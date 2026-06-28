@@ -146,9 +146,9 @@ io.on('connection', (socket) => {
   });
 
   // ── Host: rejoin after reconnect ──────────────────────────────────────────
-  socket.on('rejoin_host', ({ pin }: { pin: string }, callback: (r: { players: { name: string }[] }) => void) => {
+  socket.on('rejoin_host', ({ pin }: { pin: string }, callback: (r: { players: { name: string }[] } | { error: string }) => void) => {
     const game = gm.getGame(pin);
-    if (!game) return;
+    if (!game) return callback({ error: 'Game not found' });
 
     // Cancel the host grace-period timer so the game survives.
     const hostTimer = hostDisconnectTimers.get(pin);

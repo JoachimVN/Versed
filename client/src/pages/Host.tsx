@@ -42,6 +42,7 @@ interface HostState {
   roundsSetting: number;
   reconnecting: boolean;
   reconnectingCount: number;
+  gameExpired: boolean;
   toggleSettings: () => void;
   setBettingTimeSetting: (v: number) => void;
   setGuessingTimeSetting: (v: number) => void;
@@ -80,6 +81,7 @@ function useHostGame(): HostState {
   const [roundsSetting, setRoundsSetting] = useState(10);
   const [reconnecting, setReconnecting] = useState(false);
   const [reconnectingCount, setReconnectingCount] = useState(0);
+  const [gameExpired, setGameExpired] = useState(false);
   const timerRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const playRafRef = useRef<number | null>(null);
 
@@ -124,11 +126,15 @@ function useHostGame(): HostState {
     socket.connect();
 
     socket.on('connect', () => {
-      setReconnecting(false);
       if (pinRef.current) {
-        socket.emit('rejoin_host', { pin: pinRef.current }, ({ players: p }: { players: PlayerInfo[] }) => {
-          if (p) setPlayers(p);
+        socket.emit('rejoin_host', { pin: pinRef.current }, (res: { players: PlayerInfo[] } | { error: string }) => {
+          if ('error' in res) {
+            setGameExpired(true);
+          } else if (res.players) setPlayers(res.players);
+          setReconnecting(false);
         });
+      } else {
+        setReconnecting(false);
       }
     });
 
@@ -294,7 +300,7 @@ function useHostGame(): HostState {
     bettingTime, timeLeft, bidCount, countdown, guesserNames, lowestBid, playerBids,
     result, roundDeltas, leaderboard, copied, playProgress, inviteUrl,
     settingsOpen, bettingTimeSetting, guessingTimeSetting, roundsSetting,
-    reconnecting, reconnectingCount,
+    reconnecting, reconnectingCount, gameExpired,
     toggleSettings: () => setSettingsOpen(o => !o),
     setBettingTimeSetting, setGuessingTimeSetting, setRoundsSetting,
     createGame, startGame, copyInvite, newGame,
@@ -730,7 +736,8 @@ function LeaderboardView({ game }: Readonly<{ game: HostState }>) {
 
 export default function Host() {
   const game = useHostGame();
-  const { phase, result, reconnecting, reconnectingCount } = game;
+  const navigate = useNavigate();
+  const { phase, result, reconnecting, reconnectingCount, gameExpired } = game;
 
   return (
     <div className="relative">
@@ -742,11 +749,23 @@ export default function Host() {
       {phase === 'reveal' && result && <RevealView game={game} result={result} />}
       {(phase === 'leaderboard' || phase === 'finished') && <LeaderboardView game={game} />}
 
-      {reconnecting && (
+      {reconnecting && !gameExpired && (
         <div className="fixed inset-0 bg-black/80 backdrop-blur-sm flex flex-col items-center justify-center z-50 gap-4">
           <div className="w-12 h-12 border-4 border-purple-500 border-t-transparent rounded-full animate-spin" />
           <p className="text-white font-bold text-xl">Reconnecting...</p>
           <p className="text-white/40 text-sm">Game is still running</p>
+        </div>
+      )}
+      {gameExpired && (
+        <div className="fixed inset-0 bg-black/90 backdrop-blur-sm flex flex-col items-center justify-center z-50 gap-4">
+          <p className="text-white font-bold text-xl">Game expired</p>
+          <p className="text-white/40 text-sm text-center">You were away too long and the game was closed.</p>
+          <button
+            onClick={() => navigate('/')}
+            className="mt-2 px-6 py-2 bg-purple-600 hover:bg-purple-500 text-white font-semibold rounded-xl transition-colors"
+          >
+            Go home
+          </button>
         </div>
       )}
       {reconnectingCount > 0 && !reconnecting && (
