@@ -1,0 +1,68 @@
+name: Update screenshots
+
+on:
+  push:
+    branches: [dev]
+    paths:
+      - 'client/src/**'
+      - 'client/index.html'
+      - 'client/tailwind.config.js'
+      - 'client/postcss.config.js'
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  screenshot:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.head_ref || github.ref_name }}
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+
+      - name: Install client dependencies
+        working-directory: client
+        run: npm ci
+
+      - name: Build client
+        working-directory: client
+        run: npx vite build --base=/
+
+      - name: Install Playwright and Chromium
+        working-directory: .github/scripts
+        run: |
+          npm ci --ignore-scripts
+          ./node_modules/.bin/playwright install chromium --with-deps
+
+      - name: Serve client
+        run: npx serve@14 client/dist -p 4321 -s &
+
+      - name: Wait for server
+        run: sleep 3
+
+      - name: Take screenshots
+        run: node .github/scripts/screenshots.js
+
+      - name: Commit if changed
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git add docs/screenshots/
+          if git diff --cached --quiet; then
+            echo "No screenshot changes"
+            exit 0
+          fi
+          git commit -m "chore: update screenshots [skip ci]"
+          BRANCH=${{ github.ref_name }}
+          for i in 1 2 3 4 5; do
+            git push origin HEAD:$BRANCH && exit 0
+            echo "Push rejected, rebasing (attempt $i)..."
+            git pull --rebase origin $BRANCH
+          done
+          echo "Failed to push after 5 attempts" >&2
+          exit 1
