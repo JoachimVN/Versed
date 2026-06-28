@@ -21,6 +21,28 @@
 
 ---
 
+## Screenshots
+
+<p align="center">
+  <img src="docs/screenshots/Lobby.png" alt="Versed home screen"/>
+  <br>
+  <em>Home screen</em>
+</p>
+
+<p align="center">
+  <img src="docs/screenshots/Playing.png" alt="Versed host view — song playing"/>
+  <br>
+  <em>Song playing — Player1 guessing on their 2s bid</em>
+</p>
+
+<p align="center">
+  <img src="docs/screenshots/Betting.png" alt="Versed player view — betting phase"/>
+  <br>
+  <em>Betting phase — how fast can you name this song?</em>
+</p>
+
+---
+
 ## How it plays
 
 The host's screen is the "board" — everyone else joins from their phone. Each round you don't just guess the song, you **bid how few seconds of it you need to hear**. Lowest bid gets the first shot. Hear less, score more.
