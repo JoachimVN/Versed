@@ -169,6 +169,15 @@ function usePlayGame(pinParam?: string): PlayState {
     };
   }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
+  // Auto-submit the current bid selection when the betting timer expires
+  useEffect(() => {
+    if (phase !== 'betting' || timeLeft !== 0) return;
+    const seconds = BID_OPTIONS[bidIndex];
+    setMyBid(seconds);
+    setPhase('bid_submitted');
+    socket.emit('submit_bid', { seconds });
+  }, [timeLeft, phase]); // eslint-disable-line react-hooks/exhaustive-deps
+
   const join = () => {
     const n = name.trim();
     const p = pin.trim();

@@ -247,7 +247,10 @@ io.on('connection', (socket) => {
     if (game.phaseTimer) clearTimeout(game.phaseTimer);
     const round = game.currentRound!;
     const { lowestBid, guesserNames } = turn;
-    io.to(game.pin).emit('betting_closed', { lowestBid, guesserNames });
+    const playerBids = Array.from(round.bids.entries())
+      .map(([id, bid]) => ({ name: game.players.get(id)?.name ?? '', bid }))
+      .filter(b => b.name);
+    io.to(game.pin).emit('betting_closed', { lowestBid, guesserNames, playerBids });
     const durationMs = gm.playMsFor(lowestBid);
     io.to(`host:${game.pin}`).emit('play_song', {
       trackId: round.song.spotifyTrackId,

@@ -6,7 +6,6 @@ let sdkLoaded = false;
 export function useSpotify() {
   const [accessToken, setAccessToken] = useState<string | null>(null);
   const [refreshToken, setRefreshToken] = useState<string | null>(null);
-  const [deviceId, setDeviceId] = useState<string | null>(null);
   const [playerReady, setPlayerReady] = useState(false);
   const playerRef = useRef<import('../types').SpotifyPlayer | null>(null);
   const deviceIdRef = useRef<string | null>(null);
@@ -19,7 +18,7 @@ export function useSpotify() {
   const stopTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   useEffect(() => {
-    const params = new URLSearchParams(window.location.search);
+    const params = new URLSearchParams(globalThis.location.search);
     const at = params.get('access_token');
     const rt = params.get('refresh_token');
     if (at) {
@@ -28,7 +27,7 @@ export function useSpotify() {
       setRefreshToken(rt);
       sessionStorage.setItem('spotify_at', at);
       if (rt) sessionStorage.setItem('spotify_rt', rt);
-      window.history.replaceState({}, '', window.location.pathname);
+      globalThis.history.replaceState({}, '', globalThis.location.pathname);
     } else {
       const stored = sessionStorage.getItem('spotify_at');
       const storedRt = sessionStorage.getItem('spotify_rt');
@@ -62,14 +61,14 @@ export function useSpotify() {
     if (sdkLoaded && playerRef.current) return;
 
     const initPlayer = () => {
-      const player = new window.Spotify.Player({
+      const g = globalThis as Window & typeof globalThis;
+      const player = new g.Spotify.Player({
         name: 'Versed',
         getOAuthToken: (cb) => cb(accessTokenRef.current ?? ''),
         volume: 0.8,
       });
       player.addListener('ready', ({ device_id }: { device_id: string }) => {
         deviceIdRef.current = device_id;
-        setDeviceId(device_id);
         setPlayerReady(true);
       });
       player.addListener('not_ready', () => setPlayerReady(false));
@@ -88,10 +87,11 @@ export function useSpotify() {
       playerRef.current = player;
     };
 
-    if (window.Spotify) {
+    const g = globalThis as Window & typeof globalThis;
+    if (g.Spotify) {
       initPlayer();
     } else {
-      window.onSpotifyWebPlaybackSDKReady = initPlayer;
+      g.onSpotifyWebPlaybackSDKReady = initPlayer;
       if (!sdkLoaded) {
         sdkLoaded = true;
         const script = document.createElement('script');
