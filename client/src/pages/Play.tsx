@@ -30,7 +30,6 @@ export default function Play() {
   const [lowestBid, setLowestBid] = useState(0);
   const [guessText, setGuessText] = useState('');
   const [guessWrong, setGuessWrong] = useState(false);
-  const [turnEndMsg, setTurnEndMsg] = useState('');
   const [result, setResult] = useState<RoundResultEvent | null>(null);
   const [myScore, setMyScore] = useState(0);
   const [leaderboard, setLeaderboard] = useState<LeaderboardEntry[]>([]);
@@ -161,13 +160,13 @@ export default function Play() {
     if (!guessText.trim()) return;
     stopCountdown();
     socket.emit('submit_guess', { text: guessText }, ({ correct }: { correct: boolean }) => {
-      // One guess each: a wrong answer flashes red, then ends the turn (a
-      // correct one is moved on by the round_result event).
+      // One guess each: a wrong answer flashes red, then quietly ends the turn
+      // (no "wrong!" message — the reveal tells the story). A correct guess is
+      // moved on by the round_result event.
       if (!correct) {
         setGuessWrong(true);
         setTimeout(() => {
           setGuessWrong(false);
-          setTurnEndMsg('Not quite!');
           setPhase('passed');
         }, 800);
       }
@@ -176,7 +175,6 @@ export default function Play() {
 
   const skipGuess = () => {
     stopCountdown();
-    setTurnEndMsg('You passed');
     socket.emit('skip_guess');
     setPhase('passed');
   };
@@ -318,7 +316,6 @@ export default function Play() {
             autoCorrect="off"
             spellCheck={false}
           />
-          {guessWrong && <p className="text-red-400 text-sm text-center">Not quite!</p>}
         </div>
         <button onClick={submitGuess} disabled={!guessText.trim()}
           className="w-full py-4 rounded-2xl bg-purple-600 text-white font-bold text-xl disabled:opacity-30 hover:bg-purple-500 active:scale-95 transition-all">
@@ -333,11 +330,12 @@ export default function Play() {
   }
 
   // ─── Turn over (wrong guess or skipped) ───────────────────────────────────
+  // Deliberately neutral — no "wrong" / "handing it over" messaging. Players
+  // see who got it (or didn't) at the reveal, which is enough.
   if (phase === 'passed') {
     return (
       <div className="min-h-screen flex flex-col items-center justify-center gap-4 p-6 text-center">
-        <p className="text-white font-black text-2xl">{turnEndMsg || 'Turn over'}</p>
-        <p className="text-white/40">Handing it over…</p>
+        <Music className="w-14 h-14 text-white/40 animate-pulse" />
       </div>
     );
   }

@@ -55,6 +55,16 @@ function getInitials(artist: string): string {
   return main.split(/\s+/).map(w => (w[0] ?? '').toUpperCase()).join('.') + '.';
 }
 
+// "Good 4 U" → "_ _ _ _   _   _" — reveals the title's word/character shape
+// without giving away any letters.
+function maskTitle(title: string): string {
+  return title
+    .trim()
+    .split(/\s+/)
+    .map(w => w.replace(/\S/g, '_').split('').join(' '))
+    .join('   ');
+}
+
 function formatStreams(n: number): string {
   if (n >= 1_000_000_000) return `${(n / 1_000_000_000).toFixed(1)}B`;
   return `${(n / 1_000_000).toFixed(0)}M`;
@@ -64,13 +74,16 @@ function generateHints(song: Song): Hint[] {
   const pool: Hint[] = [];
   if (song.decade) pool.push({ label: 'Era', value: `${song.decade}s` });
   if (song.year) pool.push({ label: 'Release year', value: String(Math.floor(song.year)) });
-  if (song.bbChartWeeks && song.bbChartWeeks > 0)
-    pool.push({ label: 'Billboard weeks', value: `${Math.floor(song.bbChartWeeks)} weeks` });
-  if (song.bbPeak)
-    pool.push({ label: 'Chart peak', value: `#${Math.floor(song.bbPeak)}` });
   if (song.spotifyStreams)
     pool.push({ label: 'Streams', value: formatStreams(song.spotifyStreams) });
-  pool.push({ label: 'Artist initials', value: getInitials(song.artist) });
+  // Only ever one artist reveal — initials or the full name, never both (the
+  // full name would make initials redundant anyway).
+  pool.push(
+    Math.random() < 0.5
+      ? { label: 'Artist initials', value: getInitials(song.artist) }
+      : { label: 'Artist(s)', value: song.artist }
+  );
+  pool.push({ label: 'Title', value: maskTitle(song.title) });
 
   const count = Math.floor(Math.random() * 4); // 0–3
   return shuffle(pool).slice(0, count);
