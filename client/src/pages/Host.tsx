@@ -1,5 +1,6 @@
 import { useState, useEffect, useRef } from 'react';
-import { Music, Check, X, Loader2, Copy, ChevronDown } from 'lucide-react';
+import { useNavigate } from 'react-router-dom';
+import { Music, Check, X, Loader2, Copy, ChevronDown, ArrowLeft } from 'lucide-react';
 import { socket } from '../socket';
 import { useSpotify } from '../hooks/useSpotify';
 import { RankBadge } from '../components/RankBadge';
@@ -321,8 +322,12 @@ function SettingRow({ label, value, unit, onDec, onInc }: Readonly<{
 
 function ConnectView({ game }: Readonly<{ game: HostState }>) {
   const { spotify } = game;
+  const navigate = useNavigate();
   return (
     <div className="min-h-screen flex flex-col items-center justify-center gap-6 p-6">
+      <button onClick={() => navigate('/')} className="absolute top-5 left-5 p-2 rounded-xl bg-white/10 text-white/60 hover:bg-white/20 hover:text-white transition-colors">
+        <ArrowLeft className="w-5 h-5" />
+      </button>
       <img src={`${import.meta.env.BASE_URL}logo.svg`} alt={APP_NAME} className="h-16 w-auto" />
       {spotify.isConnected && !spotify.playerReady ? (
         <p className="text-white/50">Connecting to Spotify...</p>
@@ -345,8 +350,12 @@ function LobbyView({ game }: Readonly<{ game: HostState }>) {
     settingsOpen, bettingTimeSetting, guessingTimeSetting, roundsSetting,
     toggleSettings, setBettingTimeSetting, setGuessingTimeSetting, setRoundsSetting,
   } = game;
+  const navigate = useNavigate();
   return (
     <div className="min-h-screen flex flex-col items-center p-6 gap-6">
+      <button onClick={() => navigate('/')} className="absolute top-5 left-5 p-2 rounded-xl bg-white/10 text-white/60 hover:bg-white/20 hover:text-white transition-colors">
+        <ArrowLeft className="w-5 h-5" />
+      </button>
       <img src={`${import.meta.env.BASE_URL}logo.svg`} alt={APP_NAME} className="h-16 w-auto" />
       <span className="text-white/40 text-sm flex items-center gap-2">
         {spotify.playerReady ? (

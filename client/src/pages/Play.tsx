@@ -1,6 +1,6 @@
 import { useState, useEffect, useRef } from 'react';
-import { useParams } from 'react-router-dom';
-import { Music, Trophy, Frown, ChevronLeft, ChevronRight } from 'lucide-react';
+import { useParams, useNavigate } from 'react-router-dom';
+import { Music, Trophy, Frown, ChevronLeft, ChevronRight, ArrowLeft } from 'lucide-react';
 import { socket } from '../socket';
 import { RankBadge } from '../components/RankBadge';
 import { APP_NAME, BID_OPTIONS } from '../config';
@@ -246,8 +246,12 @@ function usePlayGame(pinParam?: string): PlayState {
 
 function JoinView({ game }: Readonly<{ game: PlayState }>) {
   const { pin, name, error, setPin, setName, join } = game;
+  const navigate = useNavigate();
   return (
     <div className="min-h-screen flex flex-col items-center justify-center p-6 gap-5">
+      <button onClick={() => navigate('/')} className="absolute top-5 left-5 p-2 rounded-xl bg-white/10 text-white/60 hover:bg-white/20 hover:text-white transition-colors">
+        <ArrowLeft className="w-5 h-5" />
+      </button>
       <img src={`${import.meta.env.BASE_URL}logo.svg`} alt={APP_NAME} className="h-16 w-auto" />
       <div className="w-full max-w-xs flex flex-col gap-3">
         <input type="text" inputMode="numeric" pattern="[0-9]*" placeholder="Game PIN"
