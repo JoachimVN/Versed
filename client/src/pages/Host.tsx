@@ -177,8 +177,8 @@ export default function Host() {
           <>
             <div className="text-center">
               <p className="text-white/40 text-sm uppercase tracking-widest mb-1">PIN</p>
-              <p className="text-7xl font-black text-white tracking-widest select-all cursor-text">{pin}</p>
-              <p className="text-white/40 text-sm mt-2 select-all cursor-text">{window.location.origin}/play</p>
+              <p className="text-7xl font-black text-white tracking-widest cursor-text">{pin}</p>
+              <p className="text-white/40 text-sm mt-2 cursor-text">{window.location.origin}/play</p>
             </div>
             <div className="w-full max-w-sm">
               <p className="text-white/40 text-sm mb-2">{players.length} player{players.length !== 1 ? 's' : ''}</p>
