@@ -63,6 +63,8 @@ function usePlayGame(pinParam?: string): PlayState {
   const [myScore, setMyScore] = useState(0);
   const [leaderboard, setLeaderboard] = useState<LeaderboardEntry[]>([]);
   const timerRef = useRef<ReturnType<typeof setInterval> | null>(null);
+  const autoSubmitTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const bidSubmittedRef = useRef(false);
   const guessInputRef = useRef<HTMLInputElement>(null);
 
   function startCountdown(seconds: number) {
@@ -102,6 +104,24 @@ function usePlayGame(pinParam?: string): PlayState {
       setGuessText('');
       setResult(null);
       setError('');
+      bidSubmittedRef.current = false;
+      if (autoSubmitTimerRef.current) clearTimeout(autoSubmitTimerRef.current);
+      // Wall-clock auto-submit: fires at exactly bettingTime seconds from now,
+      // so it's immune to setInterval drift and stopCountdown() clearing the tick.
+      // The server gives an extra 500ms grace window, so this arrives in time.
+      autoSubmitTimerRef.current = setTimeout(() => {
+        if (bidSubmittedRef.current) return;
+        bidSubmittedRef.current = true;
+        const seconds = BID_OPTIONS[bidIndexRef.current];
+        setMyBid(seconds);
+        setPhase('bid_submitted');
+        socket.emit('submit_bid', { seconds }, (res?: { ok: boolean }) => {
+          if (res && !res.ok) {
+            setError("That didn't go through — try again.");
+            setPhase('betting');
+          }
+        });
+      }, data.bettingTime * 1000);
       startCountdown(data.bettingTime);
       setPhase('betting');
     });
@@ -153,19 +173,13 @@ function usePlayGame(pinParam?: string): PlayState {
 
     return () => {
       stopCountdown();
+      if (autoSubmitTimerRef.current) clearTimeout(autoSubmitTimerRef.current);
       ['connect','round_start','betting_closed','guessing_start','your_turn',
        'round_result','score_update','leaderboard','game_over','host_disconnected']
         .forEach(e => socket.off(e));
       socket.disconnect();
     };
   }, []); // eslint-disable-line react-hooks/exhaustive-deps
-
-  // Auto-submit when the betting timer hits 0 and the player hasn't locked in.
-  // The server waits an extra 500ms before closing betting, so this lands in time.
-  useEffect(() => {
-    if (phase !== 'betting' || timeLeft !== 0) return;
-    socket.emit('submit_bid', { seconds: BID_OPTIONS[bidIndexRef.current] });
-  }, [timeLeft, phase]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const join = () => {
     const n = name.trim();
@@ -179,6 +193,9 @@ function usePlayGame(pinParam?: string): PlayState {
   };
 
   const submitBid = () => {
+    if (bidSubmittedRef.current) return;
+    bidSubmittedRef.current = true;
+    if (autoSubmitTimerRef.current) { clearTimeout(autoSubmitTimerRef.current); autoSubmitTimerRef.current = null; }
     const seconds = BID_OPTIONS[bidIndex];
     setError('');
     setMyBid(seconds);
@@ -187,7 +204,8 @@ function usePlayGame(pinParam?: string): PlayState {
       // Bid didn't register (e.g. mid-reconnect) — don't strand the player on
       // "waiting for others"; drop them back so they can lock in again.
       if (res && !res.ok) {
-        setError("That didn’t go through — try again.");
+        bidSubmittedRef.current = false;
+        setError("That didn't go through - try again.");
         setPhase('betting');
       }
     });
