@@ -16,6 +16,7 @@ export function useSpotify() {
   // 'playing'   → audible; auto-resume if Spotify pauses unexpectedly
   // 'stopping'  → must stay paused; re-pause if it slips back into playing
   const playStateRef = useRef<'idle' | 'preparing' | 'playing' | 'stopping'>('idle');
+  const stopTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   useEffect(() => {
     const params = new URLSearchParams(window.location.search);
@@ -104,6 +105,33 @@ export function useSpotify() {
     playerRef.current?.activateElement();
   }
 
+  function clearStopTimer() {
+    if (stopTimerRef.current) { clearTimeout(stopTimerRef.current); stopTimerRef.current = null; }
+  }
+
+  // Resolve once audio is genuinely playing from near the start, so the play
+  // window is timed from the audible start rather than the resume() call
+  // (which precedes real output by 100-300ms of device/SDK latency).
+  function waitForPlaybackStart(): Promise<void> {
+    return new Promise((resolve) => {
+      let done = false;
+      const finish = () => {
+        if (done) return;
+        done = true;
+        clearInterval(poll);
+        clearTimeout(safety);
+        resolve();
+      };
+      const poll = setInterval(async () => {
+        const st = await playerRef.current?.getCurrentState();
+        // >40ms: past the very start, so audio is really flowing.
+        // <1500ms: not the stale position left over from buffering.
+        if (st && !st.paused && st.position > 40 && st.position < 1500) finish();
+      }, 20);
+      const safety = setTimeout(finish, 2500);
+    });
+  }
+
   // Buffer the track ahead of time, muted, so the actual start is instant and
   // gapless. Returns true once Spotify accepted the play request.
   async function prepareTrack(trackId: string) {
@@ -113,6 +141,7 @@ export function useSpotify() {
       console.error('[Spotify] prepareTrack called but not ready', { device, hasToken: !!token });
       return false;
     }
+    clearStopTimer();
     playStateRef.current = 'preparing';
     await playerRef.current?.setVolume(0);
     const res = await fetch(`https://api.spotify.com/v1/me/player/play?device_id=${device}`, {
@@ -132,15 +161,21 @@ export function useSpotify() {
     return true;
   }
 
-  // Reveal the buffered track: rewind to 0, unmute, and ensure it's playing.
-  async function startPrepared() {
+  // Reveal the buffered track from the start and play it for exactly
+  // durationMs of audible output. Resolves when audio actually begins, so the
+  // caller can sync the on-screen timer to the real start.
+  async function startPrepared(durationMs: number) {
+    clearStopTimer();
     playStateRef.current = 'playing';
     await playerRef.current?.seek(0);
     await playerRef.current?.setVolume(0.8);
     await playerRef.current?.resume();
+    await waitForPlaybackStart();
+    stopTimerRef.current = setTimeout(() => { pauseTrack(); }, durationMs);
   }
 
   async function pauseTrack() {
+    clearStopTimer();
     playStateRef.current = 'stopping';
     await playerRef.current?.pause();
   }

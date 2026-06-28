@@ -86,7 +86,8 @@ export default function Host() {
       }
       setCountdown(null);
       await prepared;
-      await spotify.startPrepared();
+      // Resolves at the real audible start; sync the timer and server to it.
+      await spotify.startPrepared(data.durationMs);
       socket.emit('song_started');
       startCountdown(data.durationMs / 1000);
     });

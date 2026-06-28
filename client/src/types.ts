@@ -44,5 +44,6 @@ export interface SpotifyPlayer {
   pause: () => Promise<void>;
   seek: (positionMs: number) => Promise<void>;
   setVolume: (volume: number) => Promise<void>;
+  getCurrentState: () => Promise<{ paused: boolean; position: number } | null>;
   activateElement: () => void;
 }
