@@ -11,6 +11,7 @@ export function useSpotify() {
   const playerRef = useRef<import('../types').SpotifyPlayer | null>(null);
   const deviceIdRef = useRef<string | null>(null);
   const accessTokenRef = useRef<string | null>(null);
+  const shouldPlayRef = useRef(false);
 
   useEffect(() => {
     const params = new URLSearchParams(window.location.search);
@@ -58,15 +59,22 @@ export function useSpotify() {
     const initPlayer = () => {
       const player = new window.Spotify.Player({
         name: 'Versed',
-        getOAuthToken: (cb) => cb(accessToken),
+        getOAuthToken: (cb) => cb(accessTokenRef.current ?? ''),
         volume: 0.8,
       });
-      player.addListener('ready', ({ device_id }) => {
+      player.addListener('ready', ({ device_id }: { device_id: string }) => {
         deviceIdRef.current = device_id;
         setDeviceId(device_id);
         setPlayerReady(true);
       });
       player.addListener('not_ready', () => setPlayerReady(false));
+      // Auto-resume if track loaded paused and we expect it to be playing
+      player.addListener('player_state_changed', (state: any) => {
+        if (!state || !shouldPlayRef.current) return;
+        if (state.paused) {
+          playerRef.current?.resume();
+        }
+      });
       player.connect();
       playerRef.current = player;
     };
@@ -84,6 +92,10 @@ export function useSpotify() {
     }
   }, [accessToken]);
 
+  function activatePlayer() {
+    playerRef.current?.activateElement();
+  }
+
   async function playTrack(trackId: string, positionMs = 0) {
     const token = accessTokenRef.current;
     const device = deviceIdRef.current;
@@ -91,6 +103,7 @@ export function useSpotify() {
       console.error('[Spotify] playTrack called but not ready', { device, hasToken: !!token });
       return;
     }
+    shouldPlayRef.current = true;
     const res = await fetch(`https://api.spotify.com/v1/me/player/play?device_id=${device}`, {
       method: 'PUT',
       headers: {
@@ -105,20 +118,14 @@ export function useSpotify() {
     if (!res.ok) {
       const body = await res.text();
       console.error(`[Spotify] play failed ${res.status}:`, body);
+      shouldPlayRef.current = false;
     }
   }
 
   async function pauseTrack() {
-    const token = accessTokenRef.current;
-    if (!token) return;
-    const res = await fetch('https://api.spotify.com/v1/me/player/pause', {
-      method: 'PUT',
-      headers: { Authorization: `Bearer ${token}` },
-    });
-    if (!res.ok && res.status !== 204) {
-      console.error(`[Spotify] pause failed ${res.status}`);
-    }
+    shouldPlayRef.current = false;
+    playerRef.current?.pause();
   }
 
-  return { isConnected: !!accessToken, playerReady, playTrack, pauseTrack };
+  return { isConnected: !!accessToken, playerReady, playTrack, pauseTrack, activatePlayer };
 }

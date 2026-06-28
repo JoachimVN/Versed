@@ -78,6 +78,7 @@ function buildRound(usedSongIds: Set<string>): Round {
     guesserSocketIds: [],
     lowestBid: 0,
     answered: false,
+    guessAttempts: new Set(),
   };
 }
 
@@ -176,12 +177,14 @@ export function recordGuess(
   game: Game,
   socketId: string,
   text: string
-): { correct: boolean; points: number; guesserName: string } | null {
+): { correct: boolean; points: number; guesserName: string; allAttempted: boolean } | null {
   const round = game.currentRound;
   if (!round || game.phase !== 'guessing') return null;
   if (!round.guesserSocketIds.includes(socketId)) return null;
   if (round.answered) return null;
 
+  round.guessAttempts.add(socketId);
+  const allAttempted = round.guesserSocketIds.every(id => round.guessAttempts.has(id));
   const correct = isCorrectGuess(text, round.song.title);
   const guesserName = game.players.get(socketId)?.name ?? '';
 
@@ -191,10 +194,10 @@ export function recordGuess(
     const points = calcPoints(round.lowestBid, round.song.rank);
     player.score += points;
     game.phase = 'reveal';
-    return { correct: true, points, guesserName };
+    return { correct: true, points, guesserName, allAttempted };
   }
 
-  return { correct: false, points: 0, guesserName };
+  return { correct: false, points: 0, guesserName, allAttempted };
 }
 
 export function getLeaderboard(game: Game) {

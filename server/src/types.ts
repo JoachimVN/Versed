@@ -23,6 +23,7 @@ export interface Round {
   guesserSocketIds: string[];
   lowestBid: number;
   answered: boolean;
+  guessAttempts: Set<string>;
 }
 
 export interface Player {

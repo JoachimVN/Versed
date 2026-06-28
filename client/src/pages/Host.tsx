@@ -177,8 +177,8 @@ export default function Host() {
           <>
             <div className="text-center">
               <p className="text-white/40 text-sm uppercase tracking-widest mb-1">PIN</p>
-              <p className="text-7xl font-black text-white tracking-widest cursor-text">{pin}</p>
-              <p className="text-white/40 text-sm mt-2 cursor-text">{window.location.origin}/play</p>
+              <p className="text-7xl font-black text-white tracking-widest select-text">{pin}</p>
+              <p className="text-white/40 text-sm mt-2 select-text">{window.location.origin}/play</p>
             </div>
             <div className="w-full max-w-sm">
               <p className="text-white/40 text-sm mb-2">{players.length} player{players.length !== 1 ? 's' : ''}</p>
@@ -189,7 +189,7 @@ export default function Host() {
               </div>
             </div>
             <button
-              onClick={() => socket.emit('start_game')}
+              onClick={() => { spotify.activatePlayer(); socket.emit('start_game'); }}
               disabled={players.length === 0}
               className="mt-auto w-full max-w-sm py-4 rounded-2xl bg-purple-600 text-white font-bold text-xl disabled:opacity-30 hover:bg-purple-500 transition-colors"
             >

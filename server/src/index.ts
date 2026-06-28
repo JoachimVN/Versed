@@ -105,19 +105,22 @@ io.on('connection', (socket) => {
 
     callback?.({ correct: result.correct });
 
-    if (result.correct) {
+    const round = game.currentRound!;
+    if (result.correct || result.allAttempted) {
       if (game.phaseTimer) clearTimeout(game.phaseTimer);
-      const round = game.currentRound!;
+      game.phase = 'reveal';
       io.to(game.pin).emit('round_result', {
-        correct: true,
-        guesserName: result.guesserName,
+        correct: result.correct,
+        guesserName: result.correct ? result.guesserName : null,
         songTitle: round.song.title,
         artist: round.song.artist,
         points: result.points,
       });
-      io.to(game.pin).emit('score_update', {
-        players: Array.from(game.players.values()).map(p => ({ name: p.name, score: p.score })),
-      });
+      if (result.correct) {
+        io.to(game.pin).emit('score_update', {
+          players: Array.from(game.players.values()).map(p => ({ name: p.name, score: p.score })),
+        });
+      }
     }
   });
 

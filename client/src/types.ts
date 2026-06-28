@@ -38,6 +38,9 @@ declare global {
 export interface SpotifyPlayer {
   connect: () => Promise<boolean>;
   disconnect: () => void;
-  addListener: (event: string, cb: (data: { device_id: string }) => void) => void;
+  addListener: (event: string, cb: (data: any) => void) => void;
   removeListener: (event: string) => void;
+  resume: () => Promise<void>;
+  pause: () => Promise<void>;
+  activateElement: () => void;
 }
