@@ -1,7 +1,3 @@
-// Map text-speak / number homophones to a single canonical token so guesses
-// like "Good For U" line up with a title written "Good 4 U" (and vice-versa).
-// Both guess and title run through this, so the mapping just has to be
-// consistent — it doesn't matter which spelling we collapse to.
 const HOMOPHONES: Record<string, string> = {
   for: '4', four: '4',
   to: '2', too: '2', two: '2',
@@ -14,6 +10,9 @@ const HOMOPHONES: Record<string, string> = {
   luv: 'love',
   okay: 'ok',
 };
+
+const PAREN_METADATA = /^\s*(feat|ft|featuring|from|with|remaster|live|acoustic|remix|edit|version|radio|original|extended|deluxe|bonus|interlude)\b/i;
+const PAREN_RE = /^(.*?)[([]((.+?))[)\]]/;
 
 function normalize(s: string): string {
   return s
@@ -35,9 +34,12 @@ function fuzzyThreshold(len: number): number {
 function levenshtein(a: string, b: string): number {
   const m = a.length;
   const n = b.length;
-  const dp: number[][] = Array.from({ length: m + 1 }, (_, i) =>
-    Array.from({ length: n + 1 }, (_, j) => (i === 0 ? j : j === 0 ? i : 0))
-  );
+  const dp: number[][] = Array.from({ length: m + 1 }, (_, i) => {
+    return Array.from({ length: n + 1 }, (_, j) => {
+      if (i === 0) return j;
+      return j === 0 ? i : 0;
+    });
+  });
   for (let i = 1; i <= m; i++) {
     for (let j = 1; j <= n; j++) {
       dp[i][j] =
@@ -49,24 +51,26 @@ function levenshtein(a: string, b: string): number {
   return dp[m][n];
 }
 
+function fuzzyMatch(g: string, candidate: string): boolean {
+  if (!candidate) return false;
+  if (g === candidate) return true;
+  return levenshtein(g, candidate) <= fuzzyThreshold(candidate.length);
+}
+
 export function isCorrectGuess(guess: string, title: string): boolean {
   const g = normalize(guess);
   const t = normalize(title);
   if (!g) return false;
-  if (g === t) return true;
+  if (fuzzyMatch(g, t)) return true;
 
-  if (levenshtein(g, t) <= fuzzyThreshold(t.length)) return true;
-
-  // Accept a guess that nails every word but the last — "Blinding" for
-  // "Blinding Lights", or "Sweet Home" for "Sweet Home Alabama". This stays
-  // strict on purpose: a single word of a three-word title isn't enough.
-  const words = t.split(' ');
-  if (words.length >= 2) {
-    const allButLast = words.slice(0, -1).join(' ');
-    if (g === allButLast) return true;
-    if (levenshtein(g, allButLast) <= Math.min(2, Math.floor(allButLast.length * 0.2))) {
-      return true;
-    }
+  // Accept a guess matching the title before a parenthetical/subtitle, e.g.
+  // "I Wanna Dance With Somebody" for "I Wanna Dance With Somebody (Who Loves Me)".
+  // Also accept the parenthetical content itself when it's a true subtitle (not metadata
+  // like "feat. X", "from X", "remastered", etc.).
+  const parenMatch = PAREN_RE.exec(title);
+  if (parenMatch) {
+    if (fuzzyMatch(g, normalize(parenMatch[1]))) return true;
+    if (!PAREN_METADATA.test(parenMatch[2]) && fuzzyMatch(g, normalize(parenMatch[2]))) return true;
   }
 
   return false;
