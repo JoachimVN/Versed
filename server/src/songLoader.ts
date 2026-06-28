@@ -1,5 +1,5 @@
-import fs from 'fs';
-import path from 'path';
+import fs from 'node:fs';
+import path from 'node:path';
 import { Song } from './types';
 
 function parseCSVLine(line: string): string[] {
@@ -21,12 +21,12 @@ function parseCSVLine(line: string): string[] {
 }
 
 function num(s: string): number | null {
-  const n = parseFloat(s);
-  return isNaN(n) ? null : n;
+  const n = Number.parseFloat(s);
+  return Number.isNaN(n) ? null : n;
 }
 
 function extractTrackId(url: string): string | null {
-  const match = url.match(/\/track\/([A-Za-z0-9]+)/);
+  const match = /\/track\/([A-Za-z0-9]+)/.exec(url);
   return match ? match[1] : null;
 }
 
@@ -43,7 +43,7 @@ export function loadSongs(): Song[] {
     if (!trackId) continue;
 
     songs.push({
-      rank: parseInt(f[0]) || i,
+      rank: Number.parseInt(f[0]) || i,
       title: f[1].replace(/^"|"$/g, '').trim(),
       artist: f[2].replace(/^"|"$/g, '').trim(),
       year: num(f[3]),
