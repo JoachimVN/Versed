@@ -154,8 +154,8 @@ export default function Play() {
       <div className="min-h-screen flex flex-col items-center justify-center p-6 gap-5">
         <img src="/logo.svg" alt={APP_NAME} className="h-16 w-auto" />
         <div className="w-full max-w-xs flex flex-col gap-3">
-          <input type="text" inputMode="numeric" placeholder="Game PIN"
-            value={pin} onChange={e => setPin(e.target.value)} maxLength={6}
+          <input type="text" inputMode="numeric" pattern="[0-9]*" placeholder="Game PIN"
+            value={pin} onChange={e => setPin(e.target.value.replace(/\D/g, ''))} maxLength={6}
             className="w-full px-4 py-4 rounded-xl bg-white/10 text-white text-center text-2xl font-bold placeholder-white/30 outline-none focus:ring-2 focus:ring-white/30 tracking-widest" />
           <input type="text" placeholder="Your name"
             value={name} onChange={e => setName(e.target.value)}
