@@ -152,7 +152,7 @@ export default function Play() {
   if (phase === 'join') {
     return (
       <div className="min-h-screen flex flex-col items-center justify-center p-6 gap-5">
-        <h1 className="text-4xl font-black text-white">{APP_NAME}</h1>
+        <img src="/logo.svg" alt={APP_NAME} className="h-16 w-auto" />
         <div className="w-full max-w-xs flex flex-col gap-3">
           <input type="text" inputMode="numeric" placeholder="Game PIN"
             value={pin} onChange={e => setPin(e.target.value)} maxLength={6}
