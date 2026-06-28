@@ -14,6 +14,7 @@ export interface Song {
 export interface Hint {
   label: string;
   value: string;
+  imageUrl?: string;
 }
 
 // Bidders grouped by bid value. Tiers are played in ascending bid order: the

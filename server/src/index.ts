@@ -6,6 +6,7 @@ import path from 'node:path';
 import dotenv from 'dotenv';
 import authRouter from './spotifyAuth';
 import * as gm from './gameManager';
+import { getAlbumArtUrl } from './albumArt';
 
 dotenv.config();
 gm.initSongs();
@@ -345,9 +346,16 @@ io.on('connection', (socket) => {
   });
 
   // ── Round lifecycle (server-driven timing) ─────────────────────────────────
-  function beginRound(game: ReturnType<typeof gm.getGame> & object) {
+  async function beginRound(game: ReturnType<typeof gm.getGame> & object) {
     if (!game) return;
     const round = gm.startRound(game);
+
+    // 25% chance to include album art — keeps it a surprise, not the norm.
+    if (Math.random() < 0.25) {
+      const imageUrl = await getAlbumArtUrl(round.song.spotifyTrackId);
+      if (imageUrl) round.hints.push({ label: 'Album art', value: '', imageUrl });
+    }
+
     const bettingEndsAt = Date.now() + game.bettingTime * 1000;
     game.phaseEndsAt = bettingEndsAt;
 

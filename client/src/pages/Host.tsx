@@ -529,6 +529,32 @@ function LobbyView({ game }: Readonly<{ game: HostState }>) {
   );
 }
 
+function HintCards({ hints }: { hints: Hint[] }) {
+  const imageHint = hints.find(h => h.imageUrl);
+  const textHints = hints.filter(h => !h.imageUrl);
+  return (
+    <div className="flex flex-col items-center gap-8 w-full">
+      {imageHint?.imageUrl && (
+        <img
+          src={imageHint.imageUrl}
+          alt="Album art"
+          className="w-52 h-52 rounded-3xl object-cover shadow-2xl blur-sm"
+        />
+      )}
+      {textHints.length > 0 && (
+        <div className="flex flex-wrap justify-center gap-10">
+          {textHints.map(h => (
+            <div key={h.label} className="flex flex-col items-center gap-1">
+              <span className="text-white/30 text-xs uppercase tracking-[0.2em]">{h.label}</span>
+              <span className="text-white font-black text-4xl">{h.value}</span>
+            </div>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
+
 function BettingView({ game }: Readonly<{ game: HostState }>) {
   const { roundIndex, totalRounds, timeLeft, bettingTime, hints, bidCount, players, pin } = game;
   return (
@@ -543,23 +569,12 @@ function BettingView({ game }: Readonly<{ game: HostState }>) {
           style={{ width: `${(timeLeft / bettingTime) * 100}%` }} />
       </div>
 
-      {hints.length > 0 ? (
-        <div className="bg-white/5 rounded-2xl p-4 space-y-2">
-          <p className="text-white/40 text-xs uppercase tracking-widest mb-3">Hints</p>
-          {hints.map(h => (
-            <div key={h.label} className="flex justify-between">
-              <span className="text-white/50">{h.label}</span>
-              <span className="text-white font-semibold">{h.value}</span>
-            </div>
-          ))}
+      <div className="flex-1 flex flex-col items-center justify-center gap-8">
+        <HintCards hints={hints} />
+        <div className="text-center">
+          <p className="text-5xl font-black text-white">{bidCount}</p>
+          <p className="text-white/40">of {players.length} have bid</p>
         </div>
-      ) : (
-        <div className="bg-white/5 rounded-2xl p-4 text-center text-white/30">No hints this round</div>
-      )}
-
-      <div className="text-center py-6">
-        <p className="text-5xl font-black text-white">{bidCount}</p>
-        <p className="text-white/40">of {players.length} have bid</p>
       </div>
     </div>
   );

@@ -1,6 +1,7 @@
 export interface Hint {
   label: string;
   value: string;
+  imageUrl?: string;
 }
 
 export interface LeaderboardEntry {

@@ -397,13 +397,24 @@ function BettingView({ game }: Readonly<{ game: PlayState }>) {
       </div>
 
       {hints.length > 0 && (
-        <div className="bg-white/5 rounded-2xl p-4 space-y-2">
-          {hints.map(h => (
-            <div key={h.label} className="flex justify-between">
-              <span className="text-white/50 text-sm">{h.label}</span>
-              <span className="text-white font-semibold text-sm">{h.value}</span>
+        <div className="flex flex-col items-center gap-6">
+          {hints.find(h => h.imageUrl)?.imageUrl && (
+            <img
+              src={hints.find(h => h.imageUrl)!.imageUrl}
+              alt="Album art"
+              className="w-40 h-40 rounded-3xl object-cover shadow-2xl blur-sm"
+            />
+          )}
+          {hints.some(h => !h.imageUrl) && (
+            <div className="flex flex-wrap justify-center gap-8">
+              {hints.filter(h => !h.imageUrl).map(h => (
+                <div key={h.label} className="flex flex-col items-center gap-1">
+                  <span className="text-white/30 text-xs uppercase tracking-[0.2em]">{h.label}</span>
+                  <span className="text-white font-black text-3xl">{h.value}</span>
+                </div>
+              ))}
             </div>
-          ))}
+          )}
         </div>
       )}
 

@@ -56,13 +56,28 @@ function getInitials(artist: string): string {
   return main.split(/\s+/).map(w => (w[0] ?? '').toUpperCase()).join('.') + '.';
 }
 
-// "Good 4 U" → "_ _ _ _   _   _" — reveals the title's word/character shape
-// without giving away any letters.
+// "Blinding Lights" → "B _ i _ _ i _ _   L _ _ _ t _"
+// Always reveals first letter of each word plus 2 randomly selected inner letters.
 function maskTitle(title: string): string {
-  return title
-    .trim()
-    .split(/\s+/)
-    .map(w => w.replace(/\S/g, '_').split('').join(' '))
+  const words = title.trim().split(/\s+/);
+  const innerLetters: string[] = [];
+  for (const w of words) {
+    for (let i = 1; i < w.length; i++) {
+      const c = w[i].toLowerCase();
+      if (/[a-z]/.test(c)) innerLetters.push(c);
+    }
+  }
+  const unique = [...new Set(innerLetters)];
+  const extraRevealed = new Set(shuffle(unique).slice(0, Math.min(2, unique.length)));
+
+  return words
+    .map(w =>
+      w.split('').map((c, i) => {
+        if (!/[a-zA-Z]/.test(c)) return c;
+        if (i === 0 || extraRevealed.has(c.toLowerCase())) return c;
+        return '_';
+      }).join(' ')
+    )
     .join('   ');
 }
 
@@ -73,19 +88,31 @@ function formatStreams(n: number): string {
 
 function generateHints(song: Song): Hint[] {
   const pool: Hint[] = [];
-  if (song.decade) pool.push({ label: 'Era', value: `${song.decade}s` });
-  if (song.year) pool.push({ label: 'Release year', value: String(Math.floor(song.year)) });
+
+  // Only ever one time hint — year and decade must not appear together.
+  if (song.year && song.decade) {
+    pool.push(
+      randomInt(0, 2) === 0
+        ? { label: 'Era', value: `${song.decade}s` }
+        : { label: 'Release year', value: String(Math.floor(song.year)) }
+    );
+  } else if (song.decade) {
+    pool.push({ label: 'Era', value: `${song.decade}s` });
+  } else if (song.year) {
+    pool.push({ label: 'Release year', value: String(Math.floor(song.year)) });
+  }
+
   if (song.spotifyStreams)
     pool.push({ label: 'Streams', value: formatStreams(song.spotifyStreams) });
-  // Only ever one artist reveal — initials or the full name, never both (the
-  // full name would make initials redundant anyway).
+
+  // Only ever one artist reveal — initials or full name, never both.
   pool.push(
     randomInt(0, 2) === 0
       ? { label: 'Artist initials', value: getInitials(song.artist) }
       : { label: 'Artist(s)', value: song.artist }
-  , { label: 'Title', value: maskTitle(song.title) });
+  );
 
-  const count = randomInt(0, 4); // 0–3
+  const count = randomInt(1, 4); // 1–3, always at least one hint
   return shuffle(pool).slice(0, count);
 }
 
