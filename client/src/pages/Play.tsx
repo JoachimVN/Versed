@@ -270,7 +270,7 @@ function WaitingView({ game }: Readonly<{ game: PlayState }>) {
     <div className="min-h-screen flex flex-col items-center justify-center gap-4 p-6">
       <div className="w-12 h-12 border-4 border-purple-500 border-t-transparent rounded-full animate-spin" />
       <p className="text-white text-xl font-bold">{game.myName}</p>
-      <p className="text-white/50">You're in! Waiting for the host to start the game…</p>
+      <p className="text-white/50">You're in! Hang tight…</p>
     </div>
   );
 }

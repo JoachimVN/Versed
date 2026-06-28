@@ -43,51 +43,9 @@ io.on('connection', (socket) => {
     callback({ pin: game.pin });
   });
 
-  // ── Host: rejoin after reconnect ──────────────────────────────────────────
-  socket.on('rejoin_host', ({ pin }: { pin: string }, callback: (r: { players: { name: string }[] }) => void) => {
-    const game = gm.getGame(pin);
-    if (!game) return;
-    game.hostSocketId = socket.id;
-    socket.join(pin);
-    socket.join(`host:${pin}`);
-    gm.updateSocketPin(socket.id, pin);
-    callback({ players: Array.from(game.players.values()).map(p => ({ name: p.name })) });
-  });
-
-  // ── Player: join lobby ─────────────────────────────────────────────────────
-  socket.on(
-    'join_game',
-    ({ pin, name }: { pin: string; name: string }, callback: (r: { error?: string; success?: boolean }) => void) => {
-      const game = gm.getGame(pin);
-      if (!game) return callback({ error: 'Game not found' });
-      if (game.phase !== 'lobby') return callback({ error: 'Game already started' });
-
-      const player = gm.addPlayer(game, socket.id, name);
-      if (!player) return callback({ error: 'Name already taken' });
-
-      socket.join(pin);
-      socket.join(`player:${pin}`);
-      callback({ success: true });
-
-      const players = Array.from(game.players.values()).map(p => ({ name: p.name }));
-      const hostRoom = io.sockets.adapter.rooms.get(`host:${pin}`);
-      console.log(`[join_game] pin=${pin} name=${name} hostRoom=host:${pin} hostSockets=${hostRoom ? [...hostRoom].join(',') : 'EMPTY'}`);
-      io.to(`host:${pin}`).emit('player_joined', { players });
-    }
-  );
-
-  // ── Player: rejoin after reconnect ─────────────────────────────────────────
-  socket.on('rejoin_player', ({ pin, name }: { pin: string; name: string }, callback?: (r: { ok: boolean }) => void) => {
-    const game = gm.getGame(pin);
-    if (!game) return callback?.({ ok: false });
-    const player = gm.rejoinPlayer(game, socket.id, name);
-    if (!player) return callback?.({ ok: false });
-    socket.join(pin);
-    socket.join(`player:${pin}`);
-    callback?.({ ok: true });
-
-    // Push current game state so a reconnecting tab snaps to the right phase
-    // instead of being frozen at whatever it was showing before the disconnect.
+  // Emit the right phase snapshot to this socket so a reconnecting or
+  // mid-game-joining player jumps straight to where the game is.
+  function syncState(game: NonNullable<ReturnType<typeof gm.getGame>>) {
     const round = game.currentRound;
     if (game.phase === 'betting' && round && game.phaseEndsAt) {
       socket.emit('round_start', {
@@ -111,6 +69,68 @@ io.on('connection', (socket) => {
     } else if (game.phase === 'finished') {
       socket.emit('game_over', { leaderboard: gm.getLeaderboard(game) });
     }
+  }
+
+  // ── Host: rejoin after reconnect ──────────────────────────────────────────
+  socket.on('rejoin_host', ({ pin }: { pin: string }, callback: (r: { players: { name: string }[] }) => void) => {
+    const game = gm.getGame(pin);
+    if (!game) return;
+    game.hostSocketId = socket.id;
+    socket.join(pin);
+    socket.join(`host:${pin}`);
+    gm.updateSocketPin(socket.id, pin);
+    callback({ players: Array.from(game.players.values()).map(p => ({ name: p.name })) });
+  });
+
+  // ── Player: join game (lobby or mid-game) ─────────────────────────────────
+  socket.on(
+    'join_game',
+    ({ pin, name }: { pin: string; name: string }, callback: (r: { error?: string; success?: boolean }) => void) => {
+      const game = gm.getGame(pin);
+      if (!game) return callback({ error: 'Game not found' });
+
+      // Mid-game: if this name is already in the game, it's a full-disconnect
+      // rejoin — migrate the socket ID and snap to the current phase.
+      if (game.phase !== 'lobby') {
+        const existing = Array.from(game.players.values()).find(
+          p => p.name.toLowerCase() === name.trim().toLowerCase()
+        );
+        if (existing) {
+          const rejoined = gm.rejoinPlayer(game, socket.id, name);
+          if (!rejoined) return callback({ error: 'Could not rejoin' });
+          socket.join(pin);
+          socket.join(`player:${pin}`);
+          callback({ success: true });
+          syncState(game);
+          return;
+        }
+      }
+
+      const player = gm.addPlayer(game, socket.id, name);
+      if (!player) return callback({ error: 'Name already taken' });
+
+      socket.join(pin);
+      socket.join(`player:${pin}`);
+      callback({ success: true });
+
+      const players = Array.from(game.players.values()).map(p => ({ name: p.name }));
+      io.to(`host:${pin}`).emit('player_joined', { players });
+
+      // New player joining an in-progress game — sync them to the current phase.
+      if (game.phase !== 'lobby') syncState(game);
+    }
+  );
+
+  // ── Player: rejoin after reconnect ─────────────────────────────────────────
+  socket.on('rejoin_player', ({ pin, name }: { pin: string; name: string }, callback?: (r: { ok: boolean }) => void) => {
+    const game = gm.getGame(pin);
+    if (!game) return callback?.({ ok: false });
+    const player = gm.rejoinPlayer(game, socket.id, name);
+    if (!player) return callback?.({ ok: false });
+    socket.join(pin);
+    socket.join(`player:${pin}`);
+    callback?.({ ok: true });
+    syncState(game);
   });
 
   // ── Host: start game → first round ────────────────────────────────────────
