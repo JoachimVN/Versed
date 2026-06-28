@@ -16,14 +16,24 @@ export interface Hint {
   value: string;
 }
 
+// Bidders grouped by bid value. Tiers are played in ascending bid order: the
+// lowest bidders guess first (on the least audio), and each failed tier hands
+// off to the next-lowest, who hear their own — longer — bid's worth of audio.
+export interface BidTier {
+  bid: number;
+  socketIds: string[];
+}
+
 export interface Round {
   song: Song;
   hints: Hint[];
   bids: Map<string, number>;
+  bidTiers: BidTier[];
+  tierIndex: number;
   guesserSocketIds: string[];
   lowestBid: number;
   answered: boolean;
-  guessAttempts: Set<string>;
+  passed: Set<string>; // guessers whose turn is over this tier (wrong guess or skip)
 }
 
 export interface Player {

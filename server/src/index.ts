@@ -76,6 +76,17 @@ io.on('connection', (socket) => {
     }
   );
 
+  // ── Player: rejoin after reconnect ─────────────────────────────────────────
+  socket.on('rejoin_player', ({ pin, name }: { pin: string; name: string }, callback?: (r: { ok: boolean }) => void) => {
+    const game = gm.getGame(pin);
+    if (!game) return callback?.({ ok: false });
+    const player = gm.rejoinPlayer(game, socket.id, name);
+    if (!player) return callback?.({ ok: false });
+    socket.join(pin);
+    socket.join(`player:${pin}`);
+    callback?.({ ok: true });
+  });
+
   // ── Host: start game → first round ────────────────────────────────────────
   socket.on('start_game', () => {
     const game = gm.getGameBySocket(socket.id);
@@ -85,10 +96,11 @@ io.on('connection', (socket) => {
   });
 
   // ── Player: submit bid ─────────────────────────────────────────────────────
-  socket.on('submit_bid', ({ seconds }: { seconds: number }) => {
+  socket.on('submit_bid', ({ seconds }: { seconds: number }, callback?: (r: { ok: boolean }) => void) => {
     const game = gm.getGameBySocket(socket.id);
-    if (!game) return;
+    if (!game) return callback?.({ ok: false });
     const ok = gm.recordBid(game, socket.id, seconds);
+    callback?.({ ok });
     if (!ok) return;
 
     const round = game.currentRound!;
@@ -110,7 +122,7 @@ io.on('connection', (socket) => {
     if (!game || game.hostSocketId !== socket.id || game.phase !== 'playing') return;
     // Cancel fallback; start guessing timer from actual playback start
     if (game.phaseTimer) clearTimeout(game.phaseTimer);
-    game.phaseTimer = setTimeout(() => startGuessingPhase(game), game.currentRound!.lowestBid * 1000);
+    game.phaseTimer = setTimeout(() => startGuessingPhase(game), gm.playMsFor(game.currentRound!.lowestBid));
   });
 
   // ── Player: submit guess ───────────────────────────────────────────────────
@@ -124,22 +136,33 @@ io.on('connection', (socket) => {
     callback?.({ correct: result.correct });
 
     const round = game.currentRound!;
-    if (result.correct || result.allAttempted) {
+    if (result.correct) {
       if (game.phaseTimer) clearTimeout(game.phaseTimer);
       game.phase = 'reveal';
       io.to(game.pin).emit('round_result', {
-        correct: result.correct,
-        guesserName: result.correct ? result.guesserName : null,
+        correct: true,
+        guesserName: result.guesserName,
         songTitle: round.song.title,
         artist: round.song.artist,
         points: result.points,
       });
-      if (result.correct) {
-        io.to(game.pin).emit('score_update', {
-          players: Array.from(game.players.values()).map(p => ({ name: p.name, score: p.score })),
-        });
-      }
+      io.to(game.pin).emit('score_update', {
+        players: Array.from(game.players.values()).map(p => ({ name: p.name, score: p.score })),
+      });
+    } else if (result.allDone) {
+      // Everyone in the tier has had their one guess — hand off / reveal.
+      advanceTierOrReveal(game);
     }
+  });
+
+  // ── Player: skip guess ─────────────────────────────────────────────────────
+  socket.on('skip_guess', () => {
+    const game = gm.getGameBySocket(socket.id);
+    if (!game) return;
+    const result = gm.skipGuess(game, socket.id);
+    if (!result) return;
+    // Once everyone in the tier is done, hand off to the next tier / reveal.
+    if (result.allDone) advanceTierOrReveal(game);
   });
 
   // ── Host: advance to next round ────────────────────────────────────────────
@@ -212,21 +235,52 @@ io.on('connection', (socket) => {
       });
       return;
     }
+    playTier(game, result);
+  }
 
-    const { lowestBid, guesserNames } = result;
+  // Play the song for the current tier and queue its guessing phase. Reused both
+  // for the opening (lowest) tier and each next-lowest tier that gets a turn.
+  function playTier(
+    game: ReturnType<typeof gm.getGame> & object,
+    turn: gm.TierTurn,
+  ) {
+    if (game.phaseTimer) clearTimeout(game.phaseTimer);
+    const round = game.currentRound!;
+    const { lowestBid, guesserNames } = turn;
     io.to(game.pin).emit('betting_closed', { lowestBid, guesserNames });
+    const durationMs = gm.playMsFor(lowestBid);
     io.to(`host:${game.pin}`).emit('play_song', {
       trackId: round.song.spotifyTrackId,
-      durationMs: lowestBid * 1000,
+      durationMs,
       countdownMs: PLAYBACK_COUNTDOWN_MS,
     });
 
     // Fallback: start guessing if host never confirms song_started. The host
     // first runs a countdown (and buffers the track) before playback begins,
-    // so allow for that plus the bid duration plus slack.
+    // so allow for that plus the play duration plus slack.
     game.phaseTimer = setTimeout(() => {
       if (game.phase === 'playing') startGuessingPhase(game);
-    }, lowestBid * 1000 + PLAYBACK_COUNTDOWN_MS + 5000);
+    }, durationMs + PLAYBACK_COUNTDOWN_MS + 5000);
+  }
+
+  // A tier ran out of guesses (all wrong, or time expired). Hand off to the
+  // next-lowest bidders if there are any; otherwise reveal that nobody got it.
+  function advanceTierOrReveal(game: ReturnType<typeof gm.getGame> & object) {
+    const round = game.currentRound!;
+    const next = gm.advanceTier(game);
+    if (next) {
+      playTier(game, next);
+      return;
+    }
+    if (game.phaseTimer) clearTimeout(game.phaseTimer);
+    game.phase = 'reveal';
+    io.to(game.pin).emit('round_result', {
+      correct: false,
+      guesserName: null,
+      songTitle: round.song.title,
+      artist: round.song.artist,
+      points: 0,
+    });
   }
 
   function startGuessingPhase(game: ReturnType<typeof gm.getGame> & object) {
@@ -246,14 +300,7 @@ io.on('connection', (socket) => {
 
     game.phaseTimer = setTimeout(() => {
       if (game.phase !== 'guessing' || round.answered) return;
-      game.phase = 'reveal';
-      io.to(game.pin).emit('round_result', {
-        correct: false,
-        guesserName: null,
-        songTitle: round.song.title,
-        artist: round.song.artist,
-        points: 0,
-      });
+      advanceTierOrReveal(game);
     }, gm.GUESSING_TIME * 1000);
   }
 });

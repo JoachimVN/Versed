@@ -7,6 +7,20 @@ export const BETTING_TIME = 15;
 export const GUESSING_TIME = 15;
 export const TOTAL_ROUNDS = 10;
 
+// The tiniest bids ask for so little audio that a clip can land entirely inside
+// a song's near-silent lead-in and reveal nothing — pure bad luck the bidder
+// couldn't foresee. We can't detect silence (Spotify's audio-analysis is gone
+// and the SDK is DRM'd), so we instead always play at least this much audio.
+// Bids are still shown and scored at face value, so the bid ladder stays
+// monotonic (more audio ⇄ lower score) and there's no "always bid 0.1" exploit.
+export const MIN_PLAY_MS = 200;
+
+// Actual audible window for a winning bid: the bid itself, floored so the
+// shortest clips still have a fighting chance of containing a real transient.
+export function playMsFor(bid: number): number {
+  return Math.max(bid * 1000, MIN_PLAY_MS);
+}
+
 let songs: Song[] = [];
 const games = new Map<string, Game>();
 const socketToPin = new Map<string, string>();
@@ -41,6 +55,16 @@ function getInitials(artist: string): string {
   return main.split(/\s+/).map(w => (w[0] ?? '').toUpperCase()).join('.') + '.';
 }
 
+// "Good 4 U" → "_ _ _ _   _   _" — reveals the title's word/character shape
+// without giving away any letters.
+function maskTitle(title: string): string {
+  return title
+    .trim()
+    .split(/\s+/)
+    .map(w => w.replace(/\S/g, '_').split('').join(' '))
+    .join('   ');
+}
+
 function formatStreams(n: number): string {
   if (n >= 1_000_000_000) return `${(n / 1_000_000_000).toFixed(1)}B`;
   return `${(n / 1_000_000).toFixed(0)}M`;
@@ -50,13 +74,15 @@ function generateHints(song: Song): Hint[] {
   const pool: Hint[] = [];
   if (song.decade) pool.push({ label: 'Era', value: `${song.decade}s` });
   if (song.year) pool.push({ label: 'Release year', value: String(Math.floor(song.year)) });
-  if (song.bbChartWeeks && song.bbChartWeeks > 0)
-    pool.push({ label: 'Billboard weeks', value: `${Math.floor(song.bbChartWeeks)} weeks` });
-  if (song.bbPeak)
-    pool.push({ label: 'Chart peak', value: `#${Math.floor(song.bbPeak)}` });
   if (song.spotifyStreams)
     pool.push({ label: 'Streams', value: formatStreams(song.spotifyStreams) });
-  pool.push({ label: 'Artist initials', value: getInitials(song.artist) });
+  // Only ever one artist reveal — initials or the full name, never both (the
+  // full name would make initials redundant anyway).
+  pool.push(
+    Math.random() < 0.5
+      ? { label: 'Artist initials', value: getInitials(song.artist) }
+      : { label: 'Artist(s)', value: song.artist }
+  , { label: 'Title', value: maskTitle(song.title) });
 
   const count = Math.floor(Math.random() * 4); // 0–3
   return shuffle(pool).slice(0, count);
@@ -75,10 +101,12 @@ function buildRound(usedSongIds: Set<string>): Round {
     song,
     hints: generateHints(song),
     bids: new Map(),
+    bidTiers: [],
+    tierIndex: 0,
     guesserSocketIds: [],
     lowestBid: 0,
     answered: false,
-    guessAttempts: new Set(),
+    passed: new Set(),
   };
 }
 
@@ -122,6 +150,37 @@ export function addPlayer(game: Game, socketId: string, name: string): Player | 
   return player;
 }
 
+// Re-attach an existing player to a fresh socket id after a reconnect (e.g. a
+// dropped connection or a dev hot-reload). Without this the player's socket
+// becomes a stranger to the game and every submit_bid / submit_guess is
+// silently rejected. Migrates any in-flight round references too, so a round
+// already under way keeps working for the reconnected player.
+export function rejoinPlayer(game: Game, newSocketId: string, name: string): Player | null {
+  const entry = Array.from(game.players.entries()).find(
+    ([, p]) => p.name.toLowerCase() === name.trim().toLowerCase()
+  );
+  if (!entry) return null;
+  const [oldId, player] = entry;
+
+  if (oldId !== newSocketId) {
+    game.players.delete(oldId);
+    socketToPin.delete(oldId);
+    player.socketId = newSocketId;
+    game.players.set(newSocketId, player);
+
+    const round = game.currentRound;
+    if (round) {
+      const bid = round.bids.get(oldId);
+      if (bid !== undefined) { round.bids.set(newSocketId, bid); round.bids.delete(oldId); }
+      round.guesserSocketIds = round.guesserSocketIds.map(id => (id === oldId ? newSocketId : id));
+      round.bidTiers.forEach(t => { t.socketIds = t.socketIds.map(id => (id === oldId ? newSocketId : id)); });
+      if (round.passed.delete(oldId)) round.passed.add(newSocketId);
+    }
+  }
+  socketToPin.set(newSocketId, game.pin);
+  return player;
+}
+
 export function removeSocket(socketId: string): { game: Game; wasHost: boolean } | null {
   const game = getGameBySocket(socketId);
   if (!game) return null;
@@ -148,43 +207,68 @@ export function recordBid(game: Game, socketId: string, seconds: number): boolea
   return true;
 }
 
-export function closeBetting(game: Game): {
+export interface TierTurn {
   lowestBid: number;
   guesserSocketIds: string[];
   guesserNames: string[];
-} | null {
+}
+
+// Point the round's guessers at the current tier and reset its guess attempts,
+// then describe that turn (bid + who's up) for the clients.
+function applyTier(game: Game, round: Round): TierTurn {
+  const tier = round.bidTiers[round.tierIndex];
+  round.lowestBid = tier.bid;
+  round.guesserSocketIds = tier.socketIds;
+  round.passed = new Set();
+  game.phase = 'playing';
+  const guesserNames = tier.socketIds
+    .map(id => game.players.get(id)?.name ?? '')
+    .filter(Boolean);
+  return { lowestBid: tier.bid, guesserSocketIds: tier.socketIds, guesserNames };
+}
+
+export function closeBetting(game: Game): TierTurn | null {
   const round = game.currentRound;
   if (!round || game.phase !== 'betting') return null;
   if (round.bids.size === 0) return null;
 
-  const minBid = Math.min(...round.bids.values());
-  const guesserIds = Array.from(round.bids.entries())
-    .filter(([, bid]) => bid === minBid)
-    .map(([id]) => id);
+  const byBid = new Map<number, string[]>();
+  for (const [id, bid] of round.bids.entries()) {
+    const tier = byBid.get(bid);
+    if (tier) tier.push(id);
+    else byBid.set(bid, [id]);
+  }
+  round.bidTiers = Array.from(byBid.entries())
+    .sort(([a], [b]) => a - b)
+    .map(([bid, socketIds]) => ({ bid, socketIds }));
+  round.tierIndex = 0;
 
-  round.lowestBid = minBid;
-  round.guesserSocketIds = guesserIds;
-  game.phase = 'playing';
-
-  const guesserNames = guesserIds
-    .map(id => game.players.get(id)?.name ?? '')
-    .filter(Boolean);
-
-  return { lowestBid: minBid, guesserSocketIds: guesserIds, guesserNames };
+  return applyTier(game, round);
 }
 
+// After a tier fails, hand off to the next-lowest bidders. Returns null when no
+// tier is left (nobody got it) or the song's already been answered.
+export function advanceTier(game: Game): TierTurn | null {
+  const round = game.currentRound;
+  if (!round || round.answered) return null;
+  if (round.tierIndex + 1 >= round.bidTiers.length) return null;
+  round.tierIndex += 1;
+  return applyTier(game, round);
+}
+
+// One guess per guesser: a correct guess wins, a wrong guess ends that
+// guesser's turn. `allDone` is true once every guesser in the tier has had
+// their shot (guessed or passed), so the round can move on.
 export function recordGuess(
   game: Game,
   socketId: string,
   text: string
-): { correct: boolean; points: number; guesserName: string; allAttempted: boolean } | null {
+): { correct: boolean; points: number; guesserName: string; allDone: boolean } | null {
   const round = game.currentRound;
   if (!round || game.phase !== 'guessing') return null;
   if (!round.guesserSocketIds.includes(socketId)) return null;
-  if (round.answered) return null;
+  if (round.answered || round.passed.has(socketId)) return null;
 
-  round.guessAttempts.add(socketId);
-  const allAttempted = round.guesserSocketIds.every(id => round.guessAttempts.has(id));
   const correct = isCorrectGuess(text, round.song.title);
   const guesserName = game.players.get(socketId)?.name ?? '';
 
@@ -194,10 +278,25 @@ export function recordGuess(
     const points = calcPoints(round.lowestBid, round.song.rank);
     player.score += points;
     game.phase = 'reveal';
-    return { correct: true, points, guesserName, allAttempted };
+    return { correct: true, points, guesserName, allDone: false };
   }
 
-  return { correct: false, points: 0, guesserName, allAttempted };
+  round.passed.add(socketId);
+  const allDone = round.guesserSocketIds.every(id => round.passed.has(id));
+  return { correct: false, points: 0, guesserName, allDone };
+}
+
+// A guesser forfeits their turn without guessing. Once every guesser in the
+// tier is done, the round moves on (to the next tier or the reveal).
+export function skipGuess(game: Game, socketId: string): { allDone: boolean } | null {
+  const round = game.currentRound;
+  if (!round || game.phase !== 'guessing') return null;
+  if (!round.guesserSocketIds.includes(socketId)) return null;
+  if (round.answered || round.passed.has(socketId)) return null;
+
+  round.passed.add(socketId);
+  const allDone = round.guesserSocketIds.every(id => round.passed.has(id));
+  return { allDone };
 }
 
 export function getLeaderboard(game: Game) {

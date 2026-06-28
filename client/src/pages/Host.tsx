@@ -1,5 +1,5 @@
 import { useState, useEffect, useRef } from 'react';
-import { Music, Check, X, Loader2 } from 'lucide-react';
+import { Music, Check, X, Loader2, Copy } from 'lucide-react';
 import { socket } from '../socket';
 import { useSpotify } from '../hooks/useSpotify';
 import { RankBadge } from '../components/RankBadge';
@@ -29,7 +29,10 @@ export default function Host() {
   const [lowestBid, setLowestBid] = useState(0);
   const [result, setResult] = useState<RoundResultEvent | null>(null);
   const [leaderboard, setLeaderboard] = useState<LeaderboardEntry[]>([]);
+  const [copied, setCopied] = useState(false);
+  const [playProgress, setPlayProgress] = useState(0);
   const timerRef = useRef<ReturnType<typeof setInterval> | null>(null);
+  const playRafRef = useRef<number | null>(null);
 
   useEffect(() => {
     if (spotify.isConnected && phase === 'connect') setPhase('lobby');
@@ -76,6 +79,7 @@ export default function Host() {
     socket.on('play_song', async (data: { trackId: string; durationMs: number; countdownMs?: number }) => {
       // Start buffering immediately, then run the countdown while it loads so
       // the reveal is instant and the X-second timer matches the audible start.
+      stopPlaybackBar(); // keep the bar empty through the countdown/buffer
       const prepared = spotify.prepareTrack(data.trackId);
       const ticks = Math.ceil((data.countdownMs ?? 3000) / 1000);
       for (let n = ticks; n > 0; n--) {
@@ -88,11 +92,13 @@ export default function Host() {
       await spotify.startPrepared(data.durationMs);
       socket.emit('song_started');
       startCountdown(data.durationMs / 1000);
+      startPlaybackBar(data.durationMs);
     });
 
     socket.on('guessing_start', (data: { guesserNames: string[]; timeLimit: number }) => {
       spotify.pauseTrack();
       stopCountdown();
+      stopPlaybackBar();
       setGuesserNames(data.guesserNames);
       startCountdown(data.timeLimit);
       setPhase('guessing');
@@ -100,6 +106,7 @@ export default function Host() {
 
     socket.on('round_result', (data: RoundResultEvent) => {
       stopCountdown();
+      stopPlaybackBar();
       spotify.pauseTrack();
       setResult(data);
       setPhase('reveal');
@@ -119,6 +126,7 @@ export default function Host() {
 
     return () => {
       stopCountdown();
+      stopPlaybackBar();
       socket.off('player_joined'); socket.off('player_left');
       socket.off('host_round_start'); socket.off('bid_received');
       socket.off('betting_closed'); socket.off('play_song');
@@ -143,6 +151,24 @@ export default function Host() {
     if (timerRef.current) { clearInterval(timerRef.current); timerRef.current = null; }
   }
 
+  // Drive a smooth playback bar over the clip's duration. rAF (rather than the
+  // 1s countdown) keeps even sub-second clips visibly animating.
+  function startPlaybackBar(durationMs: number) {
+    stopPlaybackBar();
+    const start = performance.now();
+    const tick = (now: number) => {
+      const p = Math.min(1, (now - start) / durationMs);
+      setPlayProgress(p);
+      if (p < 1) playRafRef.current = requestAnimationFrame(tick);
+    };
+    playRafRef.current = requestAnimationFrame(tick);
+  }
+
+  function stopPlaybackBar() {
+    if (playRafRef.current) { cancelAnimationFrame(playRafRef.current); playRafRef.current = null; }
+    setPlayProgress(0);
+  }
+
   const createGame = () => {
     socket.emit('create_game', ({ pin: p, error: e }: { pin?: string; error?: string }) => {
       if (e || !p) return;
@@ -151,12 +177,24 @@ export default function Host() {
     });
   };
 
+  // Deep link that pre-fills the PIN on the join screen (Play reads /play/:pin).
+  const inviteUrl = `${globalThis.location.origin}${import.meta.env.BASE_URL}play/${pin}`;
+
+  const copyInvite = () => {
+    navigator.clipboard?.writeText(inviteUrl)
+      .then(() => {
+        setCopied(true);
+        setTimeout(() => setCopied(false), 1500);
+      })
+      .catch(() => { /* clipboard unavailable; user can still read the link */ });
+  };
+
   // ─── Views ────────────────────────────────────────────────────────────────
 
   if (phase === 'connect') {
     return (
       <div className="min-h-screen flex flex-col items-center justify-center gap-6 p-6">
-        <h1 className="text-5xl font-black text-white">{APP_NAME}</h1>
+        <img src="/logo.svg" alt={APP_NAME} className="h-16 w-auto" />
         {spotify.isConnected && !spotify.playerReady ? (
           <p className="text-white/50">Connecting to Spotify...</p>
         ) : (
@@ -175,7 +213,7 @@ export default function Host() {
   if (phase === 'lobby') {
     return (
       <div className="min-h-screen flex flex-col items-center p-6 gap-6">
-        <h1 className="text-3xl font-black text-white">{APP_NAME}</h1>
+        <img src="/logo.svg" alt={APP_NAME} className="h-16 w-auto" />
         <span className="text-white/40 text-sm flex items-center gap-2">
           {spotify.playerReady ? (
             <><span className="w-2 h-2 rounded-full bg-green-500" />Spotify ready</>
@@ -196,8 +234,17 @@ export default function Host() {
           <>
             <div className="text-center">
               <p className="text-white/40 text-sm uppercase tracking-widest mb-1">PIN</p>
-              <p className="text-7xl font-black text-white tracking-widest select-text">{pin}</p>
-              <p className="text-white/40 text-sm mt-2 select-text">{window.location.origin}/play</p>
+              <div className="relative inline-block">
+                <p className="text-7xl font-black text-white tracking-widest select-text">{pin}</p>
+                <button
+                  onClick={copyInvite}
+                  aria-label="Copy invite link"
+                  title={copied ? 'Copied!' : 'Copy invite link'}
+                  className="absolute left-full bottom-1 ml-3 p-2 rounded-lg bg-white/10 hover:bg-white/20 text-white/70 transition-colors"
+                >
+                  {copied ? <Check className="w-5 h-5 text-green-400" /> : <Copy className="w-5 h-5" />}
+                </button>
+              </div>
             </div>
             <div className="w-full max-w-sm">
               <p className="text-white/40 text-sm mb-2">{players.length} player{players.length !== 1 ? 's' : ''}</p>
@@ -275,6 +322,9 @@ export default function Host() {
             <p className="text-white/50">
               {guesserNames.join(' & ')} will guess
             </p>
+            <div className="w-full max-w-sm bg-white/10 rounded-full h-2 overflow-hidden">
+              <div className="bg-purple-500 h-2 rounded-full" style={{ width: `${playProgress * 100}%` }} />
+            </div>
             <p className="text-white font-black text-2xl">{timeLeft}s</p>
           </>
         )}

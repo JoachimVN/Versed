@@ -8,7 +8,7 @@ import type { Hint, LeaderboardEntry, RoundResultEvent } from '../types';
 
 type Phase =
   | 'join' | 'waiting' | 'betting' | 'bid_submitted'
-  | 'watching' | 'guessing' | 'reveal' | 'leaderboard' | 'finished';
+  | 'watching' | 'guessing' | 'passed' | 'reveal' | 'leaderboard' | 'finished';
 
 export default function Play() {
   const { pin: pinParam } = useParams<{ pin?: string }>();
@@ -18,6 +18,7 @@ export default function Play() {
   const [error, setError] = useState('');
   const [myName, setMyName] = useState('');
   const myNameRef = useRef('');
+  const pinRef = useRef('');
   const [roundIndex, setRoundIndex] = useState(0);
   const [totalRounds, setTotalRounds] = useState(10);
   const [hints, setHints] = useState<Hint[]>([]);
@@ -52,6 +53,14 @@ export default function Play() {
   useEffect(() => {
     socket.connect();
 
+    // After any reconnect, re-attach this socket to the game so bids/guesses
+    // aren't silently dropped (the new socket id is a stranger otherwise).
+    socket.on('connect', () => {
+      if (myNameRef.current && pinRef.current) {
+        socket.emit('rejoin_player', { pin: pinRef.current, name: myNameRef.current });
+      }
+    });
+
     socket.on('round_start', (data: {
       roundIndex: number; total: number;
       hints: Hint[]; bettingTime: number;
@@ -62,6 +71,7 @@ export default function Play() {
       setBettingTime(data.bettingTime);
       setGuessText('');
       setResult(null);
+      setError('');
       startCountdown(data.bettingTime);
       setPhase('betting');
     });
@@ -113,7 +123,7 @@ export default function Play() {
 
     return () => {
       stopCountdown();
-      ['round_start','betting_closed','guessing_start','your_turn',
+      ['connect','round_start','betting_closed','guessing_start','your_turn',
        'round_result','score_update','leaderboard','game_over','host_disconnected']
         .forEach(e => socket.off(e));
       socket.disconnect();
@@ -127,35 +137,56 @@ export default function Play() {
     setError('');
     socket.emit('join_game', { pin: p, name: n }, ({ success, error: e }: { success?: boolean; error?: string }) => {
       if (e) { setError(e); return; }
-      if (success) { myNameRef.current = n; setMyName(n); setPhase('waiting'); }
+      if (success) { myNameRef.current = n; pinRef.current = p; setMyName(n); setPhase('waiting'); }
     });
   };
 
   const submitBid = () => {
     const seconds = BID_OPTIONS[bidIndex];
+    setError('');
     setMyBid(seconds);
-    socket.emit('submit_bid', { seconds });
     setPhase('bid_submitted');
+    socket.emit('submit_bid', { seconds }, (res?: { ok: boolean }) => {
+      // Bid didn't register (e.g. mid-reconnect) — don't strand the player on
+      // "waiting for others"; drop them back so they can lock in again.
+      if (res && !res.ok) {
+        setError('That didn’t go through — try again.');
+        setPhase('betting');
+      }
+    });
   };
 
   const submitGuess = () => {
     if (!guessText.trim()) return;
+    stopCountdown();
     socket.emit('submit_guess', { text: guessText }, ({ correct }: { correct: boolean }) => {
+      // One guess each: a wrong answer flashes red, then quietly ends the turn
+      // (no "wrong!" message — the reveal tells the story). A correct guess is
+      // moved on by the round_result event.
       if (!correct) {
         setGuessWrong(true);
-        setTimeout(() => setGuessWrong(false), 800);
+        setTimeout(() => {
+          setGuessWrong(false);
+          setPhase('passed');
+        }, 800);
       }
     });
+  };
+
+  const skipGuess = () => {
+    stopCountdown();
+    socket.emit('skip_guess');
+    setPhase('passed');
   };
 
   // ─── Join ─────────────────────────────────────────────────────────────────
   if (phase === 'join') {
     return (
       <div className="min-h-screen flex flex-col items-center justify-center p-6 gap-5">
-        <h1 className="text-4xl font-black text-white">{APP_NAME}</h1>
+        <img src="/logo.svg" alt={APP_NAME} className="h-16 w-auto" />
         <div className="w-full max-w-xs flex flex-col gap-3">
-          <input type="text" inputMode="numeric" placeholder="Game PIN"
-            value={pin} onChange={e => setPin(e.target.value)} maxLength={6}
+          <input type="text" inputMode="numeric" pattern="[0-9]*" placeholder="Game PIN"
+            value={pin} onChange={e => setPin(e.target.value.replace(/\D/g, ''))} maxLength={6}
             className="w-full px-4 py-4 rounded-xl bg-white/10 text-white text-center text-2xl font-bold placeholder-white/30 outline-none focus:ring-2 focus:ring-white/30 tracking-widest" />
           <input type="text" placeholder="Your name"
             value={name} onChange={e => setName(e.target.value)}
@@ -177,7 +208,7 @@ export default function Play() {
       <div className="min-h-screen flex flex-col items-center justify-center gap-4 p-6">
         <div className="w-12 h-12 border-4 border-purple-500 border-t-transparent rounded-full animate-spin" />
         <p className="text-white text-xl font-bold">{myName}</p>
-        <p className="text-white/50">Waiting for the host...</p>
+        <p className="text-white/50">You're in! Waiting for the host to start the game…</p>
       </div>
     );
   }
@@ -226,6 +257,8 @@ export default function Play() {
             ><ChevronRight className="w-6 h-6" /></button>
           </div>
         </div>
+
+        {error && <p className="text-red-400 text-sm text-center">{error}</p>}
 
         <button onClick={submitBid}
           className="w-full py-4 rounded-2xl bg-purple-600 text-white font-bold text-xl hover:bg-purple-500 active:scale-95 transition-all">
@@ -283,12 +316,26 @@ export default function Play() {
             autoCorrect="off"
             spellCheck={false}
           />
-          {guessWrong && <p className="text-red-400 text-sm text-center">Not quite - try again</p>}
         </div>
         <button onClick={submitGuess} disabled={!guessText.trim()}
           className="w-full py-4 rounded-2xl bg-purple-600 text-white font-bold text-xl disabled:opacity-30 hover:bg-purple-500 active:scale-95 transition-all">
           Submit
         </button>
+        <button onClick={skipGuess}
+          className="w-full py-3 rounded-2xl bg-white/5 text-white/50 font-semibold hover:bg-white/10 active:scale-95 transition-all">
+          Skip — I don't know
+        </button>
+      </div>
+    );
+  }
+
+  // ─── Turn over (wrong guess or skipped) ───────────────────────────────────
+  // Deliberately neutral — no "wrong" / "handing it over" messaging. Players
+  // see who got it (or didn't) at the reveal, which is enough.
+  if (phase === 'passed') {
+    return (
+      <div className="min-h-screen flex flex-col items-center justify-center gap-4 p-6 text-center">
+        <Music className="w-14 h-14 text-white/40 animate-pulse" />
       </div>
     );
   }
@@ -349,9 +396,9 @@ export default function Play() {
             </div>
           ))}
         </div>
-        {phase === 'leaderboard' && <p className="text-center text-white/30 text-sm">Waiting for host...</p>}
+        {phase === 'leaderboard' && <p className="text-center text-white/30 text-sm">Waiting for the host to start the next round…</p>}
         {phase === 'finished' && (
-          <button onClick={() => window.location.href = '/'}
+          <button onClick={() => globalThis.location.href = '/'}
             className="w-full py-4 rounded-2xl bg-white/10 text-white font-bold text-xl hover:bg-white/20 transition-colors">
             Play Again
           </button>
