@@ -21,6 +21,8 @@ export interface RoundResultEvent {
   guesserName: string | null;
   songTitle: string;
   artist: string;
+  year?: number | null;
+  coverUrl?: string;
   points: number;
   playerGuesses?: { name: string; guess: string | null }[];
 }

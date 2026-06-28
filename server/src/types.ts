@@ -28,6 +28,7 @@ export interface BidTier {
 export interface Round {
   song: Song;
   hints: Hint[];
+  coverUrl?: string;
   bids: Map<string, number>;
   bidTiers: BidTier[];
   tierIndex: number;

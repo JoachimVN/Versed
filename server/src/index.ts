@@ -293,6 +293,8 @@ io.on('connection', (socket) => {
         guesserName: result.guesserName,
         songTitle: round.song.title,
         artist: round.song.artist,
+        year: round.song.year,
+        coverUrl: round.coverUrl,
         points: result.points,
         playerGuesses: gm.getRoundGuesses(game),
       });
@@ -368,10 +370,11 @@ io.on('connection', (socket) => {
     if (!game) return;
     const round = gm.startRound(game);
 
-    // 25% chance to include album art — keeps it a surprise, not the norm.
-    if (randomInt(4) === 0) {
-      const imageUrl = await getAlbumArtUrl(round.song.spotifyTrackId);
-      if (imageUrl) round.hints.push({ label: 'Album art', value: '', imageUrl });
+    // Always fetch cover for the reveal screen; only show as a hint 25% of the time.
+    const coverUrl = await getAlbumArtUrl(round.song.spotifyTrackId);
+    if (coverUrl) {
+      round.coverUrl = coverUrl;
+      if (randomInt(4) === 0) round.hints.push({ label: 'Album art', value: '', imageUrl: coverUrl });
     }
 
     const bettingEndsAt = Date.now() + game.bettingTime * 1000;
@@ -412,6 +415,8 @@ io.on('connection', (socket) => {
         guesserName: null,
         songTitle: round.song.title,
         artist: round.song.artist,
+        year: round.song.year,
+        coverUrl: round.coverUrl,
         points: 0,
         playerGuesses: [],
       });
@@ -464,6 +469,8 @@ io.on('connection', (socket) => {
       guesserName: null,
       songTitle: round.song.title,
       artist: round.song.artist,
+      year: round.song.year,
+      coverUrl: round.coverUrl,
       points: 0,
       playerGuesses: gm.getRoundGuesses(game),
     });

@@ -564,10 +564,20 @@ function RevealView({ game, result }: Readonly<{ game: PlayState; result: RoundR
           : <p className="text-white/60 text-xl">No one got it</p>
         }
       </div>
-      <div className="bg-white/5 rounded-2xl p-5 w-full">
-        <p className="text-white/40 text-sm mb-1">The song was</p>
-        <p className="text-white font-black text-xl">{result.songTitle}</p>
-        <p className="text-white/60">{result.artist}</p>
+      <div className="flex flex-col items-center text-center gap-3 w-full">
+        <p className="text-white/30 text-xs uppercase tracking-widest">The song was</p>
+        {result.coverUrl && (
+          <img
+            src={result.coverUrl}
+            alt="Album art"
+            className="w-40 h-40 rounded-2xl object-cover shadow-[0_8px_40px_rgba(0,0,0,0.7)]"
+          />
+        )}
+        <div>
+          <p className="text-white font-black text-2xl leading-tight">{result.songTitle}</p>
+          <p className="text-white/50 mt-1">{result.artist}</p>
+          {result.year && <p className="text-white/25 text-sm mt-0.5">{result.year}</p>}
+        </div>
       </div>
       {result.playerGuesses && result.playerGuesses.length > 0 && (
         <div className="bg-white/5 rounded-2xl p-4 w-full space-y-1.5">
