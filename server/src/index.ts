@@ -466,6 +466,9 @@ io.on('connection', (socket) => {
       points: 0,
       playerGuesses: gm.getRoundGuesses(game),
     });
+    io.to(game.pin).emit('score_update', {
+      players: Array.from(game.players.values()).map(p => ({ name: p.name, score: p.score, streak: p.streak })),
+    });
   }
 
   function startGuessingPhase(game: ReturnType<typeof gm.getGame> & object) {
