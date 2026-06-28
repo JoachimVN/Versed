@@ -556,6 +556,23 @@ function RevealView({ game, result }: Readonly<{ game: PlayState; result: RoundR
         <p className="text-white font-black text-xl">{result.songTitle}</p>
         <p className="text-white/60">{result.artist}</p>
       </div>
+      {result.playerGuesses && result.playerGuesses.length > 0 && (
+        <div className="bg-white/5 rounded-2xl p-4 w-full space-y-1.5">
+          {result.playerGuesses.map(g => (
+            <div key={g.name} className="flex justify-between items-center gap-4">
+              <span className="text-white/50 text-sm shrink-0">{g.name}</span>
+              {(() => {
+                const skipped = g.guess === null;
+                const correct = result.correct && g.name === result.guesserName;
+                let cls = 'text-white/40';
+                if (skipped) cls = 'text-white/25 italic';
+                else if (correct) cls = 'text-green-400';
+                return <span className={`text-sm text-right truncate ${cls}`}>{skipped ? 'skipped' : `"${g.guess}"`}</span>;
+              })()}
+            </div>
+          ))}
+        </div>
+      )}
       <div className="bg-white/5 rounded-2xl px-8 py-4">
         <p className="text-3xl font-black text-white">{myScore.toLocaleString()}</p>
         <p className="text-white/40 text-sm">your score</p>

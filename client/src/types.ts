@@ -20,6 +20,7 @@ export interface RoundResultEvent {
   songTitle: string;
   artist: string;
   points: number;
+  playerGuesses?: { name: string; guess: string | null }[];
 }
 
 declare global {

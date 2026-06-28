@@ -629,12 +629,25 @@ function RevealView({ game, result }: Readonly<{ game: HostState; result: RoundR
         {players
           .slice()
           .sort((a, b) => (b.score ?? 0) - (a.score ?? 0))
-          .map(p => (
-            <div key={p.name} className="flex justify-between px-4 py-2 bg-white/5 rounded-xl">
-              <span className="text-white font-semibold">{p.name}</span>
-              <span className="text-white/60">{(p.score ?? 0).toLocaleString()}</span>
-            </div>
-          ))}
+          .map(p => {
+            const entry = result.playerGuesses?.find(g => g.name === p.name);
+            return (
+              <div key={p.name} className="flex justify-between items-center px-4 py-2 bg-white/5 rounded-xl">
+                <div>
+                  <span className="text-white font-semibold">{p.name}</span>
+                  {entry && (() => {
+                    const skipped = entry.guess === null;
+                    const correct = result.correct && p.name === result.guesserName;
+                    let cls = 'text-white/40';
+                    if (skipped) cls = 'text-white/30 italic';
+                    else if (correct) cls = 'text-green-400';
+                    return <p className={`text-xs mt-0.5 ${cls}`}>{skipped ? 'skipped' : `"${entry.guess}"`}</p>;
+                  })()}
+                </div>
+                <span className="text-white/60">{(p.score ?? 0).toLocaleString()}</span>
+              </div>
+            );
+          })}
       </div>
       <button
         onClick={() => socket.emit('next_round')}

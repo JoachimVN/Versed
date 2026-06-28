@@ -101,7 +101,7 @@ io.on('connection', (socket) => {
   // ── Host: start a new game without a page reload ─────────────────────────
   socket.on('new_game', (callback: (r: { pin?: string; error?: string }) => void) => {
     const oldGame = gm.getGameBySocket(socket.id);
-    if (!oldGame || oldGame.hostSocketId !== socket.id) return callback({ error: 'Not a host' });
+    if (oldGame?.hostSocketId !== socket.id) return callback({ error: 'Not a host' });
     const oldPin = oldGame.pin;
 
     // Cancel any pending player disconnect timers for this game.
@@ -275,6 +275,7 @@ io.on('connection', (socket) => {
         songTitle: round.song.title,
         artist: round.song.artist,
         points: result.points,
+        playerGuesses: gm.getRoundGuesses(game),
       });
       io.to(game.pin).emit('score_update', {
         players: Array.from(game.players.values()).map(p => ({ name: p.name, score: p.score })),
@@ -386,6 +387,7 @@ io.on('connection', (socket) => {
         songTitle: round.song.title,
         artist: round.song.artist,
         points: 0,
+        playerGuesses: [],
       });
       return;
     }
@@ -437,6 +439,7 @@ io.on('connection', (socket) => {
       songTitle: round.song.title,
       artist: round.song.artist,
       points: 0,
+      playerGuesses: gm.getRoundGuesses(game),
     });
   }
 

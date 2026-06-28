@@ -35,6 +35,7 @@ export interface Round {
   answered: boolean;
   passed: Set<string>; // guessers whose turn is over this tier (wrong guess or skip)
   earlyGuessers: Set<string>; // guessers who opted in before their listening time expired
+  guesses: Map<string, string | null>; // socketId → text submitted (null = skipped)
 }
 
 export interface Player {

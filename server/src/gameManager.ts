@@ -109,6 +109,7 @@ function buildRound(usedSongIds: Set<string>): Round {
     answered: false,
     passed: new Set(),
     earlyGuessers: new Set(),
+    guesses: new Map(),
   };
 }
 
@@ -180,6 +181,8 @@ export function rejoinPlayer(game: Game, newSocketId: string, name: string): Pla
       round.guesserSocketIds = round.guesserSocketIds.map(id => (id === oldId ? newSocketId : id));
       round.bidTiers.forEach(t => { t.socketIds = t.socketIds.map(id => (id === oldId ? newSocketId : id)); });
       if (round.passed.delete(oldId)) round.passed.add(newSocketId);
+      const guess = round.guesses.get(oldId);
+      if (guess !== undefined) { round.guesses.set(newSocketId, guess); round.guesses.delete(oldId); }
     }
   }
   socketToPin.set(newSocketId, game.pin);
@@ -281,6 +284,7 @@ export function recordGuess(
   }
   if (round.answered || round.passed.has(socketId)) return null;
 
+  round.guesses.set(socketId, text);
   const correct = isCorrectGuess(text, round.song.title);
   const guesserName = game.players.get(socketId)?.name ?? '';
 
@@ -311,9 +315,18 @@ export function skipGuess(game: Game, socketId: string): { allDone: boolean } | 
   }
   if (round.answered || round.passed.has(socketId)) return null;
 
+  round.guesses.set(socketId, null);
   round.passed.add(socketId);
   const allDone = round.guesserSocketIds.every(id => round.passed.has(id));
   return { allDone };
+}
+
+export function getRoundGuesses(game: Game): { name: string; guess: string | null }[] {
+  const round = game.currentRound;
+  if (!round) return [];
+  return Array.from(round.guesses.entries())
+    .map(([id, guess]) => ({ name: game.players.get(id)?.name ?? '', guess }))
+    .filter(g => g.name);
 }
 
 export function getLeaderboard(game: Game) {
