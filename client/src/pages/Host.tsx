@@ -194,7 +194,7 @@ export default function Host() {
   if (phase === 'connect') {
     return (
       <div className="min-h-screen flex flex-col items-center justify-center gap-6 p-6">
-        <img src="/logo.svg" alt={APP_NAME} className="h-16 w-auto" />
+        <img src={`${import.meta.env.BASE_URL}logo.svg`} alt={APP_NAME} className="h-16 w-auto" />
         {spotify.isConnected && !spotify.playerReady ? (
           <p className="text-white/50">Connecting to Spotify...</p>
         ) : (
@@ -213,7 +213,7 @@ export default function Host() {
   if (phase === 'lobby') {
     return (
       <div className="min-h-screen flex flex-col items-center p-6 gap-6">
-        <img src="/logo.svg" alt={APP_NAME} className="h-16 w-auto" />
+        <img src={`${import.meta.env.BASE_URL}logo.svg`} alt={APP_NAME} className="h-16 w-auto" />
         <span className="text-white/40 text-sm flex items-center gap-2">
           {spotify.playerReady ? (
             <><span className="w-2 h-2 rounded-full bg-green-500" />Spotify ready</>
