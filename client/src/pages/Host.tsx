@@ -30,7 +30,9 @@ export default function Host() {
   const [result, setResult] = useState<RoundResultEvent | null>(null);
   const [leaderboard, setLeaderboard] = useState<LeaderboardEntry[]>([]);
   const [copied, setCopied] = useState(false);
+  const [playProgress, setPlayProgress] = useState(0);
   const timerRef = useRef<ReturnType<typeof setInterval> | null>(null);
+  const playRafRef = useRef<number | null>(null);
 
   useEffect(() => {
     if (spotify.isConnected && phase === 'connect') setPhase('lobby');
@@ -89,11 +91,13 @@ export default function Host() {
       await spotify.startPrepared(data.durationMs);
       socket.emit('song_started');
       startCountdown(data.durationMs / 1000);
+      startPlaybackBar(data.durationMs);
     });
 
     socket.on('guessing_start', (data: { guesserNames: string[]; timeLimit: number }) => {
       spotify.pauseTrack();
       stopCountdown();
+      stopPlaybackBar();
       setGuesserNames(data.guesserNames);
       startCountdown(data.timeLimit);
       setPhase('guessing');
@@ -101,6 +105,7 @@ export default function Host() {
 
     socket.on('round_result', (data: RoundResultEvent) => {
       stopCountdown();
+      stopPlaybackBar();
       spotify.pauseTrack();
       setResult(data);
       setPhase('reveal');
@@ -120,6 +125,7 @@ export default function Host() {
 
     return () => {
       stopCountdown();
+      stopPlaybackBar();
       socket.off('player_joined'); socket.off('player_left');
       socket.off('host_round_start'); socket.off('bid_received');
       socket.off('betting_closed'); socket.off('play_song');
@@ -142,6 +148,24 @@ export default function Host() {
 
   function stopCountdown() {
     if (timerRef.current) { clearInterval(timerRef.current); timerRef.current = null; }
+  }
+
+  // Drive a smooth playback bar over the clip's duration. rAF (rather than the
+  // 1s countdown) keeps even sub-second clips visibly animating.
+  function startPlaybackBar(durationMs: number) {
+    stopPlaybackBar();
+    const start = performance.now();
+    const tick = (now: number) => {
+      const p = Math.min(1, (now - start) / durationMs);
+      setPlayProgress(p);
+      if (p < 1) playRafRef.current = requestAnimationFrame(tick);
+    };
+    playRafRef.current = requestAnimationFrame(tick);
+  }
+
+  function stopPlaybackBar() {
+    if (playRafRef.current) { cancelAnimationFrame(playRafRef.current); playRafRef.current = null; }
+    setPlayProgress(0);
   }
 
   const createGame = () => {
@@ -297,6 +321,9 @@ export default function Host() {
             <p className="text-white/50">
               {guesserNames.join(' & ')} will guess
             </p>
+            <div className="w-full max-w-sm bg-white/10 rounded-full h-2 overflow-hidden">
+              <div className="bg-purple-500 h-2 rounded-full" style={{ width: `${playProgress * 100}%` }} />
+            </div>
             <p className="text-white font-black text-2xl">{timeLeft}s</p>
           </>
         )}
