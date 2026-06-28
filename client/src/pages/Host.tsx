@@ -1,6 +1,6 @@
 import { useState, useEffect, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { Music, Check, X, Loader2, Copy, ChevronDown, ArrowLeft } from 'lucide-react';
+import { Music, Check, X, Loader2, Copy, ArrowLeft, Settings } from 'lucide-react';
 import QRCode from 'react-qr-code';
 import { socket } from '../socket';
 import { useSpotify } from '../hooks/useSpotify';
@@ -365,6 +365,24 @@ function LobbyView({ game }: Readonly<{ game: HostState }>) {
       <button onClick={() => navigate('/')} className="absolute top-5 left-5 p-2 rounded-xl bg-white/10 text-white/60 hover:bg-white/20 hover:text-white transition-colors z-10">
         <ArrowLeft className="w-5 h-5" />
       </button>
+      <button onClick={toggleSettings} className="absolute top-5 right-5 p-2 rounded-xl bg-white/10 text-white/60 hover:bg-white/20 hover:text-white transition-colors z-10">
+        <Settings className="w-5 h-5" />
+      </button>
+
+      {/* Settings panel — drops below the top bar when open */}
+      {settingsOpen && (
+        <div className="absolute top-16 right-5 z-20 bg-[#1a1a2e] border border-white/10 rounded-2xl p-4 space-y-4 w-64 shadow-xl">
+          <SettingRow label="Bet time" value={bettingTimeSetting} unit="s"
+            onDec={() => setBettingTimeSetting(Math.max(5, bettingTimeSetting - 5))}
+            onInc={() => setBettingTimeSetting(Math.min(60, bettingTimeSetting + 5))} />
+          <SettingRow label="Guess time" value={guessingTimeSetting} unit="s"
+            onDec={() => setGuessingTimeSetting(Math.max(5, guessingTimeSetting - 5))}
+            onInc={() => setGuessingTimeSetting(Math.min(60, guessingTimeSetting + 5))} />
+          <SettingRow label="Rounds" value={roundsSetting} unit=""
+            onDec={() => setRoundsSetting(Math.max(1, roundsSetting - 1))}
+            onInc={() => setRoundsSetting(Math.min(30, roundsSetting + 1))} />
+        </div>
+      )}
 
       {/* Header slides up from center on game creation using translateY */}
       <div
@@ -384,20 +402,22 @@ function LobbyView({ game }: Readonly<{ game: HostState }>) {
       {pin ? (
         <div className={`flex-1 flex flex-col items-center gap-5 px-6 pb-6 transition-all duration-500 ${lobbyVisible ? 'opacity-100 translate-y-0' : 'opacity-0 translate-y-6'}`}>
           {/* Join card */}
-          <div className="w-full max-w-sm bg-white/5 rounded-2xl p-5">
-            <div className="flex items-start justify-between gap-4">
-              <div className="flex-1 min-w-0">
-                <p className="text-white/40 text-xs uppercase tracking-widest mb-0.5">Join at</p>
-                <p className="text-white font-semibold text-base">
-                  {`${globalThis.location.origin}${import.meta.env.BASE_URL}`.replace(/\/+$/, '')}
-                </p>
-                <div className="mt-4">
+          <div className="w-full max-w-md bg-white/5 rounded-2xl p-5">
+            <div className="flex items-stretch gap-5">
+              <div className="flex-1 min-w-0 flex flex-col justify-between">
+                <div>
+                  <p className="text-white/40 text-xs uppercase tracking-widest mb-0.5">Join at</p>
+                  <p className="text-white font-semibold text-base">
+                    {`${globalThis.location.origin}${import.meta.env.BASE_URL}`.replace(/\/+$/, '')}
+                  </p>
+                </div>
+                <div>
                   <p className="text-white/40 text-xs uppercase tracking-widest mb-0.5">PIN</p>
                   <p className="text-6xl font-black text-white tracking-widest leading-none select-text">{pin}</p>
                 </div>
               </div>
-              <div className="p-2 bg-white rounded-xl shrink-0">
-                <QRCode value={`${globalThis.location.origin}${import.meta.env.BASE_URL}play/${pin}`} size={96} />
+              <div className="p-2 bg-white rounded-xl shrink-0 flex items-center">
+                <QRCode value={`${globalThis.location.origin}${import.meta.env.BASE_URL}play/${pin}`} size={128} />
               </div>
             </div>
             <button
@@ -410,7 +430,7 @@ function LobbyView({ game }: Readonly<{ game: HostState }>) {
           </div>
 
           {/* Players */}
-          <div className="w-full max-w-sm">
+          <div className="w-full max-w-md">
             <p className="text-white/40 text-sm mb-2">{players.length} player{players.length === 1 ? '' : 's'}</p>
             <div className="flex flex-wrap gap-2">
               {players.map(p => (
@@ -420,31 +440,9 @@ function LobbyView({ game }: Readonly<{ game: HostState }>) {
           </div>
 
           <button
-            onClick={toggleSettings}
-            className="flex items-center gap-1.5 text-white/40 text-sm hover:text-white/70 transition-colors"
-          >
-            Settings
-            <ChevronDown className={`w-4 h-4 transition-transform duration-200 ${settingsOpen ? 'rotate-180' : ''}`} />
-          </button>
-
-          {settingsOpen && (
-            <div className="w-full max-w-sm bg-white/5 rounded-2xl p-4 space-y-4">
-              <SettingRow label="Bet time" value={bettingTimeSetting} unit="s"
-                onDec={() => setBettingTimeSetting(Math.max(5, bettingTimeSetting - 5))}
-                onInc={() => setBettingTimeSetting(Math.min(60, bettingTimeSetting + 5))} />
-              <SettingRow label="Guess time" value={guessingTimeSetting} unit="s"
-                onDec={() => setGuessingTimeSetting(Math.max(5, guessingTimeSetting - 5))}
-                onInc={() => setGuessingTimeSetting(Math.min(60, guessingTimeSetting + 5))} />
-              <SettingRow label="Rounds" value={roundsSetting} unit=""
-                onDec={() => setRoundsSetting(Math.max(1, roundsSetting - 1))}
-                onInc={() => setRoundsSetting(Math.min(30, roundsSetting + 1))} />
-            </div>
-          )}
-
-          <button
             onClick={startGame}
             disabled={players.length === 0}
-            className="mt-auto w-full max-w-sm py-4 rounded-2xl bg-purple-600 text-white font-bold text-xl disabled:opacity-30 hover:bg-purple-500 transition-colors"
+            className="mt-auto w-full max-w-md py-4 rounded-2xl bg-purple-600 text-white font-bold text-xl disabled:opacity-30 hover:bg-purple-500 transition-colors"
           >
             Start Game
           </button>
