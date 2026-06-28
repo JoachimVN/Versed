@@ -42,6 +42,8 @@ interface PlayState {
   submitBid: () => void;
   submitGuess: () => void;
   skipGuess: () => void;
+  newGamePin: string | null;
+  rejoinNewGame: () => void;
 }
 
 function usePlayGame(pinParam?: string): PlayState {
@@ -68,6 +70,8 @@ function usePlayGame(pinParam?: string): PlayState {
   const [leaderboard, setLeaderboard] = useState<LeaderboardEntry[]>([]);
   const [reconnecting, setReconnecting] = useState(false);
   const [hostReconnecting, setHostReconnecting] = useState(false);
+  const [newGamePin, setNewGamePin] = useState<string | null>(null);
+  const newGamePinRef = useRef<string | null>(null);
   const [savedSession, setSavedSession] = useState<{ pin: string; name: string } | null>(() => {
     try { return JSON.parse(localStorage.getItem('versed_session') ?? 'null'); }
     catch { return null; }
@@ -195,12 +199,17 @@ function usePlayGame(pinParam?: string): PlayState {
       setPhase('join');
     });
 
+    socket.on('game_restarted', ({ newPin }: { newPin: string }) => {
+      newGamePinRef.current = newPin;
+      setNewGamePin(newPin);
+    });
+
     return () => {
       stopCountdown();
       if (autoSubmitTimerRef.current) clearTimeout(autoSubmitTimerRef.current);
       ['connect','disconnect','round_start','betting_closed','guessing_start','your_turn',
        'round_result','score_update','leaderboard','game_over',
-       'host_reconnecting','host_reconnected','host_disconnected']
+       'host_reconnecting','host_reconnected','host_disconnected','game_restarted']
         .forEach(e => socket.off(e));
       socket.disconnect();
     };
@@ -270,10 +279,33 @@ function usePlayGame(pinParam?: string): PlayState {
     setPhase('passed');
   };
 
+  const rejoinNewGame = () => {
+    const newPin = newGamePinRef.current;
+    const n = myNameRef.current;
+    if (!newPin || !n) return;
+    setError('');
+    socket.emit('join_game', { pin: newPin, name: n }, ({ success, error: e }: { success?: boolean; error?: string }) => {
+      if (e) { setError(e); return; }
+      if (success) {
+        pinRef.current = newPin;
+        setPin(newPin);
+        newGamePinRef.current = null;
+        setNewGamePin(null);
+        const session = { pin: newPin, name: n };
+        setSavedSession(session);
+        localStorage.setItem('versed_session', JSON.stringify(session));
+        setLeaderboard([]);
+        setResult(null);
+        setPhase('waiting');
+      }
+    });
+  };
+
   return {
     phase, pin, name, myName, error, roundIndex, totalRounds, hints,
     timeLeft, bettingTime, bidIndex, myBid, guesserNames, lowestBid,
     guessText, result, myScore, leaderboard, reconnecting, hostReconnecting, savedSession, guessInputRef,
+    newGamePin, rejoinNewGame,
     setPin, setName,
   setBidIndex: (i: number | ((prev: number) => number)) => {
     setBidIndex(prev => {
@@ -520,7 +552,7 @@ function RevealView({ game, result }: Readonly<{ game: PlayState; result: RoundR
 }
 
 function LeaderboardView({ game }: Readonly<{ game: PlayState }>) {
-  const { phase, myName, myScore, leaderboard } = game;
+  const { phase, myName, myScore, leaderboard, newGamePin, rejoinNewGame } = game;
   const myEntry = leaderboard.find(e => e.name === myName);
   return (
     <div className="min-h-screen flex flex-col p-6 gap-4">
@@ -545,10 +577,25 @@ function LeaderboardView({ game }: Readonly<{ game: PlayState }>) {
         ))}
       </div>
       {phase === 'leaderboard' && <p className="text-center text-white/30 text-sm">Waiting for the host to start the next round…</p>}
-      {phase === 'finished' && (
+      {phase === 'finished' && newGamePin && (
+        <div className="space-y-3">
+          <div className="bg-emerald-900/40 border border-emerald-500/40 rounded-2xl px-4 py-3 text-center">
+            <p className="text-emerald-300 text-sm font-semibold">Host started a new game!</p>
+          </div>
+          <button onClick={rejoinNewGame}
+            className="w-full py-4 rounded-2xl bg-emerald-600 text-white font-bold text-xl hover:bg-emerald-500 transition-colors">
+            Play Again
+          </button>
+          <button onClick={() => { globalThis.location.href = '/'; }}
+            className="w-full py-3 rounded-2xl bg-white/10 text-white/60 font-semibold text-base hover:bg-white/20 transition-colors">
+            Leave
+          </button>
+        </div>
+      )}
+      {phase === 'finished' && !newGamePin && (
         <button onClick={() => { globalThis.location.href = '/'; }}
           className="w-full py-4 rounded-2xl bg-white/10 text-white font-bold text-xl hover:bg-white/20 transition-colors">
-          Play Again
+          Leave
         </button>
       )}
     </div>

@@ -48,6 +48,7 @@ interface HostState {
   createGame: () => void;
   startGame: () => void;
   copyInvite: () => void;
+  newGame: () => void;
 }
 
 function useHostGame(): HostState {
@@ -255,6 +256,27 @@ function useHostGame(): HostState {
       .catch(() => { /* clipboard unavailable; user can still read the link */ });
   };
 
+  const newGame = () => {
+    socket.emit('new_game', ({ pin: p, error: e }: { pin?: string; error?: string }) => {
+      if (e || !p) return;
+      pinRef.current = p;
+      setPin(p);
+      setPlayers([]);
+      setLeaderboard([]);
+      setResult(null);
+      setRoundIndex(0);
+      setHints([]);
+      setBidCount(0);
+      setGuesserNames([]);
+      setPlayerBids([]);
+      setLowestBid(0);
+      setReconnectingCount(0);
+      stopCountdown();
+      stopPlaybackBar();
+      setPhase('lobby');
+    });
+  };
+
   return {
     spotify, phase, pin, players, roundIndex, totalRounds, hints,
     bettingTime, timeLeft, bidCount, countdown, guesserNames, lowestBid, playerBids,
@@ -263,7 +285,7 @@ function useHostGame(): HostState {
     reconnecting, reconnectingCount,
     toggleSettings: () => setSettingsOpen(o => !o),
     setBettingTimeSetting, setGuessingTimeSetting, setRoundsSetting,
-    createGame, startGame, copyInvite,
+    createGame, startGame, copyInvite, newGame,
   };
 }
 
@@ -627,8 +649,8 @@ function LeaderboardView({ game }: Readonly<{ game: HostState }>) {
         ))}
       </div>
       {phase === 'finished' && (
-        <button onClick={() => globalThis.location.reload()}
-          className="w-full py-4 rounded-2xl bg-white/10 text-white font-bold text-xl hover:bg-white/20 transition-colors">
+        <button onClick={game.newGame}
+          className="w-full py-4 rounded-2xl bg-purple-600 text-white font-bold text-xl hover:bg-purple-500 transition-colors">
           New Game
         </button>
       )}

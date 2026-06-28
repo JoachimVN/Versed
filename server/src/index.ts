@@ -98,6 +98,34 @@ io.on('connection', (socket) => {
     }
   }
 
+  // ── Host: start a new game without a page reload ─────────────────────────
+  socket.on('new_game', (callback: (r: { pin?: string; error?: string }) => void) => {
+    const oldGame = gm.getGameBySocket(socket.id);
+    if (!oldGame || oldGame.hostSocketId !== socket.id) return callback({ error: 'Not a host' });
+    const oldPin = oldGame.pin;
+
+    // Cancel any pending player disconnect timers for this game.
+    for (const sid of oldGame.players.keys()) {
+      const t = playerDisconnectTimers.get(sid);
+      if (t) { clearTimeout(t); playerDisconnectTimers.delete(sid); }
+    }
+
+    // Tear down old game state, then create the new one so we have its PIN.
+    gm.cleanupGame(oldPin);
+    const newGame = gm.createGame(socket.id);
+
+    // Notify players still subscribed to the old room (Socket.IO rooms persist
+    // independently of game state, so the emit reaches them before they leave).
+    io.to(`player:${oldPin}`).emit('game_restarted', { newPin: newGame.pin });
+
+    socket.leave(oldPin);
+    socket.leave(`host:${oldPin}`);
+    socket.join(newGame.pin);
+    socket.join(`host:${newGame.pin}`);
+
+    callback({ pin: newGame.pin });
+  });
+
   // ── Host: rejoin after reconnect ──────────────────────────────────────────
   socket.on('rejoin_host', ({ pin }: { pin: string }, callback: (r: { players: { name: string }[] }) => void) => {
     const game = gm.getGame(pin);
