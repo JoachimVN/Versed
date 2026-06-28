@@ -65,6 +65,7 @@ function usePlayGame(pinParam?: string): PlayState {
   const [myScore, setMyScore] = useState(0);
   const [leaderboard, setLeaderboard] = useState<LeaderboardEntry[]>([]);
   const timerRef = useRef<ReturnType<typeof setInterval> | null>(null);
+  const guessTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const guessInputRef = useRef<HTMLInputElement>(null);
 
   function startCountdown(seconds: number) {
@@ -128,6 +129,11 @@ function usePlayGame(pinParam?: string): PlayState {
 
     socket.on('round_result', (data: RoundResultEvent) => {
       stopCountdown();
+      if (guessTimeoutRef.current) {
+        clearTimeout(guessTimeoutRef.current);
+        guessTimeoutRef.current = null;
+      }
+      setGuessWrong(false);
       setResult(data);
       setPhase('reveal');
     });
@@ -155,6 +161,7 @@ function usePlayGame(pinParam?: string): PlayState {
 
     return () => {
       stopCountdown();
+      if (guessTimeoutRef.current) clearTimeout(guessTimeoutRef.current);
       ['connect','round_start','betting_closed','guessing_start','your_turn',
        'round_result','score_update','leaderboard','game_over','host_disconnected']
         .forEach(e => socket.off(e));
@@ -197,7 +204,7 @@ function usePlayGame(pinParam?: string): PlayState {
       // moved on by the round_result event.
       if (!correct) {
         setGuessWrong(true);
-        setTimeout(() => {
+        guessTimeoutRef.current = setTimeout(() => {
           setGuessWrong(false);
           setPhase('passed');
         }, 800);
