@@ -23,6 +23,11 @@ const hostDisconnectTimers = new Map<string, ReturnType<typeof setTimeout>>();
 // socketId → pending player-disconnect timer
 const playerDisconnectTimers = new Map<string, ReturnType<typeof setTimeout>>();
 
+// IP → timestamps of recent create_game calls (for rate limiting)
+const createGameAttempts = new Map<string, number[]>();
+const CREATE_GAME_LIMIT = 5;
+const CREATE_GAME_WINDOW_MS = 60 * 60 * 1000; // 1 hour
+
 const allowedOrigins = new Set(
   (process.env.CORS_ORIGINS || process.env.FRONTEND_URL || '')
     .split(',')
@@ -64,6 +69,18 @@ io.on('connection', (socket) => {
 
   // ── Host: create game ──────────────────────────────────────────────────────
   socket.on('create_game', (callback: (r: { pin?: string; error?: string }) => void) => {
+    if (gm.activeGameCount() >= gm.MAX_ACTIVE_GAMES) {
+      return callback({ error: 'Server is at capacity, try again later' });
+    }
+
+    const ip = socket.handshake.address;
+    const now = Date.now();
+    const attempts = (createGameAttempts.get(ip) ?? []).filter(t => now - t < CREATE_GAME_WINDOW_MS);
+    if (attempts.length >= CREATE_GAME_LIMIT) {
+      return callback({ error: 'Too many games created, try again later' });
+    }
+    createGameAttempts.set(ip, [...attempts, now]);
+
     const game = gm.createGame(socket.id);
     socket.join(game.pin);
     socket.join(`host:${game.pin}`);

@@ -7,6 +7,8 @@ export const BID_OPTIONS = [0.1, 0.5, 1, 1.5, 2, 2.5, 3, 4, 5, 7, 10, 15, 20, 30
 export const BETTING_TIME = 15;
 export const GUESSING_TIME = 15;
 export const TOTAL_ROUNDS = 10;
+export const MAX_PLAYERS = 50;
+export const MAX_ACTIVE_GAMES = 20;
 
 // The tiniest bids ask for so little audio that a clip can land entirely inside
 // a song's near-silent lead-in and reveal nothing — pure bad luck the bidder
@@ -142,6 +144,10 @@ function buildRound(usedSongIds: Set<string>): Round {
 
 // ─── Public API ───────────────────────────────────────────────────────────────
 
+export function activeGameCount(): number {
+  return games.size;
+}
+
 export function createGame(hostSocketId: string): Game {
   const pin = generatePin();
   const game: Game = {
@@ -173,6 +179,7 @@ export function getGameBySocket(socketId: string): Game | undefined {
 }
 
 export function addPlayer(game: Game, socketId: string, name: string): Player | null {
+  if (game.players.size >= MAX_PLAYERS) return null;
   const taken = Array.from(game.players.values()).some(
     p => p.name.toLowerCase() === name.trim().toLowerCase()
   );
