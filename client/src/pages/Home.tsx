@@ -7,7 +7,7 @@ export default function Home() {
   return (
     <div className="min-h-screen flex flex-col items-center justify-center gap-8 p-6">
       <div className="text-center">
-        <img src="/logo.svg" alt={APP_NAME} className="mx-auto h-16 w-auto" />
+        <img src={`${import.meta.env.BASE_URL}logo.svg`} alt={APP_NAME} className="mx-auto h-16 w-auto" />
         <p className="mt-2 text-white/60 text-lg">Music quiz for everyone in the room</p>
       </div>
 
