@@ -1,5 +1,6 @@
 import express from 'express';
 import { createServer } from 'node:http';
+import { randomInt } from 'node:crypto';
 import { Server } from 'socket.io';
 import cors from 'cors';
 import path from 'node:path';
@@ -368,7 +369,7 @@ io.on('connection', (socket) => {
     const round = gm.startRound(game);
 
     // 25% chance to include album art — keeps it a surprise, not the norm.
-    if (Math.random() < 0.25) {
+    if (randomInt(4) === 0) {
       const imageUrl = await getAlbumArtUrl(round.song.spotifyTrackId);
       if (imageUrl) round.hints.push({ label: 'Album art', value: '', imageUrl });
     }

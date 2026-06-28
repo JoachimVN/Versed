@@ -475,7 +475,7 @@ function LobbyView({ game }: Readonly<{ game: HostState }>) {
                 <div>
                   <p className="text-white/40 text-xs uppercase tracking-widest mb-0.5">Join at</p>
                   <p className="text-white font-semibold text-base">
-                    {`${globalThis.location.origin}${import.meta.env.BASE_URL}`.replace(/\/+$/, '')}
+                    {`${globalThis.location.origin}${import.meta.env.BASE_URL}`.replace(/\/$/, '')}
                   </p>
                 </div>
                 <div>
@@ -529,7 +529,7 @@ function LobbyView({ game }: Readonly<{ game: HostState }>) {
   );
 }
 
-function HintCards({ hints }: { hints: Hint[] }) {
+function HintCards({ hints }: { hints: readonly Hint[] }) {
   const imageHint = hints.find(h => h.imageUrl);
   const textHints = hints.filter(h => !h.imageUrl);
   return (

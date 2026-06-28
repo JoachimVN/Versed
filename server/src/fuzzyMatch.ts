@@ -12,7 +12,7 @@ const HOMOPHONES: Record<string, string> = {
 };
 
 const PAREN_METADATA = /^\s*(feat|ft|featuring|from|with|remaster|live|acoustic|remix|edit|version|radio|original|extended|deluxe|bonus|interlude)\b/i;
-const PAREN_RE = /^(.*?)[([]((.+?))[)\]]/;
+const PAREN_RE = /^([^([]*)[([](([^)\]]*?))[)\]]/;
 
 function normalize(s: string): string {
   return s
