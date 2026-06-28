@@ -351,22 +351,37 @@ function LobbyView({ game }: Readonly<{ game: HostState }>) {
     toggleSettings, setBettingTimeSetting, setGuessingTimeSetting, setRoundsSetting,
   } = game;
   const navigate = useNavigate();
+  const [lobbyVisible, setLobbyVisible] = useState(false);
+
+  useEffect(() => {
+    if (!pin) { setLobbyVisible(false); return; }
+    const t = setTimeout(() => setLobbyVisible(true), 10);
+    return () => clearTimeout(t);
+  }, [pin]);
+
   return (
-    <div className="min-h-screen flex flex-col items-center p-6 gap-6">
-      <button onClick={() => navigate('/')} className="absolute top-5 left-5 p-2 rounded-xl bg-white/10 text-white/60 hover:bg-white/20 hover:text-white transition-colors">
+    <div className="min-h-screen relative flex flex-col overflow-hidden">
+      <button onClick={() => navigate('/')} className="absolute top-5 left-5 p-2 rounded-xl bg-white/10 text-white/60 hover:bg-white/20 hover:text-white transition-colors z-10">
         <ArrowLeft className="w-5 h-5" />
       </button>
-      <img src={`${import.meta.env.BASE_URL}logo.svg`} alt={APP_NAME} className="h-16 w-auto" />
-      <span className="text-white/40 text-sm flex items-center gap-2">
-        {spotify.playerReady ? (
-          <><span className="w-2 h-2 rounded-full bg-green-500" />Spotify ready</>
-        ) : (
-          <><Loader2 className="w-3.5 h-3.5 animate-spin" />Spotify loading...</>
-        )}
-      </span>
+
+      {/* Header slides up from center on game creation using translateY */}
+      <div
+        className="flex flex-col items-center gap-6 p-6 transition-transform duration-500 ease-out"
+        style={{ transform: pin ? 'translateY(0)' : 'translateY(30vh)' }}
+      >
+        <img src={`${import.meta.env.BASE_URL}logo.svg`} alt={APP_NAME} className="h-16 w-auto" />
+        <span className="text-white/40 text-sm flex items-center gap-2">
+          {spotify.playerReady ? (
+            <><span className="w-2 h-2 rounded-full bg-green-500" />Spotify ready</>
+          ) : (
+            <><Loader2 className="w-3.5 h-3.5 animate-spin" />Spotify loading...</>
+          )}
+        </span>
+      </div>
 
       {pin ? (
-        <>
+        <div className={`flex-1 flex flex-col items-center gap-6 px-6 pb-6 transition-all duration-500 ${lobbyVisible ? 'opacity-100 translate-y-0' : 'opacity-0 translate-y-6'}`}>
           <div className="text-center">
             <p className="text-white/40 text-sm uppercase tracking-widest mb-1">PIN</p>
             <div className="relative inline-block">
@@ -419,15 +434,17 @@ function LobbyView({ game }: Readonly<{ game: HostState }>) {
           >
             Start Game
           </button>
-        </>
+        </div>
       ) : (
-        <button
-          onClick={createGame}
-          disabled={!spotify.playerReady}
-          className="px-8 py-4 rounded-2xl bg-purple-600 text-white font-bold text-xl disabled:opacity-30 hover:bg-purple-500 transition-colors"
-        >
-          Create Game
-        </button>
+        <div className="flex flex-col items-center px-6 pb-6" style={{ transform: 'translateY(30vh)' }}>
+          <button
+            onClick={createGame}
+            disabled={!spotify.playerReady}
+            className="px-8 py-4 rounded-2xl bg-purple-600 text-white font-bold text-xl disabled:opacity-30 hover:bg-purple-500 active:scale-95 transition-all"
+          >
+            Create Game
+          </button>
+        </div>
       )}
     </div>
   );
