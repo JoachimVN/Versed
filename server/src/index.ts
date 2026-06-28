@@ -16,7 +16,9 @@ const PLAYBACK_COUNTDOWN_MS = 3000;
 const allowedOrigins = new Set(
   (process.env.CORS_ORIGINS || process.env.FRONTEND_URL || '')
     .split(',')
-    .map((origin) => origin.trim())
+    .map((origin) => {
+      try { return new URL(origin.trim()).origin; } catch { return origin.trim(); }
+    })
     .filter(Boolean),
 );
 
