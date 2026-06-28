@@ -529,7 +529,7 @@ function LobbyView({ game }: Readonly<{ game: HostState }>) {
   );
 }
 
-function HintCards({ hints }: { hints: readonly Hint[] }) {
+function HintCards({ hints }: Readonly<{ hints: readonly Hint[] }>) {
   const imageHint = hints.find(h => h.imageUrl);
   const textHints = hints.filter(h => !h.imageUrl);
   return (
