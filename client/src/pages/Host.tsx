@@ -79,6 +79,7 @@ export default function Host() {
     socket.on('play_song', async (data: { trackId: string; durationMs: number; countdownMs?: number }) => {
       // Start buffering immediately, then run the countdown while it loads so
       // the reveal is instant and the X-second timer matches the audible start.
+      stopPlaybackBar(); // keep the bar empty through the countdown/buffer
       const prepared = spotify.prepareTrack(data.trackId);
       const ticks = Math.ceil((data.countdownMs ?? 3000) / 1000);
       for (let n = ticks; n > 0; n--) {
