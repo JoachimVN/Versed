@@ -42,6 +42,7 @@ export interface Player {
   socketId: string;
   name: string;
   score: number;
+  streak: number;
 }
 
 export type GamePhase =

@@ -1,6 +1,6 @@
 import { useState, useEffect, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { Music, Check, X, Loader2, Copy, ArrowLeft, Settings } from 'lucide-react';
+import { Music, Check, X, Loader2, Copy, ArrowLeft, Settings, Flame } from 'lucide-react';
 import QRCode from 'react-qr-code';
 import { socket } from '../socket';
 import { useSpotify } from '../hooks/useSpotify';
@@ -31,6 +31,7 @@ interface HostState {
   lowestBid: number;
   playerBids: { name: string; bid: number }[];
   result: RoundResultEvent | null;
+  roundDeltas: Record<string, number>;
   leaderboard: LeaderboardEntry[];
   copied: boolean;
   playProgress: number;
@@ -57,6 +58,7 @@ function useHostGame(): HostState {
   const [pin, setPin] = useState('');
   const pinRef = useRef('');
   const [players, setPlayers] = useState<PlayerInfo[]>([]);
+  const playersRef = useRef<PlayerInfo[]>([]);
   const [roundIndex, setRoundIndex] = useState(0);
   const [totalRounds, setTotalRounds] = useState(10);
   const [hints, setHints] = useState<Hint[]>([]);
@@ -68,6 +70,7 @@ function useHostGame(): HostState {
   const [lowestBid, setLowestBid] = useState(0);
   const [playerBids, setPlayerBids] = useState<{ name: string; bid: number }[]>([]);
   const [result, setResult] = useState<RoundResultEvent | null>(null);
+  const [roundDeltas, setRoundDeltas] = useState<Record<string, number>>({});
   const [leaderboard, setLeaderboard] = useState<LeaderboardEntry[]>([]);
   const [copied, setCopied] = useState(false);
   const [playProgress, setPlayProgress] = useState(0);
@@ -203,7 +206,16 @@ function useHostGame(): HostState {
       setPhase('reveal');
     });
 
-    socket.on('score_update', ({ players: p }: { players: PlayerInfo[] }) => setPlayers(p));
+    socket.on('score_update', ({ players: p }: { players: PlayerInfo[] }) => {
+      const deltas: Record<string, number> = {};
+      for (const updated of p) {
+        const prev = playersRef.current.find(x => x.name === updated.name);
+        deltas[updated.name] = (updated.score ?? 0) - (prev?.score ?? 0);
+      }
+      playersRef.current = p;
+      setRoundDeltas(deltas);
+      setPlayers(p);
+    });
 
     socket.on('leaderboard', ({ leaderboard: lb }: { leaderboard: LeaderboardEntry[] }) => {
       setLeaderboard(lb);
@@ -280,7 +292,7 @@ function useHostGame(): HostState {
   return {
     spotify, phase, pin, players, roundIndex, totalRounds, hints,
     bettingTime, timeLeft, bidCount, countdown, guesserNames, lowestBid, playerBids,
-    result, leaderboard, copied, playProgress, inviteUrl,
+    result, roundDeltas, leaderboard, copied, playProgress, inviteUrl,
     settingsOpen, bettingTimeSetting, guessingTimeSetting, roundsSetting,
     reconnecting, reconnectingCount,
     toggleSettings: () => setSettingsOpen(o => !o),
@@ -605,7 +617,7 @@ function GuessingView({ game }: Readonly<{ game: HostState }>) {
 }
 
 function RevealView({ game, result }: Readonly<{ game: HostState; result: RoundResultEvent }>) {
-  const { roundIndex, totalRounds, players } = game;
+  const { roundIndex, totalRounds, players, roundDeltas } = game;
   return (
     <div className="min-h-screen flex flex-col p-6 gap-5">
       <p className="text-center text-white/50">Round {roundIndex + 1}/{totalRounds}</p>
@@ -631,10 +643,19 @@ function RevealView({ game, result }: Readonly<{ game: HostState; result: RoundR
           .sort((a, b) => (b.score ?? 0) - (a.score ?? 0))
           .map(p => {
             const entry = result.playerGuesses?.find(g => g.name === p.name);
+            const delta = roundDeltas[p.name] ?? 0;
+            const streak = p.streak ?? 0;
             return (
               <div key={p.name} className="flex justify-between items-center px-4 py-2 bg-white/5 rounded-xl">
                 <div>
-                  <span className="text-white font-semibold">{p.name}</span>
+                  <div className="flex items-center gap-1.5">
+                    {streak >= 2 && (
+                      <span className="flex items-center gap-0.5 text-orange-400 text-xs font-bold">
+                        <Flame className="w-3 h-3" />{streak}
+                      </span>
+                    )}
+                    <span className="text-white font-semibold">{p.name}</span>
+                  </div>
                   {entry && (() => {
                     const skipped = entry.guess === null;
                     const correct = result.correct && p.name === result.guesserName;
@@ -644,7 +665,10 @@ function RevealView({ game, result }: Readonly<{ game: HostState; result: RoundR
                     return <p className={`text-xs mt-0.5 ${cls}`}>{skipped ? 'skipped' : `"${entry.guess}"`}</p>;
                   })()}
                 </div>
-                <span className="text-white/60">{(p.score ?? 0).toLocaleString()}</span>
+                <div className="text-right">
+                  {delta > 0 && <p className="text-green-400 text-xs font-semibold">+{delta.toLocaleString()}</p>}
+                  <span className="text-white/60">{(p.score ?? 0).toLocaleString()}</span>
+                </div>
               </div>
             );
           })}

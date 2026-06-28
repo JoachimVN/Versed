@@ -12,6 +12,7 @@ export interface LeaderboardEntry {
 export interface PlayerInfo {
   name: string;
   score?: number;
+  streak?: number;
 }
 
 export interface RoundResultEvent {

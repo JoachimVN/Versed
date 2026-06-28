@@ -278,7 +278,7 @@ io.on('connection', (socket) => {
         playerGuesses: gm.getRoundGuesses(game),
       });
       io.to(game.pin).emit('score_update', {
-        players: Array.from(game.players.values()).map(p => ({ name: p.name, score: p.score })),
+        players: Array.from(game.players.values()).map(p => ({ name: p.name, score: p.score, streak: p.streak })),
       });
     } else if (result.allDone) {
       // Everyone in the tier has had their one guess — hand off / reveal.

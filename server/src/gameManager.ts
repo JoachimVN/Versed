@@ -150,7 +150,7 @@ export function addPlayer(game: Game, socketId: string, name: string): Player | 
     p => p.name.toLowerCase() === name.trim().toLowerCase()
   );
   if (taken) return null;
-  const player: Player = { socketId, name: name.trim(), score: 0 };
+  const player: Player = { socketId, name: name.trim(), score: 0, streak: 0 };
   game.players.set(socketId, player);
   socketToPin.set(socketId, game.pin);
   return player;
@@ -293,10 +293,13 @@ export function recordGuess(
     const player = game.players.get(socketId)!;
     const points = calcPoints(round.lowestBid, round.song.rank);
     player.score += points;
+    player.streak += 1;
     game.phase = 'reveal';
     return { correct: true, points, guesserName, allDone: false };
   }
 
+  const player = game.players.get(socketId);
+  if (player) player.streak = 0;
   round.passed.add(socketId);
   const allDone = round.guesserSocketIds.every(id => round.passed.has(id));
   return { correct: false, points: 0, guesserName, allDone };
@@ -316,6 +319,8 @@ export function skipGuess(game: Game, socketId: string): { allDone: boolean } | 
   if (round.answered || round.passed.has(socketId)) return null;
 
   round.guesses.set(socketId, null);
+  const skipper = game.players.get(socketId);
+  if (skipper) skipper.streak = 0;
   round.passed.add(socketId);
   const allDone = round.guesserSocketIds.every(id => round.passed.has(id));
   return { allDone };

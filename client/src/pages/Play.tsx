@@ -1,6 +1,6 @@
 import { useState, useEffect, useRef } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
-import { Music, Trophy, Frown, ChevronLeft, ChevronRight, ArrowLeft } from 'lucide-react';
+import { Music, Trophy, Frown, ChevronLeft, ChevronRight, ArrowLeft, Flame } from 'lucide-react';
 import { socket } from '../socket';
 import { RankBadge } from '../components/RankBadge';
 import { APP_NAME, BID_OPTIONS } from '../config';
@@ -28,6 +28,7 @@ interface PlayState {
   guessText: string;
   result: RoundResultEvent | null;
   myScore: number;
+  myStreak: number;
   leaderboard: LeaderboardEntry[];
   reconnecting: boolean;
   hostReconnecting: boolean;
@@ -67,6 +68,7 @@ function usePlayGame(pinParam?: string): PlayState {
   const [guessText, setGuessText] = useState('');
   const [result, setResult] = useState<RoundResultEvent | null>(null);
   const [myScore, setMyScore] = useState(0);
+  const [myStreak, setMyStreak] = useState(0);
   const [leaderboard, setLeaderboard] = useState<LeaderboardEntry[]>([]);
   const [reconnecting, setReconnecting] = useState(false);
   const [hostReconnecting, setHostReconnecting] = useState(false);
@@ -178,9 +180,9 @@ function usePlayGame(pinParam?: string): PlayState {
       setPhase('reveal');
     });
 
-    socket.on('score_update', ({ players }: { players: { name: string; score: number }[] }) => {
+    socket.on('score_update', ({ players }: { players: { name: string; score: number; streak: number }[] }) => {
       const me = players.find(p => p.name === myNameRef.current);
-      if (me) setMyScore(me.score);
+      if (me) { setMyScore(me.score); setMyStreak(me.streak); }
     });
 
     socket.on('leaderboard', ({ leaderboard: lb }: { leaderboard: LeaderboardEntry[] }) => {
@@ -313,7 +315,7 @@ function usePlayGame(pinParam?: string): PlayState {
   return {
     phase, pin, name, myName, error, roundIndex, totalRounds, hints,
     timeLeft, bettingTime, bidIndex, myBid, guesserNames, lowestBid,
-    guessText, result, myScore, leaderboard, reconnecting, hostReconnecting, savedSession, guessInputRef,
+    guessText, result, myScore, myStreak, leaderboard, reconnecting, hostReconnecting, savedSession, guessInputRef,
     newGamePin, rejoinNewGame,
     setPin, setName,
   setBidIndex: (i: number | ((prev: number) => number)) => {
@@ -536,7 +538,7 @@ function revealIcon(correct: boolean, iWon: boolean) {
 }
 
 function RevealView({ game, result }: Readonly<{ game: PlayState; result: RoundResultEvent }>) {
-  const { myName, myScore } = game;
+  const { myName, myScore, myStreak } = game;
   const iWon = result.correct && result.guesserName === myName;
   return (
     <div className="min-h-screen flex flex-col items-center justify-center p-6 gap-6 text-center">
@@ -576,6 +578,11 @@ function RevealView({ game, result }: Readonly<{ game: PlayState; result: RoundR
       <div className="bg-white/5 rounded-2xl px-8 py-4">
         <p className="text-3xl font-black text-white">{myScore.toLocaleString()}</p>
         <p className="text-white/40 text-sm">your score</p>
+        {myStreak >= 2 && (
+          <p className="flex items-center justify-center gap-1 text-orange-400 text-xs font-bold mt-1">
+            <Flame className="w-3 h-3" />{myStreak} in a row
+          </p>
+        )}
       </div>
     </div>
   );
