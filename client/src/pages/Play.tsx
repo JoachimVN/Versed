@@ -26,16 +26,14 @@ interface PlayState {
   guesserNames: string[];
   lowestBid: number;
   guessText: string;
-  guessWrong: boolean;
   result: RoundResultEvent | null;
   myScore: number;
   leaderboard: LeaderboardEntry[];
   guessInputRef: React.RefObject<HTMLInputElement>;
   setPin: (v: string) => void;
   setName: (v: string) => void;
-  setBidIndex: React.Dispatch<React.SetStateAction<number>>;
+  setBidIndex: (i: number | ((prev: number) => number)) => void;
   setGuessText: (v: string) => void;
-  setGuessWrong: (v: boolean) => void;
   join: () => void;
   submitBid: () => void;
   submitGuess: () => void;
@@ -56,16 +54,15 @@ function usePlayGame(pinParam?: string): PlayState {
   const [timeLeft, setTimeLeft] = useState(0);
   const [bettingTime, setBettingTime] = useState(15);
   const [bidIndex, setBidIndex] = useState(4); // default: 2s (index 4)
+  const bidIndexRef = useRef(4);
   const [myBid, setMyBid] = useState(0);
   const [guesserNames, setGuesserNames] = useState<string[]>([]);
   const [lowestBid, setLowestBid] = useState(0);
   const [guessText, setGuessText] = useState('');
-  const [guessWrong, setGuessWrong] = useState(false);
   const [result, setResult] = useState<RoundResultEvent | null>(null);
   const [myScore, setMyScore] = useState(0);
   const [leaderboard, setLeaderboard] = useState<LeaderboardEntry[]>([]);
   const timerRef = useRef<ReturnType<typeof setInterval> | null>(null);
-  const guessTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const guessInputRef = useRef<HTMLInputElement>(null);
 
   function startCountdown(seconds: number) {
@@ -129,11 +126,6 @@ function usePlayGame(pinParam?: string): PlayState {
 
     socket.on('round_result', (data: RoundResultEvent) => {
       stopCountdown();
-      if (guessTimeoutRef.current) {
-        clearTimeout(guessTimeoutRef.current);
-        guessTimeoutRef.current = null;
-      }
-      setGuessWrong(false);
       setResult(data);
       setPhase('reveal');
     });
@@ -161,7 +153,6 @@ function usePlayGame(pinParam?: string): PlayState {
 
     return () => {
       stopCountdown();
-      if (guessTimeoutRef.current) clearTimeout(guessTimeoutRef.current);
       ['connect','round_start','betting_closed','guessing_start','your_turn',
        'round_result','score_update','leaderboard','game_over','host_disconnected']
         .forEach(e => socket.off(e));
@@ -169,13 +160,11 @@ function usePlayGame(pinParam?: string): PlayState {
     };
   }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
-  // Auto-submit the current bid selection when the betting timer expires
+  // Auto-submit when the betting timer hits 0 and the player hasn't locked in.
+  // The server waits an extra 500ms before closing betting, so this lands in time.
   useEffect(() => {
     if (phase !== 'betting' || timeLeft !== 0) return;
-    const seconds = BID_OPTIONS[bidIndex];
-    setMyBid(seconds);
-    setPhase('bid_submitted');
-    socket.emit('submit_bid', { seconds });
+    socket.emit('submit_bid', { seconds: BID_OPTIONS[bidIndexRef.current] });
   }, [timeLeft, phase]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const join = () => {
@@ -208,16 +197,7 @@ function usePlayGame(pinParam?: string): PlayState {
     if (!guessText.trim()) return;
     stopCountdown();
     socket.emit('submit_guess', { text: guessText }, ({ correct }: { correct: boolean }) => {
-      // One guess each: a wrong answer flashes red, then quietly ends the turn
-      // (no "wrong!" message — the reveal tells the story). A correct guess is
-      // moved on by the round_result event.
-      if (!correct) {
-        setGuessWrong(true);
-        guessTimeoutRef.current = setTimeout(() => {
-          setGuessWrong(false);
-          setPhase('passed');
-        }, 800);
-      }
+      if (!correct) setPhase('passed');
     });
   };
 
@@ -230,8 +210,16 @@ function usePlayGame(pinParam?: string): PlayState {
   return {
     phase, pin, name, myName, error, roundIndex, totalRounds, hints,
     timeLeft, bettingTime, bidIndex, myBid, guesserNames, lowestBid,
-    guessText, guessWrong, result, myScore, leaderboard, guessInputRef,
-    setPin, setName, setBidIndex, setGuessText, setGuessWrong,
+    guessText, result, myScore, leaderboard, guessInputRef,
+    setPin, setName,
+  setBidIndex: (i: number | ((prev: number) => number)) => {
+    setBidIndex(prev => {
+      const next = typeof i === 'function' ? i(prev) : i;
+      bidIndexRef.current = next;
+      return next;
+    });
+  },
+  setGuessText,
     join, submitBid, submitGuess, skipGuess,
   };
 }
@@ -351,7 +339,7 @@ function WatchingView({ game }: Readonly<{ game: PlayState }>) {
 }
 
 function GuessingView({ game }: Readonly<{ game: PlayState }>) {
-  const { timeLeft, myScore, guessText, guessWrong, guessInputRef, setGuessText, setGuessWrong, submitGuess, skipGuess } = game;
+  const { timeLeft, myScore, guessText, guessInputRef, setGuessText, submitGuess, skipGuess } = game;
   return (
     <div className="min-h-screen flex flex-col p-5 gap-4">
       <div className="flex justify-between items-center">
@@ -366,9 +354,9 @@ function GuessingView({ game }: Readonly<{ game: PlayState }>) {
           type="text"
           placeholder="Type song title..."
           value={guessText}
-          onChange={e => { setGuessText(e.target.value); setGuessWrong(false); }}
+          onChange={e => setGuessText(e.target.value)}
           onKeyDown={e => e.key === 'Enter' && submitGuess()}
-          className={`w-full px-4 py-4 rounded-xl text-white text-center text-xl placeholder-white/30 outline-none focus:ring-2 transition-colors ${guessWrong ? 'bg-red-900/50 ring-2 ring-red-500' : 'bg-white/10 focus:ring-purple-500'}`}
+          className="w-full px-4 py-4 rounded-xl bg-white/10 text-white text-center text-xl placeholder-white/30 outline-none focus:ring-2 focus:ring-purple-500"
           autoComplete="off"
           autoCorrect="off"
           spellCheck={false}
@@ -387,13 +375,7 @@ function GuessingView({ game }: Readonly<{ game: PlayState }>) {
 }
 
 function PassedView() {
-  // Deliberately neutral — no "wrong" / "handing it over" messaging. Players
-  // see who got it (or didn't) at the reveal, which is enough.
-  return (
-    <div className="min-h-screen flex flex-col items-center justify-center gap-4 p-6 text-center">
-      <Music className="w-14 h-14 text-white/40 animate-pulse" />
-    </div>
-  );
+  return <div className="min-h-screen" />;
 }
 
 function revealIcon(correct: boolean, iWon: boolean) {

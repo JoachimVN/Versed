@@ -231,6 +231,7 @@ function applyTier(game: Game, round: Round): TierTurn {
 export function closeBetting(game: Game): TierTurn | null {
   const round = game.currentRound;
   if (!round || game.phase !== 'betting') return null;
+
   if (round.bids.size === 0) return null;
 
   const byBid = new Map<number, string[]>();

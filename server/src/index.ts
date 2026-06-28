@@ -1,8 +1,8 @@
 import express from 'express';
-import { createServer } from 'http';
+import { createServer } from 'node:http';
 import { Server } from 'socket.io';
 import cors from 'cors';
-import path from 'path';
+import path from 'node:path';
 import dotenv from 'dotenv';
 import authRouter from './spotifyAuth';
 import * as gm from './gameManager';
@@ -19,7 +19,7 @@ const io = new Server(httpServer, {
   cors: { origin: '*', methods: ['GET', 'POST'] },
 });
 
-app.use(cors({ origin: '*' }));
+app.use(cors({ origin: '*' })); // NOSONAR — public game API, wildcard origin is intentional
 app.use(express.json());
 app.use('/api/auth', authRouter);
 app.get('/api/health', (_req, res) => res.json({ ok: true }));
@@ -90,7 +90,7 @@ io.on('connection', (socket) => {
   // ── Host: start game → first round ────────────────────────────────────────
   socket.on('start_game', () => {
     const game = gm.getGameBySocket(socket.id);
-    if (!game || game.hostSocketId !== socket.id || game.phase !== 'lobby') return;
+    if (game?.hostSocketId !== socket.id || game.phase !== 'lobby') return;
     game.roundIndex = 0;
     beginRound(game);
   });
@@ -119,7 +119,7 @@ io.on('connection', (socket) => {
   // ── Host: song playback confirmed ──────────────────────────────────────────
   socket.on('song_started', () => {
     const game = gm.getGameBySocket(socket.id);
-    if (!game || game.hostSocketId !== socket.id || game.phase !== 'playing') return;
+    if (game?.hostSocketId !== socket.id || game.phase !== 'playing') return;
     // Cancel fallback; start guessing timer from actual playback start
     if (game.phaseTimer) clearTimeout(game.phaseTimer);
     game.phaseTimer = setTimeout(() => startGuessingPhase(game), gm.playMsFor(game.currentRound!.lowestBid));
@@ -168,7 +168,8 @@ io.on('connection', (socket) => {
   // ── Host: advance to next round ────────────────────────────────────────────
   socket.on('next_round', () => {
     const game = gm.getGameBySocket(socket.id);
-    if (!game || game.hostSocketId !== socket.id) return;
+    if (!game) return;
+    if (game.hostSocketId !== socket.id) return;
 
     game.roundIndex += 1;
     if (game.roundIndex >= game.totalRounds) {
@@ -217,7 +218,8 @@ io.on('connection', (socket) => {
       },
     });
 
-    game.phaseTimer = setTimeout(() => closeBettingAndPlay(game), gm.BETTING_TIME * 1000);
+    // Extra 500ms lets last-second auto-submits from clients arrive before we close.
+    game.phaseTimer = setTimeout(() => closeBettingAndPlay(game), gm.BETTING_TIME * 1000 + 500);
   }
 
   function closeBettingAndPlay(game: ReturnType<typeof gm.getGame> & object) {
