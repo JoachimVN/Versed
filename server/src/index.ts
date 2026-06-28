@@ -13,13 +13,29 @@ gm.initSongs();
 // Countdown shown on the host before a song plays, used to buffer the track.
 const PLAYBACK_COUNTDOWN_MS = 3000;
 
+const allowedOrigins = new Set(
+  (process.env.CORS_ORIGINS || '')
+    .split(',')
+    .map((origin) => origin.trim())
+    .filter(Boolean),
+);
+
+const corsOptions = {
+  origin: (origin: string | undefined, callback: (err: Error | null, allow?: boolean) => void) => {
+    if (!origin) return callback(null, true);
+    if (allowedOrigins.has(origin)) return callback(null, true);
+    return callback(new Error('CORS origin not allowed'));
+  },
+  methods: ['GET', 'POST'],
+};
+
 const app = express();
 const httpServer = createServer(app);
 const io = new Server(httpServer, {
-  cors: { origin: '*', methods: ['GET', 'POST'] },
+  cors: corsOptions,
 });
 
-app.use(cors({ origin: '*' })); // NOSONAR — public game API, wildcard origin is intentional
+app.use(cors(corsOptions));
 app.use(express.json());
 app.use('/api/auth', authRouter);
 app.get('/api/health', (_req, res) => res.json({ ok: true }));
