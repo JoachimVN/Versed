@@ -19,7 +19,7 @@ cp -r "$SCRIPT_DIR/client/dist" "$DEST"
 echo "Committing Portfolio..."
 cd "$PORTFOLIO_DIR"
 git add versed/
-git commit -m "chore: sync Versed from Versed"
+git diff --staged --quiet || git commit -m "chore: sync Versed"
 git push
 
 echo "Done. joavn.dev/versed updated."
