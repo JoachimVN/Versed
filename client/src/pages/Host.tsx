@@ -351,8 +351,19 @@ function LobbyView({ game }: Readonly<{ game: HostState }>) {
     toggleSettings, setBettingTimeSetting, setGuessingTimeSetting, setRoundsSetting,
   } = game;
   const navigate = useNavigate();
+  const [lobbyVisible, setLobbyVisible] = useState(false);
+
+  useEffect(() => {
+    if (!pin) { setLobbyVisible(false); return; }
+    const t = setTimeout(() => setLobbyVisible(true), 10);
+    return () => clearTimeout(t);
+  }, [pin]);
+
   return (
-    <div className="min-h-screen flex flex-col items-center p-6 gap-6">
+    <div
+      className="min-h-screen flex flex-col items-center px-6 pb-6 gap-6 transition-all duration-500 ease-in-out"
+      style={{ paddingTop: pin ? '1.5rem' : 'clamp(4rem, 28vh, 8rem)' }}
+    >
       <button onClick={() => navigate('/')} className="absolute top-5 left-5 p-2 rounded-xl bg-white/10 text-white/60 hover:bg-white/20 hover:text-white transition-colors">
         <ArrowLeft className="w-5 h-5" />
       </button>
@@ -366,7 +377,7 @@ function LobbyView({ game }: Readonly<{ game: HostState }>) {
       </span>
 
       {pin ? (
-        <>
+        <div className={`w-full flex-1 flex flex-col items-center gap-6 transition-all duration-500 ${lobbyVisible ? 'opacity-100 translate-y-0' : 'opacity-0 translate-y-4'}`}>
           <div className="text-center">
             <p className="text-white/40 text-sm uppercase tracking-widest mb-1">PIN</p>
             <div className="relative inline-block">
@@ -419,7 +430,7 @@ function LobbyView({ game }: Readonly<{ game: HostState }>) {
           >
             Start Game
           </button>
-        </>
+        </div>
       ) : (
         <button
           onClick={createGame}
