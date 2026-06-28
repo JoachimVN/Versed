@@ -398,7 +398,7 @@ export default function Play() {
         </div>
         {phase === 'leaderboard' && <p className="text-center text-white/30 text-sm">Waiting for the host to start the next round…</p>}
         {phase === 'finished' && (
-          <button onClick={() => window.location.href = '/'}
+          <button onClick={() => globalThis.location.href = '/'}
             className="w-full py-4 rounded-2xl bg-white/10 text-white font-bold text-xl hover:bg-white/20 transition-colors">
             Play Again
           </button>

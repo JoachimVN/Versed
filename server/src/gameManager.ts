@@ -82,8 +82,7 @@ function generateHints(song: Song): Hint[] {
     Math.random() < 0.5
       ? { label: 'Artist initials', value: getInitials(song.artist) }
       : { label: 'Artist(s)', value: song.artist }
-  );
-  pool.push({ label: 'Title', value: maskTitle(song.title) });
+  , { label: 'Title', value: maskTitle(song.title) });
 
   const count = Math.floor(Math.random() * 4); // 0–3
   return shuffle(pool).slice(0, count);

@@ -178,7 +178,7 @@ export default function Host() {
   };
 
   // Deep link that pre-fills the PIN on the join screen (Play reads /play/:pin).
-  const inviteUrl = `${window.location.origin}${import.meta.env.BASE_URL}play/${pin}`;
+  const inviteUrl = `${globalThis.location.origin}${import.meta.env.BASE_URL}play/${pin}`;
 
   const copyInvite = () => {
     navigator.clipboard?.writeText(inviteUrl)
