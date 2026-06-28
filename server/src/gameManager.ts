@@ -1,3 +1,4 @@
+import { randomInt } from 'node:crypto';
 import { Game, Hint, Player, Round, Song } from './types';
 import { loadSongs } from './songLoader';
 import { isCorrectGuess } from './fuzzyMatch';
@@ -32,19 +33,19 @@ export function initSongs() {
 
 function generatePin(): string {
   let pin: string;
-  do { pin = Math.floor(100 + Math.random() * 900).toString(); }
+  do { pin = (100 + randomInt(0, 900)).toString(); }
   while (games.has(pin));
   return pin;
 }
 
 function pickRandom<T>(arr: T[]): T {
-  return arr[Math.floor(Math.random() * arr.length)];
+  return arr[randomInt(0, arr.length)];
 }
 
 function shuffle<T>(arr: T[]): T[] {
   const c = [...arr];
   for (let i = c.length - 1; i > 0; i--) {
-    const j = Math.floor(Math.random() * (i + 1));
+    const j = randomInt(0, i + 1);
     [c[i], c[j]] = [c[j], c[i]];
   }
   return c;
@@ -79,12 +80,12 @@ function generateHints(song: Song): Hint[] {
   // Only ever one artist reveal — initials or the full name, never both (the
   // full name would make initials redundant anyway).
   pool.push(
-    Math.random() < 0.5
+    randomInt(0, 2) === 0
       ? { label: 'Artist initials', value: getInitials(song.artist) }
       : { label: 'Artist(s)', value: song.artist }
   , { label: 'Title', value: maskTitle(song.title) });
 
-  const count = Math.floor(Math.random() * 4); // 0–3
+  const count = randomInt(0, 4); // 0–3
   return shuffle(pool).slice(0, count);
 }
 
