@@ -4,10 +4,10 @@ import { APP_NAME, BID_OPTIONS } from '../config';
 
 // ─── Shared ───────────────────────────────────────────────────────────────────
 
-function BidTimeline({ bids, lowestBid }: { bids: { name: string; bid: number }[]; lowestBid: number }) {
+function BidTimeline({ bids, lowestBid }: Readonly<{ bids: { name: string; bid: number }[]; lowestBid: number }>) {
   const sorted = [...bids].sort((a, b) => a.bid - b.bid);
   const min = sorted[0].bid;
-  const max = sorted[sorted.length - 1].bid;
+  const max = sorted.at(-1)!.bid;
   const span = max === min ? 0 : max - min;
   const pos = (bid: number) => (span === 0 ? 50 : 8 + ((bid - min) / span) * 84);
   return (
