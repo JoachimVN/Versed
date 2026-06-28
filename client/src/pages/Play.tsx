@@ -1,8 +1,9 @@
 import { useState, useEffect, useRef } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
-import { Music, Trophy, Frown, ChevronLeft, ChevronRight, ArrowLeft, Flame } from 'lucide-react';
+import { Music, ChevronLeft, ChevronRight, ArrowLeft, Flame } from 'lucide-react';
 import { socket } from '../socket';
 import { RankBadge } from '../components/RankBadge';
+import { RevealStatusHeader, RevealSongCard } from '../components/RevealShared';
 import { APP_NAME, BID_OPTIONS } from '../config';
 import type { Hint, LeaderboardEntry, RoundResultEvent } from '../types';
 
@@ -542,43 +543,12 @@ function PassedView() {
   return <div className="min-h-screen" />;
 }
 
-function revealIcon(correct: boolean, iWon: boolean) {
-  if (!correct) return <Music className="w-12 h-12 text-white/60" />;
-  if (iWon) return <Trophy className="w-12 h-12 text-amber-400" />;
-  return <Frown className="w-12 h-12 text-white/60" />;
-}
-
 function RevealView({ game, result }: Readonly<{ game: PlayState; result: RoundResultEvent }>) {
   const { myName, myScore, myStreak } = game;
-  const iWon = result.correct && result.guesserName === myName;
   return (
     <div className="min-h-screen flex flex-col items-center justify-center p-6 gap-6 text-center">
-      <div className={`w-24 h-24 rounded-full flex items-center justify-center ${result.correct ? 'bg-green-500/20' : 'bg-white/5'}`}>
-        {revealIcon(result.correct, iWon)}
-      </div>
-      <div>
-        {result.correct
-          ? <p className={`text-2xl font-black ${iWon ? 'text-green-400' : 'text-white'}`}>
-              {iWon ? `+${result.points} pts!` : `${result.guesserName} got it`}
-            </p>
-          : <p className="text-white/60 text-xl">No one got it</p>
-        }
-      </div>
-      <div className="flex flex-col items-center text-center gap-3 w-full">
-        <p className="text-white/30 text-xs uppercase tracking-widest">The song was</p>
-        {result.coverUrl && (
-          <img
-            src={result.coverUrl}
-            alt="Album art"
-            className="w-40 h-40 rounded-2xl object-cover shadow-[0_8px_40px_rgba(0,0,0,0.7)]"
-          />
-        )}
-        <div>
-          <p className="text-white font-black text-2xl leading-tight">{result.songTitle}</p>
-          <p className="text-white/50 mt-1">{result.artist}</p>
-          {result.year && <p className="text-white/25 text-sm mt-0.5">{result.year}</p>}
-        </div>
-      </div>
+      <RevealStatusHeader result={result} myName={myName} />
+      <RevealSongCard result={result} />
       {result.playerGuesses && result.playerGuesses.length > 0 && (
         <div className="bg-white/5 rounded-2xl p-4 w-full space-y-1.5">
           {result.playerGuesses.map(g => (

@@ -1,10 +1,11 @@
 import { useState, useEffect, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { Music, Check, X, Loader2, Copy, ArrowLeft, Settings, Flame } from 'lucide-react';
+import { Music, Check, Loader2, Copy, ArrowLeft, Settings, Flame } from 'lucide-react';
 import QRCode from 'react-qr-code';
 import { socket } from '../socket';
 import { useSpotify } from '../hooks/useSpotify';
 import { RankBadge } from '../components/RankBadge';
+import { RevealStatusHeader, RevealSongCard } from '../components/RevealShared';
 import { APP_NAME, BACKEND_URL } from '../config';
 import type { Hint, LeaderboardEntry, PlayerInfo, RoundResultEvent } from '../types';
 
@@ -640,35 +641,11 @@ function GuessingView({ game }: Readonly<{ game: HostState }>) {
 function RevealView({ game, result }: Readonly<{ game: HostState; result: RoundResultEvent }>) {
   const { roundIndex, totalRounds, players, roundDeltas } = game;
   return (
-    <div className="min-h-screen flex flex-col p-6 gap-5">
-      <p className="text-center text-white/50">Round {roundIndex + 1}/{totalRounds}</p>
-      <div className={`rounded-2xl p-6 text-center ${result.correct ? 'bg-green-900/40 border border-green-700/40' : 'bg-white/5'}`}>
-        <div className="flex justify-center mb-2">
-          {result.correct
-            ? <Check className="w-10 h-10 text-green-400" />
-            : <X className="w-10 h-10 text-white/60" />}
-        </div>
-        {result.correct
-          ? <p className="text-white font-bold text-lg">{result.guesserName} got it! <span className="text-green-400">+{result.points}</span></p>
-          : <p className="text-white/60">Nobody got it</p>
-        }
-      </div>
-      <div className="bg-white/5 rounded-2xl p-6 flex flex-col items-center text-center gap-3">
-        <p className="text-white/30 text-xs uppercase tracking-widest">The song was</p>
-        {result.coverUrl && (
-          <img
-            src={result.coverUrl}
-            alt="Album art"
-            className="w-32 h-32 rounded-2xl object-cover shadow-[0_8px_32px_rgba(0,0,0,0.6)]"
-          />
-        )}
-        <div>
-          <p className="text-white font-black text-2xl leading-tight">{result.songTitle}</p>
-          <p className="text-white/50 mt-1">{result.artist}</p>
-          {result.year && <p className="text-white/25 text-sm mt-0.5">{result.year}</p>}
-        </div>
-      </div>
-      <div className="flex-1 space-y-2">
+    <div className="min-h-screen flex flex-col items-center p-6 gap-6 text-center">
+      <p className="text-white/50 text-sm">{roundIndex + 1} / {totalRounds}</p>
+      <RevealStatusHeader result={result} />
+      <RevealSongCard result={result} />
+      <div className="bg-white/5 rounded-2xl p-4 w-full space-y-1.5">
         {players
           .slice()
           .sort((a, b) => (b.score ?? 0) - (a.score ?? 0))
@@ -676,29 +653,29 @@ function RevealView({ game, result }: Readonly<{ game: HostState; result: RoundR
             const entry = result.playerGuesses?.find(g => g.name === p.name);
             const delta = roundDeltas[p.name] ?? 0;
             const streak = p.streak ?? 0;
+            const correct = result.correct && p.name === result.guesserName;
             return (
-              <div key={p.name} className="flex justify-between items-center px-4 py-2 bg-white/5 rounded-xl">
-                <div>
+              <div key={p.name} className="flex justify-between items-center gap-4">
+                <div className="text-left">
                   <div className="flex items-center gap-1.5">
                     {streak >= 2 && (
                       <span className="flex items-center gap-0.5 text-orange-400 text-xs font-bold">
                         <Flame className="w-3 h-3" />{streak}
                       </span>
                     )}
-                    <span className="text-white font-semibold">{p.name}</span>
+                    <span className="text-white/50 text-sm">{p.name}</span>
                   </div>
                   {entry && (() => {
                     const skipped = entry.guess === null;
-                    const correct = result.correct && p.name === result.guesserName;
-                    let cls = 'text-white/40';
-                    if (skipped) cls = 'text-white/30 italic';
-                    else if (correct) cls = 'text-green-400';
-                    return <p className={`text-xs mt-0.5 ${cls}`}>{skipped ? 'skipped' : `"${entry.guess}"`}</p>;
+                    let cls = 'text-white/40 text-xs';
+                    if (skipped) cls = 'text-white/25 italic text-xs';
+                    else if (correct) cls = 'text-green-400 text-xs';
+                    return <p className={cls}>{skipped ? 'skipped' : `"${entry.guess}"`}</p>;
                   })()}
                 </div>
-                <div className="text-right">
+                <div className="text-right shrink-0">
                   {delta > 0 && <p className="text-green-400 text-xs font-semibold">+{delta.toLocaleString()}</p>}
-                  <span className="text-white/60">{(p.score ?? 0).toLocaleString()}</span>
+                  <span className="text-white/60 text-sm">{(p.score ?? 0).toLocaleString()}</span>
                 </div>
               </div>
             );
