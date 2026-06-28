@@ -476,7 +476,7 @@ function GuessInputSection({ guessText, guessInputRef, setGuessText, submitGuess
 }
 
 function WatchingView({ game }: Readonly<{ game: PlayState }>) {
-  const { lowestBid, guesserNames, myName, guessText, guessInputRef, setGuessText, submitGuess } = game;
+  const { lowestBid, guesserNames, myName, guessText, guessInputRef, setGuessText, submitGuess, skipGuess } = game;
   const imGuessing = guesserNames.includes(myName);
 
   if (imGuessing) {
@@ -487,6 +487,10 @@ function WatchingView({ game }: Readonly<{ game: PlayState }>) {
           <span className="text-white/40 text-sm">Listening...</span>
         </div>
         <GuessInputSection guessText={guessText} guessInputRef={guessInputRef} setGuessText={setGuessText} submitGuess={submitGuess} />
+        <button onClick={skipGuess}
+          className="w-full py-3 rounded-2xl bg-white/5 text-white/50 font-semibold hover:bg-white/10 active:scale-95 transition-all">
+          Skip — I don't know
+        </button>
       </div>
     );
   }
