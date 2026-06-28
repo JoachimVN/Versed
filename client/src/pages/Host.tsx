@@ -1,6 +1,7 @@
 import { useState, useEffect, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Music, Check, X, Loader2, Copy, ChevronDown, ArrowLeft } from 'lucide-react';
+import QRCode from 'react-qr-code';
 import { socket } from '../socket';
 import { useSpotify } from '../hooks/useSpotify';
 import { RankBadge } from '../components/RankBadge';
@@ -381,21 +382,34 @@ function LobbyView({ game }: Readonly<{ game: HostState }>) {
       </div>
 
       {pin ? (
-        <div className={`flex-1 flex flex-col items-center gap-6 px-6 pb-6 transition-all duration-500 ${lobbyVisible ? 'opacity-100 translate-y-0' : 'opacity-0 translate-y-6'}`}>
-          <div className="text-center">
-            <p className="text-white/40 text-sm uppercase tracking-widest mb-1">PIN</p>
-            <div className="relative inline-block">
-              <p className="text-7xl font-black text-white tracking-widest select-text">{pin}</p>
-              <button
-                onClick={copyInvite}
-                aria-label="Copy invite link"
-                title={copied ? 'Copied!' : 'Copy invite link'}
-                className="absolute left-full bottom-1 ml-3 p-2 rounded-lg bg-white/10 hover:bg-white/20 text-white/70 transition-colors"
-              >
-                {copied ? <Check className="w-5 h-5 text-green-400" /> : <Copy className="w-5 h-5" />}
-              </button>
+        <div className={`flex-1 flex flex-col items-center gap-5 px-6 pb-6 transition-all duration-500 ${lobbyVisible ? 'opacity-100 translate-y-0' : 'opacity-0 translate-y-6'}`}>
+          {/* Join card */}
+          <div className="w-full max-w-sm bg-white/5 rounded-2xl p-5">
+            <div className="flex items-start justify-between gap-4">
+              <div className="flex-1 min-w-0">
+                <p className="text-white/40 text-xs uppercase tracking-widest mb-0.5">Join at</p>
+                <p className="text-white font-semibold text-base">
+                  {`${globalThis.location.origin}${import.meta.env.BASE_URL}`.replace(/\/+$/, '')}
+                </p>
+                <div className="mt-4">
+                  <p className="text-white/40 text-xs uppercase tracking-widest mb-0.5">PIN</p>
+                  <p className="text-6xl font-black text-white tracking-widest leading-none select-text">{pin}</p>
+                </div>
+              </div>
+              <div className="p-2 bg-white rounded-xl shrink-0">
+                <QRCode value={`${globalThis.location.origin}${import.meta.env.BASE_URL}play/${pin}`} size={96} />
+              </div>
             </div>
+            <button
+              onClick={copyInvite}
+              className="mt-4 flex items-center gap-2 text-white/40 text-xs hover:text-white/70 transition-colors"
+            >
+              {copied ? <Check className="w-3.5 h-3.5 text-green-400" /> : <Copy className="w-3.5 h-3.5" />}
+              {copied ? 'Copied!' : 'Copy invite link'}
+            </button>
           </div>
+
+          {/* Players */}
           <div className="w-full max-w-sm">
             <p className="text-white/40 text-sm mb-2">{players.length} player{players.length === 1 ? '' : 's'}</p>
             <div className="flex flex-wrap gap-2">
