@@ -108,6 +108,7 @@ function buildRound(usedSongIds: Set<string>): Round {
     lowestBid: 0,
     answered: false,
     passed: new Set(),
+    earlyGuessers: new Set(),
   };
 }
 
@@ -222,6 +223,7 @@ function applyTier(game: Game, round: Round): TierTurn {
   round.lowestBid = tier.bid;
   round.guesserSocketIds = tier.socketIds;
   round.passed = new Set();
+  round.earlyGuessers = new Set();
   game.phase = 'playing';
   const guesserNames = tier.socketIds
     .map(id => game.players.get(id)?.name ?? '')
@@ -268,8 +270,13 @@ export function recordGuess(
   text: string
 ): { correct: boolean; points: number; guesserName: string; allDone: boolean } | null {
   const round = game.currentRound;
-  if (!round || game.phase !== 'guessing') return null;
+  if (!round) return null;
   if (!round.guesserSocketIds.includes(socketId)) return null;
+  if (game.phase === 'playing') {
+    round.earlyGuessers.add(socketId);
+  } else if (game.phase !== 'guessing') {
+    return null;
+  }
   if (round.answered || round.passed.has(socketId)) return null;
 
   const correct = isCorrectGuess(text, round.song.title);
@@ -293,8 +300,13 @@ export function recordGuess(
 // tier is done, the round moves on (to the next tier or the reveal).
 export function skipGuess(game: Game, socketId: string): { allDone: boolean } | null {
   const round = game.currentRound;
-  if (!round || game.phase !== 'guessing') return null;
+  if (!round) return null;
   if (!round.guesserSocketIds.includes(socketId)) return null;
+  if (game.phase === 'playing') {
+    round.earlyGuessers.add(socketId);
+  } else if (game.phase !== 'guessing') {
+    return null;
+  }
   if (round.answered || round.passed.has(socketId)) return null;
 
   round.passed.add(socketId);

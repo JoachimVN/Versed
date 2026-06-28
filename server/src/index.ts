@@ -319,7 +319,7 @@ io.on('connection', (socket) => {
   }
 
   function startGuessingPhase(game: ReturnType<typeof gm.getGame> & object) {
-    if (!game) return;
+    if (!game || game.phase !== 'playing') return;
     const round = game.currentRound!;
     const guesserSocketIds = round.guesserSocketIds;
     const guesserNames = guesserSocketIds
@@ -332,7 +332,10 @@ io.on('connection', (socket) => {
     game.phaseEndsAt = guessingEndsAt;
     io.to(game.pin).emit('guessing_start', { guesserNames, timeLimit: gm.GUESSING_TIME, endsAt: guessingEndsAt });
     for (const sid of guesserSocketIds) {
-      io.to(sid).emit('your_turn', { timeLimit: gm.GUESSING_TIME, endsAt: guessingEndsAt });
+      // Skip players who already got their turn early — don't reset their timer
+      if (!round.earlyGuessers.has(sid)) {
+        io.to(sid).emit('your_turn', { timeLimit: gm.GUESSING_TIME, endsAt: guessingEndsAt });
+      }
     }
 
     game.phaseTimer = setTimeout(() => {

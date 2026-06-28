@@ -34,6 +34,7 @@ export interface Round {
   lowestBid: number;
   answered: boolean;
   passed: Set<string>; // guessers whose turn is over this tier (wrong guess or skip)
+  earlyGuessers: Set<string>; // guessers who opted in before their listening time expired
 }
 
 export interface Player {
