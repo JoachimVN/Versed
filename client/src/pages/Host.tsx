@@ -307,8 +307,8 @@ function BidTimeline({ bids, lowestBid }: Readonly<{ bids: { name: string; bid: 
     else groups.push({ bid, names: [name] });
   }
 
-  const maxGroupSize = Math.max(...groups.map(g => g.names.length));
-  const nameAreaHeight = Math.max(48, 22 + maxGroupSize * 16);
+  const MAX_NAMES = 3;
+  const nameAreaHeight = 64;
 
   return (
     <div className="w-full">
@@ -320,9 +320,12 @@ function BidTimeline({ bids, lowestBid }: Readonly<{ bids: { name: string; bid: 
             className={`absolute -translate-x-1/2 flex flex-col items-center gap-0.5 ${group.bid === lowestBid ? 'text-purple-300' : 'text-white/50'}`}
             style={{ left: `${pos(group.bid)}%`, top: i % 2 === 0 ? 2 : 22 }}
           >
-            {group.names.map(name => (
+            {group.names.slice(0, MAX_NAMES).map(name => (
               <span key={name} className="text-xs font-semibold whitespace-nowrap">{name}</span>
             ))}
+            {group.names.length > MAX_NAMES && (
+              <span className="text-xs whitespace-nowrap opacity-60">+{group.names.length - MAX_NAMES} more</span>
+            )}
           </div>
         ))}
       </div>
