@@ -295,45 +295,58 @@ function BidTimeline({ bids, lowestBid }: Readonly<{ bids: { name: string; bid: 
   if (bids.length === 0) return null;
   const sorted = [...bids].sort((a, b) => a.bid - b.bid);
   const min = sorted[0].bid;
-  const max = sorted[sorted.length - 1].bid;
+  const max = sorted.at(-1)!.bid;
   const span = max === min ? 0 : max - min;
   const pos = (bid: number) => span === 0 ? 50 : 8 + ((bid - min) / span) * 84;
+
+  // Group players by bid so ties share one position instead of stacking on top of each other.
+  const groups: { bid: number; names: string[] }[] = [];
+  for (const { name, bid } of sorted) {
+    const last = groups.at(-1);
+    if (last?.bid === bid) last.names.push(name);
+    else groups.push({ bid, names: [name] });
+  }
+
+  const maxGroupSize = Math.max(...groups.map(g => g.names.length));
+  const nameAreaHeight = Math.max(48, 22 + maxGroupSize * 16);
 
   return (
     <div className="w-full">
       {/* Name labels — alternate above/below to reduce overlap on close bids */}
-      <div className="relative h-12">
-        {sorted.map((entry, i) => (
-          <span
-            key={entry.name}
-            className={`absolute text-xs font-semibold whitespace-nowrap -translate-x-1/2 ${entry.bid === lowestBid ? 'text-purple-300' : 'text-white/50'}`}
-            style={{ left: `${pos(entry.bid)}%`, top: i % 2 === 0 ? 2 : 22 }}
+      <div className="relative" style={{ height: nameAreaHeight }}>
+        {groups.map((group, i) => (
+          <div
+            key={group.bid}
+            className={`absolute -translate-x-1/2 flex flex-col items-center gap-0.5 ${group.bid === lowestBid ? 'text-purple-300' : 'text-white/50'}`}
+            style={{ left: `${pos(group.bid)}%`, top: i % 2 === 0 ? 2 : 22 }}
           >
-            {entry.name}
-          </span>
+            {group.names.map(name => (
+              <span key={name} className="text-xs font-semibold whitespace-nowrap">{name}</span>
+            ))}
+          </div>
         ))}
       </div>
 
       {/* Bar + dots */}
       <div className="relative h-px bg-white/20">
-        {sorted.map(entry => (
+        {groups.map(group => (
           <div
-            key={entry.name}
-            className={`absolute top-1/2 -translate-y-1/2 -translate-x-1/2 rounded-full ${entry.bid === lowestBid ? 'w-3 h-3 bg-purple-400' : 'w-2 h-2 bg-white/40'}`}
-            style={{ left: `${pos(entry.bid)}%` }}
+            key={group.bid}
+            className={`absolute top-1/2 -translate-y-1/2 -translate-x-1/2 rounded-full ${group.bid === lowestBid ? 'w-3 h-3 bg-purple-400' : 'w-2 h-2 bg-white/40'}`}
+            style={{ left: `${pos(group.bid)}%` }}
           />
         ))}
       </div>
 
       {/* Bid value labels */}
       <div className="relative h-5 mt-1">
-        {sorted.map(entry => (
+        {groups.map(group => (
           <span
-            key={entry.name}
-            className={`absolute text-xs -translate-x-1/2 ${entry.bid === lowestBid ? 'text-purple-400' : 'text-white/30'}`}
-            style={{ left: `${pos(entry.bid)}%` }}
+            key={group.bid}
+            className={`absolute text-xs -translate-x-1/2 ${group.bid === lowestBid ? 'text-purple-400' : 'text-white/30'}`}
+            style={{ left: `${pos(group.bid)}%` }}
           >
-            {entry.bid}s
+            {group.bid}s
           </span>
         ))}
       </div>
