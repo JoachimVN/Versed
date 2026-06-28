@@ -94,7 +94,7 @@ function buildRound(usedSongIds: Set<string>): Round {
     guesserSocketIds: [],
     lowestBid: 0,
     answered: false,
-    guessAttempts: new Set(),
+    passed: new Set(),
   };
 }
 
@@ -162,7 +162,7 @@ export function rejoinPlayer(game: Game, newSocketId: string, name: string): Pla
       if (bid !== undefined) { round.bids.set(newSocketId, bid); round.bids.delete(oldId); }
       round.guesserSocketIds = round.guesserSocketIds.map(id => (id === oldId ? newSocketId : id));
       round.bidTiers.forEach(t => { t.socketIds = t.socketIds.map(id => (id === oldId ? newSocketId : id)); });
-      if (round.guessAttempts.delete(oldId)) round.guessAttempts.add(newSocketId);
+      if (round.passed.delete(oldId)) round.passed.add(newSocketId);
     }
   }
   socketToPin.set(newSocketId, game.pin);
@@ -207,7 +207,7 @@ function applyTier(game: Game, round: Round): TierTurn {
   const tier = round.bidTiers[round.tierIndex];
   round.lowestBid = tier.bid;
   round.guesserSocketIds = tier.socketIds;
-  round.guessAttempts = new Set();
+  round.passed = new Set();
   game.phase = 'playing';
   const guesserNames = tier.socketIds
     .map(id => game.players.get(id)?.name ?? '')
@@ -244,18 +244,18 @@ export function advanceTier(game: Game): TierTurn | null {
   return applyTier(game, round);
 }
 
+// Guessers may keep trying until they get it, pass, or the clock runs out — so
+// a wrong guess just reports back as wrong and the turn stays open.
 export function recordGuess(
   game: Game,
   socketId: string,
   text: string
-): { correct: boolean; points: number; guesserName: string; allAttempted: boolean } | null {
+): { correct: boolean; points: number; guesserName: string } | null {
   const round = game.currentRound;
   if (!round || game.phase !== 'guessing') return null;
   if (!round.guesserSocketIds.includes(socketId)) return null;
-  if (round.answered) return null;
+  if (round.answered || round.passed.has(socketId)) return null;
 
-  round.guessAttempts.add(socketId);
-  const allAttempted = round.guesserSocketIds.every(id => round.guessAttempts.has(id));
   const correct = isCorrectGuess(text, round.song.title);
   const guesserName = game.players.get(socketId)?.name ?? '';
 
@@ -265,24 +265,24 @@ export function recordGuess(
     const points = calcPoints(round.lowestBid, round.song.rank);
     player.score += points;
     game.phase = 'reveal';
-    return { correct: true, points, guesserName, allAttempted };
+    return { correct: true, points, guesserName };
   }
 
-  return { correct: false, points: 0, guesserName, allAttempted };
+  return { correct: false, points: 0, guesserName };
 }
 
-// A guesser gives up their turn. Counts as their attempt so the round can move
-// on (to a co-guesser, the next tier, or the reveal) without them inventing a
+// A guesser gives up their turn. Once every guesser in the tier has passed, the
+// round can move on (to the next tier or the reveal) without anyone inventing a
 // throwaway guess.
-export function skipGuess(game: Game, socketId: string): { allAttempted: boolean } | null {
+export function skipGuess(game: Game, socketId: string): { allPassed: boolean } | null {
   const round = game.currentRound;
   if (!round || game.phase !== 'guessing') return null;
   if (!round.guesserSocketIds.includes(socketId)) return null;
   if (round.answered) return null;
 
-  round.guessAttempts.add(socketId);
-  const allAttempted = round.guesserSocketIds.every(id => round.guessAttempts.has(id));
-  return { allAttempted };
+  round.passed.add(socketId);
+  const allPassed = round.guesserSocketIds.every(id => round.passed.has(id));
+  return { allPassed };
 }
 
 export function getLeaderboard(game: Game) {
