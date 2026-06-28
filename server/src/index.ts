@@ -1,8 +1,8 @@
 import express from 'express';
-import { createServer } from 'http';
+import { createServer } from 'node:http';
 import { Server } from 'socket.io';
 import cors from 'cors';
-import path from 'path';
+import path from 'node:path';
 import dotenv from 'dotenv';
 import authRouter from './spotifyAuth';
 import * as gm from './gameManager';
@@ -13,13 +13,29 @@ gm.initSongs();
 // Countdown shown on the host before a song plays, used to buffer the track.
 const PLAYBACK_COUNTDOWN_MS = 3000;
 
+const allowedOrigins = new Set(
+  (process.env.CORS_ORIGINS || '')
+    .split(',')
+    .map((origin) => origin.trim())
+    .filter(Boolean),
+);
+
+const corsOptions = {
+  origin: (origin: string | undefined, callback: (err: Error | null, allow?: boolean) => void) => {
+    if (!origin) return callback(null, true);
+    if (allowedOrigins.has(origin)) return callback(null, true);
+    return callback(new Error('CORS origin not allowed'));
+  },
+  methods: ['GET', 'POST'],
+};
+
 const app = express();
 const httpServer = createServer(app);
 const io = new Server(httpServer, {
-  cors: { origin: '*', methods: ['GET', 'POST'] },
+  cors: corsOptions,
 });
 
-app.use(cors({ origin: '*' }));
+app.use(cors(corsOptions));
 app.use(express.json());
 app.use('/api/auth', authRouter);
 app.get('/api/health', (_req, res) => res.json({ ok: true }));
@@ -43,6 +59,34 @@ io.on('connection', (socket) => {
     callback({ pin: game.pin });
   });
 
+  // Emit the right phase snapshot to this socket so a reconnecting or
+  // mid-game-joining player jumps straight to where the game is.
+  function syncState(game: NonNullable<ReturnType<typeof gm.getGame>>) {
+    const round = game.currentRound;
+    if (game.phase === 'betting' && round && game.phaseEndsAt) {
+      socket.emit('round_start', {
+        roundIndex: game.roundIndex,
+        total: game.totalRounds,
+        hints: round.hints,
+        bettingTime: game.bettingTime,
+        endsAt: game.phaseEndsAt,
+      });
+    } else if ((game.phase === 'playing' || game.phase === 'guessing') && round) {
+      const guesserNames = round.guesserSocketIds
+        .map(id => game.players.get(id)?.name ?? '')
+        .filter(Boolean);
+      socket.emit('betting_closed', { lowestBid: round.lowestBid, guesserNames, playerBids: [] });
+      if (game.phase === 'guessing' && game.phaseEndsAt) {
+        socket.emit('guessing_start', { guesserNames, timeLimit: game.guessingTime, endsAt: game.phaseEndsAt });
+        if (round.guesserSocketIds.includes(socket.id) && !round.passed.has(socket.id)) {
+          socket.emit('your_turn', { timeLimit: game.guessingTime, endsAt: game.phaseEndsAt });
+        }
+      }
+    } else if (game.phase === 'finished') {
+      socket.emit('game_over', { leaderboard: gm.getLeaderboard(game) });
+    }
+  }
+
   // ── Host: rejoin after reconnect ──────────────────────────────────────────
   socket.on('rejoin_host', ({ pin }: { pin: string }, callback: (r: { players: { name: string }[] }) => void) => {
     const game = gm.getGame(pin);
@@ -54,13 +98,25 @@ io.on('connection', (socket) => {
     callback({ players: Array.from(game.players.values()).map(p => ({ name: p.name })) });
   });
 
-  // ── Player: join lobby ─────────────────────────────────────────────────────
+  // ── Player: join game (lobby or mid-game) ─────────────────────────────────
   socket.on(
     'join_game',
     ({ pin, name }: { pin: string; name: string }, callback: (r: { error?: string; success?: boolean }) => void) => {
       const game = gm.getGame(pin);
       if (!game) return callback({ error: 'Game not found' });
-      if (game.phase !== 'lobby') return callback({ error: 'Game already started' });
+
+      // Mid-game: if this name is already in the game, it's a full-disconnect
+      // rejoin — migrate the socket ID and snap to the current phase.
+      if (game.phase !== 'lobby') {
+        const rejoined = gm.rejoinPlayer(game, socket.id, name);
+        if (rejoined) {
+          socket.join(pin);
+          socket.join(`player:${pin}`);
+          callback({ success: true });
+          syncState(game);
+          return;
+        }
+      }
 
       const player = gm.addPlayer(game, socket.id, name);
       if (!player) return callback({ error: 'Name already taken' });
@@ -70,9 +126,10 @@ io.on('connection', (socket) => {
       callback({ success: true });
 
       const players = Array.from(game.players.values()).map(p => ({ name: p.name }));
-      const hostRoom = io.sockets.adapter.rooms.get(`host:${pin}`);
-      console.log(`[join_game] pin=${pin} name=${name} hostRoom=host:${pin} hostSockets=${hostRoom ? [...hostRoom].join(',') : 'EMPTY'}`);
       io.to(`host:${pin}`).emit('player_joined', { players });
+
+      // New player joining an in-progress game — sync them to the current phase.
+      if (game.phase !== 'lobby') syncState(game);
     }
   );
 
@@ -85,12 +142,17 @@ io.on('connection', (socket) => {
     socket.join(pin);
     socket.join(`player:${pin}`);
     callback?.({ ok: true });
+    syncState(game);
   });
 
   // ── Host: start game → first round ────────────────────────────────────────
-  socket.on('start_game', () => {
+  socket.on('start_game', (payload?: { settings?: { bettingTime?: number; guessingTime?: number; totalRounds?: number } }) => {
     const game = gm.getGameBySocket(socket.id);
-    if (!game || game.hostSocketId !== socket.id || game.phase !== 'lobby') return;
+    if (game?.hostSocketId !== socket.id || game.phase !== 'lobby') return;
+    const s = payload?.settings;
+    if (s?.bettingTime) game.bettingTime = Math.max(5, Math.min(60, Math.round(s.bettingTime)));
+    if (s?.guessingTime) game.guessingTime = Math.max(5, Math.min(60, Math.round(s.guessingTime)));
+    if (s?.totalRounds) game.totalRounds = Math.max(1, Math.min(30, Math.round(s.totalRounds)));
     game.roundIndex = 0;
     beginRound(game);
   });
@@ -119,7 +181,7 @@ io.on('connection', (socket) => {
   // ── Host: song playback confirmed ──────────────────────────────────────────
   socket.on('song_started', () => {
     const game = gm.getGameBySocket(socket.id);
-    if (!game || game.hostSocketId !== socket.id || game.phase !== 'playing') return;
+    if (game?.hostSocketId !== socket.id || game.phase !== 'playing') return;
     // Cancel fallback; start guessing timer from actual playback start
     if (game.phaseTimer) clearTimeout(game.phaseTimer);
     game.phaseTimer = setTimeout(() => startGuessingPhase(game), gm.playMsFor(game.currentRound!.lowestBid));
@@ -168,7 +230,8 @@ io.on('connection', (socket) => {
   // ── Host: advance to next round ────────────────────────────────────────────
   socket.on('next_round', () => {
     const game = gm.getGameBySocket(socket.id);
-    if (!game || game.hostSocketId !== socket.id) return;
+    if (!game) return;
+    if (game.hostSocketId !== socket.id) return;
 
     game.roundIndex += 1;
     if (game.roundIndex >= game.totalRounds) {
@@ -198,18 +261,22 @@ io.on('connection', (socket) => {
   function beginRound(game: ReturnType<typeof gm.getGame> & object) {
     if (!game) return;
     const round = gm.startRound(game);
+    const bettingEndsAt = Date.now() + game.bettingTime * 1000;
+    game.phaseEndsAt = bettingEndsAt;
 
     io.to(`player:${game.pin}`).emit('round_start', {
       roundIndex: game.roundIndex,
       total: game.totalRounds,
       hints: round.hints,
-      bettingTime: gm.BETTING_TIME,
+      bettingTime: game.bettingTime,
+      endsAt: bettingEndsAt,
     });
     io.to(`host:${game.pin}`).emit('host_round_start', {
       roundIndex: game.roundIndex,
       total: game.totalRounds,
       hints: round.hints,
-      bettingTime: gm.BETTING_TIME,
+      bettingTime: game.bettingTime,
+      endsAt: bettingEndsAt,
       song: {
         title: round.song.title,
         artist: round.song.artist,
@@ -217,7 +284,8 @@ io.on('connection', (socket) => {
       },
     });
 
-    game.phaseTimer = setTimeout(() => closeBettingAndPlay(game), gm.BETTING_TIME * 1000);
+    // Extra 500ms lets last-second auto-submits from clients arrive before we close.
+    game.phaseTimer = setTimeout(() => closeBettingAndPlay(game), game.bettingTime * 1000 + 500);
   }
 
   function closeBettingAndPlay(game: ReturnType<typeof gm.getGame> & object) {
@@ -247,7 +315,10 @@ io.on('connection', (socket) => {
     if (game.phaseTimer) clearTimeout(game.phaseTimer);
     const round = game.currentRound!;
     const { lowestBid, guesserNames } = turn;
-    io.to(game.pin).emit('betting_closed', { lowestBid, guesserNames });
+    const playerBids = Array.from(round.bids.entries())
+      .map(([id, bid]) => ({ name: game.players.get(id)?.name ?? '', bid }))
+      .filter(b => b.name);
+    io.to(game.pin).emit('betting_closed', { lowestBid, guesserNames, playerBids });
     const durationMs = gm.playMsFor(lowestBid);
     io.to(`host:${game.pin}`).emit('play_song', {
       trackId: round.song.spotifyTrackId,
@@ -284,7 +355,7 @@ io.on('connection', (socket) => {
   }
 
   function startGuessingPhase(game: ReturnType<typeof gm.getGame> & object) {
-    if (!game) return;
+    if (!game || game.phase !== 'playing') return;
     const round = game.currentRound!;
     const guesserSocketIds = round.guesserSocketIds;
     const guesserNames = guesserSocketIds
@@ -293,15 +364,20 @@ io.on('connection', (socket) => {
 
     if (game.phaseTimer) clearTimeout(game.phaseTimer);
     game.phase = 'guessing';
-    io.to(game.pin).emit('guessing_start', { guesserNames, timeLimit: gm.GUESSING_TIME });
+    const guessingEndsAt = Date.now() + game.guessingTime * 1000;
+    game.phaseEndsAt = guessingEndsAt;
+    io.to(game.pin).emit('guessing_start', { guesserNames, timeLimit: game.guessingTime, endsAt: guessingEndsAt });
     for (const sid of guesserSocketIds) {
-      io.to(sid).emit('your_turn', { timeLimit: gm.GUESSING_TIME });
+      // Skip players who already got their turn early — don't reset their timer
+      if (!round.earlyGuessers.has(sid)) {
+        io.to(sid).emit('your_turn', { timeLimit: game.guessingTime, endsAt: guessingEndsAt });
+      }
     }
 
     game.phaseTimer = setTimeout(() => {
       if (game.phase !== 'guessing' || round.answered) return;
       advanceTierOrReveal(game);
-    }, gm.GUESSING_TIME * 1000);
+    }, game.guessingTime * 1000);
   }
 });
 

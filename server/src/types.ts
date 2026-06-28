@@ -34,6 +34,7 @@ export interface Round {
   lowestBid: number;
   answered: boolean;
   passed: Set<string>; // guessers whose turn is over this tier (wrong guess or skip)
+  earlyGuessers: Set<string>; // guessers who opted in before their listening time expired
 }
 
 export interface Player {
@@ -58,7 +59,10 @@ export interface Game {
   phase: GamePhase;
   roundIndex: number;
   totalRounds: number;
+  bettingTime: number;
+  guessingTime: number;
   currentRound: Round | null;
   usedSongIds: Set<string>;
   phaseTimer: ReturnType<typeof setTimeout> | null;
+  phaseEndsAt: number | null; // epoch ms when the current countdown expires
 }

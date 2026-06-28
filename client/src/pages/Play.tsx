@@ -26,16 +26,14 @@ interface PlayState {
   guesserNames: string[];
   lowestBid: number;
   guessText: string;
-  guessWrong: boolean;
   result: RoundResultEvent | null;
   myScore: number;
   leaderboard: LeaderboardEntry[];
   guessInputRef: React.RefObject<HTMLInputElement>;
   setPin: (v: string) => void;
   setName: (v: string) => void;
-  setBidIndex: React.Dispatch<React.SetStateAction<number>>;
+  setBidIndex: (i: number | ((prev: number) => number)) => void;
   setGuessText: (v: string) => void;
-  setGuessWrong: (v: boolean) => void;
   join: () => void;
   submitBid: () => void;
   submitGuess: () => void;
@@ -56,26 +54,42 @@ function usePlayGame(pinParam?: string): PlayState {
   const [timeLeft, setTimeLeft] = useState(0);
   const [bettingTime, setBettingTime] = useState(15);
   const [bidIndex, setBidIndex] = useState(4); // default: 2s (index 4)
+  const bidIndexRef = useRef(4);
   const [myBid, setMyBid] = useState(0);
   const [guesserNames, setGuesserNames] = useState<string[]>([]);
   const [lowestBid, setLowestBid] = useState(0);
   const [guessText, setGuessText] = useState('');
-  const [guessWrong, setGuessWrong] = useState(false);
   const [result, setResult] = useState<RoundResultEvent | null>(null);
   const [myScore, setMyScore] = useState(0);
   const [leaderboard, setLeaderboard] = useState<LeaderboardEntry[]>([]);
   const timerRef = useRef<ReturnType<typeof setInterval> | null>(null);
+  const autoSubmitTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const bidSubmittedRef = useRef(false);
   const guessInputRef = useRef<HTMLInputElement>(null);
 
-  function startCountdown(seconds: number) {
+  function autoSubmitBid() {
+    if (bidSubmittedRef.current) return;
+    bidSubmittedRef.current = true;
+    const seconds = BID_OPTIONS[bidIndexRef.current];
+    setMyBid(seconds);
+    setPhase('bid_submitted');
+    socket.emit('submit_bid', { seconds }, (res?: { ok: boolean }) => {
+      if (res && !res.ok) {
+        setError("That didn't go through — try again.");
+        setPhase('betting');
+      }
+    });
+  }
+
+  function startCountdown(endsAt: number) {
     stopCountdown();
-    setTimeLeft(Math.ceil(seconds));
-    timerRef.current = setInterval(() => {
-      setTimeLeft(t => {
-        if (t <= 1) { stopCountdown(); return 0; }
-        return t - 1;
-      });
-    }, 1000);
+    const tick = () => {
+      const remaining = Math.ceil(Math.max(0, endsAt - Date.now()) / 1000);
+      setTimeLeft(remaining);
+      if (remaining <= 0) stopCountdown();
+    };
+    tick();
+    timerRef.current = setInterval(tick, 500);
   }
 
   function stopCountdown() {
@@ -95,7 +109,7 @@ function usePlayGame(pinParam?: string): PlayState {
 
     socket.on('round_start', (data: {
       roundIndex: number; total: number;
-      hints: Hint[]; bettingTime: number;
+      hints: Hint[]; bettingTime: number; endsAt?: number;
     }) => {
       setRoundIndex(data.roundIndex);
       setTotalRounds(data.total);
@@ -104,7 +118,11 @@ function usePlayGame(pinParam?: string): PlayState {
       setGuessText('');
       setResult(null);
       setError('');
-      startCountdown(data.bettingTime);
+      bidSubmittedRef.current = false;
+      if (autoSubmitTimerRef.current) clearTimeout(autoSubmitTimerRef.current);
+      const endsAt = data.endsAt ?? (Date.now() + data.bettingTime * 1000);
+      autoSubmitTimerRef.current = setTimeout(autoSubmitBid, endsAt - Date.now());
+      startCountdown(endsAt);
       setPhase('betting');
     });
 
@@ -115,13 +133,13 @@ function usePlayGame(pinParam?: string): PlayState {
       setPhase('watching');
     });
 
-    socket.on('guessing_start', (data: { guesserNames: string[]; timeLimit: number }) => {
+    socket.on('guessing_start', (data: { guesserNames: string[]; timeLimit: number; endsAt?: number }) => {
       setGuesserNames(data.guesserNames);
-      startCountdown(data.timeLimit);
+      startCountdown(data.endsAt ?? (Date.now() + data.timeLimit * 1000));
     });
 
-    socket.on('your_turn', (data: { timeLimit: number }) => {
-      startCountdown(data.timeLimit);
+    socket.on('your_turn', (data: { timeLimit: number; endsAt?: number }) => {
+      startCountdown(data.endsAt ?? (Date.now() + data.timeLimit * 1000));
       setPhase('guessing');
       setTimeout(() => guessInputRef.current?.focus(), 100);
     });
@@ -155,6 +173,7 @@ function usePlayGame(pinParam?: string): PlayState {
 
     return () => {
       stopCountdown();
+      if (autoSubmitTimerRef.current) clearTimeout(autoSubmitTimerRef.current);
       ['connect','round_start','betting_closed','guessing_start','your_turn',
        'round_result','score_update','leaderboard','game_over','host_disconnected']
         .forEach(e => socket.off(e));
@@ -174,6 +193,9 @@ function usePlayGame(pinParam?: string): PlayState {
   };
 
   const submitBid = () => {
+    if (bidSubmittedRef.current) return;
+    bidSubmittedRef.current = true;
+    if (autoSubmitTimerRef.current) { clearTimeout(autoSubmitTimerRef.current); autoSubmitTimerRef.current = null; }
     const seconds = BID_OPTIONS[bidIndex];
     setError('');
     setMyBid(seconds);
@@ -182,7 +204,8 @@ function usePlayGame(pinParam?: string): PlayState {
       // Bid didn't register (e.g. mid-reconnect) — don't strand the player on
       // "waiting for others"; drop them back so they can lock in again.
       if (res && !res.ok) {
-        setError("That didn’t go through — try again.");
+        bidSubmittedRef.current = false;
+        setError("That didn't go through - try again.");
         setPhase('betting');
       }
     });
@@ -192,16 +215,7 @@ function usePlayGame(pinParam?: string): PlayState {
     if (!guessText.trim()) return;
     stopCountdown();
     socket.emit('submit_guess', { text: guessText }, ({ correct }: { correct: boolean }) => {
-      // One guess each: a wrong answer flashes red, then quietly ends the turn
-      // (no "wrong!" message — the reveal tells the story). A correct guess is
-      // moved on by the round_result event.
-      if (!correct) {
-        setGuessWrong(true);
-        setTimeout(() => {
-          setGuessWrong(false);
-          setPhase('passed');
-        }, 800);
-      }
+      if (!correct) setPhase('passed');
     });
   };
 
@@ -214,8 +228,16 @@ function usePlayGame(pinParam?: string): PlayState {
   return {
     phase, pin, name, myName, error, roundIndex, totalRounds, hints,
     timeLeft, bettingTime, bidIndex, myBid, guesserNames, lowestBid,
-    guessText, guessWrong, result, myScore, leaderboard, guessInputRef,
-    setPin, setName, setBidIndex, setGuessText, setGuessWrong,
+    guessText, result, myScore, leaderboard, guessInputRef,
+    setPin, setName,
+  setBidIndex: (i: number | ((prev: number) => number)) => {
+    setBidIndex(prev => {
+      const next = typeof i === 'function' ? i(prev) : i;
+      bidIndexRef.current = next;
+      return next;
+    });
+  },
+  setGuessText,
     join, submitBid, submitGuess, skipGuess,
   };
 }
@@ -250,7 +272,7 @@ function WaitingView({ game }: Readonly<{ game: PlayState }>) {
     <div className="min-h-screen flex flex-col items-center justify-center gap-4 p-6">
       <div className="w-12 h-12 border-4 border-purple-500 border-t-transparent rounded-full animate-spin" />
       <p className="text-white text-xl font-bold">{game.myName}</p>
-      <p className="text-white/50">You're in! Waiting for the host to start the game…</p>
+      <p className="text-white/50">You're in! Hang tight…</p>
     </div>
   );
 }
@@ -320,8 +342,53 @@ function BidSubmittedView({ game }: Readonly<{ game: PlayState }>) {
   );
 }
 
+function GuessInputSection({ guessText, guessInputRef, setGuessText, submitGuess }: Readonly<{
+  guessText: string;
+  guessInputRef: React.RefObject<HTMLInputElement>;
+  setGuessText: (v: string) => void;
+  submitGuess: () => void;
+}>) {
+  return (
+    <>
+      <div className="flex-1 flex flex-col items-center justify-center gap-6">
+        <p className="text-white/60">Name the song</p>
+        <input
+          ref={guessInputRef}
+          type="text"
+          placeholder="Type song title..."
+          value={guessText}
+          onChange={e => setGuessText(e.target.value)}
+          onKeyDown={e => e.key === 'Enter' && submitGuess()}
+          className="w-full px-4 py-4 rounded-xl bg-white/10 text-white text-center text-xl placeholder-white/30 outline-none focus:ring-2 focus:ring-purple-500"
+          autoComplete="off"
+          autoCorrect="off"
+          spellCheck={false}
+        />
+      </div>
+      <button onClick={submitGuess} disabled={!guessText.trim()}
+        className="w-full py-4 rounded-2xl bg-purple-600 text-white font-bold text-xl disabled:opacity-30 hover:bg-purple-500 active:scale-95 transition-all">
+        Submit
+      </button>
+    </>
+  );
+}
+
 function WatchingView({ game }: Readonly<{ game: PlayState }>) {
-  const { lowestBid, guesserNames } = game;
+  const { lowestBid, guesserNames, myName, guessText, guessInputRef, setGuessText, submitGuess } = game;
+  const imGuessing = guesserNames.includes(myName);
+
+  if (imGuessing) {
+    return (
+      <div className="min-h-screen flex flex-col p-5 gap-4">
+        <div className="flex justify-center items-center gap-2">
+          <Music className="w-4 h-4 text-white/40 animate-pulse" />
+          <span className="text-white/40 text-sm">Listening...</span>
+        </div>
+        <GuessInputSection guessText={guessText} guessInputRef={guessInputRef} setGuessText={setGuessText} submitGuess={submitGuess} />
+      </div>
+    );
+  }
+
   return (
     <div className="min-h-screen flex flex-col items-center justify-center gap-4 p-6 text-center">
       <Music className="w-14 h-14 text-white animate-pulse" />
@@ -335,7 +402,7 @@ function WatchingView({ game }: Readonly<{ game: PlayState }>) {
 }
 
 function GuessingView({ game }: Readonly<{ game: PlayState }>) {
-  const { timeLeft, myScore, guessText, guessWrong, guessInputRef, setGuessText, setGuessWrong, submitGuess, skipGuess } = game;
+  const { timeLeft, myScore, guessText, guessInputRef, setGuessText, submitGuess, skipGuess } = game;
   return (
     <div className="min-h-screen flex flex-col p-5 gap-4">
       <div className="flex justify-between items-center">
@@ -343,25 +410,7 @@ function GuessingView({ game }: Readonly<{ game: PlayState }>) {
         <span className="text-white font-black text-2xl">{timeLeft}s</span>
         <span className="text-white/50 text-sm">{myScore.toLocaleString()} pts</span>
       </div>
-      <div className="flex-1 flex flex-col items-center justify-center gap-6">
-        <p className="text-white/60">Name the song</p>
-        <input
-          ref={guessInputRef}
-          type="text"
-          placeholder="Type song title..."
-          value={guessText}
-          onChange={e => { setGuessText(e.target.value); setGuessWrong(false); }}
-          onKeyDown={e => e.key === 'Enter' && submitGuess()}
-          className={`w-full px-4 py-4 rounded-xl text-white text-center text-xl placeholder-white/30 outline-none focus:ring-2 transition-colors ${guessWrong ? 'bg-red-900/50 ring-2 ring-red-500' : 'bg-white/10 focus:ring-purple-500'}`}
-          autoComplete="off"
-          autoCorrect="off"
-          spellCheck={false}
-        />
-      </div>
-      <button onClick={submitGuess} disabled={!guessText.trim()}
-        className="w-full py-4 rounded-2xl bg-purple-600 text-white font-bold text-xl disabled:opacity-30 hover:bg-purple-500 active:scale-95 transition-all">
-        Submit
-      </button>
+      <GuessInputSection guessText={guessText} guessInputRef={guessInputRef} setGuessText={setGuessText} submitGuess={submitGuess} />
       <button onClick={skipGuess}
         className="w-full py-3 rounded-2xl bg-white/5 text-white/50 font-semibold hover:bg-white/10 active:scale-95 transition-all">
         Skip — I don't know
@@ -371,13 +420,7 @@ function GuessingView({ game }: Readonly<{ game: PlayState }>) {
 }
 
 function PassedView() {
-  // Deliberately neutral — no "wrong" / "handing it over" messaging. Players
-  // see who got it (or didn't) at the reveal, which is enough.
-  return (
-    <div className="min-h-screen flex flex-col items-center justify-center gap-4 p-6 text-center">
-      <Music className="w-14 h-14 text-white/40 animate-pulse" />
-    </div>
-  );
+  return <div className="min-h-screen" />;
 }
 
 function revealIcon(correct: boolean, iWon: boolean) {

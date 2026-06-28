@@ -1,5 +1,5 @@
 import { useState, useEffect, useRef } from 'react';
-import { Music, Check, X, Loader2, Copy } from 'lucide-react';
+import { Music, Check, X, Loader2, Copy, ChevronDown } from 'lucide-react';
 import { socket } from '../socket';
 import { useSpotify } from '../hooks/useSpotify';
 import { RankBadge } from '../components/RankBadge';
@@ -27,12 +27,22 @@ interface HostState {
   countdown: number | null;
   guesserNames: string[];
   lowestBid: number;
+  playerBids: { name: string; bid: number }[];
   result: RoundResultEvent | null;
   leaderboard: LeaderboardEntry[];
   copied: boolean;
   playProgress: number;
   inviteUrl: string;
+  settingsOpen: boolean;
+  bettingTimeSetting: number;
+  guessingTimeSetting: number;
+  roundsSetting: number;
+  toggleSettings: () => void;
+  setBettingTimeSetting: (v: number) => void;
+  setGuessingTimeSetting: (v: number) => void;
+  setRoundsSetting: (v: number) => void;
   createGame: () => void;
+  startGame: () => void;
   copyInvite: () => void;
 }
 
@@ -51,10 +61,15 @@ function useHostGame(): HostState {
   const [countdown, setCountdown] = useState<number | null>(null);
   const [guesserNames, setGuesserNames] = useState<string[]>([]);
   const [lowestBid, setLowestBid] = useState(0);
+  const [playerBids, setPlayerBids] = useState<{ name: string; bid: number }[]>([]);
   const [result, setResult] = useState<RoundResultEvent | null>(null);
   const [leaderboard, setLeaderboard] = useState<LeaderboardEntry[]>([]);
   const [copied, setCopied] = useState(false);
   const [playProgress, setPlayProgress] = useState(0);
+  const [settingsOpen, setSettingsOpen] = useState(false);
+  const [bettingTimeSetting, setBettingTimeSetting] = useState(15);
+  const [guessingTimeSetting, setGuessingTimeSetting] = useState(15);
+  const [roundsSetting, setRoundsSetting] = useState(10);
   const timerRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const playRafRef = useRef<number | null>(null);
 
@@ -119,6 +134,7 @@ function useHostGame(): HostState {
       setBettingTime(data.bettingTime);
       setBidCount(0);
       setGuesserNames([]);
+      setPlayerBids([]);
       setResult(null);
       startCountdown(data.bettingTime);
       setPhase('betting');
@@ -126,9 +142,10 @@ function useHostGame(): HostState {
 
     socket.on('bid_received', ({ bidCount: bc }: { bidCount: number }) => setBidCount(bc));
 
-    socket.on('betting_closed', (data: { lowestBid: number; guesserNames: string[] }) => {
+    socket.on('betting_closed', (data: { lowestBid: number; guesserNames: string[]; playerBids: { name: string; bid: number }[] }) => {
       setLowestBid(data.lowestBid);
       setGuesserNames(data.guesserNames);
+      setPlayerBids(data.playerBids ?? []);
       stopCountdown();
       setPhase('playing');
     });
@@ -204,6 +221,13 @@ function useHostGame(): HostState {
     });
   };
 
+  const startGame = () => {
+    spotify.activatePlayer();
+    socket.emit('start_game', {
+      settings: { bettingTime: bettingTimeSetting, guessingTime: guessingTimeSetting, totalRounds: roundsSetting },
+    });
+  };
+
   const copyInvite = () => {
     navigator.clipboard?.writeText(inviteUrl)
       .then(() => {
@@ -215,9 +239,82 @@ function useHostGame(): HostState {
 
   return {
     spotify, phase, pin, players, roundIndex, totalRounds, hints,
-    bettingTime, timeLeft, bidCount, countdown, guesserNames, lowestBid,
-    result, leaderboard, copied, playProgress, inviteUrl, createGame, copyInvite,
+    bettingTime, timeLeft, bidCount, countdown, guesserNames, lowestBid, playerBids,
+    result, leaderboard, copied, playProgress, inviteUrl,
+    settingsOpen, bettingTimeSetting, guessingTimeSetting, roundsSetting,
+    toggleSettings: () => setSettingsOpen(o => !o),
+    setBettingTimeSetting, setGuessingTimeSetting, setRoundsSetting,
+    createGame, startGame, copyInvite,
   };
+}
+
+// ─── Bid timeline ────────────────────────────────────────────────────────────
+
+function BidTimeline({ bids, lowestBid }: Readonly<{ bids: { name: string; bid: number }[]; lowestBid: number }>) {
+  if (bids.length === 0) return null;
+  const sorted = [...bids].sort((a, b) => a.bid - b.bid);
+  const min = sorted[0].bid;
+  const max = sorted[sorted.length - 1].bid;
+  const span = max === min ? 0 : max - min;
+  const pos = (bid: number) => span === 0 ? 50 : 8 + ((bid - min) / span) * 84;
+
+  return (
+    <div className="w-full">
+      {/* Name labels — alternate above/below to reduce overlap on close bids */}
+      <div className="relative h-12">
+        {sorted.map((entry, i) => (
+          <span
+            key={entry.name}
+            className={`absolute text-xs font-semibold whitespace-nowrap -translate-x-1/2 ${entry.bid === lowestBid ? 'text-purple-300' : 'text-white/50'}`}
+            style={{ left: `${pos(entry.bid)}%`, top: i % 2 === 0 ? 2 : 22 }}
+          >
+            {entry.name}
+          </span>
+        ))}
+      </div>
+
+      {/* Bar + dots */}
+      <div className="relative h-px bg-white/20">
+        {sorted.map(entry => (
+          <div
+            key={entry.name}
+            className={`absolute top-1/2 -translate-y-1/2 -translate-x-1/2 rounded-full ${entry.bid === lowestBid ? 'w-3 h-3 bg-purple-400' : 'w-2 h-2 bg-white/40'}`}
+            style={{ left: `${pos(entry.bid)}%` }}
+          />
+        ))}
+      </div>
+
+      {/* Bid value labels */}
+      <div className="relative h-5 mt-1">
+        {sorted.map(entry => (
+          <span
+            key={entry.name}
+            className={`absolute text-xs -translate-x-1/2 ${entry.bid === lowestBid ? 'text-purple-400' : 'text-white/30'}`}
+            style={{ left: `${pos(entry.bid)}%` }}
+          >
+            {entry.bid}s
+          </span>
+        ))}
+      </div>
+    </div>
+  );
+}
+
+// ─── Settings row ─────────────────────────────────────────────────────────────
+
+function SettingRow({ label, value, unit, onDec, onInc }: Readonly<{
+  label: string; value: number; unit: string; onDec: () => void; onInc: () => void;
+}>) {
+  return (
+    <div className="flex items-center justify-between">
+      <span className="text-white/60 text-sm">{label}</span>
+      <div className="flex items-center gap-3">
+        <button onClick={onDec} className="w-8 h-8 rounded-full bg-white/10 text-white text-lg flex items-center justify-center hover:bg-white/20 active:scale-95 transition-all">−</button>
+        <span className="text-white font-bold w-12 text-center">{value}{unit}</span>
+        <button onClick={onInc} className="w-8 h-8 rounded-full bg-white/10 text-white text-lg flex items-center justify-center hover:bg-white/20 active:scale-95 transition-all">+</button>
+      </div>
+    </div>
+  );
 }
 
 // ─── Phase views ─────────────────────────────────────────────────────────────
@@ -243,7 +340,11 @@ function ConnectView({ game }: Readonly<{ game: HostState }>) {
 }
 
 function LobbyView({ game }: Readonly<{ game: HostState }>) {
-  const { spotify, pin, players, copied, createGame, copyInvite } = game;
+  const {
+    spotify, pin, players, copied, createGame, startGame, copyInvite,
+    settingsOpen, bettingTimeSetting, guessingTimeSetting, roundsSetting,
+    toggleSettings, setBettingTimeSetting, setGuessingTimeSetting, setRoundsSetting,
+  } = game;
   return (
     <div className="min-h-screen flex flex-col items-center p-6 gap-6">
       <img src={`${import.meta.env.BASE_URL}logo.svg`} alt={APP_NAME} className="h-16 w-auto" />
@@ -279,8 +380,31 @@ function LobbyView({ game }: Readonly<{ game: HostState }>) {
               ))}
             </div>
           </div>
+
           <button
-            onClick={() => { spotify.activatePlayer(); socket.emit('start_game'); }}
+            onClick={toggleSettings}
+            className="flex items-center gap-1.5 text-white/40 text-sm hover:text-white/70 transition-colors"
+          >
+            Settings
+            <ChevronDown className={`w-4 h-4 transition-transform duration-200 ${settingsOpen ? 'rotate-180' : ''}`} />
+          </button>
+
+          {settingsOpen && (
+            <div className="w-full max-w-sm bg-white/5 rounded-2xl p-4 space-y-4">
+              <SettingRow label="Bet time" value={bettingTimeSetting} unit="s"
+                onDec={() => setBettingTimeSetting(Math.max(5, bettingTimeSetting - 5))}
+                onInc={() => setBettingTimeSetting(Math.min(60, bettingTimeSetting + 5))} />
+              <SettingRow label="Guess time" value={guessingTimeSetting} unit="s"
+                onDec={() => setGuessingTimeSetting(Math.max(5, guessingTimeSetting - 5))}
+                onInc={() => setGuessingTimeSetting(Math.min(60, guessingTimeSetting + 5))} />
+              <SettingRow label="Rounds" value={roundsSetting} unit=""
+                onDec={() => setRoundsSetting(Math.max(1, roundsSetting - 1))}
+                onInc={() => setRoundsSetting(Math.min(30, roundsSetting + 1))} />
+            </div>
+          )}
+
+          <button
+            onClick={startGame}
             disabled={players.length === 0}
             className="mt-auto w-full max-w-sm py-4 rounded-2xl bg-purple-600 text-white font-bold text-xl disabled:opacity-30 hover:bg-purple-500 transition-colors"
           >
@@ -337,17 +461,13 @@ function BettingView({ game }: Readonly<{ game: HostState }>) {
 }
 
 function PlayingView({ game }: Readonly<{ game: HostState }>) {
-  const { roundIndex, totalRounds, countdown, guesserNames, lowestBid, playProgress, timeLeft } = game;
+  const { roundIndex, totalRounds, countdown, guesserNames, lowestBid, playerBids, playProgress, timeLeft } = game;
   return (
     <div className="min-h-screen flex flex-col items-center justify-center p-6 gap-6 text-center">
       <p className="text-white/50">Round {roundIndex + 1}/{totalRounds}</p>
       {countdown === null ? (
         <>
           <Music className="w-16 h-16 text-white animate-pulse" />
-          <div>
-            <p className="text-white/40 text-sm">Playing for</p>
-            <p className="text-white font-black text-4xl">{lowestBid}s</p>
-          </div>
           <p className="text-white/50">
             {guesserNames.join(' & ')} will guess
           </p>
@@ -355,12 +475,18 @@ function PlayingView({ game }: Readonly<{ game: HostState }>) {
             <div className="bg-purple-500 h-2 rounded-full" style={{ width: `${playProgress * 100}%` }} />
           </div>
           <p className="text-white font-black text-2xl">{timeLeft}s</p>
+          <div className="w-full max-w-sm">
+            <BidTimeline bids={playerBids} lowestBid={lowestBid} />
+          </div>
         </>
       ) : (
         <>
           <p className="text-white/40 text-sm uppercase tracking-widest">Get ready</p>
           <div className="text-8xl font-black text-white animate-pulse">{countdown}</div>
           <p className="text-white/50">{guesserNames.join(' & ')} will guess</p>
+          <div className="w-full max-w-sm">
+            <BidTimeline bids={playerBids} lowestBid={lowestBid} />
+          </div>
         </>
       )}
     </div>
@@ -368,7 +494,7 @@ function PlayingView({ game }: Readonly<{ game: HostState }>) {
 }
 
 function GuessingView({ game }: Readonly<{ game: HostState }>) {
-  const { roundIndex, totalRounds, guesserNames, timeLeft } = game;
+  const { roundIndex, totalRounds, guesserNames, lowestBid, playerBids, timeLeft } = game;
   return (
     <div className="min-h-screen flex flex-col items-center justify-center p-6 gap-6 text-center">
       <p className="text-white/50">Round {roundIndex + 1}/{totalRounds}</p>
@@ -377,6 +503,9 @@ function GuessingView({ game }: Readonly<{ game: HostState }>) {
         <p className="text-white font-black text-2xl">{guesserNames.join(' & ')}</p>
       </div>
       <p className="text-white font-black text-5xl">{timeLeft}s</p>
+      <div className="w-full max-w-sm">
+        <BidTimeline bids={playerBids} lowestBid={lowestBid} />
+      </div>
       <p className="text-white/30 text-sm">Other players are waiting...</p>
     </div>
   );

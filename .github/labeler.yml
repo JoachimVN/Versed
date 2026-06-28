@@ -1,0 +1,17 @@
+client:
+  - changed-files:
+    - any-glob-to-any-file: 'client/**'
+
+server:
+  - changed-files:
+    - any-glob-to-any-file: 'server/**'
+
+ci:
+  - changed-files:
+    - any-glob-to-any-file: '.github/**'
+    - any-glob-to-any-file: 'package.json'
+    - any-glob-to-any-file: 'package-lock.json'
+
+docs:
+  - changed-files:
+    - any-glob-to-any-file: '*.md'
