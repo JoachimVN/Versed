@@ -244,13 +244,14 @@ export function advanceTier(game: Game): TierTurn | null {
   return applyTier(game, round);
 }
 
-// Guessers may keep trying until they get it, pass, or the clock runs out — so
-// a wrong guess just reports back as wrong and the turn stays open.
+// One guess per guesser: a correct guess wins, a wrong guess ends that
+// guesser's turn. `allDone` is true once every guesser in the tier has had
+// their shot (guessed or passed), so the round can move on.
 export function recordGuess(
   game: Game,
   socketId: string,
   text: string
-): { correct: boolean; points: number; guesserName: string } | null {
+): { correct: boolean; points: number; guesserName: string; allDone: boolean } | null {
   const round = game.currentRound;
   if (!round || game.phase !== 'guessing') return null;
   if (!round.guesserSocketIds.includes(socketId)) return null;
@@ -265,24 +266,25 @@ export function recordGuess(
     const points = calcPoints(round.lowestBid, round.song.rank);
     player.score += points;
     game.phase = 'reveal';
-    return { correct: true, points, guesserName };
+    return { correct: true, points, guesserName, allDone: false };
   }
 
-  return { correct: false, points: 0, guesserName };
+  round.passed.add(socketId);
+  const allDone = round.guesserSocketIds.every(id => round.passed.has(id));
+  return { correct: false, points: 0, guesserName, allDone };
 }
 
-// A guesser gives up their turn. Once every guesser in the tier has passed, the
-// round can move on (to the next tier or the reveal) without anyone inventing a
-// throwaway guess.
-export function skipGuess(game: Game, socketId: string): { allPassed: boolean } | null {
+// A guesser forfeits their turn without guessing. Once every guesser in the
+// tier is done, the round moves on (to the next tier or the reveal).
+export function skipGuess(game: Game, socketId: string): { allDone: boolean } | null {
   const round = game.currentRound;
   if (!round || game.phase !== 'guessing') return null;
   if (!round.guesserSocketIds.includes(socketId)) return null;
-  if (round.answered) return null;
+  if (round.answered || round.passed.has(socketId)) return null;
 
   round.passed.add(socketId);
-  const allPassed = round.guesserSocketIds.every(id => round.passed.has(id));
-  return { allPassed };
+  const allDone = round.guesserSocketIds.every(id => round.passed.has(id));
+  return { allDone };
 }
 
 export function getLeaderboard(game: Game) {

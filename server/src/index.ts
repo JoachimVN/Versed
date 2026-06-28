@@ -149,9 +149,10 @@ io.on('connection', (socket) => {
       io.to(game.pin).emit('score_update', {
         players: Array.from(game.players.values()).map(p => ({ name: p.name, score: p.score })),
       });
+    } else if (result.allDone) {
+      // Everyone in the tier has had their one guess — hand off / reveal.
+      advanceTierOrReveal(game);
     }
-    // A wrong guess leaves the turn open: the guesser can try again, pass, or
-    // let the clock run out — those paths handle moving on.
   });
 
   // ── Player: skip guess ─────────────────────────────────────────────────────
@@ -160,8 +161,8 @@ io.on('connection', (socket) => {
     if (!game) return;
     const result = gm.skipGuess(game, socket.id);
     if (!result) return;
-    // Once everyone in the tier has passed, hand off to the next tier / reveal.
-    if (result.allPassed) advanceTierOrReveal(game);
+    // Once everyone in the tier is done, hand off to the next tier / reveal.
+    if (result.allDone) advanceTierOrReveal(game);
   });
 
   // ── Host: advance to next round ────────────────────────────────────────────

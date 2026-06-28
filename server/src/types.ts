@@ -33,7 +33,7 @@ export interface Round {
   guesserSocketIds: string[];
   lowestBid: number;
   answered: boolean;
-  passed: Set<string>; // guessers who gave up their turn this tier
+  passed: Set<string>; // guessers whose turn is over this tier (wrong guess or skip)
 }
 
 export interface Player {
