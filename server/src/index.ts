@@ -14,7 +14,7 @@ gm.initSongs();
 const PLAYBACK_COUNTDOWN_MS = 3000;
 
 const allowedOrigins = new Set(
-  (process.env.CORS_ORIGINS || '')
+  (process.env.CORS_ORIGINS || process.env.FRONTEND_URL || '')
     .split(',')
     .map((origin) => origin.trim())
     .filter(Boolean),
