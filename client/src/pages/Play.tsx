@@ -1,6 +1,8 @@
 import { useState, useEffect, useRef } from 'react';
 import { useParams } from 'react-router-dom';
+import { Music, Trophy, Frown, ChevronLeft, ChevronRight } from 'lucide-react';
 import { socket } from '../socket';
+import { RankBadge } from '../components/RankBadge';
 import { APP_NAME, BID_OPTIONS } from '../config';
 import type { Hint, LeaderboardEntry, RoundResultEvent } from '../types';
 
@@ -212,16 +214,16 @@ export default function Play() {
           <div className="flex items-center gap-6">
             <button
               onClick={() => setBidIndex(i => Math.max(0, i - 1))}
-              className="w-14 h-14 rounded-full bg-white/10 text-white text-2xl font-bold hover:bg-white/20 active:scale-95 transition-all"
-            >←</button>
+              className="w-14 h-14 rounded-full bg-white/10 text-white flex items-center justify-center hover:bg-white/20 active:scale-95 transition-all"
+            ><ChevronLeft className="w-6 h-6" /></button>
             <div className="text-center w-28">
               <p className="text-white font-black text-5xl">{BID_OPTIONS[bidIndex]}</p>
               <p className="text-white/40 text-sm">seconds</p>
             </div>
             <button
               onClick={() => setBidIndex(i => Math.min(BID_OPTIONS.length - 1, i + 1))}
-              className="w-14 h-14 rounded-full bg-white/10 text-white text-2xl font-bold hover:bg-white/20 active:scale-95 transition-all"
-            >→</button>
+              className="w-14 h-14 rounded-full bg-white/10 text-white flex items-center justify-center hover:bg-white/20 active:scale-95 transition-all"
+            ><ChevronRight className="w-6 h-6" /></button>
           </div>
         </div>
 
@@ -248,7 +250,7 @@ export default function Play() {
   if (phase === 'watching') {
     return (
       <div className="min-h-screen flex flex-col items-center justify-center gap-4 p-6 text-center">
-        <div className="text-5xl animate-pulse">🎵</div>
+        <Music className="w-14 h-14 text-white animate-pulse" />
         <div>
           <p className="text-white/40 text-sm mb-1">Guessing after {lowestBid}s</p>
           <p className="text-white font-black text-2xl">{guesserNames.join(' & ')}</p>
@@ -296,8 +298,10 @@ export default function Play() {
     const iWon = result.correct && result.guesserName === myName;
     return (
       <div className="min-h-screen flex flex-col items-center justify-center p-6 gap-6 text-center">
-        <div className={`w-24 h-24 rounded-full flex items-center justify-center text-5xl ${result.correct ? 'bg-green-500/20' : 'bg-white/5'}`}>
-          {result.correct ? (iWon ? '🏆' : '😔') : '🎵'}
+        <div className={`w-24 h-24 rounded-full flex items-center justify-center ${result.correct ? 'bg-green-500/20' : 'bg-white/5'}`}>
+          {result.correct
+            ? (iWon ? <Trophy className="w-12 h-12 text-amber-400" /> : <Frown className="w-12 h-12 text-white/60" />)
+            : <Music className="w-12 h-12 text-white/60" />}
         </div>
         <div>
           {result.correct
@@ -337,8 +341,8 @@ export default function Play() {
         <div className="flex-1 space-y-3">
           {leaderboard.slice(0, 10).map(e => (
             <div key={e.name} className={`flex items-center gap-4 px-4 py-3 rounded-xl ${e.name === myName ? 'bg-purple-600/20 border border-purple-500/40' : 'bg-white/5'}`}>
-              <span className="text-xl w-8 text-center">
-                {e.rank === 1 ? '🥇' : e.rank === 2 ? '🥈' : e.rank === 3 ? '🥉' : `${e.rank}.`}
+              <span className="w-8 flex justify-center">
+                <RankBadge rank={e.rank} />
               </span>
               <span className="text-white font-bold flex-1">{e.name}</span>
               <span className="text-white/60 font-semibold">{e.score.toLocaleString()}</span>

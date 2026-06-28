@@ -1,6 +1,8 @@
 import { useState, useEffect, useRef } from 'react';
+import { Music, Check, X, Loader2 } from 'lucide-react';
 import { socket } from '../socket';
 import { useSpotify } from '../hooks/useSpotify';
+import { RankBadge } from '../components/RankBadge';
 import { APP_NAME, BACKEND_URL } from '../config';
 import type { Hint, LeaderboardEntry, PlayerInfo, RoundResultEvent } from '../types';
 
@@ -175,8 +177,12 @@ export default function Host() {
     return (
       <div className="min-h-screen flex flex-col items-center p-6 gap-6">
         <h1 className="text-3xl font-black text-white">{APP_NAME}</h1>
-        <span className="text-white/40 text-sm">
-          {spotify.playerReady ? '🟢 Spotify ready' : '🟡 Spotify loading...'}
+        <span className="text-white/40 text-sm flex items-center gap-2">
+          {spotify.playerReady ? (
+            <><span className="w-2 h-2 rounded-full bg-green-500" />Spotify ready</>
+          ) : (
+            <><Loader2 className="w-3.5 h-3.5 animate-spin" />Spotify loading...</>
+          )}
         </span>
 
         {!pin ? (
@@ -270,7 +276,7 @@ export default function Host() {
           </>
         ) : (
           <>
-            <div className="text-6xl animate-pulse">🎵</div>
+            <Music className="w-16 h-16 text-white animate-pulse" />
             <div>
               <p className="text-white/40 text-sm">Playing for</p>
               <p className="text-white font-black text-4xl">{lowestBid}s</p>
@@ -290,7 +296,6 @@ export default function Host() {
     return (
       <div className="min-h-screen flex flex-col items-center justify-center p-6 gap-6 text-center">
         <p className="text-white/50">Round {roundIndex + 1}/{totalRounds}</p>
-        <div className="text-6xl">🎤</div>
         <div>
           <p className="text-white/50 text-sm mb-1">Guessing</p>
           <p className="text-white font-black text-2xl">{guesserNames.join(' & ')}</p>
@@ -306,7 +311,11 @@ export default function Host() {
       <div className="min-h-screen flex flex-col p-6 gap-5">
         <p className="text-center text-white/50">Round {roundIndex + 1}/{totalRounds}</p>
         <div className={`rounded-2xl p-6 text-center ${result.correct ? 'bg-green-900/40 border border-green-700/40' : 'bg-white/5'}`}>
-          <p className="text-4xl mb-2">{result.correct ? '✅' : '❌'}</p>
+          <div className="flex justify-center mb-2">
+            {result.correct
+              ? <Check className="w-10 h-10 text-green-400" />
+              : <X className="w-10 h-10 text-white/60" />}
+          </div>
           {result.correct
             ? <p className="text-white font-bold text-lg">{result.guesserName} got it! <span className="text-green-400">+{result.points}</span></p>
             : <p className="text-white/60">Nobody got it</p>
@@ -347,8 +356,8 @@ export default function Host() {
         <div className="flex-1 space-y-3">
           {leaderboard.map(e => (
             <div key={e.name} className={`flex items-center gap-4 px-4 py-3 rounded-xl ${e.rank <= 3 ? 'bg-white/10' : 'bg-white/5'}`}>
-              <span className="text-xl w-8 text-center">
-                {e.rank === 1 ? '🥇' : e.rank === 2 ? '🥈' : e.rank === 3 ? '🥉' : `${e.rank}.`}
+              <span className="w-8 flex justify-center">
+                <RankBadge rank={e.rank} />
               </span>
               <span className="text-white font-bold flex-1">{e.name}</span>
               <span className="text-white/60 font-semibold">{e.score.toLocaleString()}</span>
