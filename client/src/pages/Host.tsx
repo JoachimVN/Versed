@@ -442,8 +442,8 @@ function LobbyView({ game }: Readonly<{ game: HostState }>) {
         <div className={`flex-1 flex flex-col items-center gap-5 px-6 pb-6 transition-all duration-500 ${lobbyVisible ? 'opacity-100 translate-y-0' : 'opacity-0 translate-y-6'}`}>
           {/* Join card */}
           <div className="w-full max-w-md bg-white/5 rounded-2xl p-5">
-            <div className="flex items-stretch gap-5">
-              <div className="flex-1 min-w-0 flex flex-col justify-between">
+            <div className="flex items-center gap-5">
+              <div className="flex-1 min-w-0 flex flex-col gap-3">
                 <div>
                   <p className="text-white/40 text-xs uppercase tracking-widest mb-0.5">Join at</p>
                   <p className="text-white font-semibold text-base">
@@ -454,18 +454,18 @@ function LobbyView({ game }: Readonly<{ game: HostState }>) {
                   <p className="text-white/40 text-xs uppercase tracking-widest mb-0.5">PIN</p>
                   <p className="text-6xl font-black text-white tracking-widest leading-none select-text">{pin}</p>
                 </div>
+                <button
+                  onClick={copyInvite}
+                  className="flex items-center gap-2 text-white/40 text-xs hover:text-white/70 transition-colors"
+                >
+                  {copied ? <Check className="w-3.5 h-3.5 text-green-400" /> : <Copy className="w-3.5 h-3.5" />}
+                  {copied ? 'Copied!' : 'Copy invite link'}
+                </button>
               </div>
-              <div className="p-2 bg-white rounded-xl shrink-0 flex items-center">
-                <QRCode value={`${globalThis.location.origin}${import.meta.env.BASE_URL}play/${pin}`} size={128} />
+              <div className="p-2 bg-white rounded-xl shrink-0">
+                <QRCode value={`${globalThis.location.origin}${import.meta.env.BASE_URL}play/${pin}`} size={148} />
               </div>
             </div>
-            <button
-              onClick={copyInvite}
-              className="mt-4 flex items-center gap-2 text-white/40 text-xs hover:text-white/70 transition-colors"
-            >
-              {copied ? <Check className="w-3.5 h-3.5 text-green-400" /> : <Copy className="w-3.5 h-3.5" />}
-              {copied ? 'Copied!' : 'Copy invite link'}
-            </button>
           </div>
 
           {/* Players */}
