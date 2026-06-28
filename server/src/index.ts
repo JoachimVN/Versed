@@ -124,21 +124,22 @@ io.on('connection', (socket) => {
     callback?.({ correct: result.correct });
 
     const round = game.currentRound!;
-    if (result.correct || result.allAttempted) {
+    if (result.correct) {
       if (game.phaseTimer) clearTimeout(game.phaseTimer);
       game.phase = 'reveal';
       io.to(game.pin).emit('round_result', {
-        correct: result.correct,
-        guesserName: result.correct ? result.guesserName : null,
+        correct: true,
+        guesserName: result.guesserName,
         songTitle: round.song.title,
         artist: round.song.artist,
         points: result.points,
       });
-      if (result.correct) {
-        io.to(game.pin).emit('score_update', {
-          players: Array.from(game.players.values()).map(p => ({ name: p.name, score: p.score })),
-        });
-      }
+      io.to(game.pin).emit('score_update', {
+        players: Array.from(game.players.values()).map(p => ({ name: p.name, score: p.score })),
+      });
+    } else if (result.allAttempted) {
+      // Current tier struck out — give the next-lowest bidders a turn, if any.
+      advanceTierOrReveal(game);
     }
   });
 
@@ -212,8 +213,18 @@ io.on('connection', (socket) => {
       });
       return;
     }
+    playTier(game, result);
+  }
 
-    const { lowestBid, guesserNames } = result;
+  // Play the song for the current tier and queue its guessing phase. Reused both
+  // for the opening (lowest) tier and each next-lowest tier that gets a turn.
+  function playTier(
+    game: ReturnType<typeof gm.getGame> & object,
+    turn: gm.TierTurn,
+  ) {
+    if (game.phaseTimer) clearTimeout(game.phaseTimer);
+    const round = game.currentRound!;
+    const { lowestBid, guesserNames } = turn;
     io.to(game.pin).emit('betting_closed', { lowestBid, guesserNames });
     const durationMs = gm.playMsFor(lowestBid);
     io.to(`host:${game.pin}`).emit('play_song', {
@@ -228,6 +239,26 @@ io.on('connection', (socket) => {
     game.phaseTimer = setTimeout(() => {
       if (game.phase === 'playing') startGuessingPhase(game);
     }, durationMs + PLAYBACK_COUNTDOWN_MS + 5000);
+  }
+
+  // A tier ran out of guesses (all wrong, or time expired). Hand off to the
+  // next-lowest bidders if there are any; otherwise reveal that nobody got it.
+  function advanceTierOrReveal(game: ReturnType<typeof gm.getGame> & object) {
+    const round = game.currentRound!;
+    const next = gm.advanceTier(game);
+    if (next) {
+      playTier(game, next);
+      return;
+    }
+    if (game.phaseTimer) clearTimeout(game.phaseTimer);
+    game.phase = 'reveal';
+    io.to(game.pin).emit('round_result', {
+      correct: false,
+      guesserName: null,
+      songTitle: round.song.title,
+      artist: round.song.artist,
+      points: 0,
+    });
   }
 
   function startGuessingPhase(game: ReturnType<typeof gm.getGame> & object) {
@@ -247,14 +278,7 @@ io.on('connection', (socket) => {
 
     game.phaseTimer = setTimeout(() => {
       if (game.phase !== 'guessing' || round.answered) return;
-      game.phase = 'reveal';
-      io.to(game.pin).emit('round_result', {
-        correct: false,
-        guesserName: null,
-        songTitle: round.song.title,
-        artist: round.song.artist,
-        points: 0,
-      });
+      advanceTierOrReveal(game);
     }, gm.GUESSING_TIME * 1000);
   }
 });

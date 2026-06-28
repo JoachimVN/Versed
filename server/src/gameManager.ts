@@ -89,6 +89,8 @@ function buildRound(usedSongIds: Set<string>): Round {
     song,
     hints: generateHints(song),
     bids: new Map(),
+    bidTiers: [],
+    tierIndex: 0,
     guesserSocketIds: [],
     lowestBid: 0,
     answered: false,
@@ -162,29 +164,53 @@ export function recordBid(game: Game, socketId: string, seconds: number): boolea
   return true;
 }
 
-export function closeBetting(game: Game): {
+export interface TierTurn {
   lowestBid: number;
   guesserSocketIds: string[];
   guesserNames: string[];
-} | null {
+}
+
+// Point the round's guessers at the current tier and reset its guess attempts,
+// then describe that turn (bid + who's up) for the clients.
+function applyTier(game: Game, round: Round): TierTurn {
+  const tier = round.bidTiers[round.tierIndex];
+  round.lowestBid = tier.bid;
+  round.guesserSocketIds = tier.socketIds;
+  round.guessAttempts = new Set();
+  game.phase = 'playing';
+  const guesserNames = tier.socketIds
+    .map(id => game.players.get(id)?.name ?? '')
+    .filter(Boolean);
+  return { lowestBid: tier.bid, guesserSocketIds: tier.socketIds, guesserNames };
+}
+
+export function closeBetting(game: Game): TierTurn | null {
   const round = game.currentRound;
   if (!round || game.phase !== 'betting') return null;
   if (round.bids.size === 0) return null;
 
-  const minBid = Math.min(...round.bids.values());
-  const guesserIds = Array.from(round.bids.entries())
-    .filter(([, bid]) => bid === minBid)
-    .map(([id]) => id);
+  const byBid = new Map<number, string[]>();
+  for (const [id, bid] of round.bids.entries()) {
+    const tier = byBid.get(bid);
+    if (tier) tier.push(id);
+    else byBid.set(bid, [id]);
+  }
+  round.bidTiers = Array.from(byBid.entries())
+    .sort(([a], [b]) => a - b)
+    .map(([bid, socketIds]) => ({ bid, socketIds }));
+  round.tierIndex = 0;
 
-  round.lowestBid = minBid;
-  round.guesserSocketIds = guesserIds;
-  game.phase = 'playing';
+  return applyTier(game, round);
+}
 
-  const guesserNames = guesserIds
-    .map(id => game.players.get(id)?.name ?? '')
-    .filter(Boolean);
-
-  return { lowestBid: minBid, guesserSocketIds: guesserIds, guesserNames };
+// After a tier fails, hand off to the next-lowest bidders. Returns null when no
+// tier is left (nobody got it) or the song's already been answered.
+export function advanceTier(game: Game): TierTurn | null {
+  const round = game.currentRound;
+  if (!round || round.answered) return null;
+  if (round.tierIndex + 1 >= round.bidTiers.length) return null;
+  round.tierIndex += 1;
+  return applyTier(game, round);
 }
 
 export function recordGuess(
