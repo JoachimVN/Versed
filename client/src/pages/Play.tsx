@@ -177,7 +177,7 @@ export default function Play() {
       <div className="min-h-screen flex flex-col items-center justify-center gap-4 p-6">
         <div className="w-12 h-12 border-4 border-purple-500 border-t-transparent rounded-full animate-spin" />
         <p className="text-white text-xl font-bold">{myName}</p>
-        <p className="text-white/50">Waiting for the host...</p>
+        <p className="text-white/50">You're in! Waiting for the host to start the game…</p>
       </div>
     );
   }
@@ -349,7 +349,7 @@ export default function Play() {
             </div>
           ))}
         </div>
-        {phase === 'leaderboard' && <p className="text-center text-white/30 text-sm">Waiting for host...</p>}
+        {phase === 'leaderboard' && <p className="text-center text-white/30 text-sm">Waiting for the host to start the next round…</p>}
         {phase === 'finished' && (
           <button onClick={() => window.location.href = '/'}
             className="w-full py-4 rounded-2xl bg-white/10 text-white font-bold text-xl hover:bg-white/20 transition-colors">
