@@ -29,12 +29,16 @@ interface PlayState {
   result: RoundResultEvent | null;
   myScore: number;
   leaderboard: LeaderboardEntry[];
+  reconnecting: boolean;
+  hostReconnecting: boolean;
+  savedSession: { pin: string; name: string } | null;
   guessInputRef: React.RefObject<HTMLInputElement>;
   setPin: (v: string) => void;
   setName: (v: string) => void;
   setBidIndex: (i: number | ((prev: number) => number)) => void;
   setGuessText: (v: string) => void;
   join: () => void;
+  rejoinSaved: () => void;
   submitBid: () => void;
   submitGuess: () => void;
   skipGuess: () => void;
@@ -62,6 +66,12 @@ function usePlayGame(pinParam?: string): PlayState {
   const [result, setResult] = useState<RoundResultEvent | null>(null);
   const [myScore, setMyScore] = useState(0);
   const [leaderboard, setLeaderboard] = useState<LeaderboardEntry[]>([]);
+  const [reconnecting, setReconnecting] = useState(false);
+  const [hostReconnecting, setHostReconnecting] = useState(false);
+  const [savedSession, setSavedSession] = useState<{ pin: string; name: string } | null>(() => {
+    try { return JSON.parse(localStorage.getItem('versed_session') ?? 'null'); }
+    catch { return null; }
+  });
   const timerRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const autoSubmitTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const bidSubmittedRef = useRef(false);
@@ -102,9 +112,14 @@ function usePlayGame(pinParam?: string): PlayState {
     // After any reconnect, re-attach this socket to the game so bids/guesses
     // aren't silently dropped (the new socket id is a stranger otherwise).
     socket.on('connect', () => {
+      setReconnecting(false);
       if (myNameRef.current && pinRef.current) {
         socket.emit('rejoin_player', { pin: pinRef.current, name: myNameRef.current });
       }
+    });
+
+    socket.on('disconnect', (reason: string) => {
+      if (reason !== 'io client disconnect') setReconnecting(true);
     });
 
     socket.on('round_start', (data: {
@@ -165,7 +180,16 @@ function usePlayGame(pinParam?: string): PlayState {
       setPhase('finished');
     });
 
+    socket.on('host_reconnecting', () => {
+      setHostReconnecting(true);
+    });
+
+    socket.on('host_reconnected', () => {
+      setHostReconnecting(false);
+    });
+
     socket.on('host_disconnected', () => {
+      setHostReconnecting(false);
       stopCountdown();
       setError('Host disconnected.');
       setPhase('join');
@@ -174,8 +198,9 @@ function usePlayGame(pinParam?: string): PlayState {
     return () => {
       stopCountdown();
       if (autoSubmitTimerRef.current) clearTimeout(autoSubmitTimerRef.current);
-      ['connect','round_start','betting_closed','guessing_start','your_turn',
-       'round_result','score_update','leaderboard','game_over','host_disconnected']
+      ['connect','disconnect','round_start','betting_closed','guessing_start','your_turn',
+       'round_result','score_update','leaderboard','game_over',
+       'host_reconnecting','host_reconnected','host_disconnected']
         .forEach(e => socket.off(e));
       socket.disconnect();
     };
@@ -188,7 +213,27 @@ function usePlayGame(pinParam?: string): PlayState {
     setError('');
     socket.emit('join_game', { pin: p, name: n }, ({ success, error: e }: { success?: boolean; error?: string }) => {
       if (e) { setError(e); return; }
-      if (success) { myNameRef.current = n; pinRef.current = p; setMyName(n); setPhase('waiting'); }
+      if (success) {
+        myNameRef.current = n; pinRef.current = p; setMyName(n); setPhase('waiting');
+        const session = { pin: p, name: n };
+        setSavedSession(session);
+        localStorage.setItem('versed_session', JSON.stringify(session));
+      }
+    });
+  };
+
+  const rejoinSaved = () => {
+    if (!savedSession) return;
+    const { pin: p, name: n } = savedSession;
+    setError('');
+    socket.emit('join_game', { pin: p, name: n }, ({ success, error: e }: { success?: boolean; error?: string }) => {
+      if (e) {
+        setError(e);
+        setSavedSession(null);
+        localStorage.removeItem('versed_session');
+        return;
+      }
+      if (success) { myNameRef.current = n; pinRef.current = p; setMyName(n); setPin(p); setName(n); setPhase('waiting'); }
     });
   };
 
@@ -228,7 +273,7 @@ function usePlayGame(pinParam?: string): PlayState {
   return {
     phase, pin, name, myName, error, roundIndex, totalRounds, hints,
     timeLeft, bettingTime, bidIndex, myBid, guesserNames, lowestBid,
-    guessText, result, myScore, leaderboard, guessInputRef,
+    guessText, result, myScore, leaderboard, reconnecting, hostReconnecting, savedSession, guessInputRef,
     setPin, setName,
   setBidIndex: (i: number | ((prev: number) => number)) => {
     setBidIndex(prev => {
@@ -238,14 +283,14 @@ function usePlayGame(pinParam?: string): PlayState {
     });
   },
   setGuessText,
-    join, submitBid, submitGuess, skipGuess,
+    join, rejoinSaved, submitBid, submitGuess, skipGuess,
   };
 }
 
 // ─── Phase views ─────────────────────────────────────────────────────────────
 
 function JoinView({ game }: Readonly<{ game: PlayState }>) {
-  const { pin, name, error, setPin, setName, join } = game;
+  const { pin, name, error, savedSession, setPin, setName, join, rejoinSaved } = game;
   const navigate = useNavigate();
   return (
     <div className="min-h-screen flex flex-col items-center justify-center p-6 gap-5">
@@ -253,7 +298,19 @@ function JoinView({ game }: Readonly<{ game: PlayState }>) {
         <ArrowLeft className="w-5 h-5" />
       </button>
       <img src={`${import.meta.env.BASE_URL}logo.svg`} alt={APP_NAME} className="h-16 w-auto" />
+
+      {savedSession && (
+        <div className="w-full max-w-xs">
+          <button onClick={rejoinSaved}
+            className="w-full py-4 rounded-2xl bg-purple-600 text-white font-bold text-xl hover:bg-purple-500 transition-colors">
+            Rejoin as {savedSession.name}
+          </button>
+          <p className="text-white/30 text-xs text-center mt-2">PIN {savedSession.pin}</p>
+        </div>
+      )}
+
       <div className="w-full max-w-xs flex flex-col gap-3">
+        {savedSession && <p className="text-white/30 text-xs text-center">— or join a different game —</p>}
         <input type="text" inputMode="numeric" pattern="[0-9]*" placeholder="Game PIN"
           value={pin} onChange={e => setPin(e.target.value.replace(/\D/g, ''))} maxLength={6}
           className="w-full px-4 py-4 rounded-xl bg-white/10 text-white text-center text-2xl font-bold placeholder-white/30 outline-none focus:ring-2 focus:ring-white/30 tracking-widest" />
@@ -263,7 +320,7 @@ function JoinView({ game }: Readonly<{ game: PlayState }>) {
           className="w-full px-4 py-4 rounded-xl bg-white/10 text-white text-center text-xl placeholder-white/30 outline-none focus:ring-2 focus:ring-white/30" />
         {error && <p className="text-red-400 text-sm text-center">{error}</p>}
         <button onClick={join} disabled={!pin.trim() || !name.trim()}
-          className="w-full py-4 rounded-2xl bg-purple-600 text-white font-bold text-xl disabled:opacity-30 hover:bg-purple-500 transition-colors">
+          className="w-full py-4 rounded-2xl bg-white/10 text-white font-bold text-xl disabled:opacity-30 hover:bg-white/20 transition-colors">
           Join
         </button>
       </div>
@@ -503,16 +560,31 @@ function LeaderboardView({ game }: Readonly<{ game: PlayState }>) {
 export default function Play() {
   const { pin: pinParam } = useParams<{ pin?: string }>();
   const game = usePlayGame(pinParam);
-  const { phase, result } = game;
+  const { phase, result, reconnecting, hostReconnecting } = game;
 
-  if (phase === 'join') return <JoinView game={game} />;
-  if (phase === 'waiting') return <WaitingView game={game} />;
-  if (phase === 'betting') return <BettingView game={game} />;
-  if (phase === 'bid_submitted') return <BidSubmittedView game={game} />;
-  if (phase === 'watching') return <WatchingView game={game} />;
-  if (phase === 'guessing') return <GuessingView game={game} />;
-  if (phase === 'passed') return <PassedView />;
-  if (phase === 'reveal' && result) return <RevealView game={game} result={result} />;
-  if (phase === 'leaderboard' || phase === 'finished') return <LeaderboardView game={game} />;
-  return null;
+  return (
+    <div className="relative">
+      {phase === 'join' && <JoinView game={game} />}
+      {phase === 'waiting' && <WaitingView game={game} />}
+      {phase === 'betting' && <BettingView game={game} />}
+      {phase === 'bid_submitted' && <BidSubmittedView game={game} />}
+      {phase === 'watching' && <WatchingView game={game} />}
+      {phase === 'guessing' && <GuessingView game={game} />}
+      {phase === 'passed' && <PassedView />}
+      {phase === 'reveal' && result && <RevealView game={game} result={result} />}
+      {(phase === 'leaderboard' || phase === 'finished') && <LeaderboardView game={game} />}
+
+      {reconnecting && (
+        <div className="fixed inset-0 bg-black/80 backdrop-blur-sm flex flex-col items-center justify-center z-50 gap-4">
+          <div className="w-12 h-12 border-4 border-purple-500 border-t-transparent rounded-full animate-spin" />
+          <p className="text-white font-bold text-xl">Reconnecting...</p>
+        </div>
+      )}
+      {hostReconnecting && !reconnecting && (
+        <div className="fixed bottom-4 left-4 right-4 bg-amber-900/60 border border-amber-500/40 rounded-xl px-4 py-3 text-center z-40">
+          <p className="text-amber-300 text-sm font-semibold">Host disconnected — waiting to reconnect...</p>
+        </div>
+      )}
+    </div>
+  );
 }

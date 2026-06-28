@@ -13,6 +13,15 @@ gm.initSongs();
 // Countdown shown on the host before a song plays, used to buffer the track.
 const PLAYBACK_COUNTDOWN_MS = 3000;
 
+// Grace periods before treating a disconnect as permanent.
+const HOST_GRACE_MS = 60_000;
+const PLAYER_GRACE_MS = 30_000;
+
+// pin → pending host-disconnect timer
+const hostDisconnectTimers = new Map<string, ReturnType<typeof setTimeout>>();
+// socketId → pending player-disconnect timer
+const playerDisconnectTimers = new Map<string, ReturnType<typeof setTimeout>>();
+
 const allowedOrigins = new Set(
   (process.env.CORS_ORIGINS || process.env.FRONTEND_URL || '')
     .split(',')
@@ -93,10 +102,19 @@ io.on('connection', (socket) => {
   socket.on('rejoin_host', ({ pin }: { pin: string }, callback: (r: { players: { name: string }[] }) => void) => {
     const game = gm.getGame(pin);
     if (!game) return;
+
+    // Cancel the host grace-period timer so the game survives.
+    const hostTimer = hostDisconnectTimers.get(pin);
+    if (hostTimer) { clearTimeout(hostTimer); hostDisconnectTimers.delete(pin); }
+
+    // Remove the stale host socket from the lookup table.
+    if (game.hostSocketId !== socket.id) gm.removeSocket(game.hostSocketId);
+
     game.hostSocketId = socket.id;
     socket.join(pin);
     socket.join(`host:${pin}`);
     gm.updateSocketPin(socket.id, pin);
+    io.to(game.pin).emit('host_reconnected');
     callback({ players: Array.from(game.players.values()).map(p => ({ name: p.name })) });
   });
 
@@ -108,14 +126,23 @@ io.on('connection', (socket) => {
       if (!game) return callback({ error: 'Game not found' });
 
       // Mid-game: if this name is already in the game, it's a full-disconnect
-      // rejoin — migrate the socket ID and snap to the current phase.
+      // rejoin — cancel any pending removal timer, migrate the socket ID, and
+      // snap to the current phase.
       if (game.phase !== 'lobby') {
+        const oldEntry = Array.from(game.players.entries())
+          .find(([, p]) => p.name.toLowerCase() === name.trim().toLowerCase());
+        if (oldEntry) {
+          const [oldId] = oldEntry;
+          const t = playerDisconnectTimers.get(oldId);
+          if (t) { clearTimeout(t); playerDisconnectTimers.delete(oldId); }
+        }
         const rejoined = gm.rejoinPlayer(game, socket.id, name);
         if (rejoined) {
           socket.join(pin);
           socket.join(`player:${pin}`);
           callback({ success: true });
           syncState(game);
+          io.to(`host:${pin}`).emit('player_reconnected', { name: rejoined.name });
           return;
         }
       }
@@ -139,12 +166,23 @@ io.on('connection', (socket) => {
   socket.on('rejoin_player', ({ pin, name }: { pin: string; name: string }, callback?: (r: { ok: boolean }) => void) => {
     const game = gm.getGame(pin);
     if (!game) return callback?.({ ok: false });
+
+    // Cancel any pending removal timer for this player.
+    const oldEntry = Array.from(game.players.entries())
+      .find(([, p]) => p.name.toLowerCase() === name.trim().toLowerCase());
+    if (oldEntry) {
+      const [oldId] = oldEntry;
+      const t = playerDisconnectTimers.get(oldId);
+      if (t) { clearTimeout(t); playerDisconnectTimers.delete(oldId); }
+    }
+
     const player = gm.rejoinPlayer(game, socket.id, name);
     if (!player) return callback?.({ ok: false });
     socket.join(pin);
     socket.join(`player:${pin}`);
     callback?.({ ok: true });
     syncState(game);
+    io.to(`host:${pin}`).emit('player_reconnected', { name: player.name });
   });
 
   // ── Host: start game → first round ────────────────────────────────────────
@@ -246,16 +284,34 @@ io.on('connection', (socket) => {
 
   // ── Disconnect ─────────────────────────────────────────────────────────────
   socket.on('disconnect', () => {
-    const result = gm.removeSocket(socket.id);
-    if (!result) return;
-    const { game, wasHost } = result;
-    if (wasHost) {
-      io.to(game.pin).emit('host_disconnected');
-      gm.cleanupGame(game.pin);
+    const game = gm.getGameBySocket(socket.id);
+    if (!game) return;
+
+    if (game.hostSocketId === socket.id) {
+      // Give the host a grace window to reconnect before destroying the game.
+      io.to(game.pin).emit('host_reconnecting');
+      const timer = setTimeout(() => {
+        hostDisconnectTimers.delete(game.pin);
+        gm.removeSocket(socket.id);
+        io.to(game.pin).emit('host_disconnected');
+        gm.cleanupGame(game.pin);
+      }, HOST_GRACE_MS);
+      hostDisconnectTimers.set(game.pin, timer);
     } else {
-      io.to(`host:${game.pin}`).emit('player_left', {
-        players: Array.from(game.players.values()).map(p => ({ name: p.name })),
-      });
+      // Give the player a grace window to reconnect before removing them.
+      const player = game.players.get(socket.id);
+      if (!player) return;
+      const sid = socket.id;
+      io.to(`host:${game.pin}`).emit('player_reconnecting', { name: player.name });
+      const timer = setTimeout(() => {
+        playerDisconnectTimers.delete(sid);
+        const removed = gm.removeSocket(sid);
+        if (!removed) return; // already handled by rejoin
+        io.to(`host:${removed.game.pin}`).emit('player_left', {
+          players: Array.from(removed.game.players.values()).map(p => ({ name: p.name })),
+        });
+      }, PLAYER_GRACE_MS);
+      playerDisconnectTimers.set(sid, timer);
     }
   });
 

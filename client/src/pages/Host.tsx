@@ -39,6 +39,8 @@ interface HostState {
   bettingTimeSetting: number;
   guessingTimeSetting: number;
   roundsSetting: number;
+  reconnecting: boolean;
+  reconnectingCount: number;
   toggleSettings: () => void;
   setBettingTimeSetting: (v: number) => void;
   setGuessingTimeSetting: (v: number) => void;
@@ -72,6 +74,8 @@ function useHostGame(): HostState {
   const [bettingTimeSetting, setBettingTimeSetting] = useState(15);
   const [guessingTimeSetting, setGuessingTimeSetting] = useState(15);
   const [roundsSetting, setRoundsSetting] = useState(10);
+  const [reconnecting, setReconnecting] = useState(false);
+  const [reconnectingCount, setReconnectingCount] = useState(0);
   const timerRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const playRafRef = useRef<number | null>(null);
 
@@ -116,6 +120,7 @@ function useHostGame(): HostState {
     socket.connect();
 
     socket.on('connect', () => {
+      setReconnecting(false);
       if (pinRef.current) {
         socket.emit('rejoin_host', { pin: pinRef.current }, ({ players: p }: { players: PlayerInfo[] }) => {
           if (p) setPlayers(p);
@@ -123,8 +128,17 @@ function useHostGame(): HostState {
       }
     });
 
+    socket.on('disconnect', (reason: string) => {
+      if (reason !== 'io client disconnect') setReconnecting(true);
+    });
+
     socket.on('player_joined', ({ players: p }: { players: PlayerInfo[] }) => setPlayers(p));
-    socket.on('player_left', ({ players: p }: { players: PlayerInfo[] }) => setPlayers(p));
+    socket.on('player_left', ({ players: p }: { players: PlayerInfo[] }) => {
+      setPlayers(p);
+      setReconnectingCount(n => Math.max(0, n - 1));
+    });
+    socket.on('player_reconnecting', () => setReconnectingCount(n => n + 1));
+    socket.on('player_reconnected', () => setReconnectingCount(n => Math.max(0, n - 1)));
 
     socket.on('host_round_start', (data: {
       roundIndex: number; total: number; hints: Hint[];
@@ -203,7 +217,9 @@ function useHostGame(): HostState {
     return () => {
       stopCountdown();
       stopPlaybackBar();
+      socket.off('connect'); socket.off('disconnect');
       socket.off('player_joined'); socket.off('player_left');
+      socket.off('player_reconnecting'); socket.off('player_reconnected');
       socket.off('host_round_start'); socket.off('bid_received');
       socket.off('betting_closed'); socket.off('play_song');
       socket.off('guessing_start'); socket.off('round_result');
@@ -244,6 +260,7 @@ function useHostGame(): HostState {
     bettingTime, timeLeft, bidCount, countdown, guesserNames, lowestBid, playerBids,
     result, leaderboard, copied, playProgress, inviteUrl,
     settingsOpen, bettingTimeSetting, guessingTimeSetting, roundsSetting,
+    reconnecting, reconnectingCount,
     toggleSettings: () => setSettingsOpen(o => !o),
     setBettingTimeSetting, setGuessingTimeSetting, setRoundsSetting,
     createGame, startGame, copyInvite,
@@ -623,14 +640,32 @@ function LeaderboardView({ game }: Readonly<{ game: HostState }>) {
 
 export default function Host() {
   const game = useHostGame();
-  const { phase, result } = game;
+  const { phase, result, reconnecting, reconnectingCount } = game;
 
-  if (phase === 'connect') return <ConnectView game={game} />;
-  if (phase === 'lobby') return <LobbyView game={game} />;
-  if (phase === 'betting') return <BettingView game={game} />;
-  if (phase === 'playing') return <PlayingView game={game} />;
-  if (phase === 'guessing') return <GuessingView game={game} />;
-  if (phase === 'reveal' && result) return <RevealView game={game} result={result} />;
-  if (phase === 'leaderboard' || phase === 'finished') return <LeaderboardView game={game} />;
-  return null;
+  return (
+    <div className="relative">
+      {phase === 'connect' && <ConnectView game={game} />}
+      {phase === 'lobby' && <LobbyView game={game} />}
+      {phase === 'betting' && <BettingView game={game} />}
+      {phase === 'playing' && <PlayingView game={game} />}
+      {phase === 'guessing' && <GuessingView game={game} />}
+      {phase === 'reveal' && result && <RevealView game={game} result={result} />}
+      {(phase === 'leaderboard' || phase === 'finished') && <LeaderboardView game={game} />}
+
+      {reconnecting && (
+        <div className="fixed inset-0 bg-black/80 backdrop-blur-sm flex flex-col items-center justify-center z-50 gap-4">
+          <div className="w-12 h-12 border-4 border-purple-500 border-t-transparent rounded-full animate-spin" />
+          <p className="text-white font-bold text-xl">Reconnecting...</p>
+          <p className="text-white/40 text-sm">Game is still running</p>
+        </div>
+      )}
+      {reconnectingCount > 0 && !reconnecting && (
+        <div className="fixed top-4 right-4 bg-amber-900/60 border border-amber-500/40 rounded-xl px-3 py-2 z-40">
+          <p className="text-amber-300 text-xs font-semibold">
+            {reconnectingCount} player{reconnectingCount > 1 ? 's' : ''} reconnecting...
+          </p>
+        </div>
+      )}
+    </div>
+  );
 }
