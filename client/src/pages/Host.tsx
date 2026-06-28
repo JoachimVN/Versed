@@ -1,5 +1,5 @@
 import { useState, useEffect, useRef } from 'react';
-import { Music, Check, X, Loader2 } from 'lucide-react';
+import { Music, Check, X, Loader2, Copy } from 'lucide-react';
 import { socket } from '../socket';
 import { useSpotify } from '../hooks/useSpotify';
 import { RankBadge } from '../components/RankBadge';
@@ -29,6 +29,7 @@ export default function Host() {
   const [lowestBid, setLowestBid] = useState(0);
   const [result, setResult] = useState<RoundResultEvent | null>(null);
   const [leaderboard, setLeaderboard] = useState<LeaderboardEntry[]>([]);
+  const [copied, setCopied] = useState(false);
   const timerRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
   useEffect(() => {
@@ -151,12 +152,24 @@ export default function Host() {
     });
   };
 
+  // Deep link that pre-fills the PIN on the join screen (Play reads /play/:pin).
+  const inviteUrl = `${window.location.origin}${import.meta.env.BASE_URL}play/${pin}`;
+
+  const copyInvite = () => {
+    navigator.clipboard?.writeText(inviteUrl)
+      .then(() => {
+        setCopied(true);
+        setTimeout(() => setCopied(false), 1500);
+      })
+      .catch(() => { /* clipboard unavailable; user can still read the link */ });
+  };
+
   // ─── Views ────────────────────────────────────────────────────────────────
 
   if (phase === 'connect') {
     return (
       <div className="min-h-screen flex flex-col items-center justify-center gap-6 p-6">
-        <h1 className="text-5xl font-black text-white">{APP_NAME}</h1>
+        <img src="/logo.svg" alt={APP_NAME} className="h-16 w-auto" />
         {spotify.isConnected && !spotify.playerReady ? (
           <p className="text-white/50">Connecting to Spotify...</p>
         ) : (
@@ -175,7 +188,7 @@ export default function Host() {
   if (phase === 'lobby') {
     return (
       <div className="min-h-screen flex flex-col items-center p-6 gap-6">
-        <h1 className="text-3xl font-black text-white">{APP_NAME}</h1>
+        <img src="/logo.svg" alt={APP_NAME} className="h-16 w-auto" />
         <span className="text-white/40 text-sm flex items-center gap-2">
           {spotify.playerReady ? (
             <><span className="w-2 h-2 rounded-full bg-green-500" />Spotify ready</>
@@ -197,7 +210,13 @@ export default function Host() {
             <div className="text-center">
               <p className="text-white/40 text-sm uppercase tracking-widest mb-1">PIN</p>
               <p className="text-7xl font-black text-white tracking-widest select-text">{pin}</p>
-              <p className="text-white/40 text-sm mt-2 select-text">{window.location.origin}/play</p>
+              <button
+                onClick={copyInvite}
+                className="mt-3 inline-flex items-center gap-2 px-4 py-2 rounded-xl bg-white/10 hover:bg-white/20 text-white/80 text-sm font-semibold transition-colors"
+              >
+                {copied ? <Check className="w-4 h-4 text-green-400" /> : <Copy className="w-4 h-4" />}
+                {copied ? 'Copied!' : 'Copy invite link'}
+              </button>
             </div>
             <div className="w-full max-w-sm">
               <p className="text-white/40 text-sm mb-2">{players.length} player{players.length !== 1 ? 's' : ''}</p>
