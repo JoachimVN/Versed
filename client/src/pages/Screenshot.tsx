@@ -63,35 +63,26 @@ function PlayingScreenshot() {
   );
 }
 
-// ─── Lobby — host waiting for players ─────────────────────────────────────────
+// ─── Home — landing page ──────────────────────────────────────────────────────
 
 function LobbyScreenshot() {
-  const players = ['Player1', 'Player2', 'Player3'];
   return (
-    <div className="min-h-screen flex flex-col items-center p-6 gap-6">
-      <img src={`${import.meta.env.BASE_URL}logo.svg`} alt={APP_NAME} className="h-16 w-auto" />
-      <span className="text-white/40 text-sm flex items-center gap-2">
-        <span className="w-2 h-2 rounded-full bg-green-500" />Spotify ready
-      </span>
+    <div className="min-h-screen flex flex-col items-center justify-center gap-8 p-6">
       <div className="text-center">
-        <p className="text-white/40 text-sm uppercase tracking-widest mb-1">PIN</p>
-        <p className="text-7xl font-black text-white tracking-widest select-text">742</p>
+        <img src={`${import.meta.env.BASE_URL}logo.svg`} alt={APP_NAME} className="mx-auto h-16 w-auto" />
+        <p className="mt-2 text-white/60 text-lg">Music quiz for everyone in the room</p>
       </div>
-      <div className="w-full max-w-sm">
-        <p className="text-white/40 text-sm mb-2">3 players</p>
-        <div className="flex flex-wrap gap-2">
-          {players.map(p => (
-            <span key={p} className="px-3 py-1.5 rounded-full bg-white/10 text-white text-sm font-semibold">{p}</span>
-          ))}
-        </div>
+      <div className="flex flex-col gap-4 w-full max-w-xs">
+        <button className="w-full py-4 rounded-2xl bg-[#1DB954] text-white font-bold text-xl shadow-lg">
+          Host a game
+        </button>
+        <button className="w-full py-4 rounded-2xl bg-white/10 text-white font-bold text-xl">
+          Join a game
+        </button>
       </div>
-      <button className="flex items-center gap-1.5 text-white/40 text-sm">
-        Settings
-        <ChevronLeft className="w-4 h-4 -rotate-90" />
-      </button>
-      <button className="mt-auto w-full max-w-sm py-4 rounded-2xl bg-purple-600 text-white font-bold text-xl">
-        Start Game
-      </button>
+      <p className="text-white/30 text-sm text-center max-w-xs">
+        Hosting requires a Spotify Premium account
+      </p>
     </div>
   );
 }

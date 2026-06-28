@@ -24,9 +24,9 @@
 ## Screenshots
 
 <p align="center">
-  <img src="docs/screenshots/Lobby.png" alt="Versed lobby — waiting for players"/>
+  <img src="docs/screenshots/Lobby.png" alt="Versed home screen"/>
   <br>
-  <em>Lobby — host waiting for players to join</em>
+  <em>Home screen</em>
 </p>
 
 <p align="center">
