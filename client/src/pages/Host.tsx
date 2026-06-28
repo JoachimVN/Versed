@@ -327,7 +327,8 @@ function BidTimeline({ bids, lowestBid }: Readonly<{ bids: { name: string; bid: 
   }
 
   const MAX_NAMES = 3;
-  const nameAreaHeight = 64;
+  const maxLines = groups.reduce((m, g) => Math.max(m, Math.min(g.names.length, MAX_NAMES) + (g.names.length > MAX_NAMES ? 1 : 0)), 0);
+  const nameAreaHeight = 22 + maxLines * 16 + 8;
 
   return (
     <div className="w-full">
