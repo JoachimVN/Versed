@@ -21,7 +21,6 @@ export default function Host() {
   const [roundIndex, setRoundIndex] = useState(0);
   const [totalRounds, setTotalRounds] = useState(10);
   const [hints, setHints] = useState<Hint[]>([]);
-  const [song, setSong] = useState<SongInfo | null>(null);
   const [bettingTime, setBettingTime] = useState(15);
   const [timeLeft, setTimeLeft] = useState(0);
   const [bidCount, setBidCount] = useState(0);
@@ -57,7 +56,6 @@ export default function Host() {
       setRoundIndex(data.roundIndex);
       setTotalRounds(data.total);
       setHints(data.hints);
-      setSong(data.song);
       setBettingTime(data.bettingTime);
       setBidCount(0);
       setGuesserNames([]);
@@ -249,14 +247,6 @@ export default function Host() {
           <div className="bg-white/5 rounded-2xl p-4 text-center text-white/30">No hints this round</div>
         )}
 
-        {song && (
-          <div className="bg-white/5 rounded-2xl p-4">
-            <p className="text-white/40 text-xs uppercase tracking-widest mb-1">Song</p>
-            <p className="text-white font-bold text-lg">{song.title}</p>
-            <p className="text-white/60">{song.artist}</p>
-          </div>
-        )}
-
         <div className="text-center py-6">
           <p className="text-5xl font-black text-white">{bidCount}</p>
           <p className="text-white/40">of {players.length} have bid</p>
@@ -286,7 +276,6 @@ export default function Host() {
               {guesserNames.join(' & ')} will guess
             </p>
             <p className="text-white font-black text-2xl">{timeLeft}s</p>
-            {song && <p className="text-white/30 text-sm">{song.title} — {song.artist}</p>}
           </>
         )}
       </div>
