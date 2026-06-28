@@ -76,6 +76,17 @@ io.on('connection', (socket) => {
     }
   );
 
+  // ── Player: rejoin after reconnect ─────────────────────────────────────────
+  socket.on('rejoin_player', ({ pin, name }: { pin: string; name: string }, callback?: (r: { ok: boolean }) => void) => {
+    const game = gm.getGame(pin);
+    if (!game) return callback?.({ ok: false });
+    const player = gm.rejoinPlayer(game, socket.id, name);
+    if (!player) return callback?.({ ok: false });
+    socket.join(pin);
+    socket.join(`player:${pin}`);
+    callback?.({ ok: true });
+  });
+
   // ── Host: start game → first round ────────────────────────────────────────
   socket.on('start_game', () => {
     const game = gm.getGameBySocket(socket.id);
@@ -85,10 +96,11 @@ io.on('connection', (socket) => {
   });
 
   // ── Player: submit bid ─────────────────────────────────────────────────────
-  socket.on('submit_bid', ({ seconds }: { seconds: number }) => {
+  socket.on('submit_bid', ({ seconds }: { seconds: number }, callback?: (r: { ok: boolean }) => void) => {
     const game = gm.getGameBySocket(socket.id);
-    if (!game) return;
+    if (!game) return callback?.({ ok: false });
     const ok = gm.recordBid(game, socket.id, seconds);
+    callback?.({ ok });
     if (!ok) return;
 
     const round = game.currentRound!;

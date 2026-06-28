@@ -138,6 +138,37 @@ export function addPlayer(game: Game, socketId: string, name: string): Player | 
   return player;
 }
 
+// Re-attach an existing player to a fresh socket id after a reconnect (e.g. a
+// dropped connection or a dev hot-reload). Without this the player's socket
+// becomes a stranger to the game and every submit_bid / submit_guess is
+// silently rejected. Migrates any in-flight round references too, so a round
+// already under way keeps working for the reconnected player.
+export function rejoinPlayer(game: Game, newSocketId: string, name: string): Player | null {
+  const entry = Array.from(game.players.entries()).find(
+    ([, p]) => p.name.toLowerCase() === name.trim().toLowerCase()
+  );
+  if (!entry) return null;
+  const [oldId, player] = entry;
+
+  if (oldId !== newSocketId) {
+    game.players.delete(oldId);
+    socketToPin.delete(oldId);
+    player.socketId = newSocketId;
+    game.players.set(newSocketId, player);
+
+    const round = game.currentRound;
+    if (round) {
+      const bid = round.bids.get(oldId);
+      if (bid !== undefined) { round.bids.set(newSocketId, bid); round.bids.delete(oldId); }
+      round.guesserSocketIds = round.guesserSocketIds.map(id => (id === oldId ? newSocketId : id));
+      round.bidTiers.forEach(t => { t.socketIds = t.socketIds.map(id => (id === oldId ? newSocketId : id)); });
+      if (round.guessAttempts.delete(oldId)) round.guessAttempts.add(newSocketId);
+    }
+  }
+  socketToPin.set(newSocketId, game.pin);
+  return player;
+}
+
 export function removeSocket(socketId: string): { game: Game; wasHost: boolean } | null {
   const game = getGameBySocket(socketId);
   if (!game) return null;

@@ -18,6 +18,7 @@ export default function Play() {
   const [error, setError] = useState('');
   const [myName, setMyName] = useState('');
   const myNameRef = useRef('');
+  const pinRef = useRef('');
   const [roundIndex, setRoundIndex] = useState(0);
   const [totalRounds, setTotalRounds] = useState(10);
   const [hints, setHints] = useState<Hint[]>([]);
@@ -52,6 +53,14 @@ export default function Play() {
   useEffect(() => {
     socket.connect();
 
+    // After any reconnect, re-attach this socket to the game so bids/guesses
+    // aren't silently dropped (the new socket id is a stranger otherwise).
+    socket.on('connect', () => {
+      if (myNameRef.current && pinRef.current) {
+        socket.emit('rejoin_player', { pin: pinRef.current, name: myNameRef.current });
+      }
+    });
+
     socket.on('round_start', (data: {
       roundIndex: number; total: number;
       hints: Hint[]; bettingTime: number;
@@ -62,6 +71,7 @@ export default function Play() {
       setBettingTime(data.bettingTime);
       setGuessText('');
       setResult(null);
+      setError('');
       startCountdown(data.bettingTime);
       setPhase('betting');
     });
@@ -113,7 +123,7 @@ export default function Play() {
 
     return () => {
       stopCountdown();
-      ['round_start','betting_closed','guessing_start','your_turn',
+      ['connect','round_start','betting_closed','guessing_start','your_turn',
        'round_result','score_update','leaderboard','game_over','host_disconnected']
         .forEach(e => socket.off(e));
       socket.disconnect();
@@ -127,15 +137,23 @@ export default function Play() {
     setError('');
     socket.emit('join_game', { pin: p, name: n }, ({ success, error: e }: { success?: boolean; error?: string }) => {
       if (e) { setError(e); return; }
-      if (success) { myNameRef.current = n; setMyName(n); setPhase('waiting'); }
+      if (success) { myNameRef.current = n; pinRef.current = p; setMyName(n); setPhase('waiting'); }
     });
   };
 
   const submitBid = () => {
     const seconds = BID_OPTIONS[bidIndex];
+    setError('');
     setMyBid(seconds);
-    socket.emit('submit_bid', { seconds });
     setPhase('bid_submitted');
+    socket.emit('submit_bid', { seconds }, (res?: { ok: boolean }) => {
+      // Bid didn't register (e.g. mid-reconnect) — don't strand the player on
+      // "waiting for others"; drop them back so they can lock in again.
+      if (res && !res.ok) {
+        setError('That didn’t go through — try again.');
+        setPhase('betting');
+      }
+    });
   };
 
   const submitGuess = () => {
@@ -232,6 +250,8 @@ export default function Play() {
             ><ChevronRight className="w-6 h-6" /></button>
           </div>
         </div>
+
+        {error && <p className="text-red-400 text-sm text-center">{error}</p>}
 
         <button onClick={submitBid}
           className="w-full py-4 rounded-2xl bg-purple-600 text-white font-bold text-xl hover:bg-purple-500 active:scale-95 transition-all">
