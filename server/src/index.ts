@@ -108,12 +108,8 @@ io.on('connection', (socket) => {
       // Mid-game: if this name is already in the game, it's a full-disconnect
       // rejoin — migrate the socket ID and snap to the current phase.
       if (game.phase !== 'lobby') {
-        const existing = Array.from(game.players.values()).find(
-          p => p.name.toLowerCase() === name.trim().toLowerCase()
-        );
-        if (existing) {
-          const rejoined = gm.rejoinPlayer(game, socket.id, name);
-          if (!rejoined) return callback({ error: 'Could not rejoin' });
+        const rejoined = gm.rejoinPlayer(game, socket.id, name);
+        if (rejoined) {
           socket.join(pin);
           socket.join(`player:${pin}`);
           callback({ success: true });

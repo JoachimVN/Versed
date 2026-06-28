@@ -67,6 +67,20 @@ function usePlayGame(pinParam?: string): PlayState {
   const bidSubmittedRef = useRef(false);
   const guessInputRef = useRef<HTMLInputElement>(null);
 
+  function autoSubmitBid() {
+    if (bidSubmittedRef.current) return;
+    bidSubmittedRef.current = true;
+    const seconds = BID_OPTIONS[bidIndexRef.current];
+    setMyBid(seconds);
+    setPhase('bid_submitted');
+    socket.emit('submit_bid', { seconds }, (res?: { ok: boolean }) => {
+      if (res && !res.ok) {
+        setError("That didn't go through — try again.");
+        setPhase('betting');
+      }
+    });
+  }
+
   function startCountdown(endsAt: number) {
     stopCountdown();
     const tick = () => {
@@ -107,19 +121,7 @@ function usePlayGame(pinParam?: string): PlayState {
       bidSubmittedRef.current = false;
       if (autoSubmitTimerRef.current) clearTimeout(autoSubmitTimerRef.current);
       const endsAt = data.endsAt ?? (Date.now() + data.bettingTime * 1000);
-      autoSubmitTimerRef.current = setTimeout(() => {
-        if (bidSubmittedRef.current) return;
-        bidSubmittedRef.current = true;
-        const seconds = BID_OPTIONS[bidIndexRef.current];
-        setMyBid(seconds);
-        setPhase('bid_submitted');
-        socket.emit('submit_bid', { seconds }, (res?: { ok: boolean }) => {
-          if (res && !res.ok) {
-            setError("That didn't go through — try again.");
-            setPhase('betting');
-          }
-        });
-      }, endsAt - Date.now());
+      autoSubmitTimerRef.current = setTimeout(autoSubmitBid, endsAt - Date.now());
       startCountdown(endsAt);
       setPhase('betting');
     });
