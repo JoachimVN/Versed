@@ -8,7 +8,7 @@ import type { Hint, LeaderboardEntry, RoundResultEvent } from '../types';
 
 type Phase =
   | 'join' | 'waiting' | 'betting' | 'bid_submitted'
-  | 'watching' | 'guessing' | 'reveal' | 'leaderboard' | 'finished';
+  | 'watching' | 'guessing' | 'passed' | 'reveal' | 'leaderboard' | 'finished';
 
 export default function Play() {
   const { pin: pinParam } = useParams<{ pin?: string }>();
@@ -146,6 +146,12 @@ export default function Play() {
         setTimeout(() => setGuessWrong(false), 800);
       }
     });
+  };
+
+  const skipGuess = () => {
+    stopCountdown();
+    socket.emit('skip_guess');
+    setPhase('passed');
   };
 
   // ─── Join ─────────────────────────────────────────────────────────────────
@@ -289,6 +295,20 @@ export default function Play() {
           className="w-full py-4 rounded-2xl bg-purple-600 text-white font-bold text-xl disabled:opacity-30 hover:bg-purple-500 active:scale-95 transition-all">
           Submit
         </button>
+        <button onClick={skipGuess}
+          className="w-full py-3 rounded-2xl bg-white/5 text-white/50 font-semibold hover:bg-white/10 active:scale-95 transition-all">
+          Skip — I don't know
+        </button>
+      </div>
+    );
+  }
+
+  // ─── Passed (skipped) ─────────────────────────────────────────────────────
+  if (phase === 'passed') {
+    return (
+      <div className="min-h-screen flex flex-col items-center justify-center gap-4 p-6 text-center">
+        <p className="text-white font-black text-2xl">You passed</p>
+        <p className="text-white/40">Handing it over…</p>
       </div>
     );
   }

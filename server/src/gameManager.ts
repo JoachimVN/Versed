@@ -240,6 +240,20 @@ export function recordGuess(
   return { correct: false, points: 0, guesserName, allAttempted };
 }
 
+// A guesser gives up their turn. Counts as their attempt so the round can move
+// on (to a co-guesser, the next tier, or the reveal) without them inventing a
+// throwaway guess.
+export function skipGuess(game: Game, socketId: string): { allAttempted: boolean } | null {
+  const round = game.currentRound;
+  if (!round || game.phase !== 'guessing') return null;
+  if (!round.guesserSocketIds.includes(socketId)) return null;
+  if (round.answered) return null;
+
+  round.guessAttempts.add(socketId);
+  const allAttempted = round.guesserSocketIds.every(id => round.guessAttempts.has(id));
+  return { allAttempted };
+}
+
 export function getLeaderboard(game: Game) {
   return Array.from(game.players.values())
     .sort((a, b) => b.score - a.score)

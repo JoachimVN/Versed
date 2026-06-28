@@ -143,6 +143,16 @@ io.on('connection', (socket) => {
     }
   });
 
+  // ── Player: skip guess ─────────────────────────────────────────────────────
+  socket.on('skip_guess', () => {
+    const game = gm.getGameBySocket(socket.id);
+    if (!game) return;
+    const result = gm.skipGuess(game, socket.id);
+    if (!result) return;
+    // Once everyone in the tier has guessed or passed, hand off / reveal.
+    if (result.allAttempted) advanceTierOrReveal(game);
+  });
+
   // ── Host: advance to next round ────────────────────────────────────────────
   socket.on('next_round', () => {
     const game = gm.getGameBySocket(socket.id);
