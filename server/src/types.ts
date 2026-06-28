@@ -59,6 +59,8 @@ export interface Game {
   phase: GamePhase;
   roundIndex: number;
   totalRounds: number;
+  bettingTime: number;
+  guessingTime: number;
   currentRound: Round | null;
   usedSongIds: Set<string>;
   phaseTimer: ReturnType<typeof setTimeout> | null;

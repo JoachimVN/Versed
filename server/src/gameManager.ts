@@ -123,6 +123,8 @@ export function createGame(hostSocketId: string): Game {
     phase: 'lobby',
     roundIndex: 0,
     totalRounds: TOTAL_ROUNDS,
+    bettingTime: BETTING_TIME,
+    guessingTime: GUESSING_TIME,
     currentRound: null,
     usedSongIds: new Set(),
     phaseTimer: null,

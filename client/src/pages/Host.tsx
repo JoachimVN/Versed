@@ -1,5 +1,5 @@
 import { useState, useEffect, useRef } from 'react';
-import { Music, Check, X, Loader2, Copy } from 'lucide-react';
+import { Music, Check, X, Loader2, Copy, ChevronDown } from 'lucide-react';
 import { socket } from '../socket';
 import { useSpotify } from '../hooks/useSpotify';
 import { RankBadge } from '../components/RankBadge';
@@ -33,7 +33,16 @@ interface HostState {
   copied: boolean;
   playProgress: number;
   inviteUrl: string;
+  settingsOpen: boolean;
+  bettingTimeSetting: number;
+  guessingTimeSetting: number;
+  roundsSetting: number;
+  toggleSettings: () => void;
+  setBettingTimeSetting: (v: number) => void;
+  setGuessingTimeSetting: (v: number) => void;
+  setRoundsSetting: (v: number) => void;
   createGame: () => void;
+  startGame: () => void;
   copyInvite: () => void;
 }
 
@@ -57,6 +66,10 @@ function useHostGame(): HostState {
   const [leaderboard, setLeaderboard] = useState<LeaderboardEntry[]>([]);
   const [copied, setCopied] = useState(false);
   const [playProgress, setPlayProgress] = useState(0);
+  const [settingsOpen, setSettingsOpen] = useState(false);
+  const [bettingTimeSetting, setBettingTimeSetting] = useState(15);
+  const [guessingTimeSetting, setGuessingTimeSetting] = useState(15);
+  const [roundsSetting, setRoundsSetting] = useState(10);
   const timerRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const playRafRef = useRef<number | null>(null);
 
@@ -208,6 +221,13 @@ function useHostGame(): HostState {
     });
   };
 
+  const startGame = () => {
+    spotify.activatePlayer();
+    socket.emit('start_game', {
+      settings: { bettingTime: bettingTimeSetting, guessingTime: guessingTimeSetting, totalRounds: roundsSetting },
+    });
+  };
+
   const copyInvite = () => {
     navigator.clipboard?.writeText(inviteUrl)
       .then(() => {
@@ -220,7 +240,11 @@ function useHostGame(): HostState {
   return {
     spotify, phase, pin, players, roundIndex, totalRounds, hints,
     bettingTime, timeLeft, bidCount, countdown, guesserNames, lowestBid, playerBids,
-    result, leaderboard, copied, playProgress, inviteUrl, createGame, copyInvite,
+    result, leaderboard, copied, playProgress, inviteUrl,
+    settingsOpen, bettingTimeSetting, guessingTimeSetting, roundsSetting,
+    toggleSettings: () => setSettingsOpen(o => !o),
+    setBettingTimeSetting, setGuessingTimeSetting, setRoundsSetting,
+    createGame, startGame, copyInvite,
   };
 }
 
@@ -276,6 +300,23 @@ function BidTimeline({ bids, lowestBid }: Readonly<{ bids: { name: string; bid: 
   );
 }
 
+// ─── Settings row ─────────────────────────────────────────────────────────────
+
+function SettingRow({ label, value, unit, onDec, onInc }: Readonly<{
+  label: string; value: number; unit: string; onDec: () => void; onInc: () => void;
+}>) {
+  return (
+    <div className="flex items-center justify-between">
+      <span className="text-white/60 text-sm">{label}</span>
+      <div className="flex items-center gap-3">
+        <button onClick={onDec} className="w-8 h-8 rounded-full bg-white/10 text-white text-lg flex items-center justify-center hover:bg-white/20 active:scale-95 transition-all">−</button>
+        <span className="text-white font-bold w-12 text-center">{value}{unit}</span>
+        <button onClick={onInc} className="w-8 h-8 rounded-full bg-white/10 text-white text-lg flex items-center justify-center hover:bg-white/20 active:scale-95 transition-all">+</button>
+      </div>
+    </div>
+  );
+}
+
 // ─── Phase views ─────────────────────────────────────────────────────────────
 
 function ConnectView({ game }: Readonly<{ game: HostState }>) {
@@ -299,7 +340,11 @@ function ConnectView({ game }: Readonly<{ game: HostState }>) {
 }
 
 function LobbyView({ game }: Readonly<{ game: HostState }>) {
-  const { spotify, pin, players, copied, createGame, copyInvite } = game;
+  const {
+    spotify, pin, players, copied, createGame, startGame, copyInvite,
+    settingsOpen, bettingTimeSetting, guessingTimeSetting, roundsSetting,
+    toggleSettings, setBettingTimeSetting, setGuessingTimeSetting, setRoundsSetting,
+  } = game;
   return (
     <div className="min-h-screen flex flex-col items-center p-6 gap-6">
       <img src={`${import.meta.env.BASE_URL}logo.svg`} alt={APP_NAME} className="h-16 w-auto" />
@@ -335,8 +380,31 @@ function LobbyView({ game }: Readonly<{ game: HostState }>) {
               ))}
             </div>
           </div>
+
           <button
-            onClick={() => { spotify.activatePlayer(); socket.emit('start_game'); }}
+            onClick={toggleSettings}
+            className="flex items-center gap-1.5 text-white/40 text-sm hover:text-white/70 transition-colors"
+          >
+            Settings
+            <ChevronDown className={`w-4 h-4 transition-transform duration-200 ${settingsOpen ? 'rotate-180' : ''}`} />
+          </button>
+
+          {settingsOpen && (
+            <div className="w-full max-w-sm bg-white/5 rounded-2xl p-4 space-y-4">
+              <SettingRow label="Bet time" value={bettingTimeSetting} unit="s"
+                onDec={() => setBettingTimeSetting(Math.max(5, bettingTimeSetting - 5))}
+                onInc={() => setBettingTimeSetting(Math.min(60, bettingTimeSetting + 5))} />
+              <SettingRow label="Guess time" value={guessingTimeSetting} unit="s"
+                onDec={() => setGuessingTimeSetting(Math.max(5, guessingTimeSetting - 5))}
+                onInc={() => setGuessingTimeSetting(Math.min(60, guessingTimeSetting + 5))} />
+              <SettingRow label="Rounds" value={roundsSetting} unit=""
+                onDec={() => setRoundsSetting(Math.max(1, roundsSetting - 1))}
+                onInc={() => setRoundsSetting(Math.min(30, roundsSetting + 1))} />
+            </div>
+          )}
+
+          <button
+            onClick={startGame}
             disabled={players.length === 0}
             className="mt-auto w-full max-w-sm py-4 rounded-2xl bg-purple-600 text-white font-bold text-xl disabled:opacity-30 hover:bg-purple-500 transition-colors"
           >
