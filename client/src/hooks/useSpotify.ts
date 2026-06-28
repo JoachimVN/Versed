@@ -11,7 +11,11 @@ export function useSpotify() {
   const playerRef = useRef<import('../types').SpotifyPlayer | null>(null);
   const deviceIdRef = useRef<string | null>(null);
   const accessTokenRef = useRef<string | null>(null);
-  const shouldPlayRef = useRef(false);
+  // 'idle'      → nothing scheduled
+  // 'preparing' → track buffering, muted, not yet revealed to listeners
+  // 'playing'   → audible; auto-resume if Spotify pauses unexpectedly
+  // 'stopping'  → must stay paused; re-pause if it slips back into playing
+  const playStateRef = useRef<'idle' | 'preparing' | 'playing' | 'stopping'>('idle');
 
   useEffect(() => {
     const params = new URLSearchParams(window.location.search);
@@ -68,11 +72,15 @@ export function useSpotify() {
         setPlayerReady(true);
       });
       player.addListener('not_ready', () => setPlayerReady(false));
-      // Auto-resume if track loaded paused and we expect it to be playing
+      // Keep playback in sync with intent. The SDK can spontaneously pause
+      // (buffering) or a queued play command can land late; self-heal both ways.
       player.addListener('player_state_changed', (state: any) => {
-        if (!state || !shouldPlayRef.current) return;
-        if (state.paused) {
+        if (!state) return;
+        const phase = playStateRef.current;
+        if (phase === 'playing' && state.paused) {
           playerRef.current?.resume();
+        } else if (phase === 'stopping' && !state.paused) {
+          playerRef.current?.pause();
         }
       });
       player.connect();
@@ -96,36 +104,46 @@ export function useSpotify() {
     playerRef.current?.activateElement();
   }
 
-  async function playTrack(trackId: string, positionMs = 0) {
+  // Buffer the track ahead of time, muted, so the actual start is instant and
+  // gapless. Returns true once Spotify accepted the play request.
+  async function prepareTrack(trackId: string) {
     const token = accessTokenRef.current;
     const device = deviceIdRef.current;
     if (!device || !token) {
-      console.error('[Spotify] playTrack called but not ready', { device, hasToken: !!token });
-      return;
+      console.error('[Spotify] prepareTrack called but not ready', { device, hasToken: !!token });
+      return false;
     }
-    shouldPlayRef.current = true;
+    playStateRef.current = 'preparing';
+    await playerRef.current?.setVolume(0);
     const res = await fetch(`https://api.spotify.com/v1/me/player/play?device_id=${device}`, {
       method: 'PUT',
       headers: {
         Authorization: `Bearer ${token}`,
         'Content-Type': 'application/json',
       },
-      body: JSON.stringify({
-        uris: [`spotify:track:${trackId}`],
-        position_ms: positionMs,
-      }),
+      body: JSON.stringify({ uris: [`spotify:track:${trackId}`], position_ms: 0 }),
     });
     if (!res.ok) {
       const body = await res.text();
-      console.error(`[Spotify] play failed ${res.status}:`, body);
-      shouldPlayRef.current = false;
+      console.error(`[Spotify] prepare failed ${res.status}:`, body);
+      playStateRef.current = 'idle';
+      return false;
     }
+    return true;
+  }
+
+  // Reveal the buffered track: rewind to 0, unmute, and ensure it's playing.
+  async function startPrepared() {
+    playStateRef.current = 'playing';
+    await playerRef.current?.seek(0);
+    await playerRef.current?.setVolume(0.8);
+    await playerRef.current?.resume();
   }
 
   async function pauseTrack() {
-    shouldPlayRef.current = false;
-    playerRef.current?.pause();
+    playStateRef.current = 'stopping';
+    await playerRef.current?.pause();
   }
 
-  return { isConnected: !!accessToken, playerReady, playTrack, pauseTrack, activatePlayer };
+  return { isConnected: !!accessToken, playerReady, prepareTrack, startPrepared, pauseTrack, activatePlayer };
 }

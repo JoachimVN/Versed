@@ -8,6 +8,8 @@ type Phase = 'connect' | 'lobby' | 'betting' | 'playing' | 'guessing' | 'reveal'
 
 interface SongInfo { title: string; artist: string; trackId: string }
 
+const wait = (ms: number) => new Promise<void>(resolve => setTimeout(resolve, ms));
+
 export default function Host() {
   const spotify = useSpotify();
   const [phase, setPhase] = useState<Phase>('connect');
@@ -21,6 +23,7 @@ export default function Host() {
   const [bettingTime, setBettingTime] = useState(15);
   const [timeLeft, setTimeLeft] = useState(0);
   const [bidCount, setBidCount] = useState(0);
+  const [countdown, setCountdown] = useState<number | null>(null);
   const [guesserNames, setGuesserNames] = useState<string[]>([]);
   const [lowestBid, setLowestBid] = useState(0);
   const [result, setResult] = useState<RoundResultEvent | null>(null);
@@ -70,8 +73,19 @@ export default function Host() {
       setPhase('playing');
     });
 
-    socket.on('play_song', async (data: { trackId: string; durationMs: number }) => {
-      await spotify.playTrack(data.trackId, 0);
+    socket.on('play_song', async (data: { trackId: string; durationMs: number; countdownMs?: number }) => {
+      // Start buffering immediately, then run the countdown while it loads so
+      // the reveal is instant and the X-second timer matches the audible start.
+      const prepared = spotify.prepareTrack(data.trackId);
+      const ticks = Math.ceil((data.countdownMs ?? 3000) / 1000);
+      for (let n = ticks; n > 0; n--) {
+        setCountdown(n);
+        await wait(1000);
+      }
+      setCountdown(null);
+      await prepared;
+      await spotify.startPrepared();
+      socket.emit('song_started');
       startCountdown(data.durationMs / 1000);
     });
 
@@ -248,16 +262,26 @@ export default function Host() {
     return (
       <div className="min-h-screen flex flex-col items-center justify-center p-6 gap-6 text-center">
         <p className="text-white/50">Round {roundIndex + 1}/{totalRounds}</p>
-        <div className="text-6xl animate-pulse">🎵</div>
-        <div>
-          <p className="text-white/40 text-sm">Playing for</p>
-          <p className="text-white font-black text-4xl">{lowestBid}s</p>
-        </div>
-        <p className="text-white/50">
-          {guesserNames.join(' & ')} will guess
-        </p>
-        <p className="text-white font-black text-2xl">{timeLeft}s</p>
-        {song && <p className="text-white/30 text-sm">{song.title} — {song.artist}</p>}
+        {countdown !== null ? (
+          <>
+            <p className="text-white/40 text-sm uppercase tracking-widest">Get ready</p>
+            <div className="text-8xl font-black text-white animate-pulse">{countdown}</div>
+            <p className="text-white/50">{guesserNames.join(' & ')} will guess</p>
+          </>
+        ) : (
+          <>
+            <div className="text-6xl animate-pulse">🎵</div>
+            <div>
+              <p className="text-white/40 text-sm">Playing for</p>
+              <p className="text-white font-black text-4xl">{lowestBid}s</p>
+            </div>
+            <p className="text-white/50">
+              {guesserNames.join(' & ')} will guess
+            </p>
+            <p className="text-white font-black text-2xl">{timeLeft}s</p>
+            {song && <p className="text-white/30 text-sm">{song.title} — {song.artist}</p>}
+          </>
+        )}
       </div>
     );
   }

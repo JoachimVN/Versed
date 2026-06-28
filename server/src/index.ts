@@ -10,6 +10,9 @@ import * as gm from './gameManager';
 dotenv.config();
 gm.initSongs();
 
+// Countdown shown on the host before a song plays, used to buffer the track.
+const PLAYBACK_COUNTDOWN_MS = 3000;
+
 const app = express();
 const httpServer = createServer(app);
 const io = new Server(httpServer, {
@@ -93,6 +96,21 @@ io.on('connection', (socket) => {
       bidCount: round.bids.size,
       totalPlayers: game.players.size,
     });
+
+    // Early close when every player has placed a bid
+    if (round.bids.size >= game.players.size) {
+      if (game.phaseTimer) clearTimeout(game.phaseTimer);
+      closeBettingAndPlay(game);
+    }
+  });
+
+  // ── Host: song playback confirmed ──────────────────────────────────────────
+  socket.on('song_started', () => {
+    const game = gm.getGameBySocket(socket.id);
+    if (!game || game.hostSocketId !== socket.id || game.phase !== 'playing') return;
+    // Cancel fallback; start guessing timer from actual playback start
+    if (game.phaseTimer) clearTimeout(game.phaseTimer);
+    game.phaseTimer = setTimeout(() => startGuessingPhase(game), game.currentRound!.lowestBid * 1000);
   });
 
   // ── Player: submit guess ───────────────────────────────────────────────────
@@ -158,7 +176,6 @@ io.on('connection', (socket) => {
     if (!game) return;
     const round = gm.startRound(game);
 
-    // send hint data to everyone, song details only to host
     io.to(`player:${game.pin}`).emit('round_start', {
       roundIndex: game.roundIndex,
       total: game.totalRounds,
@@ -177,57 +194,67 @@ io.on('connection', (socket) => {
       },
     });
 
-    // betting timer
-    game.phaseTimer = setTimeout(() => {
-      const result = gm.closeBetting(game);
-      if (!result) {
-        // nobody bid — skip round
-        io.to(game.pin).emit('round_result', {
-          correct: false,
-          guesserName: null,
-          songTitle: round.song.title,
-          artist: round.song.artist,
-          points: 0,
-        });
-        return;
-      }
+    game.phaseTimer = setTimeout(() => closeBettingAndPlay(game), gm.BETTING_TIME * 1000);
+  }
 
-      const { lowestBid, guesserSocketIds, guesserNames } = result;
-
-      // tell everyone who's guessing
-      io.to(game.pin).emit('betting_closed', { lowestBid, guesserNames });
-      // tell host to play the song
-      io.to(`host:${game.pin}`).emit('play_song', {
-        trackId: round.song.spotifyTrackId,
-        durationMs: lowestBid * 1000,
+  function closeBettingAndPlay(game: ReturnType<typeof gm.getGame> & object) {
+    if (!game || game.phase !== 'betting') return;
+    const round = game.currentRound!;
+    const result = gm.closeBetting(game);
+    if (!result) {
+      // nobody bid — skip round
+      io.to(game.pin).emit('round_result', {
+        correct: false,
+        guesserName: null,
+        songTitle: round.song.title,
+        artist: round.song.artist,
+        points: 0,
       });
+      return;
+    }
 
-      // after clip plays, start guessing phase
-      game.phaseTimer = setTimeout(() => {
-        game.phase = 'guessing';
-        io.to(game.pin).emit('guessing_start', {
-          guesserNames,
-          timeLimit: gm.GUESSING_TIME,
-        });
-        // personalised event so each guesser knows it's their turn
-        for (const sid of guesserSocketIds) {
-          io.to(sid).emit('your_turn', { timeLimit: gm.GUESSING_TIME });
-        }
+    const { lowestBid, guesserNames } = result;
+    io.to(game.pin).emit('betting_closed', { lowestBid, guesserNames });
+    io.to(`host:${game.pin}`).emit('play_song', {
+      trackId: round.song.spotifyTrackId,
+      durationMs: lowestBid * 1000,
+      countdownMs: PLAYBACK_COUNTDOWN_MS,
+    });
 
-        // guessing timeout → no winner
-        game.phaseTimer = setTimeout(() => {
-          if (game.phase !== 'guessing' || round.answered) return;
-          game.phase = 'reveal';
-          io.to(game.pin).emit('round_result', {
-            correct: false,
-            guesserName: null,
-            songTitle: round.song.title,
-            artist: round.song.artist,
-            points: 0,
-          });
-        }, gm.GUESSING_TIME * 1000);
-      }, lowestBid * 1000);
-    }, gm.BETTING_TIME * 1000);
+    // Fallback: start guessing if host never confirms song_started. The host
+    // first runs a countdown (and buffers the track) before playback begins,
+    // so allow for that plus the bid duration plus slack.
+    game.phaseTimer = setTimeout(() => {
+      if (game.phase === 'playing') startGuessingPhase(game);
+    }, lowestBid * 1000 + PLAYBACK_COUNTDOWN_MS + 5000);
+  }
+
+  function startGuessingPhase(game: ReturnType<typeof gm.getGame> & object) {
+    if (!game) return;
+    const round = game.currentRound!;
+    const guesserSocketIds = round.guesserSocketIds;
+    const guesserNames = guesserSocketIds
+      .map(id => game.players.get(id)?.name ?? '')
+      .filter(Boolean);
+
+    if (game.phaseTimer) clearTimeout(game.phaseTimer);
+    game.phase = 'guessing';
+    io.to(game.pin).emit('guessing_start', { guesserNames, timeLimit: gm.GUESSING_TIME });
+    for (const sid of guesserSocketIds) {
+      io.to(sid).emit('your_turn', { timeLimit: gm.GUESSING_TIME });
+    }
+
+    game.phaseTimer = setTimeout(() => {
+      if (game.phase !== 'guessing' || round.answered) return;
+      game.phase = 'reveal';
+      io.to(game.pin).emit('round_result', {
+        correct: false,
+        guesserName: null,
+        songTitle: round.song.title,
+        artist: round.song.artist,
+        points: 0,
+      });
+    }, gm.GUESSING_TIME * 1000);
   }
 });
 

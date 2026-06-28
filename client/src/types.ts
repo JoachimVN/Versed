@@ -42,5 +42,7 @@ export interface SpotifyPlayer {
   removeListener: (event: string) => void;
   resume: () => Promise<void>;
   pause: () => Promise<void>;
+  seek: (positionMs: number) => Promise<void>;
+  setVolume: (volume: number) => Promise<void>;
   activateElement: () => void;
 }
