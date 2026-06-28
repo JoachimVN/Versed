@@ -7,6 +7,20 @@ export const BETTING_TIME = 15;
 export const GUESSING_TIME = 15;
 export const TOTAL_ROUNDS = 10;
 
+// The tiniest bids ask for so little audio that a clip can land entirely inside
+// a song's near-silent lead-in and reveal nothing — pure bad luck the bidder
+// couldn't foresee. We can't detect silence (Spotify's audio-analysis is gone
+// and the SDK is DRM'd), so we instead always play at least this much audio.
+// Bids are still shown and scored at face value, so the bid ladder stays
+// monotonic (more audio ⇄ lower score) and there's no "always bid 0.1" exploit.
+export const MIN_PLAY_MS = 200;
+
+// Actual audible window for a winning bid: the bid itself, floored so the
+// shortest clips still have a fighting chance of containing a real transient.
+export function playMsFor(bid: number): number {
+  return Math.max(bid * 1000, MIN_PLAY_MS);
+}
+
 let songs: Song[] = [];
 const games = new Map<string, Game>();
 const socketToPin = new Map<string, string>();

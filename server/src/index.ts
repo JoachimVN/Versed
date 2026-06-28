@@ -110,7 +110,7 @@ io.on('connection', (socket) => {
     if (!game || game.hostSocketId !== socket.id || game.phase !== 'playing') return;
     // Cancel fallback; start guessing timer from actual playback start
     if (game.phaseTimer) clearTimeout(game.phaseTimer);
-    game.phaseTimer = setTimeout(() => startGuessingPhase(game), game.currentRound!.lowestBid * 1000);
+    game.phaseTimer = setTimeout(() => startGuessingPhase(game), gm.playMsFor(game.currentRound!.lowestBid));
   });
 
   // ── Player: submit guess ───────────────────────────────────────────────────
@@ -215,18 +215,19 @@ io.on('connection', (socket) => {
 
     const { lowestBid, guesserNames } = result;
     io.to(game.pin).emit('betting_closed', { lowestBid, guesserNames });
+    const durationMs = gm.playMsFor(lowestBid);
     io.to(`host:${game.pin}`).emit('play_song', {
       trackId: round.song.spotifyTrackId,
-      durationMs: lowestBid * 1000,
+      durationMs,
       countdownMs: PLAYBACK_COUNTDOWN_MS,
     });
 
     // Fallback: start guessing if host never confirms song_started. The host
     // first runs a countdown (and buffers the track) before playback begins,
-    // so allow for that plus the bid duration plus slack.
+    // so allow for that plus the play duration plus slack.
     game.phaseTimer = setTimeout(() => {
       if (game.phase === 'playing') startGuessingPhase(game);
-    }, lowestBid * 1000 + PLAYBACK_COUNTDOWN_MS + 5000);
+    }, durationMs + PLAYBACK_COUNTDOWN_MS + 5000);
   }
 
   function startGuessingPhase(game: ReturnType<typeof gm.getGame> & object) {
