@@ -1,5 +1,5 @@
 {
-  "name": "music-quiz",
+  "name": "Versed",
   "private": true,
   "workspaces": ["client", "server"],
   "scripts": {

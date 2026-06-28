@@ -1,6 +1,6 @@
 #!/bin/bash
 # Builds the frontend and syncs it to the Portfolio repo at ../Portfolio/versed/
-# Run from the music-quiz repo root after setting up client/.env.production
+# Run from the Versed repo root after setting up client/.env.production
 
 set -e
 
@@ -19,7 +19,7 @@ cp -r "$SCRIPT_DIR/client/dist" "$DEST"
 echo "Committing Portfolio..."
 cd "$PORTFOLIO_DIR"
 git add versed/
-git commit -m "chore: sync Versed from music-quiz"
+git commit -m "chore: sync Versed from Versed"
 git push
 
 echo "Done. joavn.dev/versed updated."

@@ -1,31 +1,6 @@
-export interface QuizTrack {
-  uri: string;
-  name: string;
-  artist: string;
-  albumArt: string;
-}
-
-export interface SpotifySearchTrack {
-  uri: string;
-  name: string;
-  artists: { name: string }[];
-  album: {
-    name: string;
-    images: { url: string; width: number; height: number }[];
-  };
-  duration_ms: number;
-}
-
-export interface GameQuestion {
-  trackUri: string;
-  trackName: string;
-  artist: string;
-  albumArt: string;
-  startMs: number;
-  playDurationMs: number;
-  answers: string[];
-  correctIndex: number;
-  timeLimit: number;
+export interface Hint {
+  label: string;
+  value: string;
 }
 
 export interface LeaderboardEntry {
@@ -34,10 +9,16 @@ export interface LeaderboardEntry {
   score: number;
 }
 
-export interface PlayerResult {
+export interface PlayerInfo {
   name: string;
-  answerIndex: number;
-  isCorrect: boolean;
+  score?: number;
+}
+
+export interface RoundResultEvent {
+  correct: boolean;
+  guesserName: string | null;
+  songTitle: string;
+  artist: string;
   points: number;
 }
 
@@ -59,5 +40,4 @@ export interface SpotifyPlayer {
   disconnect: () => void;
   addListener: (event: string, cb: (data: { device_id: string }) => void) => void;
   removeListener: (event: string) => void;
-  getCurrentState: () => Promise<unknown>;
 }

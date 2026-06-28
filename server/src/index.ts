@@ -6,50 +6,55 @@ import path from 'path';
 import dotenv from 'dotenv';
 import authRouter from './spotifyAuth';
 import * as gm from './gameManager';
-import { QuizTrack } from './types';
 
 dotenv.config();
+gm.initSongs();
 
 const app = express();
 const httpServer = createServer(app);
-
 const io = new Server(httpServer, {
   cors: { origin: '*', methods: ['GET', 'POST'] },
 });
 
 app.use(cors({ origin: '*' }));
 app.use(express.json());
-
 app.use('/api/auth', authRouter);
-
 app.get('/api/health', (_req, res) => res.json({ ok: true }));
 
-// Serve React build in production
 if (process.env.NODE_ENV === 'production') {
   const clientDist = path.join(__dirname, '../../client/dist');
   app.use(express.static(clientDist));
-  app.get('*', (_req, res) => {
-    res.sendFile(path.join(clientDist, 'index.html'));
-  });
+  app.get('*', (_req, res) => res.sendFile(path.join(clientDist, 'index.html')));
 }
 
 io.on('connection', (socket) => {
-  socket.on('create_game', (tracks: QuizTrack[], callback: (res: { pin?: string; error?: string }) => void) => {
-    if (!Array.isArray(tracks) || tracks.length < 4) {
-      return callback({ error: 'Need at least 4 songs' });
-    }
-    const game = gm.createGame(socket.id, tracks);
+  console.log(`[socket] connected: ${socket.id}`);
+  socket.on('disconnect', (reason) => console.log(`[socket] disconnected: ${socket.id} (${reason})`));
+
+  // ── Host: create game ──────────────────────────────────────────────────────
+  socket.on('create_game', (callback: (r: { pin?: string; error?: string }) => void) => {
+    const game = gm.createGame(socket.id);
     socket.join(game.pin);
     socket.join(`host:${game.pin}`);
+    console.log(`[create_game] socket=${socket.id} pin=${game.pin} rooms=${[...socket.rooms].join(',')}`);
     callback({ pin: game.pin });
   });
 
+  // ── Host: rejoin after reconnect ──────────────────────────────────────────
+  socket.on('rejoin_host', ({ pin }: { pin: string }, callback: (r: { players: { name: string }[] }) => void) => {
+    const game = gm.getGame(pin);
+    if (!game) return;
+    game.hostSocketId = socket.id;
+    socket.join(pin);
+    socket.join(`host:${pin}`);
+    gm.updateSocketPin(socket.id, pin);
+    callback({ players: Array.from(game.players.values()).map(p => ({ name: p.name })) });
+  });
+
+  // ── Player: join lobby ─────────────────────────────────────────────────────
   socket.on(
     'join_game',
-    (
-      { pin, name }: { pin: string; name: string },
-      callback: (res: { error?: string; success?: boolean }) => void
-    ) => {
+    ({ pin, name }: { pin: string; name: string }, callback: (r: { error?: string; success?: boolean }) => void) => {
       const game = gm.getGame(pin);
       if (!game) return callback({ error: 'Game not found' });
       if (game.phase !== 'lobby') return callback({ error: 'Game already started' });
@@ -61,154 +66,167 @@ io.on('connection', (socket) => {
       socket.join(`player:${pin}`);
       callback({ success: true });
 
-      const players = Array.from(game.players.values()).map((p) => ({
-        name: p.name,
-        score: p.score,
-      }));
-      io.to(`host:${pin}`).emit('player_joined', { name: player.name, players });
+      const players = Array.from(game.players.values()).map(p => ({ name: p.name }));
+      const hostRoom = io.sockets.adapter.rooms.get(`host:${pin}`);
+      console.log(`[join_game] pin=${pin} name=${name} hostRoom=host:${pin} hostSockets=${hostRoom ? [...hostRoom].join(',') : 'EMPTY'}`);
+      io.to(`host:${pin}`).emit('player_joined', { players });
     }
   );
 
+  // ── Host: start game → first round ────────────────────────────────────────
   socket.on('start_game', () => {
     const game = gm.getGameBySocket(socket.id);
     if (!game || game.hostSocketId !== socket.id || game.phase !== 'lobby') return;
+    game.roundIndex = 0;
+    beginRound(game);
+  });
 
-    game.phase = 'question';
-    game.currentQuestion = 0;
-    game.answers.clear();
-    game.questionStartTime = Date.now();
+  // ── Player: submit bid ─────────────────────────────────────────────────────
+  socket.on('submit_bid', ({ seconds }: { seconds: number }) => {
+    const game = gm.getGameBySocket(socket.id);
+    if (!game) return;
+    const ok = gm.recordBid(game, socket.id, seconds);
+    if (!ok) return;
 
-    const q = game.questions[0];
-    io.to(`player:${game.pin}`).emit('question_start', {
-      questionIndex: 0,
-      total: game.questions.length,
-      answers: q.answers,
-      timeLimit: q.timeLimit,
-    });
-    io.to(`host:${game.pin}`).emit('host_question_start', {
-      questionIndex: 0,
-      total: game.questions.length,
-      question: q,
-      playerCount: game.players.size,
+    const round = game.currentRound!;
+    io.to(`host:${game.pin}`).emit('bid_received', {
+      bidCount: round.bids.size,
+      totalPlayers: game.players.size,
     });
   });
 
-  socket.on(
-    'submit_answer',
-    (
-      { answerIndex }: { answerIndex: number },
-      callback?: (res: { error?: string; isCorrect?: boolean; points?: number }) => void
-    ) => {
-      const game = gm.getGameBySocket(socket.id);
-      if (!game) return callback?.({ error: 'Not in a game' });
+  // ── Player: submit guess ───────────────────────────────────────────────────
+  socket.on('submit_guess', ({ text }: { text: string }, callback?: (r: { correct: boolean }) => void) => {
+    const game = gm.getGameBySocket(socket.id);
+    if (!game) return callback?.({ correct: false });
 
-      const answer = gm.recordAnswer(game, socket.id, answerIndex);
-      if (!answer) return callback?.({ error: 'Cannot answer now' });
+    const result = gm.recordGuess(game, socket.id, text);
+    if (!result) return callback?.({ correct: false });
 
-      callback?.({ isCorrect: answer.isCorrect, points: answer.points });
+    callback?.({ correct: result.correct });
 
-      const player = game.players.get(socket.id);
-      io.to(`host:${game.pin}`).emit('player_answered', {
-        name: player?.name,
-        answeredCount: game.answers.size,
-        totalPlayers: game.players.size,
+    if (result.correct) {
+      if (game.phaseTimer) clearTimeout(game.phaseTimer);
+      const round = game.currentRound!;
+      io.to(game.pin).emit('round_result', {
+        correct: true,
+        guesserName: result.guesserName,
+        songTitle: round.song.title,
+        artist: round.song.artist,
+        points: result.points,
+      });
+      io.to(game.pin).emit('score_update', {
+        players: Array.from(game.players.values()).map(p => ({ name: p.name, score: p.score })),
       });
     }
-  );
-
-  socket.on('reveal_answers', () => {
-    const game = gm.getGameBySocket(socket.id);
-    if (!game || game.hostSocketId !== socket.id) return;
-
-    game.phase = 'reveal';
-    const q = game.questions[game.currentQuestion];
-
-    for (const [sid, player] of game.players) {
-      const answer = game.answers.get(sid);
-      io.to(sid).emit('answer_reveal', {
-        correctIndex: q.correctIndex,
-        yourAnswerIndex: answer?.answerIndex ?? -1,
-        isCorrect: answer?.isCorrect ?? false,
-        points: answer?.points ?? 0,
-        totalScore: player.score,
-      });
-    }
-
-    const results = Array.from(game.players.entries()).map(([sid, player]) => {
-      const answer = game.answers.get(sid);
-      return {
-        name: player.name,
-        answerIndex: answer?.answerIndex ?? -1,
-        isCorrect: answer?.isCorrect ?? false,
-        points: answer?.points ?? 0,
-      };
-    });
-    io.to(`host:${game.pin}`).emit('host_answer_reveal', {
-      correctIndex: q.correctIndex,
-      results,
-    });
   });
 
-  socket.on('show_leaderboard', () => {
+  // ── Host: advance to next round ────────────────────────────────────────────
+  socket.on('next_round', () => {
     const game = gm.getGameBySocket(socket.id);
     if (!game || game.hostSocketId !== socket.id) return;
 
-    game.phase = 'leaderboard';
-    const leaderboard = gm.getLeaderboard(game);
-    io.to(game.pin).emit('leaderboard', { leaderboard });
-  });
-
-  socket.on('next_question', () => {
-    const game = gm.getGameBySocket(socket.id);
-    if (!game || game.hostSocketId !== socket.id) return;
-
-    game.currentQuestion += 1;
-
-    if (game.currentQuestion >= game.questions.length) {
+    game.roundIndex += 1;
+    if (game.roundIndex >= game.totalRounds) {
       game.phase = 'finished';
-      const leaderboard = gm.getLeaderboard(game);
-      io.to(game.pin).emit('game_over', { leaderboard });
+      io.to(game.pin).emit('game_over', { leaderboard: gm.getLeaderboard(game) });
       return;
     }
-
-    game.phase = 'question';
-    game.answers.clear();
-    game.questionStartTime = Date.now();
-
-    const q = game.questions[game.currentQuestion];
-    io.to(`player:${game.pin}`).emit('question_start', {
-      questionIndex: game.currentQuestion,
-      total: game.questions.length,
-      answers: q.answers,
-      timeLimit: q.timeLimit,
-    });
-    io.to(`host:${game.pin}`).emit('host_question_start', {
-      questionIndex: game.currentQuestion,
-      total: game.questions.length,
-      question: q,
-      playerCount: game.players.size,
-    });
+    beginRound(game);
   });
 
+  // ── Disconnect ─────────────────────────────────────────────────────────────
   socket.on('disconnect', () => {
     const result = gm.removeSocket(socket.id);
     if (!result) return;
     const { game, wasHost } = result;
-
     if (wasHost) {
       io.to(game.pin).emit('host_disconnected');
       gm.cleanupGame(game.pin);
     } else {
-      const players = Array.from(game.players.values()).map((p) => ({
-        name: p.name,
-        score: p.score,
-      }));
-      io.to(`host:${game.pin}`).emit('player_left', { players });
+      io.to(`host:${game.pin}`).emit('player_left', {
+        players: Array.from(game.players.values()).map(p => ({ name: p.name })),
+      });
     }
   });
+
+  // ── Round lifecycle (server-driven timing) ─────────────────────────────────
+  function beginRound(game: ReturnType<typeof gm.getGame> & object) {
+    if (!game) return;
+    const round = gm.startRound(game);
+
+    // send hint data to everyone, song details only to host
+    io.to(`player:${game.pin}`).emit('round_start', {
+      roundIndex: game.roundIndex,
+      total: game.totalRounds,
+      hints: round.hints,
+      bettingTime: gm.BETTING_TIME,
+    });
+    io.to(`host:${game.pin}`).emit('host_round_start', {
+      roundIndex: game.roundIndex,
+      total: game.totalRounds,
+      hints: round.hints,
+      bettingTime: gm.BETTING_TIME,
+      song: {
+        title: round.song.title,
+        artist: round.song.artist,
+        trackId: round.song.spotifyTrackId,
+      },
+    });
+
+    // betting timer
+    game.phaseTimer = setTimeout(() => {
+      const result = gm.closeBetting(game);
+      if (!result) {
+        // nobody bid — skip round
+        io.to(game.pin).emit('round_result', {
+          correct: false,
+          guesserName: null,
+          songTitle: round.song.title,
+          artist: round.song.artist,
+          points: 0,
+        });
+        return;
+      }
+
+      const { lowestBid, guesserSocketIds, guesserNames } = result;
+
+      // tell everyone who's guessing
+      io.to(game.pin).emit('betting_closed', { lowestBid, guesserNames });
+      // tell host to play the song
+      io.to(`host:${game.pin}`).emit('play_song', {
+        trackId: round.song.spotifyTrackId,
+        durationMs: lowestBid * 1000,
+      });
+
+      // after clip plays, start guessing phase
+      game.phaseTimer = setTimeout(() => {
+        game.phase = 'guessing';
+        io.to(game.pin).emit('guessing_start', {
+          guesserNames,
+          timeLimit: gm.GUESSING_TIME,
+        });
+        // personalised event so each guesser knows it's their turn
+        for (const sid of guesserSocketIds) {
+          io.to(sid).emit('your_turn', { timeLimit: gm.GUESSING_TIME });
+        }
+
+        // guessing timeout → no winner
+        game.phaseTimer = setTimeout(() => {
+          if (game.phase !== 'guessing' || round.answered) return;
+          game.phase = 'reveal';
+          io.to(game.pin).emit('round_result', {
+            correct: false,
+            guesserName: null,
+            songTitle: round.song.title,
+            artist: round.song.artist,
+            points: 0,
+          });
+        }, gm.GUESSING_TIME * 1000);
+      }, lowestBid * 1000);
+    }, gm.BETTING_TIME * 1000);
+  }
 });
 
 const PORT = process.env.PORT || 3001;
-httpServer.listen(PORT, () => {
-  console.log(`Server running on port ${PORT}`);
-});
+httpServer.listen(PORT, () => console.log(`Server on port ${PORT}`));

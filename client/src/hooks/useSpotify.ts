@@ -1,5 +1,4 @@
 import { useState, useEffect, useRef } from 'react';
-import { SpotifySearchTrack, QuizTrack } from '../types';
 import { BACKEND_URL } from '../config';
 
 let sdkLoaded = false;
@@ -11,18 +10,16 @@ export function useSpotify() {
   const [playerReady, setPlayerReady] = useState(false);
   const playerRef = useRef<import('../types').SpotifyPlayer | null>(null);
 
-  // Read token from URL params or sessionStorage on mount
   useEffect(() => {
     const params = new URLSearchParams(window.location.search);
-    const atFromUrl = params.get('access_token');
-    const rtFromUrl = params.get('refresh_token');
-
-    if (atFromUrl) {
-      setAccessToken(atFromUrl);
-      setRefreshToken(rtFromUrl);
-      sessionStorage.setItem('spotify_at', atFromUrl);
-      if (rtFromUrl) sessionStorage.setItem('spotify_rt', rtFromUrl);
-      window.history.replaceState({}, '', '/host');
+    const at = params.get('access_token');
+    const rt = params.get('refresh_token');
+    if (at) {
+      setAccessToken(at);
+      setRefreshToken(rt);
+      sessionStorage.setItem('spotify_at', at);
+      if (rt) sessionStorage.setItem('spotify_rt', rt);
+      window.history.replaceState({}, '', window.location.pathname);
     } else {
       const stored = sessionStorage.getItem('spotify_at');
       const storedRt = sessionStorage.getItem('spotify_rt');
@@ -31,7 +28,6 @@ export function useSpotify() {
     }
   }, []);
 
-  // Schedule token refresh every 50 minutes
   useEffect(() => {
     if (!refreshToken) return;
     const id = setInterval(async () => {
@@ -46,14 +42,11 @@ export function useSpotify() {
           setAccessToken(data.access_token);
           sessionStorage.setItem('spotify_at', data.access_token);
         }
-      } catch {
-        // silently fail; next refresh will retry
-      }
+      } catch { /* silently retry next interval */ }
     }, 50 * 60 * 1000);
     return () => clearInterval(id);
   }, [refreshToken]);
 
-  // Initialize Spotify Web Playback SDK
   useEffect(() => {
     if (!accessToken) return;
     if (sdkLoaded && playerRef.current) return;
@@ -64,14 +57,11 @@ export function useSpotify() {
         getOAuthToken: (cb) => cb(accessToken),
         volume: 0.8,
       });
-
       player.addListener('ready', ({ device_id }) => {
         setDeviceId(device_id);
         setPlayerReady(true);
       });
-
       player.addListener('not_ready', () => setPlayerReady(false));
-
       player.connect();
       playerRef.current = player;
     };
@@ -89,46 +79,38 @@ export function useSpotify() {
     }
   }, [accessToken]);
 
-  async function searchTracks(query: string): Promise<QuizTrack[]> {
-    if (!accessToken) return [];
-    const res = await fetch(
-      `https://api.spotify.com/v1/search?q=${encodeURIComponent(query)}&type=track&limit=10`,
-      { headers: { Authorization: `Bearer ${accessToken}` } }
-    );
-    const data = await res.json() as { tracks?: { items: SpotifySearchTrack[] } };
-    return (data.tracks?.items ?? []).map((t) => ({
-      uri: t.uri,
-      name: t.name,
-      artist: t.artists.map((a) => a.name).join(', '),
-      albumArt: t.album.images[1]?.url ?? t.album.images[0]?.url ?? '',
-    }));
-  }
-
-  async function playTrack(trackUri: string, positionMs = 0) {
-    if (!deviceId || !accessToken) return;
-    await fetch(`https://api.spotify.com/v1/me/player/play?device_id=${deviceId}`, {
+  async function playTrack(trackId: string, positionMs = 0) {
+    if (!deviceId || !accessToken) {
+      console.error('[Spotify] playTrack called but not ready', { deviceId, hasToken: !!accessToken });
+      return;
+    }
+    const res = await fetch(`https://api.spotify.com/v1/me/player/play?device_id=${deviceId}`, {
       method: 'PUT',
       headers: {
         Authorization: `Bearer ${accessToken}`,
         'Content-Type': 'application/json',
       },
-      body: JSON.stringify({ uris: [trackUri], position_ms: positionMs }),
+      body: JSON.stringify({
+        uris: [`spotify:track:${trackId}`],
+        position_ms: positionMs,
+      }),
     });
+    if (!res.ok) {
+      const body = await res.text();
+      console.error(`[Spotify] play failed ${res.status}:`, body);
+    }
   }
 
   async function pauseTrack() {
     if (!accessToken) return;
-    await fetch('https://api.spotify.com/v1/me/player/pause', {
+    const res = await fetch('https://api.spotify.com/v1/me/player/pause', {
       method: 'PUT',
       headers: { Authorization: `Bearer ${accessToken}` },
     });
+    if (!res.ok && res.status !== 204) {
+      console.error(`[Spotify] pause failed ${res.status}`);
+    }
   }
 
-  return {
-    isConnected: !!accessToken,
-    playerReady,
-    searchTracks,
-    playTrack,
-    pauseTrack,
-  };
+  return { isConnected: !!accessToken, playerReady, playTrack, pauseTrack };
 }

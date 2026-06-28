@@ -1,20 +1,28 @@
-export interface QuizTrack {
-  uri: string;
-  name: string;
+export interface Song {
+  rank: number;
+  title: string;
   artist: string;
-  albumArt: string;
+  year: number | null;
+  decade: number | null;
+  bbPeak: number | null;
+  bbChartWeeks: number | null;
+  spotifyStreams: number | null;
+  spotifyTrackId: string;
+  finalScore: number;
 }
 
-export interface GameQuestion {
-  trackUri: string;
-  trackName: string;
-  artist: string;
-  albumArt: string;
-  startMs: number;
-  playDurationMs: number;
-  answers: string[];
-  correctIndex: number;
-  timeLimit: number;
+export interface Hint {
+  label: string;
+  value: string;
+}
+
+export interface Round {
+  song: Song;
+  hints: Hint[];
+  bids: Map<string, number>;
+  guesserSocketIds: string[];
+  lowestBid: number;
+  answered: boolean;
 }
 
 export interface Player {
@@ -23,22 +31,23 @@ export interface Player {
   score: number;
 }
 
-export interface PlayerAnswer {
-  answerIndex: number;
-  isCorrect: boolean;
-  points: number;
-  answeredAt: number;
-}
-
-export type GamePhase = 'lobby' | 'question' | 'reveal' | 'leaderboard' | 'finished';
+export type GamePhase =
+  | 'lobby'
+  | 'betting'
+  | 'playing'
+  | 'guessing'
+  | 'reveal'
+  | 'leaderboard'
+  | 'finished';
 
 export interface Game {
   pin: string;
   hostSocketId: string;
-  questions: GameQuestion[];
   players: Map<string, Player>;
   phase: GamePhase;
-  currentQuestion: number;
-  questionStartTime: number;
-  answers: Map<string, PlayerAnswer>;
+  roundIndex: number;
+  totalRounds: number;
+  currentRound: Round | null;
+  usedSongIds: Set<string>;
+  phaseTimer: ReturnType<typeof setTimeout> | null;
 }

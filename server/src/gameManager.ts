@@ -1,56 +1,100 @@
-import { Game, GameQuestion, Player, PlayerAnswer, QuizTrack } from './types';
+import { Game, Hint, Player, Round, Song } from './types';
+import { loadSongs } from './songLoader';
+import { isCorrectGuess } from './fuzzyMatch';
 
+export const BID_OPTIONS = [0.1, 0.5, 1, 1.5, 2, 2.5, 3, 4, 5, 7, 10, 15, 20, 30, 45, 60];
+export const BETTING_TIME = 15;
+export const GUESSING_TIME = 15;
+export const TOTAL_ROUNDS = 10;
+
+let songs: Song[] = [];
 const games = new Map<string, Game>();
 const socketToPin = new Map<string, string>();
 
+export function initSongs() {
+  songs = loadSongs();
+  console.log(`Loaded ${songs.length} playable songs`);
+}
+
 function generatePin(): string {
   let pin: string;
-  do {
-    pin = Math.floor(100000 + Math.random() * 900000).toString();
-  } while (games.has(pin));
+  do { pin = Math.floor(100 + Math.random() * 900).toString(); }
+  while (games.has(pin));
   return pin;
 }
 
-function pickRandom<T>(arr: T[], n: number): T[] {
-  const copy = [...arr];
-  for (let i = copy.length - 1; i > 0; i--) {
+function pickRandom<T>(arr: T[]): T {
+  return arr[Math.floor(Math.random() * arr.length)];
+}
+
+function shuffle<T>(arr: T[]): T[] {
+  const c = [...arr];
+  for (let i = c.length - 1; i > 0; i--) {
     const j = Math.floor(Math.random() * (i + 1));
-    [copy[i], copy[j]] = [copy[j], copy[i]];
+    [c[i], c[j]] = [c[j], c[i]];
   }
-  return copy.slice(0, n);
+  return c;
 }
 
-function buildQuestions(tracks: QuizTrack[]): GameQuestion[] {
-  const shuffled = pickRandom(tracks, tracks.length);
-  return shuffled.map((track) => {
-    const others = shuffled.filter((t) => t.uri !== track.uri);
-    const wrong = pickRandom(others, 3).map((t) => t.name);
-    const allAnswers = [track.name, ...wrong].sort(() => Math.random() - 0.5);
-    return {
-      trackUri: track.uri,
-      trackName: track.name,
-      artist: track.artist,
-      albumArt: track.albumArt,
-      startMs: 30000,
-      playDurationMs: 20000,
-      answers: allAnswers,
-      correctIndex: allAnswers.indexOf(track.name),
-      timeLimit: 20,
-    };
-  });
+function getInitials(artist: string): string {
+  const main = artist.split(/\s+(?:featuring|feat\.|ft\.|x\s)/i)[0].trim();
+  return main.split(/\s+/).map(w => (w[0] ?? '').toUpperCase()).join('.') + '.';
 }
 
-export function createGame(hostSocketId: string, tracks: QuizTrack[]): Game {
+function formatStreams(n: number): string {
+  if (n >= 1_000_000_000) return `${(n / 1_000_000_000).toFixed(1)}B`;
+  return `${(n / 1_000_000).toFixed(0)}M`;
+}
+
+function generateHints(song: Song): Hint[] {
+  const pool: Hint[] = [];
+  if (song.decade) pool.push({ label: 'Era', value: `${song.decade}s` });
+  if (song.year) pool.push({ label: 'Release year', value: String(Math.floor(song.year)) });
+  if (song.bbChartWeeks && song.bbChartWeeks > 0)
+    pool.push({ label: 'Billboard weeks', value: `${Math.floor(song.bbChartWeeks)} weeks` });
+  if (song.bbPeak)
+    pool.push({ label: 'Chart peak', value: `#${Math.floor(song.bbPeak)}` });
+  if (song.spotifyStreams)
+    pool.push({ label: 'Streams', value: formatStreams(song.spotifyStreams) });
+  pool.push({ label: 'Artist initials', value: getInitials(song.artist) });
+
+  const count = Math.floor(Math.random() * 4); // 0–3
+  return shuffle(pool).slice(0, count);
+}
+
+export function calcPoints(bid: number, rank: number): number {
+  const bidScore = Math.round(1000 * Math.max(0, 1 - bid / 60));
+  const diffScore = Math.round(500 * Math.max(0, 1 - (rank - 1) / Math.max(songs.length - 1, 1)));
+  return 500 + bidScore + diffScore;
+}
+
+function buildRound(usedSongIds: Set<string>): Round {
+  const pool = songs.filter(s => !usedSongIds.has(s.spotifyTrackId));
+  const song = pool.length > 0 ? pickRandom(pool) : pickRandom(songs);
+  return {
+    song,
+    hints: generateHints(song),
+    bids: new Map(),
+    guesserSocketIds: [],
+    lowestBid: 0,
+    answered: false,
+  };
+}
+
+// ─── Public API ───────────────────────────────────────────────────────────────
+
+export function createGame(hostSocketId: string): Game {
   const pin = generatePin();
   const game: Game = {
     pin,
     hostSocketId,
-    questions: buildQuestions(tracks),
     players: new Map(),
     phase: 'lobby',
-    currentQuestion: 0,
-    questionStartTime: 0,
-    answers: new Map(),
+    roundIndex: 0,
+    totalRounds: TOTAL_ROUNDS,
+    currentRound: null,
+    usedSongIds: new Set(),
+    phaseTimer: null,
   };
   games.set(pin, game);
   socketToPin.set(hostSocketId, pin);
@@ -67,11 +111,10 @@ export function getGameBySocket(socketId: string): Game | undefined {
 }
 
 export function addPlayer(game: Game, socketId: string, name: string): Player | null {
-  const nameTaken = Array.from(game.players.values()).some(
-    (p) => p.name.toLowerCase() === name.trim().toLowerCase()
+  const taken = Array.from(game.players.values()).some(
+    p => p.name.toLowerCase() === name.trim().toLowerCase()
   );
-  if (nameTaken) return null;
-
+  if (taken) return null;
   const player: Player = { socketId, name: name.trim(), score: 0 };
   game.players.set(socketId, player);
   socketToPin.set(socketId, game.pin);
@@ -87,37 +130,71 @@ export function removeSocket(socketId: string): { game: Game; wasHost: boolean }
   return { game, wasHost };
 }
 
-export function recordAnswer(
+export function startRound(game: Game): Round {
+  if (game.phaseTimer) clearTimeout(game.phaseTimer);
+  const round = buildRound(game.usedSongIds);
+  game.usedSongIds.add(round.song.spotifyTrackId);
+  game.currentRound = round;
+  game.phase = 'betting';
+  return round;
+}
+
+export function recordBid(game: Game, socketId: string, seconds: number): boolean {
+  if (game.phase !== 'betting') return false;
+  if (!game.players.has(socketId)) return false;
+  if (!BID_OPTIONS.includes(seconds)) return false;
+  game.currentRound!.bids.set(socketId, seconds);
+  return true;
+}
+
+export function closeBetting(game: Game): {
+  lowestBid: number;
+  guesserSocketIds: string[];
+  guesserNames: string[];
+} | null {
+  const round = game.currentRound;
+  if (!round || game.phase !== 'betting') return null;
+  if (round.bids.size === 0) return null;
+
+  const minBid = Math.min(...round.bids.values());
+  const guesserIds = Array.from(round.bids.entries())
+    .filter(([, bid]) => bid === minBid)
+    .map(([id]) => id);
+
+  round.lowestBid = minBid;
+  round.guesserSocketIds = guesserIds;
+  game.phase = 'playing';
+
+  const guesserNames = guesserIds
+    .map(id => game.players.get(id)?.name ?? '')
+    .filter(Boolean);
+
+  return { lowestBid: minBid, guesserSocketIds: guesserIds, guesserNames };
+}
+
+export function recordGuess(
   game: Game,
   socketId: string,
-  answerIndex: number
-): PlayerAnswer | null {
-  if (game.phase !== 'question') return null;
-  if (game.answers.has(socketId)) return null;
+  text: string
+): { correct: boolean; points: number; guesserName: string } | null {
+  const round = game.currentRound;
+  if (!round || game.phase !== 'guessing') return null;
+  if (!round.guesserSocketIds.includes(socketId)) return null;
+  if (round.answered) return null;
 
-  const player = game.players.get(socketId);
-  if (!player) return null;
+  const correct = isCorrectGuess(text, round.song.title);
+  const guesserName = game.players.get(socketId)?.name ?? '';
 
-  const question = game.questions[game.currentQuestion];
-  const elapsed = Date.now() - game.questionStartTime;
-  const timeLimitMs = question.timeLimit * 1000;
-  const isCorrect = answerIndex === question.correctIndex;
-
-  let points = 0;
-  if (isCorrect) {
-    const speedRatio = Math.max(0, 1 - elapsed / timeLimitMs);
-    points = Math.round(500 + 500 * speedRatio);
+  if (correct) {
+    round.answered = true;
+    const player = game.players.get(socketId)!;
+    const points = calcPoints(round.lowestBid, round.song.rank);
     player.score += points;
+    game.phase = 'reveal';
+    return { correct: true, points, guesserName };
   }
 
-  const answer: PlayerAnswer = {
-    answerIndex,
-    isCorrect,
-    points,
-    answeredAt: Date.now(),
-  };
-  game.answers.set(socketId, answer);
-  return answer;
+  return { correct: false, points: 0, guesserName };
 }
 
 export function getLeaderboard(game: Game) {
@@ -126,10 +203,15 @@ export function getLeaderboard(game: Game) {
     .map((p, i) => ({ rank: i + 1, name: p.name, score: p.score }));
 }
 
+export function updateSocketPin(socketId: string, pin: string) {
+  socketToPin.set(socketId, pin);
+}
+
 export function cleanupGame(pin: string) {
   const game = games.get(pin);
   if (!game) return;
-  for (const socketId of game.players.keys()) socketToPin.delete(socketId);
+  if (game.phaseTimer) clearTimeout(game.phaseTimer);
+  for (const id of game.players.keys()) socketToPin.delete(id);
   socketToPin.delete(game.hostSocketId);
   games.delete(pin);
 }
