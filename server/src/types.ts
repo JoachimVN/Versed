@@ -61,4 +61,5 @@ export interface Game {
   currentRound: Round | null;
   usedSongIds: Set<string>;
   phaseTimer: ReturnType<typeof setTimeout> | null;
+  phaseEndsAt: number | null; // epoch ms when the current countdown expires
 }

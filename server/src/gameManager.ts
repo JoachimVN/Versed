@@ -125,6 +125,7 @@ export function createGame(hostSocketId: string): Game {
     currentRound: null,
     usedSongIds: new Set(),
     phaseTimer: null,
+    phaseEndsAt: null,
   };
   games.set(pin, game);
   socketToPin.set(hostSocketId, pin);

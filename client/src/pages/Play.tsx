@@ -67,15 +67,15 @@ function usePlayGame(pinParam?: string): PlayState {
   const bidSubmittedRef = useRef(false);
   const guessInputRef = useRef<HTMLInputElement>(null);
 
-  function startCountdown(seconds: number) {
+  function startCountdown(endsAt: number) {
     stopCountdown();
-    setTimeLeft(Math.ceil(seconds));
-    timerRef.current = setInterval(() => {
-      setTimeLeft(t => {
-        if (t <= 1) { stopCountdown(); return 0; }
-        return t - 1;
-      });
-    }, 1000);
+    const tick = () => {
+      const remaining = Math.ceil(Math.max(0, endsAt - Date.now()) / 1000);
+      setTimeLeft(remaining);
+      if (remaining <= 0) stopCountdown();
+    };
+    tick();
+    timerRef.current = setInterval(tick, 500);
   }
 
   function stopCountdown() {
@@ -95,7 +95,7 @@ function usePlayGame(pinParam?: string): PlayState {
 
     socket.on('round_start', (data: {
       roundIndex: number; total: number;
-      hints: Hint[]; bettingTime: number;
+      hints: Hint[]; bettingTime: number; endsAt?: number;
     }) => {
       setRoundIndex(data.roundIndex);
       setTotalRounds(data.total);
@@ -106,9 +106,7 @@ function usePlayGame(pinParam?: string): PlayState {
       setError('');
       bidSubmittedRef.current = false;
       if (autoSubmitTimerRef.current) clearTimeout(autoSubmitTimerRef.current);
-      // Wall-clock auto-submit: fires at exactly bettingTime seconds from now,
-      // so it's immune to setInterval drift and stopCountdown() clearing the tick.
-      // The server gives an extra 500ms grace window, so this arrives in time.
+      const endsAt = data.endsAt ?? (Date.now() + data.bettingTime * 1000);
       autoSubmitTimerRef.current = setTimeout(() => {
         if (bidSubmittedRef.current) return;
         bidSubmittedRef.current = true;
@@ -121,8 +119,8 @@ function usePlayGame(pinParam?: string): PlayState {
             setPhase('betting');
           }
         });
-      }, data.bettingTime * 1000);
-      startCountdown(data.bettingTime);
+      }, endsAt - Date.now());
+      startCountdown(endsAt);
       setPhase('betting');
     });
 
@@ -133,13 +131,13 @@ function usePlayGame(pinParam?: string): PlayState {
       setPhase('watching');
     });
 
-    socket.on('guessing_start', (data: { guesserNames: string[]; timeLimit: number }) => {
+    socket.on('guessing_start', (data: { guesserNames: string[]; timeLimit: number; endsAt?: number }) => {
       setGuesserNames(data.guesserNames);
-      startCountdown(data.timeLimit);
+      startCountdown(data.endsAt ?? (Date.now() + data.timeLimit * 1000));
     });
 
-    socket.on('your_turn', (data: { timeLimit: number }) => {
-      startCountdown(data.timeLimit);
+    socket.on('your_turn', (data: { timeLimit: number; endsAt?: number }) => {
+      startCountdown(data.endsAt ?? (Date.now() + data.timeLimit * 1000));
       setPhase('guessing');
       setTimeout(() => guessInputRef.current?.focus(), 100);
     });

@@ -85,6 +85,32 @@ io.on('connection', (socket) => {
     socket.join(pin);
     socket.join(`player:${pin}`);
     callback?.({ ok: true });
+
+    // Push current game state so a reconnecting tab snaps to the right phase
+    // instead of being frozen at whatever it was showing before the disconnect.
+    const round = game.currentRound;
+    if (game.phase === 'betting' && round && game.phaseEndsAt) {
+      socket.emit('round_start', {
+        roundIndex: game.roundIndex,
+        total: game.totalRounds,
+        hints: round.hints,
+        bettingTime: gm.BETTING_TIME,
+        endsAt: game.phaseEndsAt,
+      });
+    } else if ((game.phase === 'playing' || game.phase === 'guessing') && round) {
+      const guesserNames = round.guesserSocketIds
+        .map(id => game.players.get(id)?.name ?? '')
+        .filter(Boolean);
+      socket.emit('betting_closed', { lowestBid: round.lowestBid, guesserNames, playerBids: [] });
+      if (game.phase === 'guessing' && game.phaseEndsAt) {
+        socket.emit('guessing_start', { guesserNames, timeLimit: gm.GUESSING_TIME, endsAt: game.phaseEndsAt });
+        if (round.guesserSocketIds.includes(socket.id) && !round.passed.has(socket.id)) {
+          socket.emit('your_turn', { timeLimit: gm.GUESSING_TIME, endsAt: game.phaseEndsAt });
+        }
+      }
+    } else if (game.phase === 'finished') {
+      socket.emit('game_over', { leaderboard: gm.getLeaderboard(game) });
+    }
   });
 
   // ── Host: start game → first round ────────────────────────────────────────
@@ -199,18 +225,22 @@ io.on('connection', (socket) => {
   function beginRound(game: ReturnType<typeof gm.getGame> & object) {
     if (!game) return;
     const round = gm.startRound(game);
+    const bettingEndsAt = Date.now() + gm.BETTING_TIME * 1000;
+    game.phaseEndsAt = bettingEndsAt;
 
     io.to(`player:${game.pin}`).emit('round_start', {
       roundIndex: game.roundIndex,
       total: game.totalRounds,
       hints: round.hints,
       bettingTime: gm.BETTING_TIME,
+      endsAt: bettingEndsAt,
     });
     io.to(`host:${game.pin}`).emit('host_round_start', {
       roundIndex: game.roundIndex,
       total: game.totalRounds,
       hints: round.hints,
       bettingTime: gm.BETTING_TIME,
+      endsAt: bettingEndsAt,
       song: {
         title: round.song.title,
         artist: round.song.artist,
@@ -298,9 +328,11 @@ io.on('connection', (socket) => {
 
     if (game.phaseTimer) clearTimeout(game.phaseTimer);
     game.phase = 'guessing';
-    io.to(game.pin).emit('guessing_start', { guesserNames, timeLimit: gm.GUESSING_TIME });
+    const guessingEndsAt = Date.now() + gm.GUESSING_TIME * 1000;
+    game.phaseEndsAt = guessingEndsAt;
+    io.to(game.pin).emit('guessing_start', { guesserNames, timeLimit: gm.GUESSING_TIME, endsAt: guessingEndsAt });
     for (const sid of guesserSocketIds) {
-      io.to(sid).emit('your_turn', { timeLimit: gm.GUESSING_TIME });
+      io.to(sid).emit('your_turn', { timeLimit: gm.GUESSING_TIME, endsAt: guessingEndsAt });
     }
 
     game.phaseTimer = setTimeout(() => {
