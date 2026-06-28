@@ -340,6 +340,37 @@ function BidSubmittedView({ game }: Readonly<{ game: PlayState }>) {
   );
 }
 
+function GuessInputSection({ guessText, guessInputRef, setGuessText, submitGuess }: Readonly<{
+  guessText: string;
+  guessInputRef: React.RefObject<HTMLInputElement>;
+  setGuessText: (v: string) => void;
+  submitGuess: () => void;
+}>) {
+  return (
+    <>
+      <div className="flex-1 flex flex-col items-center justify-center gap-6">
+        <p className="text-white/60">Name the song</p>
+        <input
+          ref={guessInputRef}
+          type="text"
+          placeholder="Type song title..."
+          value={guessText}
+          onChange={e => setGuessText(e.target.value)}
+          onKeyDown={e => e.key === 'Enter' && submitGuess()}
+          className="w-full px-4 py-4 rounded-xl bg-white/10 text-white text-center text-xl placeholder-white/30 outline-none focus:ring-2 focus:ring-purple-500"
+          autoComplete="off"
+          autoCorrect="off"
+          spellCheck={false}
+        />
+      </div>
+      <button onClick={submitGuess} disabled={!guessText.trim()}
+        className="w-full py-4 rounded-2xl bg-purple-600 text-white font-bold text-xl disabled:opacity-30 hover:bg-purple-500 active:scale-95 transition-all">
+        Submit
+      </button>
+    </>
+  );
+}
+
 function WatchingView({ game }: Readonly<{ game: PlayState }>) {
   const { lowestBid, guesserNames, myName, guessText, guessInputRef, setGuessText, submitGuess } = game;
   const imGuessing = guesserNames.includes(myName);
@@ -351,25 +382,7 @@ function WatchingView({ game }: Readonly<{ game: PlayState }>) {
           <Music className="w-4 h-4 text-white/40 animate-pulse" />
           <span className="text-white/40 text-sm">Listening...</span>
         </div>
-        <div className="flex-1 flex flex-col items-center justify-center gap-6">
-          <p className="text-white/60">Name the song</p>
-          <input
-            ref={guessInputRef}
-            type="text"
-            placeholder="Type song title..."
-            value={guessText}
-            onChange={e => setGuessText(e.target.value)}
-            onKeyDown={e => e.key === 'Enter' && submitGuess()}
-            className="w-full px-4 py-4 rounded-xl bg-white/10 text-white text-center text-xl placeholder-white/30 outline-none focus:ring-2 focus:ring-purple-500"
-            autoComplete="off"
-            autoCorrect="off"
-            spellCheck={false}
-          />
-        </div>
-        <button onClick={submitGuess} disabled={!guessText.trim()}
-          className="w-full py-4 rounded-2xl bg-purple-600 text-white font-bold text-xl disabled:opacity-30 hover:bg-purple-500 active:scale-95 transition-all">
-          Submit
-        </button>
+        <GuessInputSection guessText={guessText} guessInputRef={guessInputRef} setGuessText={setGuessText} submitGuess={submitGuess} />
       </div>
     );
   }
@@ -395,25 +408,7 @@ function GuessingView({ game }: Readonly<{ game: PlayState }>) {
         <span className="text-white font-black text-2xl">{timeLeft}s</span>
         <span className="text-white/50 text-sm">{myScore.toLocaleString()} pts</span>
       </div>
-      <div className="flex-1 flex flex-col items-center justify-center gap-6">
-        <p className="text-white/60">Name the song</p>
-        <input
-          ref={guessInputRef}
-          type="text"
-          placeholder="Type song title..."
-          value={guessText}
-          onChange={e => setGuessText(e.target.value)}
-          onKeyDown={e => e.key === 'Enter' && submitGuess()}
-          className="w-full px-4 py-4 rounded-xl bg-white/10 text-white text-center text-xl placeholder-white/30 outline-none focus:ring-2 focus:ring-purple-500"
-          autoComplete="off"
-          autoCorrect="off"
-          spellCheck={false}
-        />
-      </div>
-      <button onClick={submitGuess} disabled={!guessText.trim()}
-        className="w-full py-4 rounded-2xl bg-purple-600 text-white font-bold text-xl disabled:opacity-30 hover:bg-purple-500 active:scale-95 transition-all">
-        Submit
-      </button>
+      <GuessInputSection guessText={guessText} guessInputRef={guessInputRef} setGuessText={setGuessText} submitGuess={submitGuess} />
       <button onClick={skipGuess}
         className="w-full py-3 rounded-2xl bg-white/5 text-white/50 font-semibold hover:bg-white/10 active:scale-95 transition-all">
         Skip — I don't know
