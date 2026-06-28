@@ -81,7 +81,7 @@ function useHostGame(): HostState {
   const [guessingTimeSetting, setGuessingTimeSetting] = useState(15);
   const [roundsSetting, setRoundsSetting] = useState(10);
   const [reconnecting, setReconnecting] = useState(false);
-  const [reconnectingCount, setReconnectingCount] = useState(0);
+  const [reconnectingNames, setReconnectingNames] = useState<Set<string>>(new Set());
   const [gameExpired, setGameExpired] = useState(false);
   const timerRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const playRafRef = useRef<number | null>(null);
@@ -133,6 +133,7 @@ function useHostGame(): HostState {
             setGameExpired(true);
           } else if (res.players) setPlayers(res.players);
           setReconnecting(false);
+          setReconnectingNames(new Set());
         });
       } else {
         setReconnecting(false);
@@ -146,10 +147,15 @@ function useHostGame(): HostState {
     socket.on('player_joined', ({ players: p }: { players: PlayerInfo[] }) => setPlayers(p));
     socket.on('player_left', ({ players: p }: { players: PlayerInfo[] }) => {
       setPlayers(p);
-      setReconnectingCount(n => Math.max(0, n - 1));
+      const remaining = new Set(p.map(pl => pl.name));
+      setReconnectingNames(prev => { const s = new Set(prev); for (const n of s) { if (!remaining.has(n)) s.delete(n); } return s; });
     });
-    socket.on('player_reconnecting', () => setReconnectingCount(n => n + 1));
-    socket.on('player_reconnected', () => setReconnectingCount(n => Math.max(0, n - 1)));
+    socket.on('player_reconnecting', ({ name }: { name: string }) => {
+      setReconnectingNames(prev => new Set(prev).add(name));
+    });
+    socket.on('player_reconnected', ({ name }: { name: string }) => {
+      setReconnectingNames(prev => { const s = new Set(prev); s.delete(name); return s; });
+    });
 
     socket.on('host_round_start', (data: {
       roundIndex: number; total: number; hints: Hint[];
@@ -289,7 +295,7 @@ function useHostGame(): HostState {
       setGuesserNames([]);
       setPlayerBids([]);
       setLowestBid(0);
-      setReconnectingCount(0);
+      setReconnectingNames(new Set());
       stopCountdown();
       stopPlaybackBar();
       setPhase('lobby');
@@ -301,7 +307,7 @@ function useHostGame(): HostState {
     bettingTime, timeLeft, bidCount, countdown, guesserNames, lowestBid, playerBids,
     result, roundDeltas, leaderboard, copied, playProgress, inviteUrl,
     settingsOpen, bettingTimeSetting, guessingTimeSetting, roundsSetting,
-    reconnecting, reconnectingCount, gameExpired,
+    reconnecting, reconnectingCount: reconnectingNames.size, gameExpired,
     toggleSettings: () => setSettingsOpen(o => !o),
     setBettingTimeSetting, setGuessingTimeSetting, setRoundsSetting,
     createGame, startGame, copyInvite, newGame,
