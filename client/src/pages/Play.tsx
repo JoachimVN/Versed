@@ -118,7 +118,16 @@ function usePlayGame(pinParam?: string): PlayState {
     socket.on('connect', () => {
       setReconnecting(false);
       if (myNameRef.current && pinRef.current) {
-        socket.emit('rejoin_player', { pin: pinRef.current, name: myNameRef.current });
+        socket.emit('rejoin_player', { pin: pinRef.current, name: myNameRef.current }, (res?: { ok: boolean }) => {
+          if (res && !res.ok) {
+            myNameRef.current = '';
+            pinRef.current = '';
+            setSavedSession(null);
+            localStorage.removeItem('versed_session');
+            setError('Game has ended.');
+            setPhase('join');
+          }
+        });
       }
     });
 
