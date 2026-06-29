@@ -16,6 +16,9 @@ export function useSpotify() {
   // 'stopping'  → must stay paused; re-pause if it slips back into playing
   const playStateRef = useRef<'idle' | 'preparing' | 'playing' | 'stopping'>('idle');
   const stopTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  // Incremented by prepareTrack and pauseTrack; startPrepared bails if it
+  // changes mid-flight, preventing orphaned stop timers and stale resumes.
+  const playGenRef = useRef(0);
 
   useEffect(() => {
     const params = new URLSearchParams(globalThis.location.search);
@@ -78,7 +81,11 @@ export function useSpotify() {
         if (!state) return;
         const phase = playStateRef.current;
         if (phase === 'playing' && state.paused) {
-          playerRef.current?.resume();
+          // Don't auto-resume if the track reached its natural end — that would
+          // loop the song indefinitely. Only heal genuine buffering pauses.
+          const duration = state.track_window?.current_track?.duration_ms;
+          const atEnd = duration && state.position >= duration - 500;
+          if (!atEnd) playerRef.current?.resume();
         } else if (phase === 'stopping' && !state.paused) {
           playerRef.current?.pause();
         }
@@ -142,6 +149,7 @@ export function useSpotify() {
       return false;
     }
     clearStopTimer();
+    playGenRef.current += 1;
     playStateRef.current = 'preparing';
     await playerRef.current?.setVolume(0);
     const res = await fetch(`https://api.spotify.com/v1/me/player/play?device_id=${device}`, {
@@ -164,18 +172,30 @@ export function useSpotify() {
   // Reveal the buffered track from the start and play it for exactly
   // durationMs of audible output. Resolves when audio actually begins, so the
   // caller can sync the on-screen timer to the real start.
-  async function startPrepared(durationMs: number) {
+  // Returns true if playback actually started; false if aborted (caller should
+  // not emit song_started or start client-side timers in the false case).
+  async function startPrepared(durationMs: number): Promise<boolean> {
+    // If pauseTrack() was called during the prepare/countdown phase (e.g. a
+    // round_result arrived while the countdown was still ticking), bail out so
+    // we don't restart audio that should be stopped.
+    if (playStateRef.current === 'stopping') return false;
     clearStopTimer();
+    const gen = playGenRef.current;
     playStateRef.current = 'playing';
     await playerRef.current?.seek(0);
     await playerRef.current?.setVolume(0.8);
     await playerRef.current?.resume();
     await waitForPlaybackStart();
+    // Another prepareTrack/pauseTrack started while we were waiting — don't
+    // arm a stop timer that would fire at the wrong time.
+    if (gen !== playGenRef.current) return false;
     stopTimerRef.current = setTimeout(() => { pauseTrack(); }, durationMs);
+    return true;
   }
 
   async function pauseTrack() {
     clearStopTimer();
+    playGenRef.current += 1; // invalidate any in-flight startPrepared
     playStateRef.current = 'stopping';
     await playerRef.current?.pause();
   }
