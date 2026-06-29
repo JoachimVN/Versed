@@ -101,6 +101,7 @@ function useHostGame(): HostState {
   const [gameExpired, setGameExpired] = useState(false);
   const timerRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const playRafRef = useRef<number | null>(null);
+  const playGenRef = useRef(0);
 
   useEffect(() => {
     if (spotify.isConnected && phase === 'connect') setPhase('lobby');
@@ -214,17 +215,20 @@ function useHostGame(): HostState {
     });
 
     socket.on('play_song', async (data: { trackId: string; durationMs: number; countdownMs?: number }) => {
-      // Start buffering immediately, then run the countdown while it loads so
-      // the reveal is instant and the X-second timer matches the audible start.
+      // Bump generation so any previously-running countdown loop exits early.
+      const myGen = ++playGenRef.current;
       stopPlaybackBar(); // keep the bar empty through the countdown/buffer
       const prepared = spotify.prepareTrack(data.trackId);
       const ticks = Math.ceil((data.countdownMs ?? 3000) / 1000);
       for (let n = ticks; n > 0; n--) {
+        if (playGenRef.current !== myGen) return;
         setCountdown(n);
         await wait(1000);
       }
+      if (playGenRef.current !== myGen) return;
       setCountdown(null);
       await prepared;
+      if (playGenRef.current !== myGen) return;
       // Resolves at the real audible start; sync the timer and server to it.
       // Returns false if a round_result/guessing_start arrived and cancelled
       // playback mid-countdown — in that case skip song_started so the server
@@ -237,6 +241,7 @@ function useHostGame(): HostState {
     });
 
     socket.on('guessing_start', (data: { guesserNames: string[]; timeLimit: number }) => {
+      ++playGenRef.current;
       spotify.pauseTrack();
       stopCountdown();
       stopPlaybackBar();
@@ -246,6 +251,7 @@ function useHostGame(): HostState {
     });
 
     socket.on('round_result', (data: RoundResultEvent) => {
+      ++playGenRef.current;
       stopCountdown();
       stopPlaybackBar();
       spotify.pauseTrack();
@@ -665,7 +671,7 @@ function HintCards({ hints }: Readonly<{ hints: readonly Hint[] }>) {
 }
 
 function BettingView({ game }: Readonly<{ game: HostState }>) {
-  const { roundIndex, totalRounds, timeLeft, bettingTime, hints, bidCount, players, pin } = game;
+  const { roundIndex, totalRounds, timeLeft, bettingTime, hints, bidCount, players, pin, skipTurn } = game;
   return (
     <div className="min-h-screen flex flex-col p-6 gap-5">
       <div className="flex justify-between items-center">
@@ -684,6 +690,9 @@ function BettingView({ game }: Readonly<{ game: HostState }>) {
           <p className="text-5xl font-black text-white">{bidCount}</p>
           <p className="text-white/40">of {players.length} have bid</p>
         </div>
+        <button onClick={skipTurn} className="text-white/20 text-xs hover:text-white/50 transition-colors">
+          Skip round
+        </button>
       </div>
     </div>
   );
@@ -729,11 +738,9 @@ export function PlayingView({ game }: Readonly<{ game: HostState }>) {
           )}
         </>
       )}
-      {countdown === null && (
-        <button onClick={skipTurn} className="text-white/20 text-xs hover:text-white/50 transition-colors mt-2">
-          Skip round
-        </button>
-      )}
+      <button onClick={skipTurn} className="text-white/20 text-xs hover:text-white/50 transition-colors mt-2">
+        Skip round
+      </button>
     </div>
   );
 }
