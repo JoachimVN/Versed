@@ -165,8 +165,13 @@ function useHostGame(): HostState {
     socket.on('player_reconnecting', ({ name }: { name: string }) => {
       setReconnectingNames(prev => new Set(prev).add(name));
     });
-    socket.on('player_reconnected', ({ name }: { name: string }) => {
+    socket.on('player_reconnected', ({ name, score, streak }: { name: string; score?: number; streak?: number }) => {
       setReconnectingNames(prev => { const s = new Set(prev); s.delete(name); return s; });
+      if (score !== undefined) {
+        playersRef.current = playersRef.current.map(p =>
+          p.name === name ? { ...p, score, streak: streak ?? p.streak } : p
+        );
+      }
     });
 
     socket.on('host_round_start', (data: {

@@ -180,6 +180,7 @@ export function createGame(hostSocketId: string): Game {
     pin,
     hostSocketId,
     players: new Map(),
+    formerPlayers: new Map(),
     phase: 'lobby',
     roundIndex: 0,
     totalRounds: TOTAL_ROUNDS,
@@ -213,7 +214,8 @@ export function addPlayer(game: Game, socketId: string, name: string): Player | 
     p => p.name.toLowerCase() === name.trim().toLowerCase()
   );
   if (taken) return null;
-  const player: Player = { socketId, name: name.trim(), score: 0, streak: 0 };
+  const former = game.formerPlayers.get(name.trim().toLowerCase());
+  const player: Player = { socketId, name: name.trim(), score: former?.score ?? 0, streak: former?.streak ?? 0 };
   game.players.set(socketId, player);
   socketToPin.set(socketId, game.pin);
   return player;
@@ -260,7 +262,11 @@ export function removeSocket(socketId: string): { game: Game; wasHost: boolean }
   if (!game) return null;
   socketToPin.delete(socketId);
   const wasHost = game.hostSocketId === socketId;
-  if (!wasHost) game.players.delete(socketId);
+  if (!wasHost) {
+    const player = game.players.get(socketId);
+    if (player) game.formerPlayers.set(player.name.toLowerCase(), { score: player.score, streak: player.streak });
+    game.players.delete(socketId);
+  }
   return { game, wasHost };
 }
 
@@ -377,11 +383,7 @@ export function skipGuess(game: Game, socketId: string): { allDone: boolean } | 
   const round = game.currentRound;
   if (!round) return null;
   if (!round.guesserSocketIds.includes(socketId)) return null;
-  if (game.phase === 'playing') {
-    round.earlyGuessers.add(socketId);
-  } else if (game.phase !== 'guessing') {
-    return null;
-  }
+  if (game.phase !== 'guessing') return null;
   if (round.answered || round.passed.has(socketId)) return null;
 
   round.guesses.set(socketId, null);
