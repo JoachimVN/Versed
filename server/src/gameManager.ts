@@ -3,7 +3,7 @@ import { Game, Hint, Player, Round, Song } from './types';
 import { loadSongs } from './songLoader';
 import { isCorrectGuess, isCorrectArtistGuess } from './fuzzyMatch';
 
-export const BID_OPTIONS = [0.1, 0.5, 1, 1.5, 2, 2.5, 3, 4, 5, 7, 10, 15, 20, 30, 45, 60];
+export const BID_OPTIONS = [0.1, 0.5, 1, 2, 3, 4, 5, 7, 10, 15, 20, 30, 45, 60];
 export const BETTING_TIME = 15;
 export const GUESSING_TIME = 15;
 export const TOTAL_ROUNDS = 10;
@@ -232,6 +232,19 @@ export function addPlayer(game: Game, socketId: string, name: string): Player | 
 // becomes a stranger to the game and every submit_bid / submit_guess is
 // silently rejected. Migrates any in-flight round references too, so a round
 // already under way keeps working for the reconnected player.
+function migrateRoundSocketId(round: Round, oldId: string, newId: string): void {
+  const bid = round.bids.get(oldId);
+  if (bid !== undefined) { round.bids.set(newId, bid); round.bids.delete(oldId); }
+  round.guesserSocketIds = round.guesserSocketIds.map(id => (id === oldId ? newId : id));
+  round.bidTiers.forEach(t => { t.socketIds = t.socketIds.map(id => (id === oldId ? newId : id)); });
+  if (round.passed.delete(oldId)) round.passed.add(newId);
+  const guess = round.guesses.get(oldId);
+  if (guess !== undefined) { round.guesses.set(newId, guess); round.guesses.delete(oldId); }
+  if (round.correctGuessers.delete(oldId)) round.correctGuessers.add(newId);
+  const guessTime = round.guessTimes.get(oldId);
+  if (guessTime !== undefined) { round.guessTimes.set(newId, guessTime); round.guessTimes.delete(oldId); }
+}
+
 export function rejoinPlayer(game: Game, newSocketId: string, name: string): Player | null {
   const entry = Array.from(game.players.entries()).find(
     ([, p]) => p.name.toLowerCase() === name.trim().toLowerCase()
@@ -244,20 +257,7 @@ export function rejoinPlayer(game: Game, newSocketId: string, name: string): Pla
     socketToPin.delete(oldId);
     player.socketId = newSocketId;
     game.players.set(newSocketId, player);
-
-    const round = game.currentRound;
-    if (round) {
-      const bid = round.bids.get(oldId);
-      if (bid !== undefined) { round.bids.set(newSocketId, bid); round.bids.delete(oldId); }
-      round.guesserSocketIds = round.guesserSocketIds.map(id => (id === oldId ? newSocketId : id));
-      round.bidTiers.forEach(t => { t.socketIds = t.socketIds.map(id => (id === oldId ? newSocketId : id)); });
-      if (round.passed.delete(oldId)) round.passed.add(newSocketId);
-      const guess = round.guesses.get(oldId);
-      if (guess !== undefined) { round.guesses.set(newSocketId, guess); round.guesses.delete(oldId); }
-      if (round.correctGuessers.delete(oldId)) round.correctGuessers.add(newSocketId);
-      const guessTime = round.guessTimes.get(oldId);
-      if (guessTime !== undefined) { round.guessTimes.set(newSocketId, guessTime); round.guessTimes.delete(oldId); }
-    }
+    if (game.currentRound) migrateRoundSocketId(game.currentRound, oldId, newSocketId);
   }
   socketToPin.set(newSocketId, game.pin);
   return player;
@@ -409,6 +409,21 @@ export function markRaceStarted(game: Game): void {
   game.phase = 'guessing';
 }
 
+function applyRaceCorrectGuess(game: Game, round: Round, socketId: string, elapsedMs: number): number {
+  const isFirst = round.firstCorrectAt === null;
+  if (isFirst) round.firstCorrectAt = Date.now();
+  round.correctGuessers.add(socketId);
+  round.guessTimes.set(socketId, elapsedMs);
+  if (!isFirst && game.raceWinnerOnly) return 0;
+  const points = game.raceWinnerOnly
+    ? calcRaceWinnerPoints(elapsedMs, game.raceTime, round.song.rank)
+    : calcRacePoints(isFirst, elapsedMs, round.firstCorrectAt! - round.playStartAt!, round.song.rank);
+  const player = game.players.get(socketId)!;
+  player.score += points;
+  player.streak += 1;
+  return points;
+}
+
 export function recordRaceGuess(
   game: Game,
   socketId: string,
@@ -430,18 +445,7 @@ export function recordRaceGuess(
 
   let points = 0;
   if (correct) {
-    const isFirst = round.firstCorrectAt === null;
-    if (isFirst) round.firstCorrectAt = Date.now();
-    const player = game.players.get(socketId)!;
-    if (isFirst || !game.raceWinnerOnly) {
-      points = game.raceWinnerOnly
-        ? calcRaceWinnerPoints(elapsedMs, game.raceTime, round.song.rank)
-        : calcRacePoints(isFirst, elapsedMs, round.firstCorrectAt! - round.playStartAt!, round.song.rank);
-      player.score += points;
-      player.streak += 1;
-    }
-    round.correctGuessers.add(socketId);
-    round.guessTimes.set(socketId, elapsedMs);
+    points = applyRaceCorrectGuess(game, round, socketId, elapsedMs);
   } else {
     const player = game.players.get(socketId);
     if (player) player.streak = 0;

@@ -772,7 +772,7 @@ export default function Play() {
         </div>
       )}
       {hostReconnecting && !reconnecting && (
-        <div className="fixed bottom-5 left-1/2 -translate-x-1/2 flex items-center gap-2 bg-white/8 backdrop-blur-sm rounded-full px-4 py-2 z-40">
+        <div className="fixed bottom-5 right-5 flex items-center gap-2 bg-white/8 backdrop-blur-sm rounded-full px-3 py-1.5 z-40">
           <span className="w-1.5 h-1.5 rounded-full bg-white/50 animate-pulse" />
           <p className="text-white/50 text-xs">Host reconnecting</p>
         </div>
