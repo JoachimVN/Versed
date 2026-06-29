@@ -216,7 +216,11 @@ function useHostGame(): HostState {
       setCountdown(null);
       await prepared;
       // Resolves at the real audible start; sync the timer and server to it.
-      await spotify.startPrepared(data.durationMs);
+      // Returns false if a round_result/guessing_start arrived and cancelled
+      // playback mid-countdown — in that case skip song_started so the server
+      // doesn't start a guessing timer for a round that's already over.
+      const started = await spotify.startPrepared(data.durationMs);
+      if (!started) return;
       socket.emit('song_started');
       startCountdown(data.durationMs / 1000);
       startPlaybackBar(data.durationMs);
