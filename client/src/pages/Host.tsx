@@ -607,19 +607,19 @@ function LobbyView({ game }: Readonly<{ game: HostState }>) {
           </div>
 
           <div className="w-full max-w-md">
-            <p className="text-white/40 text-sm mb-2">{players.length} player{players.length === 1 ? '' : 's'}</p>
-            <div className="flex flex-wrap gap-2">
+            <p className="text-white/40 text-sm mb-3">{players.length} player{players.length === 1 ? '' : 's'}</p>
+            <div className="flex flex-col gap-2">
               {players.map(p => (
-                <span key={p.name} className="group flex items-center gap-1.5 pl-3 pr-2 py-1.5 rounded-full bg-white/10 text-white text-sm font-semibold">
-                  {p.name}
+                <div key={p.name} className="flex items-center justify-between px-4 py-3 rounded-xl bg-white/10">
+                  <span className="text-white font-semibold">{p.name}</span>
                   <button
                     onClick={() => removePlayer(p.name)}
-                    className="opacity-0 group-hover:opacity-100 transition-opacity text-white/40 hover:text-white"
+                    className="p-1.5 rounded-lg text-white/30 hover:text-red-400 hover:bg-white/10 transition-colors"
                     aria-label={`Remove ${p.name}`}
                   >
-                    <X className="w-3.5 h-3.5" />
+                    <X className="w-4 h-4" />
                   </button>
-                </span>
+                </div>
               ))}
             </div>
           </div>
