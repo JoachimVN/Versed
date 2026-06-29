@@ -244,6 +244,20 @@ io.on('connection', (socket) => {
     io.to(`host:${pin}`).emit('player_reconnected', { name: player.name });
   });
 
+  // ── Host: kick player from lobby ──────────────────────────────────────────
+  socket.on('kick_player', ({ name }: { name: string }) => {
+    const game = gm.getGameBySocket(socket.id);
+    if (game?.hostSocketId !== socket.id || game.phase !== 'lobby') return;
+    const entry = Array.from(game.players.entries()).find(([, p]) => p.name === name);
+    if (!entry) return;
+    const [kickedId] = entry;
+    gm.removeSocket(kickedId);
+    io.to(kickedId).emit('kicked');
+    io.to(`host:${game.pin}`).emit('player_left', {
+      players: Array.from(game.players.values()).map(p => ({ name: p.name })),
+    });
+  });
+
   // ── Host: start game → first round ────────────────────────────────────────
   socket.on('start_game', (payload?: { settings?: { bettingTime?: number; guessingTime?: number; totalRounds?: number; mode?: string; raceTime?: number; raceWinnerOnly?: boolean } }) => {
     const game = gm.getGameBySocket(socket.id);

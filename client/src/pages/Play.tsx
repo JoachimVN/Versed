@@ -259,6 +259,12 @@ function usePlayGame(pinParam?: string): PlayState {
       setPhase('join');
     });
 
+    socket.on('kicked', () => {
+      stopCountdown();
+      setError('You were removed from the lobby.');
+      setPhase('join');
+    });
+
     socket.on('game_restarted', ({ newPin }: { newPin: string }) => {
       newGamePinRef.current = newPin;
       setNewGamePin(newPin);
@@ -270,7 +276,7 @@ function usePlayGame(pinParam?: string): PlayState {
       if (guessAutoSubmitTimerRef.current) clearTimeout(guessAutoSubmitTimerRef.current);
       ['connect','disconnect','round_start','betting_closed','guessing_start','your_turn',
        'round_result','score_update','leaderboard','game_over',
-       'host_reconnecting','host_reconnected','host_disconnected','game_restarted']
+       'host_reconnecting','host_reconnected','host_disconnected','game_restarted','kicked']
         .forEach(e => socket.off(e));
       socket.disconnect();
     };

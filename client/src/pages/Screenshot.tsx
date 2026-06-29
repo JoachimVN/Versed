@@ -73,6 +73,7 @@ const MOCK_HOST: HostState = {
   startGame: noop,
   copyInvite: noop,
   newGame: noop,
+  removePlayer: noop,
 };
 
 const MOCK_HOST_REVEAL: HostState = {

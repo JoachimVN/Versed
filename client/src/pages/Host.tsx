@@ -1,6 +1,6 @@
 import { useState, useEffect, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { Music, Check, Loader2, Copy, ArrowLeft, Settings, Flame } from 'lucide-react';
+import { Music, Check, Loader2, Copy, ArrowLeft, Settings, Flame, X } from 'lucide-react';
 import QRCode from 'react-qr-code';
 import { socket } from '../socket';
 import { useSpotify } from '../hooks/useSpotify';
@@ -59,6 +59,7 @@ export interface HostState {
   startGame: () => void;
   copyInvite: () => void;
   newGame: () => void;
+  removePlayer: (name: string) => void;
 }
 
 function useHostGame(): HostState {
@@ -341,6 +342,7 @@ function useHostGame(): HostState {
     setBettingTimeSetting, setGuessingTimeSetting, setRoundsSetting,
     setMode, setRaceTimeSetting, setRaceWinnerOnly,
     createGame, startGame, copyInvite, newGame,
+    removePlayer: (name: string) => socket.emit('kick_player', { name }),
   };
 }
 
@@ -529,7 +531,7 @@ function ConnectView({ game }: Readonly<{ game: HostState }>) {
 }
 
 function LobbyView({ game }: Readonly<{ game: HostState }>) {
-  const { spotify, pin, players, createGame, startGame, mode, settingsOpen, toggleSettings, setMode } = game;
+  const { spotify, pin, players, createGame, startGame, mode, settingsOpen, toggleSettings, setMode, removePlayer } = game;
   const navigate = useNavigate();
   const [lobbyVisible, setLobbyVisible] = useState(false);
 
@@ -591,7 +593,16 @@ function LobbyView({ game }: Readonly<{ game: HostState }>) {
             <p className="text-white/40 text-sm mb-2">{players.length} player{players.length === 1 ? '' : 's'}</p>
             <div className="flex flex-wrap gap-2">
               {players.map(p => (
-                <span key={p.name} className="px-3 py-1.5 rounded-full bg-white/10 text-white text-sm font-semibold">{p.name}</span>
+                <span key={p.name} className="group flex items-center gap-1.5 pl-3 pr-2 py-1.5 rounded-full bg-white/10 text-white text-sm font-semibold">
+                  {p.name}
+                  <button
+                    onClick={() => removePlayer(p.name)}
+                    className="opacity-0 group-hover:opacity-100 transition-opacity text-white/40 hover:text-white"
+                    aria-label={`Remove ${p.name}`}
+                  >
+                    <X className="w-3.5 h-3.5" />
+                  </button>
+                </span>
               ))}
             </div>
           </div>
