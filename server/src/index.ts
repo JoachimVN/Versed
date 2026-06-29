@@ -396,8 +396,7 @@ io.on('connection', (socket) => {
     const game = gm.getGameBySocket(socket.id);
     if (!game || game.hostSocketId !== socket.id) return;
     if (game.phase === 'betting') {
-      if (game.phaseTimer) clearTimeout(game.phaseTimer);
-      revealRound(game);
+      closeBettingAndPlay(game);
     } else if (game.phase === 'playing') {
       // Song is still playing — skip directly to reveal without going through guessing
       if (game.mode === 'race') endRaceRound(game);
