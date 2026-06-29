@@ -535,6 +535,10 @@ function LobbyView({ game }: Readonly<{ game: HostState }>) {
     return () => clearTimeout(t);
   }, [pin]);
 
+  useEffect(() => {
+    if (spotify.playerReady && !pin) createGame();
+  }, [spotify.playerReady, pin]); // eslint-disable-line react-hooks/exhaustive-deps
+
   return (
     <div className="min-h-screen relative flex flex-col overflow-hidden">
       <button onClick={() => navigate('/')} className="absolute top-5 left-5 p-2 rounded-xl bg-white/10 text-white/60 hover:bg-white/20 hover:text-white transition-colors z-10">
@@ -596,17 +600,7 @@ function LobbyView({ game }: Readonly<{ game: HostState }>) {
             {mode === 'race' ? 'Start Race Game' : 'Start Classic Game'}
           </button>
         </div>
-      ) : (
-        <div className="flex flex-col items-center px-6 pb-6" style={{ transform: 'translateY(30vh)' }}>
-          <button
-            onClick={createGame}
-            disabled={!spotify.playerReady}
-            className="px-8 py-4 rounded-2xl bg-purple-600 text-white font-bold text-xl disabled:opacity-30 hover:bg-purple-500 active:scale-95 transition-all"
-          >
-            Create Game
-          </button>
-        </div>
-      )}
+      ) : null}
     </div>
   );
 }
