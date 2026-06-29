@@ -78,6 +78,7 @@ export interface Game {
   mode: GameMode;
   raceTime: number;
   raceWinnerOnly: boolean;
+  artistOnly: boolean;
   currentRound: Round | null;
   usedSongIds: Set<string>;
   phaseTimer: ReturnType<typeof setTimeout> | null;

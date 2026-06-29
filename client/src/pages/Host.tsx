@@ -44,6 +44,7 @@ export interface HostState {
   mode: 'classic' | 'race';
   raceTimeSetting: number;
   raceWinnerOnly: boolean;
+  artistOnly: boolean;
   answeredCount: number;
   reconnecting: boolean;
   reconnectingCount: number;
@@ -55,6 +56,7 @@ export interface HostState {
   setMode: (m: 'classic' | 'race') => void;
   setRaceTimeSetting: (v: number) => void;
   setRaceWinnerOnly: (v: boolean) => void;
+  setArtistOnly: (v: boolean) => void;
   createGame: () => void;
   startGame: () => void;
   copyInvite: () => void;
@@ -91,6 +93,7 @@ function useHostGame(): HostState {
   const [mode, setMode] = useState<'classic' | 'race'>('classic');
   const [raceTimeSetting, setRaceTimeSetting] = useState(RACE_TIME);
   const [raceWinnerOnly, setRaceWinnerOnly] = useState(false);
+  const [artistOnly, setArtistOnly] = useState(false);
   const [answeredCount, setAnsweredCount] = useState(0);
   const [reconnecting, setReconnecting] = useState(false);
   const [reconnectingNames, setReconnectingNames] = useState<Set<string>>(new Set());
@@ -301,7 +304,7 @@ function useHostGame(): HostState {
     socket.emit('start_game', {
       settings: {
         bettingTime: bettingTimeSetting, guessingTime: guessingTimeSetting,
-        totalRounds: roundsSetting, mode, raceTime: raceTimeSetting, raceWinnerOnly,
+        totalRounds: roundsSetting, mode, raceTime: raceTimeSetting, raceWinnerOnly, artistOnly,
       },
     });
   };
@@ -341,11 +344,11 @@ function useHostGame(): HostState {
     bettingTime, timeLeft, bidCount, countdown, guesserNames, lowestBid, playerBids,
     result, roundDeltas, leaderboard, copied, playProgress, inviteUrl,
     settingsOpen, bettingTimeSetting, guessingTimeSetting, roundsSetting,
-    mode, raceTimeSetting, raceWinnerOnly, answeredCount,
+    mode, raceTimeSetting, raceWinnerOnly, artistOnly, answeredCount,
     reconnecting, reconnectingCount: reconnectingNames.size, gameExpired,
     toggleSettings: () => setSettingsOpen(o => !o),
     setBettingTimeSetting, setGuessingTimeSetting, setRoundsSetting,
-    setMode, setRaceTimeSetting, setRaceWinnerOnly,
+    setMode, setRaceTimeSetting, setRaceWinnerOnly, setArtistOnly,
     createGame, startGame, copyInvite, newGame,
     removePlayer: (name: string) => socket.emit('kick_player', { name }),
   };
@@ -424,8 +427,8 @@ function BidTimeline({ bids, lowestBid }: Readonly<{ bids: { name: string; bid: 
 
 function SettingsPanel({ game }: Readonly<{ game: HostState }>) {
   const {
-    mode, bettingTimeSetting, guessingTimeSetting, roundsSetting, raceTimeSetting, raceWinnerOnly,
-    setBettingTimeSetting, setGuessingTimeSetting, setRoundsSetting, setRaceTimeSetting, setRaceWinnerOnly,
+    mode, bettingTimeSetting, guessingTimeSetting, roundsSetting, raceTimeSetting, raceWinnerOnly, artistOnly,
+    setBettingTimeSetting, setGuessingTimeSetting, setRoundsSetting, setRaceTimeSetting, setRaceWinnerOnly, setArtistOnly,
   } = game;
   return (
     <div className="absolute top-16 right-5 z-20 bg-[#1a1a2e] border border-white/10 rounded-2xl p-4 space-y-4 w-64 shadow-xl">
@@ -457,6 +460,15 @@ function SettingsPanel({ game }: Readonly<{ game: HostState }>) {
           </button>
         </div>
       )}
+      <div className="flex items-center justify-between">
+        <span className="text-white/60 text-sm">Artist only</span>
+        <button
+          onClick={() => setArtistOnly(!artistOnly)}
+          className={`w-11 h-6 rounded-full transition-colors relative overflow-hidden ${artistOnly ? 'bg-purple-600' : 'bg-white/20'}`}
+        >
+          <span className={`absolute top-1 left-0 w-4 h-4 rounded-full bg-white transition-transform ${artistOnly ? 'translate-x-6' : 'translate-x-1'}`} />
+        </button>
+      </div>
     </div>
   );
 }

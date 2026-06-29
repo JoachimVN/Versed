@@ -45,9 +45,12 @@ export function RevealStatusHeader({
 }
 
 export function RevealSongCard({ result }: Readonly<{ result: RoundResultEvent }>) {
+  const artistOnly = result.artistOnly;
   return (
     <div className="flex flex-col items-center text-center gap-3 w-full">
-      <p className="text-white/30 text-xs uppercase tracking-widest">The song was</p>
+      <p className="text-white/30 text-xs uppercase tracking-widest">
+        {artistOnly ? 'The artist was' : 'The song was'}
+      </p>
       {result.coverUrl && (
         <img
           src={result.coverUrl}
@@ -56,13 +59,27 @@ export function RevealSongCard({ result }: Readonly<{ result: RoundResultEvent }
         />
       )}
       <div>
-        <p className="text-white font-black text-2xl leading-tight">{result.songTitle}</p>
-        <p className="text-white/50 mt-1">
-          {result.artist}
-          {result.featuredArtists && (
-            <span className="text-white/25"> feat. {result.featuredArtists}</span>
-          )}
-        </p>
+        {artistOnly ? (
+          <>
+            <p className="text-white font-black text-2xl leading-tight">
+              {result.artist}
+              {result.featuredArtists && (
+                <span className="text-white/40 font-normal text-lg"> feat. {result.featuredArtists}</span>
+              )}
+            </p>
+            <p className="text-white/50 mt-1">{result.songTitle}</p>
+          </>
+        ) : (
+          <>
+            <p className="text-white font-black text-2xl leading-tight">{result.songTitle}</p>
+            <p className="text-white/50 mt-1">
+              {result.artist}
+              {result.featuredArtists && (
+                <span className="text-white/25"> feat. {result.featuredArtists}</span>
+              )}
+            </p>
+          </>
+        )}
         {result.year && <p className="text-white/25 text-sm mt-0.5">{result.year}</p>}
       </div>
     </div>

@@ -1,7 +1,7 @@
 import { randomInt } from 'node:crypto';
 import { Game, Hint, Player, Round, Song } from './types';
 import { loadSongs } from './songLoader';
-import { isCorrectGuess } from './fuzzyMatch';
+import { isCorrectGuess, isCorrectArtistGuess } from './fuzzyMatch';
 
 export const BID_OPTIONS = [0.1, 0.5, 1, 1.5, 2, 2.5, 3, 4, 5, 7, 10, 15, 20, 30, 45, 60];
 export const BETTING_TIME = 15;
@@ -93,7 +93,7 @@ function formatStreams(n: number): string {
   return `${(n / 1_000_000).toFixed(0)}M`;
 }
 
-function generateHints(song: Song): Hint[] {
+function generateHints(song: Song, artistOnly = false): Hint[] {
   const pool: Hint[] = [];
 
   // Only ever one time hint — year and decade must not appear together.
@@ -112,15 +112,17 @@ function generateHints(song: Song): Hint[] {
   if (song.spotifyStreams)
     pool.push({ label: 'Streams', value: formatStreams(song.spotifyStreams) });
 
-  // Only ever one artist reveal — initials or full name, never both.
-  const fullArtist = song.featuredArtists
-    ? `${song.artist} feat. ${song.featuredArtists}`
-    : song.artist;
-  pool.push(
-    randomInt(0, 2) === 0
-      ? { label: 'Artist initials', value: getInitials(song.artist) }
-      : { label: 'Artist(s)', value: fullArtist }
-  );
+  // Artist hints are suppressed in artist-only mode since the artist IS the answer.
+  if (!artistOnly) {
+    const fullArtist = song.featuredArtists
+      ? `${song.artist} feat. ${song.featuredArtists}`
+      : song.artist;
+    pool.push(
+      randomInt(0, 2) === 0
+        ? { label: 'Artist initials', value: getInitials(song.artist) }
+        : { label: 'Artist(s)', value: fullArtist }
+    );
+  }
 
   const count = randomInt(1, 4); // 1–3, always at least one hint
   return shuffle(pool).slice(0, count);
@@ -149,12 +151,12 @@ export function calcRaceWinnerPoints(elapsedMs: number, raceTime: number, rank: 
   return speed + difficultyBonus(rank);
 }
 
-function buildRound(usedSongIds: Set<string>): Round {
+function buildRound(usedSongIds: Set<string>, artistOnly = false): Round {
   const pool = songs.filter(s => !usedSongIds.has(s.spotifyTrackId));
   const song = pool.length > 0 ? pickRandom(pool) : pickRandom(songs);
   return {
     song,
-    hints: generateHints(song),
+    hints: generateHints(song, artistOnly),
     bids: new Map(),
     bidTiers: [],
     tierIndex: 0,
@@ -192,6 +194,7 @@ export function createGame(hostSocketId: string): Game {
     mode: 'classic',
     raceTime: RACE_TIME,
     raceWinnerOnly: false,
+    artistOnly: false,
     currentRound: null,
     usedSongIds: new Set(),
     phaseTimer: null,
@@ -275,7 +278,7 @@ export function removeSocket(socketId: string): { game: Game; wasHost: boolean }
 
 export function startRound(game: Game): Round {
   if (game.phaseTimer) clearTimeout(game.phaseTimer);
-  const round = buildRound(game.usedSongIds);
+  const round = buildRound(game.usedSongIds, game.artistOnly);
   game.usedSongIds.add(round.song.spotifyTrackId);
   game.currentRound = round;
   game.phase = 'betting';
@@ -360,7 +363,9 @@ export function recordGuess(
   if (round.answered || round.passed.has(socketId)) return null;
 
   round.guesses.set(socketId, text);
-  const correct = isCorrectGuess(text, round.song.title);
+  const correct = game.artistOnly
+    ? isCorrectArtistGuess(text, round.song.artist)
+    : isCorrectGuess(text, round.song.title);
   const guesserName = game.players.get(socketId)?.name ?? '';
 
   if (correct) {
@@ -419,7 +424,9 @@ export function recordRaceGuess(
   const elapsedMs = Date.now() - (round.playStartAt ?? Date.now());
   round.guesses.set(socketId, text);
   round.passed.add(socketId);
-  const correct = isCorrectGuess(text, round.song.title);
+  const correct = game.artistOnly
+    ? isCorrectArtistGuess(text, round.song.artist)
+    : isCorrectGuess(text, round.song.title);
 
   let points = 0;
   if (correct) {

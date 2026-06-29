@@ -31,6 +31,7 @@ export interface PlayState {
   myScore: number;
   myStreak: number;
   mode: 'classic' | 'race';
+  artistOnly: boolean;
   myRacePoints: number;
   myRaceTimeMs: number | null;
   leaderboard: LeaderboardEntry[];
@@ -75,6 +76,7 @@ function usePlayGame(pinParam?: string): PlayState {
   const [myStreak, setMyStreak] = useState(0);
   const [mode, setMode] = useState<'classic' | 'race'>('classic');
   const modeRef = useRef<'classic' | 'race'>('classic');
+  const [artistOnly, setArtistOnly] = useState(false);
   const [myRacePoints, setMyRacePoints] = useState(0);
   const [myRaceTimeMs, setMyRaceTimeMs] = useState<number | null>(null);
   const [leaderboard, setLeaderboard] = useState<LeaderboardEntry[]>([]);
@@ -170,7 +172,7 @@ function usePlayGame(pinParam?: string): PlayState {
     socket.on('round_start', (data: {
       roundIndex: number; total: number;
       hints: Hint[]; bettingTime?: number; endsAt?: number;
-      mode?: 'classic' | 'race'; raceTime?: number;
+      mode?: 'classic' | 'race'; raceTime?: number; artistOnly?: boolean;
     }) => {
       setRoundIndex(data.roundIndex);
       setTotalRounds(data.total);
@@ -188,6 +190,7 @@ function usePlayGame(pinParam?: string): PlayState {
       const roundMode = data.mode === 'race' ? 'race' : 'classic';
       setMode(roundMode);
       modeRef.current = roundMode;
+      setArtistOnly(data.artistOnly === true);
 
       if (roundMode === 'race') {
         setGuesserNames([]);
@@ -379,7 +382,7 @@ function usePlayGame(pinParam?: string): PlayState {
   return {
     phase, pin, name, myName, error, roundIndex, totalRounds, hints,
     timeLeft, bettingTime, bidIndex, myBid, guesserNames, lowestBid,
-    guessText, result, myScore, myStreak, mode, myRacePoints, myRaceTimeMs,
+    guessText, result, myScore, myStreak, mode, artistOnly, myRacePoints, myRaceTimeMs,
     leaderboard, reconnecting, hostReconnecting, savedSession, guessInputRef,
     newGamePin, rejoinNewGame,
     setPin, setName,
@@ -522,20 +525,21 @@ function BidSubmittedView({ game }: Readonly<{ game: PlayState }>) {
   );
 }
 
-function GuessInputSection({ guessText, guessInputRef, setGuessText, submitGuess }: Readonly<{
+function GuessInputSection({ guessText, guessInputRef, setGuessText, submitGuess, artistOnly }: Readonly<{
   guessText: string;
   guessInputRef: React.RefObject<HTMLInputElement>;
   setGuessText: (v: string) => void;
   submitGuess: () => void;
+  artistOnly?: boolean;
 }>) {
   return (
     <>
       <div className="flex-1 flex flex-col items-center justify-center gap-6">
-        <p className="text-white/60">Name the song</p>
+        <p className="text-white/60">{artistOnly ? 'Name the artist' : 'Name the song'}</p>
         <input
           ref={guessInputRef}
           type="text"
-          placeholder="Type song title..."
+          placeholder={artistOnly ? 'Type artist name...' : 'Type song title...'}
           value={guessText}
           onChange={e => setGuessText(e.target.value)}
           onKeyDown={e => e.key === 'Enter' && submitGuess()}
@@ -554,7 +558,7 @@ function GuessInputSection({ guessText, guessInputRef, setGuessText, submitGuess
 }
 
 function WatchingView({ game }: Readonly<{ game: PlayState }>) {
-  const { lowestBid, guesserNames, myName, guessText, guessInputRef, setGuessText, submitGuess, skipGuess, mode } = game;
+  const { lowestBid, guesserNames, myName, guessText, guessInputRef, setGuessText, submitGuess, skipGuess, mode, artistOnly } = game;
 
   if (mode === 'race') {
     return (
@@ -575,7 +579,7 @@ function WatchingView({ game }: Readonly<{ game: PlayState }>) {
           <Music className="w-4 h-4 text-white/40 animate-pulse" />
           <span className="text-white/40 text-sm">Listening...</span>
         </div>
-        <GuessInputSection guessText={guessText} guessInputRef={guessInputRef} setGuessText={setGuessText} submitGuess={submitGuess} />
+        <GuessInputSection guessText={guessText} guessInputRef={guessInputRef} setGuessText={setGuessText} submitGuess={submitGuess} artistOnly={artistOnly} />
         <button onClick={skipGuess}
           className="w-full py-3 rounded-2xl bg-white/5 text-white/50 font-semibold hover:bg-white/10 active:scale-95 transition-all">
           Skip, I don't know
@@ -597,7 +601,7 @@ function WatchingView({ game }: Readonly<{ game: PlayState }>) {
 }
 
 function GuessingView({ game }: Readonly<{ game: PlayState }>) {
-  const { timeLeft, myScore, guessText, guessInputRef, setGuessText, submitGuess, skipGuess } = game;
+  const { timeLeft, myScore, guessText, guessInputRef, setGuessText, submitGuess, skipGuess, artistOnly } = game;
   return (
     <div className="min-h-screen flex flex-col p-5 gap-4">
       <div className="flex justify-between items-center">
@@ -605,7 +609,7 @@ function GuessingView({ game }: Readonly<{ game: PlayState }>) {
         <span className="text-white font-black text-2xl">{timeLeft}s</span>
         <span className="text-white/50 text-sm">{myScore.toLocaleString()} pts</span>
       </div>
-      <GuessInputSection guessText={guessText} guessInputRef={guessInputRef} setGuessText={setGuessText} submitGuess={submitGuess} />
+      <GuessInputSection guessText={guessText} guessInputRef={guessInputRef} setGuessText={setGuessText} submitGuess={submitGuess} artistOnly={artistOnly} />
       <button onClick={skipGuess}
         className="w-full py-3 rounded-2xl bg-white/5 text-white/50 font-semibold hover:bg-white/10 active:scale-95 transition-all">
         Skip, I don't know

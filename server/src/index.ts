@@ -268,7 +268,7 @@ io.on('connection', (socket) => {
   });
 
   // ── Host: start game → first round ────────────────────────────────────────
-  socket.on('start_game', (payload?: { settings?: { bettingTime?: number; guessingTime?: number; totalRounds?: number; mode?: string; raceTime?: number; raceWinnerOnly?: boolean } }) => {
+  socket.on('start_game', (payload?: { settings?: { bettingTime?: number; guessingTime?: number; totalRounds?: number; mode?: string; raceTime?: number; raceWinnerOnly?: boolean; artistOnly?: boolean } }) => {
     const game = gm.getGameBySocket(socket.id);
     if (game?.hostSocketId !== socket.id || game.phase !== 'lobby') return;
     const s = payload?.settings;
@@ -278,6 +278,7 @@ io.on('connection', (socket) => {
     game.mode = s?.mode === 'race' ? 'race' : 'classic';
     if (s?.raceTime) game.raceTime = Math.max(10, Math.min(60, Math.round(s.raceTime)));
     game.raceWinnerOnly = s?.raceWinnerOnly === true;
+    game.artistOnly = s?.artistOnly === true;
     game.roundIndex = 0;
     beginRound(game);
   });
@@ -356,6 +357,7 @@ io.on('connection', (socket) => {
         coverUrl: round.coverUrl,
         points: result.points,
         playerGuesses: gm.getRoundGuesses(game),
+        artistOnly: game.artistOnly,
       });
       io.to(game.pin).emit('score_update', {
         players: Array.from(game.players.values()).map(p => ({ name: p.name, score: p.score, streak: p.streak })),
@@ -458,6 +460,7 @@ io.on('connection', (socket) => {
         hints: [],
         mode: 'race',
         raceTime: game.raceTime,
+        artistOnly: game.artistOnly,
       });
       io.to(`host:${game.pin}`).emit('host_round_start', {
         roundIndex: game.roundIndex,
@@ -465,6 +468,7 @@ io.on('connection', (socket) => {
         hints: [],
         mode: 'race',
         raceTime: game.raceTime,
+        artistOnly: game.artistOnly,
         song: {
           title: round.song.title,
           artist: round.song.artist,
@@ -498,6 +502,7 @@ io.on('connection', (socket) => {
       bettingTime: game.bettingTime,
       endsAt: bettingEndsAt,
       mode: 'classic',
+      artistOnly: game.artistOnly,
     });
     io.to(`host:${game.pin}`).emit('host_round_start', {
       roundIndex: game.roundIndex,
@@ -506,6 +511,7 @@ io.on('connection', (socket) => {
       bettingTime: game.bettingTime,
       endsAt: bettingEndsAt,
       mode: 'classic',
+      artistOnly: game.artistOnly,
       song: {
         title: round.song.title,
         artist: round.song.artist,
@@ -537,6 +543,7 @@ io.on('connection', (socket) => {
       coverUrl: round.coverUrl,
       points: 0,
       playerGuesses: gm.getRoundGuesses(game),
+      artistOnly: game.artistOnly,
     });
     io.to(game.pin).emit('score_update', {
       players: Array.from(game.players.values()).map(p => ({ name: p.name, score: p.score, streak: p.streak })),
@@ -559,6 +566,7 @@ io.on('connection', (socket) => {
         coverUrl: round.coverUrl,
         points: 0,
         playerGuesses: [],
+        artistOnly: game.artistOnly,
       });
       return;
     }
@@ -614,6 +622,7 @@ io.on('connection', (socket) => {
       coverUrl: round.coverUrl,
       points: 0,
       playerGuesses: gm.getRoundGuesses(game),
+      artistOnly: game.artistOnly,
     });
     io.to(game.pin).emit('score_update', {
       players: Array.from(game.players.values()).map(p => ({ name: p.name, score: p.score, streak: p.streak })),
