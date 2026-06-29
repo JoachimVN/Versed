@@ -24,7 +24,9 @@ export interface RoundResultEvent {
   year?: number | null;
   coverUrl?: string;
   points: number;
-  playerGuesses?: { name: string; guess: string | null }[];
+  mode?: 'classic' | 'race';
+  correctGuessers?: string[];
+  playerGuesses?: { name: string; guess: string | null; timeMs?: number | null }[];
 }
 
 declare global {

@@ -30,6 +30,9 @@ export interface PlayState {
   result: RoundResultEvent | null;
   myScore: number;
   myStreak: number;
+  mode: 'classic' | 'race';
+  myRacePoints: number;
+  myRaceTimeMs: number | null;
   leaderboard: LeaderboardEntry[];
   reconnecting: boolean;
   hostReconnecting: boolean;
@@ -70,6 +73,10 @@ function usePlayGame(pinParam?: string): PlayState {
   const [result, setResult] = useState<RoundResultEvent | null>(null);
   const [myScore, setMyScore] = useState(0);
   const [myStreak, setMyStreak] = useState(0);
+  const [mode, setMode] = useState<'classic' | 'race'>('classic');
+  const modeRef = useRef<'classic' | 'race'>('classic');
+  const [myRacePoints, setMyRacePoints] = useState(0);
+  const [myRaceTimeMs, setMyRaceTimeMs] = useState<number | null>(null);
   const [leaderboard, setLeaderboard] = useState<LeaderboardEntry[]>([]);
   const [reconnecting, setReconnecting] = useState(false);
   const [hostReconnecting, setHostReconnecting] = useState(false);
@@ -140,21 +147,34 @@ function usePlayGame(pinParam?: string): PlayState {
 
     socket.on('round_start', (data: {
       roundIndex: number; total: number;
-      hints: Hint[]; bettingTime: number; endsAt?: number;
+      hints: Hint[]; bettingTime?: number; endsAt?: number;
+      mode?: 'classic' | 'race'; raceTime?: number;
     }) => {
       setRoundIndex(data.roundIndex);
       setTotalRounds(data.total);
       setHints(data.hints);
-      setBettingTime(data.bettingTime);
       setGuessText('');
       setResult(null);
       setError('');
+      setMyRacePoints(0);
+      setMyRaceTimeMs(null);
       bidSubmittedRef.current = false;
       if (autoSubmitTimerRef.current) clearTimeout(autoSubmitTimerRef.current);
-      const endsAt = data.endsAt ?? (Date.now() + data.bettingTime * 1000);
-      autoSubmitTimerRef.current = setTimeout(autoSubmitBid, endsAt - Date.now());
-      startCountdown(endsAt);
-      setPhase('betting');
+
+      const roundMode = data.mode === 'race' ? 'race' : 'classic';
+      setMode(roundMode);
+      modeRef.current = roundMode;
+
+      if (roundMode === 'race') {
+        setGuesserNames([]);
+        setPhase('watching');
+      } else {
+        setBettingTime(data.bettingTime ?? 15);
+        const endsAt = data.endsAt ?? (Date.now() + (data.bettingTime ?? 15) * 1000);
+        autoSubmitTimerRef.current = setTimeout(autoSubmitBid, endsAt - Date.now());
+        startCountdown(endsAt);
+        setPhase('betting');
+      }
     });
 
     socket.on('betting_closed', (data: { lowestBid: number; guesserNames: string[] }) => {
@@ -280,8 +300,14 @@ function usePlayGame(pinParam?: string): PlayState {
   const submitGuess = () => {
     if (!guessText.trim()) return;
     stopCountdown();
-    socket.emit('submit_guess', { text: guessText }, ({ correct }: { correct: boolean }) => {
-      if (!correct) setPhase('passed');
+    socket.emit('submit_guess', { text: guessText }, (r: { correct: boolean; points?: number; timeMs?: number }) => {
+      if (modeRef.current === 'race') {
+        if (r.correct && r.points != null) setMyRacePoints(r.points);
+        if (r.timeMs != null) setMyRaceTimeMs(r.timeMs);
+        setPhase('passed');
+      } else {
+        if (!r.correct) setPhase('passed');
+      }
     });
   };
 
@@ -316,7 +342,8 @@ function usePlayGame(pinParam?: string): PlayState {
   return {
     phase, pin, name, myName, error, roundIndex, totalRounds, hints,
     timeLeft, bettingTime, bidIndex, myBid, guesserNames, lowestBid,
-    guessText, result, myScore, myStreak, leaderboard, reconnecting, hostReconnecting, savedSession, guessInputRef,
+    guessText, result, myScore, myStreak, mode, myRacePoints, myRaceTimeMs,
+    leaderboard, reconnecting, hostReconnecting, savedSession, guessInputRef,
     newGamePin, rejoinNewGame,
     setPin, setName,
   setBidIndex: (i: number | ((prev: number) => number)) => {
@@ -490,7 +517,18 @@ function GuessInputSection({ guessText, guessInputRef, setGuessText, submitGuess
 }
 
 function WatchingView({ game }: Readonly<{ game: PlayState }>) {
-  const { lowestBid, guesserNames, myName, guessText, guessInputRef, setGuessText, submitGuess, skipGuess } = game;
+  const { lowestBid, guesserNames, myName, guessText, guessInputRef, setGuessText, submitGuess, skipGuess, mode } = game;
+
+  if (mode === 'race') {
+    return (
+      <div className="min-h-screen flex flex-col items-center justify-center gap-4 p-6 text-center">
+        <Music className="w-14 h-14 text-white animate-pulse" />
+        <p className="text-white font-black text-2xl">Get ready…</p>
+        <p className="text-white/30 text-sm">Song starts soon — everyone guesses at once</p>
+      </div>
+    );
+  }
+
   const imGuessing = guesserNames.includes(myName);
 
   if (imGuessing) {
@@ -539,12 +577,32 @@ function GuessingView({ game }: Readonly<{ game: PlayState }>) {
   );
 }
 
-function PassedView() {
+function PassedView({ game }: Readonly<{ game: PlayState }>) {
+  const { mode, myRacePoints, myRaceTimeMs } = game;
+  if (mode === 'race') {
+    return (
+      <div className="min-h-screen flex flex-col items-center justify-center gap-4 p-6 text-center">
+        {myRacePoints > 0 ? (
+          <>
+            <p className="text-green-400 font-black text-2xl">Locked in!</p>
+            <p className="text-white/50">
+              {myRaceTimeMs != null ? `${(myRaceTimeMs / 1000).toFixed(1)}s` : ''}
+              {myRacePoints > 0 ? ` · +${myRacePoints} pts` : ''}
+            </p>
+          </>
+        ) : (
+          <p className="text-white/50 text-xl">Waiting for others…</p>
+        )}
+      </div>
+    );
+  }
   return <div className="min-h-screen" />;
 }
 
 export function RevealView({ game, result }: Readonly<{ game: PlayState; result: RoundResultEvent }>) {
-  const { myName, myScore, myStreak } = game;
+  const { myName, myScore, myStreak, myRacePoints, myRaceTimeMs } = game;
+  const isRace = result.mode === 'race';
+  const iGotItInRace = isRace && !!result.correctGuessers?.includes(myName);
   return (
     <div className="min-h-screen flex flex-col items-center justify-center p-6 gap-6 text-center">
       <RevealStatusHeader result={result} myName={myName} />
@@ -556,11 +614,20 @@ export function RevealView({ game, result }: Readonly<{ game: PlayState; result:
               <span className="text-white/50 text-sm shrink-0">{g.name}</span>
               {(() => {
                 const skipped = g.guess === null;
-                const correct = result.correct && g.name === result.guesserName;
+                const correct = isRace
+                  ? !!result.correctGuessers?.includes(g.name)
+                  : (result.correct && g.name === result.guesserName);
                 let cls = 'text-white/40';
                 if (skipped) cls = 'text-white/25 italic';
                 else if (correct) cls = 'text-green-400';
-                return <span className={`text-sm text-right truncate ${cls}`}>{skipped ? 'skipped' : `"${g.guess}"`}</span>;
+                return (
+                  <span className={`text-sm text-right truncate ${cls}`}>
+                    {skipped ? 'skipped' : `"${g.guess}"`}
+                    {correct && g.timeMs != null && (
+                      <span className="ml-1.5 text-white/30 text-xs">{(g.timeMs / 1000).toFixed(1)}s</span>
+                    )}
+                  </span>
+                );
               })()}
             </div>
           ))}
@@ -569,6 +636,11 @@ export function RevealView({ game, result }: Readonly<{ game: PlayState; result:
       <div className="bg-white/5 rounded-2xl px-8 py-4">
         <p className="text-3xl font-black text-white">{myScore.toLocaleString()}</p>
         <p className="text-white/40 text-sm">your score</p>
+        {iGotItInRace && myRaceTimeMs != null && (
+          <p className="text-green-400 text-xs font-semibold mt-1">
+            You got it in {(myRaceTimeMs / 1000).toFixed(1)}s · +{myRacePoints}
+          </p>
+        )}
         {myStreak >= 2 && (
           <p className="flex items-center justify-center gap-1 text-orange-400 text-xs font-bold mt-1">
             <Flame className="w-3 h-3" />{myStreak} in a row
@@ -645,7 +717,7 @@ export default function Play() {
       {phase === 'bid_submitted' && <BidSubmittedView game={game} />}
       {phase === 'watching' && <WatchingView game={game} />}
       {phase === 'guessing' && <GuessingView game={game} />}
-      {phase === 'passed' && <PassedView />}
+      {phase === 'passed' && <PassedView game={game} />}
       {phase === 'reveal' && result && <RevealView game={game} result={result} />}
       {(phase === 'leaderboard' || phase === 'finished') && <LeaderboardView game={game} />}
 

@@ -38,6 +38,11 @@ export interface Round {
   passed: Set<string>; // guessers whose turn is over this tier (wrong guess or skip)
   earlyGuessers: Set<string>; // guessers who opted in before their listening time expired
   guesses: Map<string, string | null>; // socketId → text submitted (null = skipped)
+  // Race-mode fields
+  playStartAt: number | null;      // epoch ms when audio started
+  firstCorrectAt: number | null;   // epoch ms of first correct guess (decay origin)
+  correctGuessers: Set<string>;    // socketIds who guessed correctly in Race
+  guessTimes: Map<string, number>; // socketId → ms from playStartAt to correct guess
 }
 
 export interface Player {
@@ -46,6 +51,8 @@ export interface Player {
   score: number;
   streak: number;
 }
+
+export type GameMode = 'classic' | 'race';
 
 export type GamePhase =
   | 'lobby'
@@ -65,6 +72,8 @@ export interface Game {
   totalRounds: number;
   bettingTime: number;
   guessingTime: number;
+  mode: GameMode;
+  raceTime: number;
   currentRound: Round | null;
   usedSongIds: Set<string>;
   phaseTimer: ReturnType<typeof setTimeout> | null;

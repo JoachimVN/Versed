@@ -6,7 +6,7 @@ import { socket } from '../socket';
 import { useSpotify } from '../hooks/useSpotify';
 import { RankBadge } from '../components/RankBadge';
 import { RevealStatusHeader, RevealSongCard } from '../components/RevealShared';
-import { APP_NAME, BACKEND_URL } from '../config';
+import { APP_NAME, BACKEND_URL, RACE_TIME } from '../config';
 import type { Hint, LeaderboardEntry, PlayerInfo, RoundResultEvent } from '../types';
 
 type Phase = 'connect' | 'lobby' | 'betting' | 'playing' | 'guessing' | 'reveal' | 'leaderboard' | 'finished';
@@ -41,6 +41,9 @@ export interface HostState {
   bettingTimeSetting: number;
   guessingTimeSetting: number;
   roundsSetting: number;
+  mode: 'classic' | 'race';
+  raceTimeSetting: number;
+  answeredCount: number;
   reconnecting: boolean;
   reconnectingCount: number;
   gameExpired: boolean;
@@ -48,6 +51,8 @@ export interface HostState {
   setBettingTimeSetting: (v: number) => void;
   setGuessingTimeSetting: (v: number) => void;
   setRoundsSetting: (v: number) => void;
+  setMode: (m: 'classic' | 'race') => void;
+  setRaceTimeSetting: (v: number) => void;
   createGame: () => void;
   startGame: () => void;
   copyInvite: () => void;
@@ -80,6 +85,9 @@ function useHostGame(): HostState {
   const [bettingTimeSetting, setBettingTimeSetting] = useState(15);
   const [guessingTimeSetting, setGuessingTimeSetting] = useState(15);
   const [roundsSetting, setRoundsSetting] = useState(10);
+  const [mode, setMode] = useState<'classic' | 'race'>('classic');
+  const [raceTimeSetting, setRaceTimeSetting] = useState(RACE_TIME);
+  const [answeredCount, setAnsweredCount] = useState(0);
   const [reconnecting, setReconnecting] = useState(false);
   const [reconnectingNames, setReconnectingNames] = useState<Set<string>>(new Set());
   const [gameExpired, setGameExpired] = useState(false);
@@ -159,18 +167,27 @@ function useHostGame(): HostState {
 
     socket.on('host_round_start', (data: {
       roundIndex: number; total: number; hints: Hint[];
-      bettingTime: number; song: SongInfo;
+      bettingTime?: number; song: SongInfo; mode?: 'classic' | 'race'; raceTime?: number;
     }) => {
       setRoundIndex(data.roundIndex);
       setTotalRounds(data.total);
       setHints(data.hints);
-      setBettingTime(data.bettingTime);
       setBidCount(0);
       setGuesserNames([]);
       setPlayerBids([]);
       setResult(null);
-      startCountdown(data.bettingTime);
-      setPhase('betting');
+      setAnsweredCount(0);
+      if (data.mode === 'race') {
+        setPhase('playing');
+      } else {
+        setBettingTime(data.bettingTime ?? 15);
+        startCountdown(data.bettingTime ?? 15);
+        setPhase('betting');
+      }
+    });
+
+    socket.on('answer_received', ({ answered }: { answered: number }) => {
+      setAnsweredCount(answered);
     });
 
     socket.on('bid_received', ({ bidCount: bc }: { bidCount: number }) => setBidCount(bc));
@@ -250,6 +267,7 @@ function useHostGame(): HostState {
       socket.off('betting_closed'); socket.off('play_song');
       socket.off('guessing_start'); socket.off('round_result');
       socket.off('score_update'); socket.off('leaderboard'); socket.off('game_over');
+      socket.off('answer_received');
       socket.disconnect();
     };
   }, []); // eslint-disable-line react-hooks/exhaustive-deps
@@ -268,7 +286,10 @@ function useHostGame(): HostState {
   const startGame = () => {
     spotify.activatePlayer();
     socket.emit('start_game', {
-      settings: { bettingTime: bettingTimeSetting, guessingTime: guessingTimeSetting, totalRounds: roundsSetting },
+      settings: {
+        bettingTime: bettingTimeSetting, guessingTime: guessingTimeSetting,
+        totalRounds: roundsSetting, mode, raceTime: raceTimeSetting,
+      },
     });
   };
 
@@ -307,9 +328,11 @@ function useHostGame(): HostState {
     bettingTime, timeLeft, bidCount, countdown, guesserNames, lowestBid, playerBids,
     result, roundDeltas, leaderboard, copied, playProgress, inviteUrl,
     settingsOpen, bettingTimeSetting, guessingTimeSetting, roundsSetting,
+    mode, raceTimeSetting, answeredCount,
     reconnecting, reconnectingCount: reconnectingNames.size, gameExpired,
     toggleSettings: () => setSettingsOpen(o => !o),
     setBettingTimeSetting, setGuessingTimeSetting, setRoundsSetting,
+    setMode, setRaceTimeSetting,
     createGame, startGame, copyInvite, newGame,
   };
 }
@@ -430,7 +453,9 @@ function LobbyView({ game }: Readonly<{ game: HostState }>) {
   const {
     spotify, pin, players, copied, createGame, startGame, copyInvite,
     settingsOpen, bettingTimeSetting, guessingTimeSetting, roundsSetting,
+    mode, raceTimeSetting,
     toggleSettings, setBettingTimeSetting, setGuessingTimeSetting, setRoundsSetting,
+    setMode, setRaceTimeSetting,
   } = game;
   const navigate = useNavigate();
   const [lobbyVisible, setLobbyVisible] = useState(false);
@@ -453,12 +478,20 @@ function LobbyView({ game }: Readonly<{ game: HostState }>) {
       {/* Settings panel — drops below the top bar when open */}
       {settingsOpen && (
         <div className="absolute top-16 right-5 z-20 bg-[#1a1a2e] border border-white/10 rounded-2xl p-4 space-y-4 w-64 shadow-xl">
-          <SettingRow label="Bet time" value={bettingTimeSetting} unit="s"
-            onDec={() => setBettingTimeSetting(Math.max(5, bettingTimeSetting - 5))}
-            onInc={() => setBettingTimeSetting(Math.min(60, bettingTimeSetting + 5))} />
-          <SettingRow label="Guess time" value={guessingTimeSetting} unit="s"
-            onDec={() => setGuessingTimeSetting(Math.max(5, guessingTimeSetting - 5))}
-            onInc={() => setGuessingTimeSetting(Math.min(60, guessingTimeSetting + 5))} />
+          {mode === 'classic' ? (
+            <>
+              <SettingRow label="Bet time" value={bettingTimeSetting} unit="s"
+                onDec={() => setBettingTimeSetting(Math.max(5, bettingTimeSetting - 5))}
+                onInc={() => setBettingTimeSetting(Math.min(60, bettingTimeSetting + 5))} />
+              <SettingRow label="Guess time" value={guessingTimeSetting} unit="s"
+                onDec={() => setGuessingTimeSetting(Math.max(5, guessingTimeSetting - 5))}
+                onInc={() => setGuessingTimeSetting(Math.min(60, guessingTimeSetting + 5))} />
+            </>
+          ) : (
+            <SettingRow label="Round time" value={raceTimeSetting} unit="s"
+              onDec={() => setRaceTimeSetting(Math.max(10, raceTimeSetting - 5))}
+              onInc={() => setRaceTimeSetting(Math.min(60, raceTimeSetting + 5))} />
+          )}
           <SettingRow label="Rounds" value={roundsSetting} unit=""
             onDec={() => setRoundsSetting(Math.max(1, roundsSetting - 1))}
             onInc={() => setRoundsSetting(Math.min(30, roundsSetting + 1))} />
@@ -510,6 +543,22 @@ function LobbyView({ game }: Readonly<{ game: HostState }>) {
             </div>
           </div>
 
+          {/* Mode toggle */}
+          <div className="w-full max-w-md flex rounded-xl bg-white/5 p-1 gap-1">
+            <button
+              onClick={() => setMode('classic')}
+              className={`flex-1 py-2 rounded-lg text-sm font-bold transition-colors ${mode === 'classic' ? 'bg-purple-600 text-white' : 'text-white/40 hover:text-white/70'}`}
+            >
+              Classic
+            </button>
+            <button
+              onClick={() => setMode('race')}
+              className={`flex-1 py-2 rounded-lg text-sm font-bold transition-colors ${mode === 'race' ? 'bg-purple-600 text-white' : 'text-white/40 hover:text-white/70'}`}
+            >
+              Race
+            </button>
+          </div>
+
           {/* Players */}
           <div className="w-full max-w-md">
             <p className="text-white/40 text-sm mb-2">{players.length} player{players.length === 1 ? '' : 's'}</p>
@@ -525,7 +574,7 @@ function LobbyView({ game }: Readonly<{ game: HostState }>) {
             disabled={players.length === 0}
             className="mt-auto w-full max-w-md py-4 rounded-2xl bg-purple-600 text-white font-bold text-xl disabled:opacity-30 hover:bg-purple-500 transition-colors"
           >
-            Start Game
+            {mode === 'race' ? 'Start Race Game' : 'Start Classic Game'}
           </button>
         </div>
       ) : (
@@ -595,32 +644,43 @@ function BettingView({ game }: Readonly<{ game: HostState }>) {
 }
 
 export function PlayingView({ game }: Readonly<{ game: HostState }>) {
-  const { roundIndex, totalRounds, countdown, guesserNames, lowestBid, playerBids, playProgress, timeLeft } = game;
+  const { roundIndex, totalRounds, countdown, guesserNames, lowestBid, playerBids, playProgress, timeLeft, mode, answeredCount, players } = game;
+  const isRace = mode === 'race';
   return (
     <div className="min-h-screen flex flex-col items-center justify-center p-6 gap-6 text-center">
       <p className="text-white/50">Round {roundIndex + 1}/{totalRounds}</p>
       {countdown === null ? (
         <>
           <Music className="w-16 h-16 text-white animate-pulse" />
-          <p className="text-white/50">
-            {guesserNames.join(' & ')} will guess
-          </p>
+          {isRace ? (
+            <p className="text-white/50">{answeredCount} / {players.length} answered</p>
+          ) : (
+            <p className="text-white/50">{guesserNames.join(' & ')} will guess</p>
+          )}
           <div className="w-full max-w-sm bg-white/10 rounded-full h-2 overflow-hidden">
             <div className="bg-purple-500 h-2 rounded-full" style={{ width: `${playProgress * 100}%` }} />
           </div>
           <p className="text-white font-black text-2xl">{timeLeft}s</p>
-          <div className="w-full max-w-sm">
-            <BidTimeline bids={playerBids} lowestBid={lowestBid} />
-          </div>
+          {!isRace && (
+            <div className="w-full max-w-sm">
+              <BidTimeline bids={playerBids} lowestBid={lowestBid} />
+            </div>
+          )}
         </>
       ) : (
         <>
           <p className="text-white/40 text-sm uppercase tracking-widest">Get ready</p>
           <div className="text-8xl font-black text-white animate-pulse">{countdown}</div>
-          <p className="text-white/50">{guesserNames.join(' & ')} will guess</p>
-          <div className="w-full max-w-sm">
-            <BidTimeline bids={playerBids} lowestBid={lowestBid} />
-          </div>
+          {isRace ? (
+            <p className="text-white/50">Everyone will guess</p>
+          ) : (
+            <>
+              <p className="text-white/50">{guesserNames.join(' & ')} will guess</p>
+              <div className="w-full max-w-sm">
+                <BidTimeline bids={playerBids} lowestBid={lowestBid} />
+              </div>
+            </>
+          )}
         </>
       )}
     </div>
@@ -647,6 +707,7 @@ function GuessingView({ game }: Readonly<{ game: HostState }>) {
 
 export function RevealView({ game, result }: Readonly<{ game: HostState; result: RoundResultEvent }>) {
   const { roundIndex, totalRounds, players, roundDeltas } = game;
+  const isRace = result.mode === 'race';
   return (
     <div className="min-h-screen flex flex-col items-center p-6 gap-6 text-center">
       <p className="text-white/50 text-sm">{roundIndex + 1} / {totalRounds}</p>
@@ -660,7 +721,9 @@ export function RevealView({ game, result }: Readonly<{ game: HostState; result:
             const entry = result.playerGuesses?.find(g => g.name === p.name);
             const delta = roundDeltas[p.name] ?? 0;
             const streak = p.streak ?? 0;
-            const correct = result.correct && p.name === result.guesserName;
+            const correct = isRace
+              ? !!result.correctGuessers?.includes(p.name)
+              : (result.correct && p.name === result.guesserName);
             return (
               <div key={p.name} className="flex justify-between items-center gap-4">
                 <div className="text-left">
@@ -677,7 +740,14 @@ export function RevealView({ game, result }: Readonly<{ game: HostState; result:
                     let cls = 'text-white/40 text-xs';
                     if (skipped) cls = 'text-white/25 italic text-xs';
                     else if (correct) cls = 'text-green-400 text-xs';
-                    return <p className={cls}>{skipped ? 'skipped' : `"${entry.guess}"`}</p>;
+                    return (
+                      <p className={cls}>
+                        {skipped ? 'skipped' : `"${entry.guess}"`}
+                        {correct && entry.timeMs != null && (
+                          <span className="ml-1.5 text-white/30">{(entry.timeMs / 1000).toFixed(1)}s</span>
+                        )}
+                      </p>
+                    );
                   })()}
                 </div>
                 <div className="text-right shrink-0">

@@ -10,6 +10,11 @@ export const TOTAL_ROUNDS = 10;
 export const MAX_PLAYERS = 50;
 export const MAX_ACTIVE_GAMES = 20;
 
+export const RACE_TIME = 30;
+export const RACE_DECAY_WINDOW = 12;
+export const RACE_FLOOR = 200;
+export const RACE_BASE = 1000;
+
 // The tiniest bids ask for so little audio that a clip can land entirely inside
 // a song's near-silent lead-in and reveal nothing — pure bad luck the bidder
 // couldn't foresee. We can't detect silence (Spotify's audio-analysis is gone
@@ -118,10 +123,22 @@ function generateHints(song: Song): Hint[] {
   return shuffle(pool).slice(0, count);
 }
 
+function difficultyBonus(rank: number): number {
+  return Math.round(500 * Math.max(0, 1 - (rank - 1) / Math.max(songs.length - 1, 1)));
+}
+
 export function calcPoints(bid: number, rank: number): number {
   const bidScore = Math.round(1000 * Math.max(0, 1 - bid / 60));
-  const diffScore = Math.round(500 * Math.max(0, 1 - (rank - 1) / Math.max(songs.length - 1, 1)));
-  return 500 + bidScore + diffScore;
+  return 500 + bidScore + difficultyBonus(rank);
+}
+
+export function calcRacePoints(
+  isFirst: boolean, elapsedMs: number, firstElapsedMs: number, rank: number,
+): number {
+  if (isFirst) return RACE_BASE + difficultyBonus(rank);
+  const gapSec = Math.max(0, (elapsedMs - firstElapsedMs) / 1000);
+  const speed = Math.max(RACE_FLOOR, Math.round(RACE_BASE * (1 - gapSec / RACE_DECAY_WINDOW)));
+  return speed + difficultyBonus(rank);
 }
 
 function buildRound(usedSongIds: Set<string>): Round {
@@ -139,6 +156,10 @@ function buildRound(usedSongIds: Set<string>): Round {
     passed: new Set(),
     earlyGuessers: new Set(),
     guesses: new Map(),
+    playStartAt: null,
+    firstCorrectAt: null,
+    correctGuessers: new Set(),
+    guessTimes: new Map(),
   };
 }
 
@@ -159,6 +180,8 @@ export function createGame(hostSocketId: string): Game {
     totalRounds: TOTAL_ROUNDS,
     bettingTime: BETTING_TIME,
     guessingTime: GUESSING_TIME,
+    mode: 'classic',
+    raceTime: RACE_TIME,
     currentRound: null,
     usedSongIds: new Set(),
     phaseTimer: null,
@@ -217,6 +240,9 @@ export function rejoinPlayer(game: Game, newSocketId: string, name: string): Pla
       if (round.passed.delete(oldId)) round.passed.add(newSocketId);
       const guess = round.guesses.get(oldId);
       if (guess !== undefined) { round.guesses.set(newSocketId, guess); round.guesses.delete(oldId); }
+      if (round.correctGuessers.delete(oldId)) round.correctGuessers.add(newSocketId);
+      const guessTime = round.guessTimes.get(oldId);
+      if (guessTime !== undefined) { round.guessTimes.set(newSocketId, guessTime); round.guessTimes.delete(oldId); }
     }
   }
   socketToPin.set(newSocketId, game.pin);
@@ -360,11 +386,76 @@ export function skipGuess(game: Game, socketId: string): { allDone: boolean } | 
   return { allDone };
 }
 
-export function getRoundGuesses(game: Game): { name: string; guess: string | null }[] {
+export function markRaceStarted(game: Game): void {
+  const round = game.currentRound;
+  if (!round) return;
+  round.playStartAt = Date.now();
+  game.phase = 'guessing';
+}
+
+export function recordRaceGuess(
+  game: Game,
+  socketId: string,
+  text: string,
+): { correct: boolean; points: number; elapsedMs: number; allDone: boolean } | null {
+  const round = game.currentRound;
+  if (!round) return null;
+  if (!game.players.has(socketId)) return null;
+  if (game.phase !== 'guessing') return null;
+  if (round.passed.has(socketId)) return null;
+
+  const elapsedMs = Date.now() - (round.playStartAt ?? Date.now());
+  round.guesses.set(socketId, text);
+  round.passed.add(socketId);
+  const correct = isCorrectGuess(text, round.song.title);
+
+  let points = 0;
+  if (correct) {
+    const isFirst = round.firstCorrectAt === null;
+    if (isFirst) round.firstCorrectAt = Date.now();
+    const firstElapsedMs = round.firstCorrectAt! - round.playStartAt!;
+    points = calcRacePoints(isFirst, elapsedMs, firstElapsedMs, round.song.rank);
+    const player = game.players.get(socketId)!;
+    player.score += points;
+    player.streak += 1;
+    round.correctGuessers.add(socketId);
+    round.guessTimes.set(socketId, elapsedMs);
+  } else {
+    const player = game.players.get(socketId);
+    if (player) player.streak = 0;
+  }
+
+  const allDone = Array.from(game.players.keys()).every(id => round.passed.has(id));
+  return { correct, points, elapsedMs, allDone };
+}
+
+export function skipRaceGuess(
+  game: Game,
+  socketId: string,
+): { allDone: boolean } | null {
+  const round = game.currentRound;
+  if (!round) return null;
+  if (!game.players.has(socketId)) return null;
+  if (game.phase !== 'guessing') return null;
+  if (round.passed.has(socketId)) return null;
+
+  round.guesses.set(socketId, null);
+  const player = game.players.get(socketId);
+  if (player) player.streak = 0;
+  round.passed.add(socketId);
+  const allDone = Array.from(game.players.keys()).every(id => round.passed.has(id));
+  return { allDone };
+}
+
+export function getRoundGuesses(game: Game): { name: string; guess: string | null; timeMs: number | null }[] {
   const round = game.currentRound;
   if (!round) return [];
   return Array.from(round.guesses.entries())
-    .map(([id, guess]) => ({ name: game.players.get(id)?.name ?? '', guess }))
+    .map(([id, guess]) => ({
+      name: game.players.get(id)?.name ?? '',
+      guess,
+      timeMs: round.guessTimes.get(id) ?? null,
+    }))
     .filter(g => g.name);
 }
 

@@ -1,24 +1,37 @@
-import { Trophy, X } from 'lucide-react';
+import { Check, Trophy, X } from 'lucide-react';
 import type { RoundResultEvent } from '../types';
 
 export function RevealStatusHeader({
   result,
   myName,
 }: Readonly<{ result: RoundResultEvent; myName?: string }>) {
-  const iWon = result.correct && myName != null && result.guesserName === myName;
+  const isRace = result.mode === 'race';
+  const iWon = isRace
+    ? (myName != null && !!result.correctGuessers?.includes(myName))
+    : (result.correct && myName != null && result.guesserName === myName);
 
   let circle: React.ReactNode;
   let bgClass: string;
+  let label: React.ReactNode;
+
   if (!result.correct) {
     circle = <X className="w-12 h-12 text-white/30" />;
     bgClass = 'bg-white/5';
+    label = <p className="text-white/60 text-xl">No one got it</p>;
   } else if (iWon) {
     circle = <Trophy className="w-12 h-12 text-amber-400" />;
     bgClass = 'bg-amber-500/20';
+    label = <p className="text-2xl font-black text-green-400">You got it!</p>;
+  } else if (isRace) {
+    const count = result.correctGuessers?.length ?? 0;
+    circle = <Check className="w-12 h-12 text-white/40" />;
+    bgClass = 'bg-white/10';
+    label = <p className="text-2xl font-black text-white">{count} player{count !== 1 ? 's' : ''} got it</p>;
   } else {
     const initial = result.guesserName?.[0]?.toUpperCase() ?? '?';
     circle = <span className="text-2xl font-black text-white/70">{initial}</span>;
     bgClass = 'bg-white/10';
+    label = <p className="text-2xl font-black text-white">{result.guesserName} got it</p>;
   }
 
   return (
@@ -26,12 +39,7 @@ export function RevealStatusHeader({
       <div className={`w-24 h-24 rounded-full flex items-center justify-center ${bgClass}`}>
         {circle}
       </div>
-      {result.correct
-        ? <p className={`text-2xl font-black ${iWon ? 'text-green-400' : 'text-white'}`}>
-            {iWon ? `+${result.points} pts!` : `${result.guesserName} got it`}
-          </p>
-        : <p className="text-white/60 text-xl">No one got it</p>
-      }
+      {label}
     </div>
   );
 }
