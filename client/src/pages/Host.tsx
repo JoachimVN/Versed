@@ -59,6 +59,7 @@ export interface HostState {
   setArtistOnly: (v: boolean) => void;
   createGame: () => void;
   startGame: () => void;
+  skipTurn: () => void;
   copyInvite: () => void;
   newGame: () => void;
   removePlayer: (name: string) => void;
@@ -350,6 +351,7 @@ function useHostGame(): HostState {
     setBettingTimeSetting, setGuessingTimeSetting, setRoundsSetting,
     setMode, setRaceTimeSetting, setRaceWinnerOnly, setArtistOnly,
     createGame, startGame, copyInvite, newGame,
+    skipTurn: () => socket.emit('host_skip_turn'),
     removePlayer: (name: string) => socket.emit('kick_player', { name }),
   };
 }
@@ -688,7 +690,7 @@ function BettingView({ game }: Readonly<{ game: HostState }>) {
 }
 
 export function PlayingView({ game }: Readonly<{ game: HostState }>) {
-  const { roundIndex, totalRounds, countdown, guesserNames, lowestBid, playerBids, playProgress, timeLeft, mode, answeredCount, players } = game;
+  const { roundIndex, totalRounds, countdown, guesserNames, lowestBid, playerBids, playProgress, timeLeft, mode, answeredCount, players, skipTurn } = game;
   const isRace = mode === 'race';
   return (
     <div className="min-h-screen flex flex-col items-center justify-center p-6 gap-6 text-center">
@@ -727,12 +729,17 @@ export function PlayingView({ game }: Readonly<{ game: HostState }>) {
           )}
         </>
       )}
+      {countdown === null && (
+        <button onClick={skipTurn} className="text-white/20 text-xs hover:text-white/50 transition-colors mt-2">
+          Skip round
+        </button>
+      )}
     </div>
   );
 }
 
 function GuessingView({ game }: Readonly<{ game: HostState }>) {
-  const { roundIndex, totalRounds, guesserNames, lowestBid, playerBids, timeLeft } = game;
+  const { roundIndex, totalRounds, guesserNames, lowestBid, playerBids, timeLeft, skipTurn } = game;
   return (
     <div className="min-h-screen flex flex-col items-center justify-center p-6 gap-6 text-center">
       <p className="text-white/50">Round {roundIndex + 1}/{totalRounds}</p>
@@ -745,6 +752,9 @@ function GuessingView({ game }: Readonly<{ game: HostState }>) {
         <BidTimeline bids={playerBids} lowestBid={lowestBid} />
       </div>
       <p className="text-white/30 text-sm">Other players are waiting...</p>
+      <button onClick={skipTurn} className="text-white/20 text-xs hover:text-white/50 transition-colors mt-2">
+        Skip turn
+      </button>
     </div>
   );
 }
@@ -858,10 +868,10 @@ export default function Host() {
       {(phase === 'leaderboard' || phase === 'finished') && <LeaderboardView game={game} />}
 
       {reconnecting && !gameExpired && (
-        <div className="fixed inset-0 bg-black/80 backdrop-blur-sm flex flex-col items-center justify-center z-50 gap-4">
-          <div className="w-12 h-12 border-4 border-purple-500 border-t-transparent rounded-full animate-spin" />
-          <p className="text-white font-bold text-xl">Reconnecting...</p>
-          <p className="text-white/40 text-sm">Game is still running</p>
+        <div className="fixed inset-0 bg-black/70 backdrop-blur-sm flex flex-col items-center justify-center z-50 gap-3">
+          <div className="w-10 h-10 border-2 border-white/30 border-t-white rounded-full animate-spin" />
+          <p className="text-white/70 text-sm font-medium">Reconnecting...</p>
+          <p className="text-white/30 text-xs">Game is still running</p>
         </div>
       )}
       {gameExpired && (
@@ -877,9 +887,10 @@ export default function Host() {
         </div>
       )}
       {reconnectingCount > 0 && !reconnecting && (
-        <div className="fixed top-4 right-4 bg-amber-900/60 border border-amber-500/40 rounded-xl px-3 py-2 z-40">
-          <p className="text-amber-300 text-xs font-semibold">
-            {reconnectingCount} player{reconnectingCount > 1 ? 's' : ''} reconnecting...
+        <div className="fixed bottom-5 left-1/2 -translate-x-1/2 flex items-center gap-2 bg-white/8 backdrop-blur-sm rounded-full px-3 py-1.5 z-40">
+          <span className="w-1.5 h-1.5 rounded-full bg-white/50 animate-pulse" />
+          <p className="text-white/50 text-xs">
+            {reconnectingCount} player{reconnectingCount > 1 ? 's' : ''} reconnecting
           </p>
         </div>
       )}

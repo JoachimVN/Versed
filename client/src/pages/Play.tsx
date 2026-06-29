@@ -766,14 +766,15 @@ export default function Play() {
       {(phase === 'leaderboard' || phase === 'finished') && <LeaderboardView game={game} />}
 
       {reconnecting && (
-        <div className="fixed inset-0 bg-black/80 backdrop-blur-sm flex flex-col items-center justify-center z-50 gap-4">
-          <div className="w-12 h-12 border-4 border-purple-500 border-t-transparent rounded-full animate-spin" />
-          <p className="text-white font-bold text-xl">Reconnecting...</p>
+        <div className="fixed inset-0 bg-black/70 backdrop-blur-sm flex flex-col items-center justify-center z-50 gap-3">
+          <div className="w-10 h-10 border-2 border-white/30 border-t-white rounded-full animate-spin" />
+          <p className="text-white/70 text-sm font-medium">Reconnecting...</p>
         </div>
       )}
       {hostReconnecting && !reconnecting && (
-        <div className="fixed bottom-4 left-4 right-4 bg-amber-900/60 border border-amber-500/40 rounded-xl px-4 py-3 text-center z-40">
-          <p className="text-amber-300 text-sm font-semibold">Host disconnected — waiting to reconnect...</p>
+        <div className="fixed bottom-5 left-1/2 -translate-x-1/2 flex items-center gap-2 bg-white/8 backdrop-blur-sm rounded-full px-4 py-2 z-40">
+          <span className="w-1.5 h-1.5 rounded-full bg-white/50 animate-pulse" />
+          <p className="text-white/50 text-xs">Host reconnecting</p>
         </div>
       )}
     </div>

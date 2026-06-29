@@ -388,6 +388,19 @@ io.on('connection', (socket) => {
     if (result.allDone) advanceTierOrReveal(game);
   });
 
+  // ── Host: force-skip current guessing turn ────────────────────────────────
+  socket.on('host_skip_turn', () => {
+    const game = gm.getGameBySocket(socket.id);
+    if (!game || game.hostSocketId !== socket.id) return;
+    if (game.phase !== 'guessing') return;
+    if (game.phaseTimer) clearTimeout(game.phaseTimer);
+    if (game.mode === 'race') {
+      endRaceRound(game);
+    } else {
+      advanceTierOrReveal(game);
+    }
+  });
+
   // ── Host: advance to next round ────────────────────────────────────────────
   socket.on('next_round', () => {
     const game = gm.getGameBySocket(socket.id);

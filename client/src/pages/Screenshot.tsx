@@ -73,6 +73,7 @@ const MOCK_HOST: HostState = {
   setArtistOnly: noop,
   createGame: noop,
   startGame: noop,
+  skipTurn: noop,
   copyInvite: noop,
   newGame: noop,
   removePlayer: noop,
