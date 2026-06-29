@@ -264,6 +264,8 @@ function usePlayGame(pinParam?: string): PlayState {
 
     socket.on('kicked', () => {
       stopCountdown();
+      setSavedSession(null);
+      localStorage.removeItem('versed_session');
       setError('You were removed from the lobby.');
       setPhase('join');
     });
