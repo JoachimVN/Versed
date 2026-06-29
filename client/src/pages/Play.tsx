@@ -633,7 +633,12 @@ function PassedView({ game }: Readonly<{ game: PlayState }>) {
       </div>
     );
   }
-  return <div className="min-h-screen" />;
+  return (
+    <div className="min-h-screen flex flex-col items-center justify-center gap-4 p-6 text-center">
+      <p className="text-white/50 text-xl">Skipped</p>
+      <p className="text-white/30 text-sm">Waiting for others…</p>
+    </div>
+  );
 }
 
 export function RevealView({ game, result }: Readonly<{ game: PlayState; result: RoundResultEvent }>) {
