@@ -93,6 +93,26 @@ function usePlayGame(pinParam?: string): PlayState {
   const guessInputRef = useRef<HTMLInputElement>(null);
   const guessTextRef = useRef('');
 
+  function autoSubmitGuess() {
+    guessAutoSubmitTimerRef.current = null;
+    const text = guessTextRef.current.trim();
+    stopCountdown();
+    if (text) {
+      socket.emit('submit_guess', { text }, (r: { correct: boolean; points?: number; timeMs?: number }) => {
+        if (modeRef.current === 'race') {
+          if (r.correct && r.points != null) setMyRacePoints(r.points);
+          if (r.timeMs != null) setMyRaceTimeMs(r.timeMs);
+        }
+        setPhase('passed');
+      });
+    } else {
+      socket.emit('skip_guess');
+      setPhase('passed');
+    }
+    guessTextRef.current = '';
+    setGuessText('');
+  }
+
   function autoSubmitBid() {
     if (bidSubmittedRef.current) return;
     bidSubmittedRef.current = true;
@@ -199,25 +219,7 @@ function usePlayGame(pinParam?: string): PlayState {
       setPhase('guessing');
       setTimeout(() => guessInputRef.current?.focus(), 100);
       if (guessAutoSubmitTimerRef.current) clearTimeout(guessAutoSubmitTimerRef.current);
-      guessAutoSubmitTimerRef.current = setTimeout(() => {
-        guessAutoSubmitTimerRef.current = null;
-        const text = guessTextRef.current.trim();
-        stopCountdown();
-        if (text) {
-          socket.emit('submit_guess', { text }, (r: { correct: boolean; points?: number; timeMs?: number }) => {
-            if (modeRef.current === 'race') {
-              if (r.correct && r.points != null) setMyRacePoints(r.points);
-              if (r.timeMs != null) setMyRaceTimeMs(r.timeMs);
-            }
-            setPhase('passed');
-          });
-        } else {
-          socket.emit('skip_guess');
-          setPhase('passed');
-        }
-        guessTextRef.current = '';
-        setGuessText('');
-      }, Math.max(0, endsAt - Date.now()));
+      guessAutoSubmitTimerRef.current = setTimeout(autoSubmitGuess, Math.max(0, endsAt - Date.now()));
     });
 
     socket.on('round_result', (data: RoundResultEvent) => {
@@ -615,8 +617,8 @@ function PassedView({ game }: Readonly<{ game: PlayState }>) {
           <>
             <p className="text-green-400 font-black text-2xl">Locked in!</p>
             <p className="text-white/50">
-              {myRaceTimeMs != null ? `${(myRaceTimeMs / 1000).toFixed(1)}s` : ''}
-              {myRacePoints > 0 ? ` · +${myRacePoints} pts` : ''}
+              {myRaceTimeMs !== null && `${(myRaceTimeMs / 1000).toFixed(1)}s`}
+              {myRacePoints > 0 && ` · +${myRacePoints} pts`}
             </p>
           </>
         ) : (
