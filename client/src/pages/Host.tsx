@@ -16,7 +16,7 @@ const wait = (ms: number) => new Promise<void>(resolve => setTimeout(resolve, ms
 
 type Spotify = ReturnType<typeof useSpotify>;
 
-interface HostState {
+export interface HostState {
   spotify: Spotify;
   phase: Phase;
   pin: string;
@@ -594,7 +594,7 @@ function BettingView({ game }: Readonly<{ game: HostState }>) {
   );
 }
 
-function PlayingView({ game }: Readonly<{ game: HostState }>) {
+export function PlayingView({ game }: Readonly<{ game: HostState }>) {
   const { roundIndex, totalRounds, countdown, guesserNames, lowestBid, playerBids, playProgress, timeLeft } = game;
   return (
     <div className="min-h-screen flex flex-col items-center justify-center p-6 gap-6 text-center">
@@ -645,7 +645,7 @@ function GuessingView({ game }: Readonly<{ game: HostState }>) {
   );
 }
 
-function RevealView({ game, result }: Readonly<{ game: HostState; result: RoundResultEvent }>) {
+export function RevealView({ game, result }: Readonly<{ game: HostState; result: RoundResultEvent }>) {
   const { roundIndex, totalRounds, players, roundDeltas } = game;
   return (
     <div className="min-h-screen flex flex-col items-center p-6 gap-6 text-center">

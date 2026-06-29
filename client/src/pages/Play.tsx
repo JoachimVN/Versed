@@ -11,7 +11,7 @@ type Phase =
   | 'join' | 'waiting' | 'betting' | 'bid_submitted'
   | 'watching' | 'guessing' | 'passed' | 'reveal' | 'leaderboard' | 'finished';
 
-interface PlayState {
+export interface PlayState {
   phase: Phase;
   pin: string;
   name: string;
@@ -382,7 +382,7 @@ function WaitingView({ game }: Readonly<{ game: PlayState }>) {
   );
 }
 
-function BettingView({ game }: Readonly<{ game: PlayState }>) {
+export function BettingView({ game }: Readonly<{ game: PlayState }>) {
   const { roundIndex, totalRounds, timeLeft, bettingTime, hints, bidIndex, myScore, error, submitBid, setBidIndex } = game;
   const timerPct = (timeLeft / bettingTime) * 100;
   return (
@@ -543,7 +543,7 @@ function PassedView() {
   return <div className="min-h-screen" />;
 }
 
-function RevealView({ game, result }: Readonly<{ game: PlayState; result: RoundResultEvent }>) {
+export function RevealView({ game, result }: Readonly<{ game: PlayState; result: RoundResultEvent }>) {
   const { myName, myScore, myStreak } = game;
   return (
     <div className="min-h-screen flex flex-col items-center justify-center p-6 gap-6 text-center">
