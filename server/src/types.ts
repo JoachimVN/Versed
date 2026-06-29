@@ -68,6 +68,7 @@ export interface Game {
   pin: string;
   hostSocketId: string;
   players: Map<string, Player>;
+  formerPlayers: Map<string, { score: number; streak: number }>; // name.toLowerCase() → saved state
   phase: GamePhase;
   roundIndex: number;
   totalRounds: number;

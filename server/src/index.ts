@@ -92,6 +92,15 @@ io.on('connection', (socket) => {
   // Emit the right phase snapshot to this socket so a reconnecting or
   // mid-game-joining player jumps straight to where the game is.
   function syncState(game: NonNullable<ReturnType<typeof gm.getGame>>) {
+    // Always send the player their current score so the client doesn't show 0
+    // after a reconnect (the client only learns score from score_update events).
+    const selfPlayer = game.players.get(socket.id);
+    if (selfPlayer) {
+      socket.emit('score_update', {
+        players: [{ name: selfPlayer.name, score: selfPlayer.score, streak: selfPlayer.streak }],
+      });
+    }
+
     const round = game.currentRound;
     if (game.mode === 'race') {
       if (game.phase === 'guessing' && round?.playStartAt && game.phaseEndsAt) {
@@ -201,7 +210,7 @@ io.on('connection', (socket) => {
           socket.join(`player:${pin}`);
           callback({ success: true });
           syncState(game);
-          io.to(`host:${pin}`).emit('player_reconnected', { name: rejoined.name });
+          io.to(`host:${pin}`).emit('player_reconnected', { name: rejoined.name, score: rejoined.score, streak: rejoined.streak });
           return;
         }
       }
@@ -241,7 +250,7 @@ io.on('connection', (socket) => {
     socket.join(`player:${pin}`);
     callback?.({ ok: true });
     syncState(game);
-    io.to(`host:${pin}`).emit('player_reconnected', { name: player.name });
+    io.to(`host:${pin}`).emit('player_reconnected', { name: player.name, score: player.score, streak: player.streak });
   });
 
   // ── Host: kick player from lobby ──────────────────────────────────────────
