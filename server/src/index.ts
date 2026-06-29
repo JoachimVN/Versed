@@ -253,10 +253,11 @@ io.on('connection', (socket) => {
     io.to(`host:${pin}`).emit('player_reconnected', { name: player.name, score: player.score, streak: player.streak });
   });
 
-  // ── Host: kick player from lobby ──────────────────────────────────────────
+  // ── Host: kick player from lobby or leaderboard ───────────────────────────
   socket.on('kick_player', ({ name }: { name: string }) => {
     const game = gm.getGameBySocket(socket.id);
-    if (game?.hostSocketId !== socket.id || game.phase !== 'lobby') return;
+    const allowedPhases = ['lobby', 'reveal'] as const;
+    if (game?.hostSocketId !== socket.id || !allowedPhases.includes(game.phase as typeof allowedPhases[number])) return;
     const entry = Array.from(game.players.entries()).find(([, p]) => p.name === name);
     if (!entry) return;
     const [kickedId] = entry;

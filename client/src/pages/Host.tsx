@@ -166,6 +166,7 @@ function useHostGame(): HostState {
       setPlayers(p);
       const remaining = new Set(p.map(pl => pl.name));
       setReconnectingNames(prev => { const s = new Set(prev); for (const n of s) { if (!remaining.has(n)) s.delete(n); } return s; });
+      setLeaderboard(prev => prev.filter(e => remaining.has(e.name)));
     });
     socket.on('player_reconnecting', ({ name }: { name: string }) => {
       setReconnectingNames(prev => new Set(prev).add(name));
@@ -767,7 +768,7 @@ function GuessingView({ game }: Readonly<{ game: HostState }>) {
 }
 
 export function RevealView({ game, result }: Readonly<{ game: HostState; result: RoundResultEvent }>) {
-  const { roundIndex, totalRounds, players, roundDeltas } = game;
+  const { roundIndex, totalRounds, players, roundDeltas, removePlayer } = game;
   const isRace = result.mode === 'race';
   return (
     <div className="min-h-screen flex flex-col items-center p-6 gap-6 text-center">
@@ -786,7 +787,7 @@ export function RevealView({ game, result }: Readonly<{ game: HostState; result:
               ? !!result.correctGuessers?.includes(p.name)
               : (result.correct && p.name === result.guesserName);
             return (
-              <div key={p.name} className="flex justify-between items-center gap-4">
+              <button key={p.name} onClick={() => removePlayer(p.name)} aria-label={`Remove ${p.name}`} className="relative group w-full flex justify-between items-center gap-4 text-left">
                 <div className="text-left">
                   <div className="flex items-center gap-1.5">
                     {streak >= 2 && (
@@ -815,7 +816,8 @@ export function RevealView({ game, result }: Readonly<{ game: HostState; result:
                   {delta > 0 && <p className="text-green-400 text-xs font-semibold">+{delta.toLocaleString()}</p>}
                   <span className="text-white/60 text-sm">{(p.score ?? 0).toLocaleString()}</span>
                 </div>
-              </div>
+                <span className="absolute -inset-x-3 -inset-y-1 rounded-lg backdrop-blur-sm opacity-0 group-hover:opacity-100 transition-opacity" />
+              </button>
             );
           })}
       </div>
