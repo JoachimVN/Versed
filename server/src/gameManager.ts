@@ -391,13 +391,14 @@ export function skipGuess(game: Game, socketId: string): { allDone: boolean } | 
   const round = game.currentRound;
   if (!round) return null;
   if (!round.guesserSocketIds.includes(socketId)) return null;
-  if (game.phase !== 'guessing') return null;
+  if (game.phase !== 'guessing' && game.phase !== 'playing') return null;
   if (round.answered || round.passed.has(socketId)) return null;
 
   round.guesses.set(socketId, null);
   const skipper = game.players.get(socketId);
   if (skipper) skipper.streak = 0;
   round.passed.add(socketId);
+  if (game.phase === 'playing') round.earlyGuessers.add(socketId);
   const allDone = round.guesserSocketIds.every(id => round.passed.has(id));
   return { allDone };
 }

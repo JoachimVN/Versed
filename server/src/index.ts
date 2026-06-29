@@ -385,7 +385,10 @@ io.on('connection', (socket) => {
 
     const result = gm.skipGuess(game, socket.id);
     if (!result) return;
-    if (result.allDone) advanceTierOrReveal(game);
+    if (result.allDone) {
+      if (game.phaseTimer) clearTimeout(game.phaseTimer);
+      advanceTierOrReveal(game);
+    }
   });
 
   // ── Host: force-skip current guessing turn ────────────────────────────────
