@@ -617,7 +617,7 @@ function LobbyView({ game }: Readonly<{ game: HostState }>) {
                   aria-label={`Remove ${p.name}`}
                 >
                   {p.name}
-                  <span className="absolute inset-0 flex items-center justify-center rounded-full bg-black/60 opacity-0 group-hover:opacity-100 transition-opacity">
+                  <span className="absolute inset-0 flex items-center justify-center rounded-full bg-white/10 backdrop-blur-sm opacity-0 group-hover:opacity-100 transition-opacity">
                     <X className="w-4 h-4 text-white" />
                   </span>
                 </button>
