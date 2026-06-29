@@ -14,6 +14,7 @@ export interface Song {
 export interface Hint {
   label: string;
   value: string;
+  imageUrl?: string;
 }
 
 // Bidders grouped by bid value. Tiers are played in ascending bid order: the
@@ -27,6 +28,7 @@ export interface BidTier {
 export interface Round {
   song: Song;
   hints: Hint[];
+  coverUrl?: string;
   bids: Map<string, number>;
   bidTiers: BidTier[];
   tierIndex: number;
@@ -35,12 +37,14 @@ export interface Round {
   answered: boolean;
   passed: Set<string>; // guessers whose turn is over this tier (wrong guess or skip)
   earlyGuessers: Set<string>; // guessers who opted in before their listening time expired
+  guesses: Map<string, string | null>; // socketId → text submitted (null = skipped)
 }
 
 export interface Player {
   socketId: string;
   name: string;
   score: number;
+  streak: number;
 }
 
 export type GamePhase =

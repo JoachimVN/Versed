@@ -30,15 +30,15 @@
 </p>
 
 <p align="center">
-  <img src="docs/screenshots/Playing.png" alt="Versed host view — song playing"/>
+  <img src="docs/screenshots/Playing.png" alt="Versed host view song playing"/>
   <br>
-  <em>Song playing — Player1 guessing on their 2s bid</em>
+  <em>Song playing, from the host's view</em>
 </p>
 
 <p align="center">
-  <img src="docs/screenshots/Betting.png" alt="Versed player view — betting phase"/>
+  <img src="docs/screenshots/Reveal.png" alt="Versed player view song reveal"/>
   <br>
-  <em>Betting phase — how fast can you name this song?</em>
+  <em>Song Reveal</em>
 </p>
 
 ---

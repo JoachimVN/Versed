@@ -1,8 +1,9 @@
 import { useState, useEffect, useRef } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
-import { Music, Trophy, Frown, ChevronLeft, ChevronRight, ArrowLeft } from 'lucide-react';
+import { Music, ChevronLeft, ChevronRight, ArrowLeft, Flame } from 'lucide-react';
 import { socket } from '../socket';
 import { RankBadge } from '../components/RankBadge';
+import { RevealStatusHeader, RevealSongCard } from '../components/RevealShared';
 import { APP_NAME, BID_OPTIONS } from '../config';
 import type { Hint, LeaderboardEntry, RoundResultEvent } from '../types';
 
@@ -10,7 +11,7 @@ type Phase =
   | 'join' | 'waiting' | 'betting' | 'bid_submitted'
   | 'watching' | 'guessing' | 'passed' | 'reveal' | 'leaderboard' | 'finished';
 
-interface PlayState {
+export interface PlayState {
   phase: Phase;
   pin: string;
   name: string;
@@ -28,16 +29,23 @@ interface PlayState {
   guessText: string;
   result: RoundResultEvent | null;
   myScore: number;
+  myStreak: number;
   leaderboard: LeaderboardEntry[];
+  reconnecting: boolean;
+  hostReconnecting: boolean;
+  savedSession: { pin: string; name: string } | null;
   guessInputRef: React.RefObject<HTMLInputElement>;
   setPin: (v: string) => void;
   setName: (v: string) => void;
   setBidIndex: (i: number | ((prev: number) => number)) => void;
   setGuessText: (v: string) => void;
   join: () => void;
+  rejoinSaved: () => void;
   submitBid: () => void;
   submitGuess: () => void;
   skipGuess: () => void;
+  newGamePin: string | null;
+  rejoinNewGame: () => void;
 }
 
 function usePlayGame(pinParam?: string): PlayState {
@@ -61,7 +69,16 @@ function usePlayGame(pinParam?: string): PlayState {
   const [guessText, setGuessText] = useState('');
   const [result, setResult] = useState<RoundResultEvent | null>(null);
   const [myScore, setMyScore] = useState(0);
+  const [myStreak, setMyStreak] = useState(0);
   const [leaderboard, setLeaderboard] = useState<LeaderboardEntry[]>([]);
+  const [reconnecting, setReconnecting] = useState(false);
+  const [hostReconnecting, setHostReconnecting] = useState(false);
+  const [newGamePin, setNewGamePin] = useState<string | null>(null);
+  const newGamePinRef = useRef<string | null>(null);
+  const [savedSession, setSavedSession] = useState<{ pin: string; name: string } | null>(() => {
+    try { return JSON.parse(localStorage.getItem('versed_session') ?? 'null'); }
+    catch { return null; }
+  });
   const timerRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const autoSubmitTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const bidSubmittedRef = useRef(false);
@@ -102,9 +119,23 @@ function usePlayGame(pinParam?: string): PlayState {
     // After any reconnect, re-attach this socket to the game so bids/guesses
     // aren't silently dropped (the new socket id is a stranger otherwise).
     socket.on('connect', () => {
+      setReconnecting(false);
       if (myNameRef.current && pinRef.current) {
-        socket.emit('rejoin_player', { pin: pinRef.current, name: myNameRef.current });
+        socket.emit('rejoin_player', { pin: pinRef.current, name: myNameRef.current }, (res?: { ok: boolean }) => {
+          if (res && !res.ok) {
+            myNameRef.current = '';
+            pinRef.current = '';
+            setSavedSession(null);
+            localStorage.removeItem('versed_session');
+            setError('Game has ended.');
+            setPhase('join');
+          }
+        });
       }
+    });
+
+    socket.on('disconnect', (reason: string) => {
+      if (reason !== 'io client disconnect') setReconnecting(true);
     });
 
     socket.on('round_start', (data: {
@@ -150,9 +181,9 @@ function usePlayGame(pinParam?: string): PlayState {
       setPhase('reveal');
     });
 
-    socket.on('score_update', ({ players }: { players: { name: string; score: number }[] }) => {
+    socket.on('score_update', ({ players }: { players: { name: string; score: number; streak: number }[] }) => {
       const me = players.find(p => p.name === myNameRef.current);
-      if (me) setMyScore(me.score);
+      if (me) { setMyScore(me.score); setMyStreak(me.streak); }
     });
 
     socket.on('leaderboard', ({ leaderboard: lb }: { leaderboard: LeaderboardEntry[] }) => {
@@ -165,17 +196,32 @@ function usePlayGame(pinParam?: string): PlayState {
       setPhase('finished');
     });
 
+    socket.on('host_reconnecting', () => {
+      setHostReconnecting(true);
+    });
+
+    socket.on('host_reconnected', () => {
+      setHostReconnecting(false);
+    });
+
     socket.on('host_disconnected', () => {
+      setHostReconnecting(false);
       stopCountdown();
       setError('Host disconnected.');
       setPhase('join');
     });
 
+    socket.on('game_restarted', ({ newPin }: { newPin: string }) => {
+      newGamePinRef.current = newPin;
+      setNewGamePin(newPin);
+    });
+
     return () => {
       stopCountdown();
       if (autoSubmitTimerRef.current) clearTimeout(autoSubmitTimerRef.current);
-      ['connect','round_start','betting_closed','guessing_start','your_turn',
-       'round_result','score_update','leaderboard','game_over','host_disconnected']
+      ['connect','disconnect','round_start','betting_closed','guessing_start','your_turn',
+       'round_result','score_update','leaderboard','game_over',
+       'host_reconnecting','host_reconnected','host_disconnected','game_restarted']
         .forEach(e => socket.off(e));
       socket.disconnect();
     };
@@ -188,7 +234,27 @@ function usePlayGame(pinParam?: string): PlayState {
     setError('');
     socket.emit('join_game', { pin: p, name: n }, ({ success, error: e }: { success?: boolean; error?: string }) => {
       if (e) { setError(e); return; }
-      if (success) { myNameRef.current = n; pinRef.current = p; setMyName(n); setPhase('waiting'); }
+      if (success) {
+        myNameRef.current = n; pinRef.current = p; setMyName(n); setPhase('waiting');
+        const session = { pin: p, name: n };
+        setSavedSession(session);
+        localStorage.setItem('versed_session', JSON.stringify(session));
+      }
+    });
+  };
+
+  const rejoinSaved = () => {
+    if (!savedSession) return;
+    const { pin: p, name: n } = savedSession;
+    setError('');
+    socket.emit('join_game', { pin: p, name: n }, ({ success, error: e }: { success?: boolean; error?: string }) => {
+      if (e) {
+        setError(e);
+        setSavedSession(null);
+        localStorage.removeItem('versed_session');
+        return;
+      }
+      if (success) { myNameRef.current = n; pinRef.current = p; setMyName(n); setPin(p); setName(n); setPhase('waiting'); }
     });
   };
 
@@ -225,10 +291,33 @@ function usePlayGame(pinParam?: string): PlayState {
     setPhase('passed');
   };
 
+  const rejoinNewGame = () => {
+    const newPin = newGamePinRef.current;
+    const n = myNameRef.current;
+    if (!newPin || !n) return;
+    setError('');
+    socket.emit('join_game', { pin: newPin, name: n }, ({ success, error: e }: { success?: boolean; error?: string }) => {
+      if (e) { setError(e); return; }
+      if (success) {
+        pinRef.current = newPin;
+        setPin(newPin);
+        newGamePinRef.current = null;
+        setNewGamePin(null);
+        const session = { pin: newPin, name: n };
+        setSavedSession(session);
+        localStorage.setItem('versed_session', JSON.stringify(session));
+        setLeaderboard([]);
+        setResult(null);
+        setPhase('waiting');
+      }
+    });
+  };
+
   return {
     phase, pin, name, myName, error, roundIndex, totalRounds, hints,
     timeLeft, bettingTime, bidIndex, myBid, guesserNames, lowestBid,
-    guessText, result, myScore, leaderboard, guessInputRef,
+    guessText, result, myScore, myStreak, leaderboard, reconnecting, hostReconnecting, savedSession, guessInputRef,
+    newGamePin, rejoinNewGame,
     setPin, setName,
   setBidIndex: (i: number | ((prev: number) => number)) => {
     setBidIndex(prev => {
@@ -238,14 +327,14 @@ function usePlayGame(pinParam?: string): PlayState {
     });
   },
   setGuessText,
-    join, submitBid, submitGuess, skipGuess,
+    join, rejoinSaved, submitBid, submitGuess, skipGuess,
   };
 }
 
 // ─── Phase views ─────────────────────────────────────────────────────────────
 
 function JoinView({ game }: Readonly<{ game: PlayState }>) {
-  const { pin, name, error, setPin, setName, join } = game;
+  const { pin, name, error, savedSession, setPin, setName, join, rejoinSaved } = game;
   const navigate = useNavigate();
   return (
     <div className="min-h-screen flex flex-col items-center justify-center p-6 gap-5">
@@ -253,7 +342,19 @@ function JoinView({ game }: Readonly<{ game: PlayState }>) {
         <ArrowLeft className="w-5 h-5" />
       </button>
       <img src={`${import.meta.env.BASE_URL}logo.svg`} alt={APP_NAME} className="h-16 w-auto" />
+
+      {savedSession && (
+        <div className="w-full max-w-xs">
+          <button onClick={rejoinSaved}
+            className="w-full py-4 rounded-2xl bg-purple-600 text-white font-bold text-xl hover:bg-purple-500 transition-colors">
+            Rejoin as {savedSession.name}
+          </button>
+          <p className="text-white/30 text-xs text-center mt-2">PIN {savedSession.pin}</p>
+        </div>
+      )}
+
       <div className="w-full max-w-xs flex flex-col gap-3">
+        {savedSession && <p className="text-white/30 text-xs text-center">— or join a different game —</p>}
         <input type="text" inputMode="numeric" pattern="[0-9]*" placeholder="Game PIN"
           value={pin} onChange={e => setPin(e.target.value.replace(/\D/g, ''))} maxLength={6}
           className="w-full px-4 py-4 rounded-xl bg-white/10 text-white text-center text-2xl font-bold placeholder-white/30 outline-none focus:ring-2 focus:ring-white/30 tracking-widest" />
@@ -263,7 +364,7 @@ function JoinView({ game }: Readonly<{ game: PlayState }>) {
           className="w-full px-4 py-4 rounded-xl bg-white/10 text-white text-center text-xl placeholder-white/30 outline-none focus:ring-2 focus:ring-white/30" />
         {error && <p className="text-red-400 text-sm text-center">{error}</p>}
         <button onClick={join} disabled={!pin.trim() || !name.trim()}
-          className="w-full py-4 rounded-2xl bg-purple-600 text-white font-bold text-xl disabled:opacity-30 hover:bg-purple-500 transition-colors">
+          className="w-full py-4 rounded-2xl bg-white/10 text-white font-bold text-xl disabled:opacity-30 hover:bg-white/20 transition-colors">
           Join
         </button>
       </div>
@@ -281,7 +382,7 @@ function WaitingView({ game }: Readonly<{ game: PlayState }>) {
   );
 }
 
-function BettingView({ game }: Readonly<{ game: PlayState }>) {
+export function BettingView({ game }: Readonly<{ game: PlayState }>) {
   const { roundIndex, totalRounds, timeLeft, bettingTime, hints, bidIndex, myScore, error, submitBid, setBidIndex } = game;
   const timerPct = (timeLeft / bettingTime) * 100;
   return (
@@ -297,13 +398,24 @@ function BettingView({ game }: Readonly<{ game: PlayState }>) {
       </div>
 
       {hints.length > 0 && (
-        <div className="bg-white/5 rounded-2xl p-4 space-y-2">
-          {hints.map(h => (
-            <div key={h.label} className="flex justify-between">
-              <span className="text-white/50 text-sm">{h.label}</span>
-              <span className="text-white font-semibold text-sm">{h.value}</span>
+        <div className="flex flex-col items-center gap-6">
+          {hints.find(h => h.imageUrl)?.imageUrl && (
+            <img
+              src={hints.find(h => h.imageUrl)!.imageUrl}
+              alt="Album art"
+              className="w-40 h-40 rounded-3xl object-cover shadow-2xl blur-sm"
+            />
+          )}
+          {hints.some(h => !h.imageUrl) && (
+            <div className="flex flex-wrap justify-center gap-8">
+              {hints.filter(h => !h.imageUrl).map(h => (
+                <div key={h.label} className="flex flex-col items-center gap-1">
+                  <span className="text-white/30 text-xs uppercase tracking-[0.2em]">{h.label}</span>
+                  <span className="text-white font-black text-3xl">{h.value}</span>
+                </div>
+              ))}
             </div>
-          ))}
+          )}
         </div>
       )}
 
@@ -378,7 +490,7 @@ function GuessInputSection({ guessText, guessInputRef, setGuessText, submitGuess
 }
 
 function WatchingView({ game }: Readonly<{ game: PlayState }>) {
-  const { lowestBid, guesserNames, myName, guessText, guessInputRef, setGuessText, submitGuess } = game;
+  const { lowestBid, guesserNames, myName, guessText, guessInputRef, setGuessText, submitGuess, skipGuess } = game;
   const imGuessing = guesserNames.includes(myName);
 
   if (imGuessing) {
@@ -389,6 +501,10 @@ function WatchingView({ game }: Readonly<{ game: PlayState }>) {
           <span className="text-white/40 text-sm">Listening...</span>
         </div>
         <GuessInputSection guessText={guessText} guessInputRef={guessInputRef} setGuessText={setGuessText} submitGuess={submitGuess} />
+        <button onClick={skipGuess}
+          className="w-full py-3 rounded-2xl bg-white/5 text-white/50 font-semibold hover:bg-white/10 active:scale-95 transition-all">
+          Skip — I don't know
+        </button>
       </div>
     );
   }
@@ -427,43 +543,44 @@ function PassedView() {
   return <div className="min-h-screen" />;
 }
 
-function revealIcon(correct: boolean, iWon: boolean) {
-  if (!correct) return <Music className="w-12 h-12 text-white/60" />;
-  if (iWon) return <Trophy className="w-12 h-12 text-amber-400" />;
-  return <Frown className="w-12 h-12 text-white/60" />;
-}
-
-function RevealView({ game, result }: Readonly<{ game: PlayState; result: RoundResultEvent }>) {
-  const { myName, myScore } = game;
-  const iWon = result.correct && result.guesserName === myName;
+export function RevealView({ game, result }: Readonly<{ game: PlayState; result: RoundResultEvent }>) {
+  const { myName, myScore, myStreak } = game;
   return (
     <div className="min-h-screen flex flex-col items-center justify-center p-6 gap-6 text-center">
-      <div className={`w-24 h-24 rounded-full flex items-center justify-center ${result.correct ? 'bg-green-500/20' : 'bg-white/5'}`}>
-        {revealIcon(result.correct, iWon)}
-      </div>
-      <div>
-        {result.correct
-          ? <p className={`text-2xl font-black ${iWon ? 'text-green-400' : 'text-white'}`}>
-              {iWon ? `+${result.points} pts!` : `${result.guesserName} got it`}
-            </p>
-          : <p className="text-white/60 text-xl">No one got it</p>
-        }
-      </div>
-      <div className="bg-white/5 rounded-2xl p-5 w-full">
-        <p className="text-white/40 text-sm mb-1">The song was</p>
-        <p className="text-white font-black text-xl">{result.songTitle}</p>
-        <p className="text-white/60">{result.artist}</p>
-      </div>
+      <RevealStatusHeader result={result} myName={myName} />
+      <RevealSongCard result={result} />
+      {result.playerGuesses && result.playerGuesses.length > 0 && (
+        <div className="bg-white/5 rounded-2xl p-4 w-full space-y-1.5">
+          {result.playerGuesses.map(g => (
+            <div key={g.name} className="flex justify-between items-center gap-4">
+              <span className="text-white/50 text-sm shrink-0">{g.name}</span>
+              {(() => {
+                const skipped = g.guess === null;
+                const correct = result.correct && g.name === result.guesserName;
+                let cls = 'text-white/40';
+                if (skipped) cls = 'text-white/25 italic';
+                else if (correct) cls = 'text-green-400';
+                return <span className={`text-sm text-right truncate ${cls}`}>{skipped ? 'skipped' : `"${g.guess}"`}</span>;
+              })()}
+            </div>
+          ))}
+        </div>
+      )}
       <div className="bg-white/5 rounded-2xl px-8 py-4">
         <p className="text-3xl font-black text-white">{myScore.toLocaleString()}</p>
         <p className="text-white/40 text-sm">your score</p>
+        {myStreak >= 2 && (
+          <p className="flex items-center justify-center gap-1 text-orange-400 text-xs font-bold mt-1">
+            <Flame className="w-3 h-3" />{myStreak} in a row
+          </p>
+        )}
       </div>
     </div>
   );
 }
 
 function LeaderboardView({ game }: Readonly<{ game: PlayState }>) {
-  const { phase, myName, myScore, leaderboard } = game;
+  const { phase, myName, myScore, leaderboard, newGamePin, rejoinNewGame } = game;
   const myEntry = leaderboard.find(e => e.name === myName);
   return (
     <div className="min-h-screen flex flex-col p-6 gap-4">
@@ -488,10 +605,25 @@ function LeaderboardView({ game }: Readonly<{ game: PlayState }>) {
         ))}
       </div>
       {phase === 'leaderboard' && <p className="text-center text-white/30 text-sm">Waiting for the host to start the next round…</p>}
-      {phase === 'finished' && (
+      {phase === 'finished' && newGamePin && (
+        <div className="space-y-3">
+          <div className="bg-emerald-900/40 border border-emerald-500/40 rounded-2xl px-4 py-3 text-center">
+            <p className="text-emerald-300 text-sm font-semibold">Host started a new game!</p>
+          </div>
+          <button onClick={rejoinNewGame}
+            className="w-full py-4 rounded-2xl bg-emerald-600 text-white font-bold text-xl hover:bg-emerald-500 transition-colors">
+            Play Again
+          </button>
+          <button onClick={() => { globalThis.location.href = '/'; }}
+            className="w-full py-3 rounded-2xl bg-white/10 text-white/60 font-semibold text-base hover:bg-white/20 transition-colors">
+            Leave
+          </button>
+        </div>
+      )}
+      {phase === 'finished' && !newGamePin && (
         <button onClick={() => { globalThis.location.href = '/'; }}
           className="w-full py-4 rounded-2xl bg-white/10 text-white font-bold text-xl hover:bg-white/20 transition-colors">
-          Play Again
+          Leave
         </button>
       )}
     </div>
@@ -503,16 +635,31 @@ function LeaderboardView({ game }: Readonly<{ game: PlayState }>) {
 export default function Play() {
   const { pin: pinParam } = useParams<{ pin?: string }>();
   const game = usePlayGame(pinParam);
-  const { phase, result } = game;
+  const { phase, result, reconnecting, hostReconnecting } = game;
 
-  if (phase === 'join') return <JoinView game={game} />;
-  if (phase === 'waiting') return <WaitingView game={game} />;
-  if (phase === 'betting') return <BettingView game={game} />;
-  if (phase === 'bid_submitted') return <BidSubmittedView game={game} />;
-  if (phase === 'watching') return <WatchingView game={game} />;
-  if (phase === 'guessing') return <GuessingView game={game} />;
-  if (phase === 'passed') return <PassedView />;
-  if (phase === 'reveal' && result) return <RevealView game={game} result={result} />;
-  if (phase === 'leaderboard' || phase === 'finished') return <LeaderboardView game={game} />;
-  return null;
+  return (
+    <div className="relative">
+      {phase === 'join' && <JoinView game={game} />}
+      {phase === 'waiting' && <WaitingView game={game} />}
+      {phase === 'betting' && <BettingView game={game} />}
+      {phase === 'bid_submitted' && <BidSubmittedView game={game} />}
+      {phase === 'watching' && <WatchingView game={game} />}
+      {phase === 'guessing' && <GuessingView game={game} />}
+      {phase === 'passed' && <PassedView />}
+      {phase === 'reveal' && result && <RevealView game={game} result={result} />}
+      {(phase === 'leaderboard' || phase === 'finished') && <LeaderboardView game={game} />}
+
+      {reconnecting && (
+        <div className="fixed inset-0 bg-black/80 backdrop-blur-sm flex flex-col items-center justify-center z-50 gap-4">
+          <div className="w-12 h-12 border-4 border-purple-500 border-t-transparent rounded-full animate-spin" />
+          <p className="text-white font-bold text-xl">Reconnecting...</p>
+        </div>
+      )}
+      {hostReconnecting && !reconnecting && (
+        <div className="fixed bottom-4 left-4 right-4 bg-amber-900/60 border border-amber-500/40 rounded-xl px-4 py-3 text-center z-40">
+          <p className="text-amber-300 text-sm font-semibold">Host disconnected — waiting to reconnect...</p>
+        </div>
+      )}
+    </div>
+  );
 }

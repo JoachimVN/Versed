@@ -1,9 +1,11 @@
 import { useState, useEffect, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { Music, Check, X, Loader2, Copy, ChevronDown, ArrowLeft } from 'lucide-react';
+import { Music, Check, Loader2, Copy, ArrowLeft, Settings, Flame } from 'lucide-react';
+import QRCode from 'react-qr-code';
 import { socket } from '../socket';
 import { useSpotify } from '../hooks/useSpotify';
 import { RankBadge } from '../components/RankBadge';
+import { RevealStatusHeader, RevealSongCard } from '../components/RevealShared';
 import { APP_NAME, BACKEND_URL } from '../config';
 import type { Hint, LeaderboardEntry, PlayerInfo, RoundResultEvent } from '../types';
 
@@ -14,7 +16,7 @@ const wait = (ms: number) => new Promise<void>(resolve => setTimeout(resolve, ms
 
 type Spotify = ReturnType<typeof useSpotify>;
 
-interface HostState {
+export interface HostState {
   spotify: Spotify;
   phase: Phase;
   pin: string;
@@ -30,6 +32,7 @@ interface HostState {
   lowestBid: number;
   playerBids: { name: string; bid: number }[];
   result: RoundResultEvent | null;
+  roundDeltas: Record<string, number>;
   leaderboard: LeaderboardEntry[];
   copied: boolean;
   playProgress: number;
@@ -38,6 +41,9 @@ interface HostState {
   bettingTimeSetting: number;
   guessingTimeSetting: number;
   roundsSetting: number;
+  reconnecting: boolean;
+  reconnectingCount: number;
+  gameExpired: boolean;
   toggleSettings: () => void;
   setBettingTimeSetting: (v: number) => void;
   setGuessingTimeSetting: (v: number) => void;
@@ -45,6 +51,7 @@ interface HostState {
   createGame: () => void;
   startGame: () => void;
   copyInvite: () => void;
+  newGame: () => void;
 }
 
 function useHostGame(): HostState {
@@ -53,6 +60,7 @@ function useHostGame(): HostState {
   const [pin, setPin] = useState('');
   const pinRef = useRef('');
   const [players, setPlayers] = useState<PlayerInfo[]>([]);
+  const playersRef = useRef<PlayerInfo[]>([]);
   const [roundIndex, setRoundIndex] = useState(0);
   const [totalRounds, setTotalRounds] = useState(10);
   const [hints, setHints] = useState<Hint[]>([]);
@@ -64,6 +72,7 @@ function useHostGame(): HostState {
   const [lowestBid, setLowestBid] = useState(0);
   const [playerBids, setPlayerBids] = useState<{ name: string; bid: number }[]>([]);
   const [result, setResult] = useState<RoundResultEvent | null>(null);
+  const [roundDeltas, setRoundDeltas] = useState<Record<string, number>>({});
   const [leaderboard, setLeaderboard] = useState<LeaderboardEntry[]>([]);
   const [copied, setCopied] = useState(false);
   const [playProgress, setPlayProgress] = useState(0);
@@ -71,6 +80,9 @@ function useHostGame(): HostState {
   const [bettingTimeSetting, setBettingTimeSetting] = useState(15);
   const [guessingTimeSetting, setGuessingTimeSetting] = useState(15);
   const [roundsSetting, setRoundsSetting] = useState(10);
+  const [reconnecting, setReconnecting] = useState(false);
+  const [reconnectingNames, setReconnectingNames] = useState<Set<string>>(new Set());
+  const [gameExpired, setGameExpired] = useState(false);
   const timerRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const playRafRef = useRef<number | null>(null);
 
@@ -116,14 +128,34 @@ function useHostGame(): HostState {
 
     socket.on('connect', () => {
       if (pinRef.current) {
-        socket.emit('rejoin_host', { pin: pinRef.current }, ({ players: p }: { players: PlayerInfo[] }) => {
-          if (p) setPlayers(p);
+        socket.emit('rejoin_host', { pin: pinRef.current }, (res: { players: PlayerInfo[] } | { error: string }) => {
+          if ('error' in res) {
+            setGameExpired(true);
+          } else if (res.players) setPlayers(res.players);
+          setReconnecting(false);
+          setReconnectingNames(new Set());
         });
+      } else {
+        setReconnecting(false);
       }
     });
 
+    socket.on('disconnect', (reason: string) => {
+      if (reason !== 'io client disconnect') setReconnecting(true);
+    });
+
     socket.on('player_joined', ({ players: p }: { players: PlayerInfo[] }) => setPlayers(p));
-    socket.on('player_left', ({ players: p }: { players: PlayerInfo[] }) => setPlayers(p));
+    socket.on('player_left', ({ players: p }: { players: PlayerInfo[] }) => {
+      setPlayers(p);
+      const remaining = new Set(p.map(pl => pl.name));
+      setReconnectingNames(prev => { const s = new Set(prev); for (const n of s) { if (!remaining.has(n)) s.delete(n); } return s; });
+    });
+    socket.on('player_reconnecting', ({ name }: { name: string }) => {
+      setReconnectingNames(prev => new Set(prev).add(name));
+    });
+    socket.on('player_reconnected', ({ name }: { name: string }) => {
+      setReconnectingNames(prev => { const s = new Set(prev); s.delete(name); return s; });
+    });
 
     socket.on('host_round_start', (data: {
       roundIndex: number; total: number; hints: Hint[];
@@ -187,7 +219,16 @@ function useHostGame(): HostState {
       setPhase('reveal');
     });
 
-    socket.on('score_update', ({ players: p }: { players: PlayerInfo[] }) => setPlayers(p));
+    socket.on('score_update', ({ players: p }: { players: PlayerInfo[] }) => {
+      const deltas: Record<string, number> = {};
+      for (const updated of p) {
+        const prev = playersRef.current.find(x => x.name === updated.name);
+        deltas[updated.name] = (updated.score ?? 0) - (prev?.score ?? 0);
+      }
+      playersRef.current = p;
+      setRoundDeltas(deltas);
+      setPlayers(p);
+    });
 
     socket.on('leaderboard', ({ leaderboard: lb }: { leaderboard: LeaderboardEntry[] }) => {
       setLeaderboard(lb);
@@ -202,7 +243,9 @@ function useHostGame(): HostState {
     return () => {
       stopCountdown();
       stopPlaybackBar();
+      socket.off('connect'); socket.off('disconnect');
       socket.off('player_joined'); socket.off('player_left');
+      socket.off('player_reconnecting'); socket.off('player_reconnected');
       socket.off('host_round_start'); socket.off('bid_received');
       socket.off('betting_closed'); socket.off('play_song');
       socket.off('guessing_start'); socket.off('round_result');
@@ -238,14 +281,36 @@ function useHostGame(): HostState {
       .catch(() => { /* clipboard unavailable; user can still read the link */ });
   };
 
+  const newGame = () => {
+    socket.emit('new_game', ({ pin: p, error: e }: { pin?: string; error?: string }) => {
+      if (e || !p) return;
+      pinRef.current = p;
+      setPin(p);
+      setPlayers([]);
+      setLeaderboard([]);
+      setResult(null);
+      setRoundIndex(0);
+      setHints([]);
+      setBidCount(0);
+      setGuesserNames([]);
+      setPlayerBids([]);
+      setLowestBid(0);
+      setReconnectingNames(new Set());
+      stopCountdown();
+      stopPlaybackBar();
+      setPhase('lobby');
+    });
+  };
+
   return {
     spotify, phase, pin, players, roundIndex, totalRounds, hints,
     bettingTime, timeLeft, bidCount, countdown, guesserNames, lowestBid, playerBids,
-    result, leaderboard, copied, playProgress, inviteUrl,
+    result, roundDeltas, leaderboard, copied, playProgress, inviteUrl,
     settingsOpen, bettingTimeSetting, guessingTimeSetting, roundsSetting,
+    reconnecting, reconnectingCount: reconnectingNames.size, gameExpired,
     toggleSettings: () => setSettingsOpen(o => !o),
     setBettingTimeSetting, setGuessingTimeSetting, setRoundsSetting,
-    createGame, startGame, copyInvite,
+    createGame, startGame, copyInvite, newGame,
   };
 }
 
@@ -255,45 +320,62 @@ function BidTimeline({ bids, lowestBid }: Readonly<{ bids: { name: string; bid: 
   if (bids.length === 0) return null;
   const sorted = [...bids].sort((a, b) => a.bid - b.bid);
   const min = sorted[0].bid;
-  const max = sorted[sorted.length - 1].bid;
+  const max = sorted.at(-1)!.bid;
   const span = max === min ? 0 : max - min;
   const pos = (bid: number) => span === 0 ? 50 : 8 + ((bid - min) / span) * 84;
+
+  // Group players by bid so ties share one position instead of stacking on top of each other.
+  const groups: { bid: number; names: string[] }[] = [];
+  for (const { name, bid } of sorted) {
+    const last = groups.at(-1);
+    if (last?.bid === bid) last.names.push(name);
+    else groups.push({ bid, names: [name] });
+  }
+
+  const MAX_NAMES = 3;
+  const maxLines = groups.reduce((m, g) => Math.max(m, Math.min(g.names.length, MAX_NAMES) + (g.names.length > MAX_NAMES ? 1 : 0)), 0);
+  const nameAreaHeight = 22 + maxLines * 16 + 8;
 
   return (
     <div className="w-full">
       {/* Name labels — alternate above/below to reduce overlap on close bids */}
-      <div className="relative h-12">
-        {sorted.map((entry, i) => (
-          <span
-            key={entry.name}
-            className={`absolute text-xs font-semibold whitespace-nowrap -translate-x-1/2 ${entry.bid === lowestBid ? 'text-purple-300' : 'text-white/50'}`}
-            style={{ left: `${pos(entry.bid)}%`, top: i % 2 === 0 ? 2 : 22 }}
+      <div className="relative" style={{ height: nameAreaHeight }}>
+        {groups.map((group, i) => (
+          <div
+            key={group.bid}
+            className={`absolute -translate-x-1/2 flex flex-col items-center gap-0.5 ${group.bid === lowestBid ? 'text-purple-300' : 'text-white/50'}`}
+            style={{ left: `${pos(group.bid)}%`, top: i % 2 === 0 ? 2 : 22 }}
           >
-            {entry.name}
-          </span>
+            {group.names.slice(0, MAX_NAMES).map(name => (
+              <span key={name} className="text-xs font-semibold whitespace-nowrap">{name}</span>
+            ))}
+            {group.names.length > MAX_NAMES && (
+              <span className="text-xs whitespace-nowrap opacity-60">+{group.names.length - MAX_NAMES} more</span>
+            )}
+          </div>
         ))}
       </div>
 
       {/* Bar + dots */}
       <div className="relative h-px bg-white/20">
-        {sorted.map(entry => (
+        {groups.map(group => (
           <div
-            key={entry.name}
-            className={`absolute top-1/2 -translate-y-1/2 -translate-x-1/2 rounded-full ${entry.bid === lowestBid ? 'w-3 h-3 bg-purple-400' : 'w-2 h-2 bg-white/40'}`}
-            style={{ left: `${pos(entry.bid)}%` }}
+            key={group.bid}
+            className={`absolute top-1/2 -translate-y-1/2 -translate-x-1/2 rounded-full ${group.bid === lowestBid ? 'w-3 h-3 bg-purple-400' : 'w-2 h-2 bg-white/40'}`}
+            style={{ left: `${pos(group.bid)}%` }}
           />
         ))}
       </div>
 
       {/* Bid value labels */}
       <div className="relative h-5 mt-1">
-        {sorted.map(entry => (
+        {groups.map(group => (
           <span
-            key={entry.name}
-            className={`absolute text-xs -translate-x-1/2 ${entry.bid === lowestBid ? 'text-purple-400' : 'text-white/30'}`}
-            style={{ left: `${pos(entry.bid)}%` }}
+            key={group.bid}
+            className={`absolute text-xs -translate-x-1/2 ${group.bid === lowestBid ? 'text-purple-400' : 'text-white/30'}`}
+            style={{ left: `${pos(group.bid)}%` }}
           >
-            {entry.bid}s
+            {group.bid}s
           </span>
         ))}
       </div>
@@ -364,6 +446,24 @@ function LobbyView({ game }: Readonly<{ game: HostState }>) {
       <button onClick={() => navigate('/')} className="absolute top-5 left-5 p-2 rounded-xl bg-white/10 text-white/60 hover:bg-white/20 hover:text-white transition-colors z-10">
         <ArrowLeft className="w-5 h-5" />
       </button>
+      <button onClick={toggleSettings} className="absolute top-5 right-5 p-2 rounded-xl bg-white/10 text-white/60 hover:bg-white/20 hover:text-white transition-colors z-10">
+        <Settings className="w-5 h-5" />
+      </button>
+
+      {/* Settings panel — drops below the top bar when open */}
+      {settingsOpen && (
+        <div className="absolute top-16 right-5 z-20 bg-[#1a1a2e] border border-white/10 rounded-2xl p-4 space-y-4 w-64 shadow-xl">
+          <SettingRow label="Bet time" value={bettingTimeSetting} unit="s"
+            onDec={() => setBettingTimeSetting(Math.max(5, bettingTimeSetting - 5))}
+            onInc={() => setBettingTimeSetting(Math.min(60, bettingTimeSetting + 5))} />
+          <SettingRow label="Guess time" value={guessingTimeSetting} unit="s"
+            onDec={() => setGuessingTimeSetting(Math.max(5, guessingTimeSetting - 5))}
+            onInc={() => setGuessingTimeSetting(Math.min(60, guessingTimeSetting + 5))} />
+          <SettingRow label="Rounds" value={roundsSetting} unit=""
+            onDec={() => setRoundsSetting(Math.max(1, roundsSetting - 1))}
+            onInc={() => setRoundsSetting(Math.min(30, roundsSetting + 1))} />
+        </div>
+      )}
 
       {/* Header slides up from center on game creation using translateY */}
       <div
@@ -381,22 +481,37 @@ function LobbyView({ game }: Readonly<{ game: HostState }>) {
       </div>
 
       {pin ? (
-        <div className={`flex-1 flex flex-col items-center gap-6 px-6 pb-6 transition-all duration-500 ${lobbyVisible ? 'opacity-100 translate-y-0' : 'opacity-0 translate-y-6'}`}>
-          <div className="text-center">
-            <p className="text-white/40 text-sm uppercase tracking-widest mb-1">PIN</p>
-            <div className="relative inline-block">
-              <p className="text-7xl font-black text-white tracking-widest select-text">{pin}</p>
-              <button
-                onClick={copyInvite}
-                aria-label="Copy invite link"
-                title={copied ? 'Copied!' : 'Copy invite link'}
-                className="absolute left-full bottom-1 ml-3 p-2 rounded-lg bg-white/10 hover:bg-white/20 text-white/70 transition-colors"
-              >
-                {copied ? <Check className="w-5 h-5 text-green-400" /> : <Copy className="w-5 h-5" />}
-              </button>
+        <div className={`flex-1 flex flex-col items-center gap-5 px-6 pb-6 transition-all duration-500 ${lobbyVisible ? 'opacity-100 translate-y-0' : 'opacity-0 translate-y-6'}`}>
+          {/* Join card */}
+          <div className="w-full max-w-md bg-white/5 rounded-2xl p-5">
+            <div className="flex items-center gap-5">
+              <div className="flex-1 min-w-0 flex flex-col gap-3">
+                <div>
+                  <p className="text-white/40 text-xs uppercase tracking-widest mb-0.5">Join at</p>
+                  <p className="text-white font-semibold text-base">
+                    {`${globalThis.location.origin}${import.meta.env.BASE_URL}`.replace(/\/$/, '')}
+                  </p>
+                </div>
+                <div>
+                  <p className="text-white/40 text-xs uppercase tracking-widest mb-0.5">PIN</p>
+                  <p className="text-6xl font-black text-white tracking-widest leading-none select-text">{pin}</p>
+                </div>
+                <button
+                  onClick={copyInvite}
+                  className="flex items-center gap-2 text-white/40 text-xs hover:text-white/70 transition-colors"
+                >
+                  {copied ? <Check className="w-3.5 h-3.5 text-green-400" /> : <Copy className="w-3.5 h-3.5" />}
+                  {copied ? 'Copied!' : 'Copy invite link'}
+                </button>
+              </div>
+              <div className="p-2 bg-white rounded-xl shrink-0">
+                <QRCode value={`${globalThis.location.origin}${import.meta.env.BASE_URL}play/${pin}`} size={148} />
+              </div>
             </div>
           </div>
-          <div className="w-full max-w-sm">
+
+          {/* Players */}
+          <div className="w-full max-w-md">
             <p className="text-white/40 text-sm mb-2">{players.length} player{players.length === 1 ? '' : 's'}</p>
             <div className="flex flex-wrap gap-2">
               {players.map(p => (
@@ -406,31 +521,9 @@ function LobbyView({ game }: Readonly<{ game: HostState }>) {
           </div>
 
           <button
-            onClick={toggleSettings}
-            className="flex items-center gap-1.5 text-white/40 text-sm hover:text-white/70 transition-colors"
-          >
-            Settings
-            <ChevronDown className={`w-4 h-4 transition-transform duration-200 ${settingsOpen ? 'rotate-180' : ''}`} />
-          </button>
-
-          {settingsOpen && (
-            <div className="w-full max-w-sm bg-white/5 rounded-2xl p-4 space-y-4">
-              <SettingRow label="Bet time" value={bettingTimeSetting} unit="s"
-                onDec={() => setBettingTimeSetting(Math.max(5, bettingTimeSetting - 5))}
-                onInc={() => setBettingTimeSetting(Math.min(60, bettingTimeSetting + 5))} />
-              <SettingRow label="Guess time" value={guessingTimeSetting} unit="s"
-                onDec={() => setGuessingTimeSetting(Math.max(5, guessingTimeSetting - 5))}
-                onInc={() => setGuessingTimeSetting(Math.min(60, guessingTimeSetting + 5))} />
-              <SettingRow label="Rounds" value={roundsSetting} unit=""
-                onDec={() => setRoundsSetting(Math.max(1, roundsSetting - 1))}
-                onInc={() => setRoundsSetting(Math.min(30, roundsSetting + 1))} />
-            </div>
-          )}
-
-          <button
             onClick={startGame}
             disabled={players.length === 0}
-            className="mt-auto w-full max-w-sm py-4 rounded-2xl bg-purple-600 text-white font-bold text-xl disabled:opacity-30 hover:bg-purple-500 transition-colors"
+            className="mt-auto w-full max-w-md py-4 rounded-2xl bg-purple-600 text-white font-bold text-xl disabled:opacity-30 hover:bg-purple-500 transition-colors"
           >
             Start Game
           </button>
@@ -444,6 +537,32 @@ function LobbyView({ game }: Readonly<{ game: HostState }>) {
           >
             Create Game
           </button>
+        </div>
+      )}
+    </div>
+  );
+}
+
+function HintCards({ hints }: Readonly<{ hints: readonly Hint[] }>) {
+  const imageHint = hints.find(h => h.imageUrl);
+  const textHints = hints.filter(h => !h.imageUrl);
+  return (
+    <div className="flex flex-col items-center gap-8 w-full">
+      {imageHint?.imageUrl && (
+        <img
+          src={imageHint.imageUrl}
+          alt="Album art"
+          className="w-52 h-52 rounded-3xl object-cover shadow-2xl blur-sm"
+        />
+      )}
+      {textHints.length > 0 && (
+        <div className="flex flex-wrap justify-center gap-10">
+          {textHints.map(h => (
+            <div key={h.label} className="flex flex-col items-center gap-1">
+              <span className="text-white/30 text-xs uppercase tracking-[0.2em]">{h.label}</span>
+              <span className="text-white font-black text-4xl">{h.value}</span>
+            </div>
+          ))}
         </div>
       )}
     </div>
@@ -464,29 +583,18 @@ function BettingView({ game }: Readonly<{ game: HostState }>) {
           style={{ width: `${(timeLeft / bettingTime) * 100}%` }} />
       </div>
 
-      {hints.length > 0 ? (
-        <div className="bg-white/5 rounded-2xl p-4 space-y-2">
-          <p className="text-white/40 text-xs uppercase tracking-widest mb-3">Hints</p>
-          {hints.map(h => (
-            <div key={h.label} className="flex justify-between">
-              <span className="text-white/50">{h.label}</span>
-              <span className="text-white font-semibold">{h.value}</span>
-            </div>
-          ))}
+      <div className="flex-1 flex flex-col items-center justify-center gap-8">
+        <HintCards hints={hints} />
+        <div className="text-center">
+          <p className="text-5xl font-black text-white">{bidCount}</p>
+          <p className="text-white/40">of {players.length} have bid</p>
         </div>
-      ) : (
-        <div className="bg-white/5 rounded-2xl p-4 text-center text-white/30">No hints this round</div>
-      )}
-
-      <div className="text-center py-6">
-        <p className="text-5xl font-black text-white">{bidCount}</p>
-        <p className="text-white/40">of {players.length} have bid</p>
       </div>
     </div>
   );
 }
 
-function PlayingView({ game }: Readonly<{ game: HostState }>) {
+export function PlayingView({ game }: Readonly<{ game: HostState }>) {
   const { roundIndex, totalRounds, countdown, guesserNames, lowestBid, playerBids, playProgress, timeLeft } = game;
   return (
     <div className="min-h-screen flex flex-col items-center justify-center p-6 gap-6 text-center">
@@ -537,37 +645,48 @@ function GuessingView({ game }: Readonly<{ game: HostState }>) {
   );
 }
 
-function RevealView({ game, result }: Readonly<{ game: HostState; result: RoundResultEvent }>) {
-  const { roundIndex, totalRounds, players } = game;
+export function RevealView({ game, result }: Readonly<{ game: HostState; result: RoundResultEvent }>) {
+  const { roundIndex, totalRounds, players, roundDeltas } = game;
   return (
-    <div className="min-h-screen flex flex-col p-6 gap-5">
-      <p className="text-center text-white/50">Round {roundIndex + 1}/{totalRounds}</p>
-      <div className={`rounded-2xl p-6 text-center ${result.correct ? 'bg-green-900/40 border border-green-700/40' : 'bg-white/5'}`}>
-        <div className="flex justify-center mb-2">
-          {result.correct
-            ? <Check className="w-10 h-10 text-green-400" />
-            : <X className="w-10 h-10 text-white/60" />}
-        </div>
-        {result.correct
-          ? <p className="text-white font-bold text-lg">{result.guesserName} got it! <span className="text-green-400">+{result.points}</span></p>
-          : <p className="text-white/60">Nobody got it</p>
-        }
-      </div>
-      <div className="bg-white/5 rounded-2xl p-5 text-center">
-        <p className="text-white/40 text-sm mb-1">The song was</p>
-        <p className="text-white font-black text-2xl">{result.songTitle}</p>
-        <p className="text-white/60">{result.artist}</p>
-      </div>
-      <div className="flex-1 space-y-2">
+    <div className="min-h-screen flex flex-col items-center p-6 gap-6 text-center">
+      <p className="text-white/50 text-sm">{roundIndex + 1} / {totalRounds}</p>
+      <RevealStatusHeader result={result} />
+      <RevealSongCard result={result} />
+      <div className="bg-white/5 rounded-2xl p-4 w-full space-y-1.5">
         {players
           .slice()
           .sort((a, b) => (b.score ?? 0) - (a.score ?? 0))
-          .map(p => (
-            <div key={p.name} className="flex justify-between px-4 py-2 bg-white/5 rounded-xl">
-              <span className="text-white font-semibold">{p.name}</span>
-              <span className="text-white/60">{(p.score ?? 0).toLocaleString()}</span>
-            </div>
-          ))}
+          .map(p => {
+            const entry = result.playerGuesses?.find(g => g.name === p.name);
+            const delta = roundDeltas[p.name] ?? 0;
+            const streak = p.streak ?? 0;
+            const correct = result.correct && p.name === result.guesserName;
+            return (
+              <div key={p.name} className="flex justify-between items-center gap-4">
+                <div className="text-left">
+                  <div className="flex items-center gap-1.5">
+                    {streak >= 2 && (
+                      <span className="flex items-center gap-0.5 text-orange-400 text-xs font-bold">
+                        <Flame className="w-3 h-3" />{streak}
+                      </span>
+                    )}
+                    <span className="text-white/50 text-sm">{p.name}</span>
+                  </div>
+                  {entry && (() => {
+                    const skipped = entry.guess === null;
+                    let cls = 'text-white/40 text-xs';
+                    if (skipped) cls = 'text-white/25 italic text-xs';
+                    else if (correct) cls = 'text-green-400 text-xs';
+                    return <p className={cls}>{skipped ? 'skipped' : `"${entry.guess}"`}</p>;
+                  })()}
+                </div>
+                <div className="text-right shrink-0">
+                  {delta > 0 && <p className="text-green-400 text-xs font-semibold">+{delta.toLocaleString()}</p>}
+                  <span className="text-white/60 text-sm">{(p.score ?? 0).toLocaleString()}</span>
+                </div>
+              </div>
+            );
+          })}
       </div>
       <button
         onClick={() => socket.emit('next_round')}
@@ -598,8 +717,8 @@ function LeaderboardView({ game }: Readonly<{ game: HostState }>) {
         ))}
       </div>
       {phase === 'finished' && (
-        <button onClick={() => globalThis.location.reload()}
-          className="w-full py-4 rounded-2xl bg-white/10 text-white font-bold text-xl hover:bg-white/20 transition-colors">
+        <button onClick={game.newGame}
+          className="w-full py-4 rounded-2xl bg-purple-600 text-white font-bold text-xl hover:bg-purple-500 transition-colors">
           New Game
         </button>
       )}
@@ -611,14 +730,45 @@ function LeaderboardView({ game }: Readonly<{ game: HostState }>) {
 
 export default function Host() {
   const game = useHostGame();
-  const { phase, result } = game;
+  const navigate = useNavigate();
+  const { phase, result, reconnecting, reconnectingCount, gameExpired } = game;
 
-  if (phase === 'connect') return <ConnectView game={game} />;
-  if (phase === 'lobby') return <LobbyView game={game} />;
-  if (phase === 'betting') return <BettingView game={game} />;
-  if (phase === 'playing') return <PlayingView game={game} />;
-  if (phase === 'guessing') return <GuessingView game={game} />;
-  if (phase === 'reveal' && result) return <RevealView game={game} result={result} />;
-  if (phase === 'leaderboard' || phase === 'finished') return <LeaderboardView game={game} />;
-  return null;
+  return (
+    <div className="relative">
+      {phase === 'connect' && <ConnectView game={game} />}
+      {phase === 'lobby' && <LobbyView game={game} />}
+      {phase === 'betting' && <BettingView game={game} />}
+      {phase === 'playing' && <PlayingView game={game} />}
+      {phase === 'guessing' && <GuessingView game={game} />}
+      {phase === 'reveal' && result && <RevealView game={game} result={result} />}
+      {(phase === 'leaderboard' || phase === 'finished') && <LeaderboardView game={game} />}
+
+      {reconnecting && !gameExpired && (
+        <div className="fixed inset-0 bg-black/80 backdrop-blur-sm flex flex-col items-center justify-center z-50 gap-4">
+          <div className="w-12 h-12 border-4 border-purple-500 border-t-transparent rounded-full animate-spin" />
+          <p className="text-white font-bold text-xl">Reconnecting...</p>
+          <p className="text-white/40 text-sm">Game is still running</p>
+        </div>
+      )}
+      {gameExpired && (
+        <div className="fixed inset-0 bg-black/90 backdrop-blur-sm flex flex-col items-center justify-center z-50 gap-4">
+          <p className="text-white font-bold text-xl">Game expired</p>
+          <p className="text-white/40 text-sm text-center">You were away too long and the game was closed.</p>
+          <button
+            onClick={() => navigate('/')}
+            className="mt-2 px-6 py-2 bg-purple-600 hover:bg-purple-500 text-white font-semibold rounded-xl transition-colors"
+          >
+            Go home
+          </button>
+        </div>
+      )}
+      {reconnectingCount > 0 && !reconnecting && (
+        <div className="fixed top-4 right-4 bg-amber-900/60 border border-amber-500/40 rounded-xl px-3 py-2 z-40">
+          <p className="text-amber-300 text-xs font-semibold">
+            {reconnectingCount} player{reconnectingCount > 1 ? 's' : ''} reconnecting...
+          </p>
+        </div>
+      )}
+    </div>
+  );
 }

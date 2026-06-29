@@ -7,6 +7,8 @@ export const BID_OPTIONS = [0.1, 0.5, 1, 1.5, 2, 2.5, 3, 4, 5, 7, 10, 15, 20, 30
 export const BETTING_TIME = 15;
 export const GUESSING_TIME = 15;
 export const TOTAL_ROUNDS = 10;
+export const MAX_PLAYERS = 50;
+export const MAX_ACTIVE_GAMES = 20;
 
 // The tiniest bids ask for so little audio that a clip can land entirely inside
 // a song's near-silent lead-in and reveal nothing — pure bad luck the bidder
@@ -56,13 +58,28 @@ function getInitials(artist: string): string {
   return main.split(/\s+/).map(w => (w[0] ?? '').toUpperCase()).join('.') + '.';
 }
 
-// "Good 4 U" → "_ _ _ _   _   _" — reveals the title's word/character shape
-// without giving away any letters.
+// "Blinding Lights" → "B _ i _ _ i _ _   L _ _ _ t _"
+// Always reveals first letter of each word plus 2 randomly selected inner letters.
 function maskTitle(title: string): string {
-  return title
-    .trim()
-    .split(/\s+/)
-    .map(w => w.replace(/\S/g, '_').split('').join(' '))
+  const words = title.trim().split(/\s+/);
+  const innerLetters: string[] = [];
+  for (const w of words) {
+    for (let i = 1; i < w.length; i++) {
+      const c = w[i].toLowerCase();
+      if (/[a-z]/.test(c)) innerLetters.push(c);
+    }
+  }
+  const unique = [...new Set(innerLetters)];
+  const extraRevealed = new Set(shuffle(unique).slice(0, Math.min(2, unique.length)));
+
+  return words
+    .map(w =>
+      w.split('').map((c, i) => {
+        if (!/[a-zA-Z]/.test(c)) return c;
+        if (i === 0 || extraRevealed.has(c.toLowerCase())) return c;
+        return '_';
+      }).join(' ')
+    )
     .join('   ');
 }
 
@@ -73,19 +90,31 @@ function formatStreams(n: number): string {
 
 function generateHints(song: Song): Hint[] {
   const pool: Hint[] = [];
-  if (song.decade) pool.push({ label: 'Era', value: `${song.decade}s` });
-  if (song.year) pool.push({ label: 'Release year', value: String(Math.floor(song.year)) });
+
+  // Only ever one time hint — year and decade must not appear together.
+  if (song.year && song.decade) {
+    pool.push(
+      randomInt(0, 2) === 0
+        ? { label: 'Era', value: `${song.decade}s` }
+        : { label: 'Release year', value: String(Math.floor(song.year)) }
+    );
+  } else if (song.decade) {
+    pool.push({ label: 'Era', value: `${song.decade}s` });
+  } else if (song.year) {
+    pool.push({ label: 'Release year', value: String(Math.floor(song.year)) });
+  }
+
   if (song.spotifyStreams)
     pool.push({ label: 'Streams', value: formatStreams(song.spotifyStreams) });
-  // Only ever one artist reveal — initials or the full name, never both (the
-  // full name would make initials redundant anyway).
+
+  // Only ever one artist reveal — initials or full name, never both.
   pool.push(
     randomInt(0, 2) === 0
       ? { label: 'Artist initials', value: getInitials(song.artist) }
       : { label: 'Artist(s)', value: song.artist }
-  , { label: 'Title', value: maskTitle(song.title) });
+  );
 
-  const count = randomInt(0, 4); // 0–3
+  const count = randomInt(1, 4); // 1–3, always at least one hint
   return shuffle(pool).slice(0, count);
 }
 
@@ -109,10 +138,15 @@ function buildRound(usedSongIds: Set<string>): Round {
     answered: false,
     passed: new Set(),
     earlyGuessers: new Set(),
+    guesses: new Map(),
   };
 }
 
 // ─── Public API ───────────────────────────────────────────────────────────────
+
+export function activeGameCount(): number {
+  return games.size;
+}
 
 export function createGame(hostSocketId: string): Game {
   const pin = generatePin();
@@ -145,11 +179,12 @@ export function getGameBySocket(socketId: string): Game | undefined {
 }
 
 export function addPlayer(game: Game, socketId: string, name: string): Player | null {
+  if (game.players.size >= MAX_PLAYERS) return null;
   const taken = Array.from(game.players.values()).some(
     p => p.name.toLowerCase() === name.trim().toLowerCase()
   );
   if (taken) return null;
-  const player: Player = { socketId, name: name.trim(), score: 0 };
+  const player: Player = { socketId, name: name.trim(), score: 0, streak: 0 };
   game.players.set(socketId, player);
   socketToPin.set(socketId, game.pin);
   return player;
@@ -180,6 +215,8 @@ export function rejoinPlayer(game: Game, newSocketId: string, name: string): Pla
       round.guesserSocketIds = round.guesserSocketIds.map(id => (id === oldId ? newSocketId : id));
       round.bidTiers.forEach(t => { t.socketIds = t.socketIds.map(id => (id === oldId ? newSocketId : id)); });
       if (round.passed.delete(oldId)) round.passed.add(newSocketId);
+      const guess = round.guesses.get(oldId);
+      if (guess !== undefined) { round.guesses.set(newSocketId, guess); round.guesses.delete(oldId); }
     }
   }
   socketToPin.set(newSocketId, game.pin);
@@ -281,6 +318,7 @@ export function recordGuess(
   }
   if (round.answered || round.passed.has(socketId)) return null;
 
+  round.guesses.set(socketId, text);
   const correct = isCorrectGuess(text, round.song.title);
   const guesserName = game.players.get(socketId)?.name ?? '';
 
@@ -289,10 +327,13 @@ export function recordGuess(
     const player = game.players.get(socketId)!;
     const points = calcPoints(round.lowestBid, round.song.rank);
     player.score += points;
+    player.streak += 1;
     game.phase = 'reveal';
     return { correct: true, points, guesserName, allDone: false };
   }
 
+  const player = game.players.get(socketId);
+  if (player) player.streak = 0;
   round.passed.add(socketId);
   const allDone = round.guesserSocketIds.every(id => round.passed.has(id));
   return { correct: false, points: 0, guesserName, allDone };
@@ -311,9 +352,20 @@ export function skipGuess(game: Game, socketId: string): { allDone: boolean } | 
   }
   if (round.answered || round.passed.has(socketId)) return null;
 
+  round.guesses.set(socketId, null);
+  const skipper = game.players.get(socketId);
+  if (skipper) skipper.streak = 0;
   round.passed.add(socketId);
   const allDone = round.guesserSocketIds.every(id => round.passed.has(id));
   return { allDone };
+}
+
+export function getRoundGuesses(game: Game): { name: string; guess: string | null }[] {
+  const round = game.currentRound;
+  if (!round) return [];
+  return Array.from(round.guesses.entries())
+    .map(([id, guess]) => ({ name: game.players.get(id)?.name ?? '', guess }))
+    .filter(g => g.name);
 }
 
 export function getLeaderboard(game: Game) {

@@ -1,17 +1,33 @@
 import express from 'express';
 import { createServer } from 'node:http';
+import { randomInt } from 'node:crypto';
 import { Server } from 'socket.io';
 import cors from 'cors';
 import path from 'node:path';
 import dotenv from 'dotenv';
 import authRouter from './spotifyAuth';
 import * as gm from './gameManager';
+import { getAlbumArtUrl } from './albumArt';
 
 dotenv.config();
 gm.initSongs();
 
 // Countdown shown on the host before a song plays, used to buffer the track.
 const PLAYBACK_COUNTDOWN_MS = 3000;
+
+// Grace periods before treating a disconnect as permanent.
+const HOST_GRACE_MS = 60_000;
+const PLAYER_GRACE_MS = 30_000;
+
+// pin → pending host-disconnect timer
+const hostDisconnectTimers = new Map<string, ReturnType<typeof setTimeout>>();
+// socketId → pending player-disconnect timer
+const playerDisconnectTimers = new Map<string, ReturnType<typeof setTimeout>>();
+
+// IP → timestamps of recent create_game calls (for rate limiting)
+const createGameAttempts = new Map<string, number[]>();
+const CREATE_GAME_LIMIT = 5;
+const CREATE_GAME_WINDOW_MS = 60 * 60 * 1000; // 1 hour
 
 const allowedOrigins = new Set(
   (process.env.CORS_ORIGINS || process.env.FRONTEND_URL || '')
@@ -54,6 +70,18 @@ io.on('connection', (socket) => {
 
   // ── Host: create game ──────────────────────────────────────────────────────
   socket.on('create_game', (callback: (r: { pin?: string; error?: string }) => void) => {
+    if (gm.activeGameCount() >= gm.MAX_ACTIVE_GAMES) {
+      return callback({ error: 'Server is at capacity, try again later' });
+    }
+
+    const ip = socket.handshake.address;
+    const now = Date.now();
+    const attempts = (createGameAttempts.get(ip) ?? []).filter(t => now - t < CREATE_GAME_WINDOW_MS);
+    if (attempts.length >= CREATE_GAME_LIMIT) {
+      return callback({ error: 'Too many games created, try again later' });
+    }
+    createGameAttempts.set(ip, [...attempts, now]);
+
     const game = gm.createGame(socket.id);
     socket.join(game.pin);
     socket.join(`host:${game.pin}`);
@@ -89,14 +117,51 @@ io.on('connection', (socket) => {
     }
   }
 
+  // ── Host: start a new game without a page reload ─────────────────────────
+  socket.on('new_game', (callback: (r: { pin?: string; error?: string }) => void) => {
+    const oldGame = gm.getGameBySocket(socket.id);
+    if (oldGame?.hostSocketId !== socket.id) return callback({ error: 'Not a host' });
+    const oldPin = oldGame.pin;
+
+    // Cancel any pending player disconnect timers for this game.
+    for (const sid of oldGame.players.keys()) {
+      const t = playerDisconnectTimers.get(sid);
+      if (t) { clearTimeout(t); playerDisconnectTimers.delete(sid); }
+    }
+
+    // Tear down old game state, then create the new one so we have its PIN.
+    gm.cleanupGame(oldPin);
+    const newGame = gm.createGame(socket.id);
+
+    // Notify players still subscribed to the old room (Socket.IO rooms persist
+    // independently of game state, so the emit reaches them before they leave).
+    io.to(`player:${oldPin}`).emit('game_restarted', { newPin: newGame.pin });
+
+    socket.leave(oldPin);
+    socket.leave(`host:${oldPin}`);
+    socket.join(newGame.pin);
+    socket.join(`host:${newGame.pin}`);
+
+    callback({ pin: newGame.pin });
+  });
+
   // ── Host: rejoin after reconnect ──────────────────────────────────────────
-  socket.on('rejoin_host', ({ pin }: { pin: string }, callback: (r: { players: { name: string }[] }) => void) => {
+  socket.on('rejoin_host', ({ pin }: { pin: string }, callback: (r: { players: { name: string }[] } | { error: string }) => void) => {
     const game = gm.getGame(pin);
-    if (!game) return;
+    if (!game) return callback({ error: 'Game not found' });
+
+    // Cancel the host grace-period timer so the game survives.
+    const hostTimer = hostDisconnectTimers.get(pin);
+    if (hostTimer) { clearTimeout(hostTimer); hostDisconnectTimers.delete(pin); }
+
+    // Remove the stale host socket from the lookup table.
+    if (game.hostSocketId !== socket.id) gm.removeSocket(game.hostSocketId);
+
     game.hostSocketId = socket.id;
     socket.join(pin);
     socket.join(`host:${pin}`);
     gm.updateSocketPin(socket.id, pin);
+    io.to(game.pin).emit('host_reconnected');
     callback({ players: Array.from(game.players.values()).map(p => ({ name: p.name })) });
   });
 
@@ -108,14 +173,23 @@ io.on('connection', (socket) => {
       if (!game) return callback({ error: 'Game not found' });
 
       // Mid-game: if this name is already in the game, it's a full-disconnect
-      // rejoin — migrate the socket ID and snap to the current phase.
+      // rejoin — cancel any pending removal timer, migrate the socket ID, and
+      // snap to the current phase.
       if (game.phase !== 'lobby') {
+        const oldEntry = Array.from(game.players.entries())
+          .find(([, p]) => p.name.toLowerCase() === name.trim().toLowerCase());
+        if (oldEntry) {
+          const [oldId] = oldEntry;
+          const t = playerDisconnectTimers.get(oldId);
+          if (t) { clearTimeout(t); playerDisconnectTimers.delete(oldId); }
+        }
         const rejoined = gm.rejoinPlayer(game, socket.id, name);
         if (rejoined) {
           socket.join(pin);
           socket.join(`player:${pin}`);
           callback({ success: true });
           syncState(game);
+          io.to(`host:${pin}`).emit('player_reconnected', { name: rejoined.name });
           return;
         }
       }
@@ -139,12 +213,23 @@ io.on('connection', (socket) => {
   socket.on('rejoin_player', ({ pin, name }: { pin: string; name: string }, callback?: (r: { ok: boolean }) => void) => {
     const game = gm.getGame(pin);
     if (!game) return callback?.({ ok: false });
+
+    // Cancel any pending removal timer for this player.
+    const oldEntry = Array.from(game.players.entries())
+      .find(([, p]) => p.name.toLowerCase() === name.trim().toLowerCase());
+    if (oldEntry) {
+      const [oldId] = oldEntry;
+      const t = playerDisconnectTimers.get(oldId);
+      if (t) { clearTimeout(t); playerDisconnectTimers.delete(oldId); }
+    }
+
     const player = gm.rejoinPlayer(game, socket.id, name);
     if (!player) return callback?.({ ok: false });
     socket.join(pin);
     socket.join(`player:${pin}`);
     callback?.({ ok: true });
     syncState(game);
+    io.to(`host:${pin}`).emit('player_reconnected', { name: player.name });
   });
 
   // ── Host: start game → first round ────────────────────────────────────────
@@ -208,10 +293,13 @@ io.on('connection', (socket) => {
         guesserName: result.guesserName,
         songTitle: round.song.title,
         artist: round.song.artist,
+        year: round.song.year,
+        coverUrl: round.coverUrl,
         points: result.points,
+        playerGuesses: gm.getRoundGuesses(game),
       });
       io.to(game.pin).emit('score_update', {
-        players: Array.from(game.players.values()).map(p => ({ name: p.name, score: p.score })),
+        players: Array.from(game.players.values()).map(p => ({ name: p.name, score: p.score, streak: p.streak })),
       });
     } else if (result.allDone) {
       // Everyone in the tier has had their one guess — hand off / reveal.
@@ -246,23 +334,49 @@ io.on('connection', (socket) => {
 
   // ── Disconnect ─────────────────────────────────────────────────────────────
   socket.on('disconnect', () => {
-    const result = gm.removeSocket(socket.id);
-    if (!result) return;
-    const { game, wasHost } = result;
-    if (wasHost) {
-      io.to(game.pin).emit('host_disconnected');
-      gm.cleanupGame(game.pin);
+    const game = gm.getGameBySocket(socket.id);
+    if (!game) return;
+
+    if (game.hostSocketId === socket.id) {
+      // Give the host a grace window to reconnect before destroying the game.
+      io.to(game.pin).emit('host_reconnecting');
+      const timer = setTimeout(() => {
+        hostDisconnectTimers.delete(game.pin);
+        gm.removeSocket(socket.id);
+        io.to(game.pin).emit('host_disconnected');
+        gm.cleanupGame(game.pin);
+      }, HOST_GRACE_MS);
+      hostDisconnectTimers.set(game.pin, timer);
     } else {
-      io.to(`host:${game.pin}`).emit('player_left', {
-        players: Array.from(game.players.values()).map(p => ({ name: p.name })),
-      });
+      // Give the player a grace window to reconnect before removing them.
+      const player = game.players.get(socket.id);
+      if (!player) return;
+      const sid = socket.id;
+      io.to(`host:${game.pin}`).emit('player_reconnecting', { name: player.name });
+      const timer = setTimeout(() => {
+        playerDisconnectTimers.delete(sid);
+        const removed = gm.removeSocket(sid);
+        if (!removed) return; // already handled by rejoin
+        io.to(`host:${removed.game.pin}`).emit('player_left', {
+          players: Array.from(removed.game.players.values()).map(p => ({ name: p.name })),
+        });
+      }, PLAYER_GRACE_MS);
+      playerDisconnectTimers.set(sid, timer);
     }
   });
 
   // ── Round lifecycle (server-driven timing) ─────────────────────────────────
-  function beginRound(game: ReturnType<typeof gm.getGame> & object) {
+  async function beginRound(game: ReturnType<typeof gm.getGame> & object) {
     if (!game) return;
     const round = gm.startRound(game);
+
+    // Always fetch cover for the reveal screen; only show as a hint 25% of the time.
+    const coverUrl = await getAlbumArtUrl(round.song.spotifyTrackId);
+    if (coverUrl) {
+      round.coverUrl = coverUrl;
+      if (randomInt(4) === 0) round.hints.push({ label: 'Album art', value: '', imageUrl: coverUrl });
+    }
+
     const bettingEndsAt = Date.now() + game.bettingTime * 1000;
     game.phaseEndsAt = bettingEndsAt;
 
@@ -301,7 +415,10 @@ io.on('connection', (socket) => {
         guesserName: null,
         songTitle: round.song.title,
         artist: round.song.artist,
+        year: round.song.year,
+        coverUrl: round.coverUrl,
         points: 0,
+        playerGuesses: [],
       });
       return;
     }
@@ -352,7 +469,13 @@ io.on('connection', (socket) => {
       guesserName: null,
       songTitle: round.song.title,
       artist: round.song.artist,
+      year: round.song.year,
+      coverUrl: round.coverUrl,
       points: 0,
+      playerGuesses: gm.getRoundGuesses(game),
+    });
+    io.to(game.pin).emit('score_update', {
+      players: Array.from(game.players.values()).map(p => ({ name: p.name, score: p.score, streak: p.streak })),
     });
   }
 
