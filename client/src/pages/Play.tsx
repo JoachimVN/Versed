@@ -88,8 +88,10 @@ function usePlayGame(pinParam?: string): PlayState {
   });
   const timerRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const autoSubmitTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const guessAutoSubmitTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const bidSubmittedRef = useRef(false);
   const guessInputRef = useRef<HTMLInputElement>(null);
+  const guessTextRef = useRef('');
 
   function autoSubmitBid() {
     if (bidSubmittedRef.current) return;
@@ -153,6 +155,7 @@ function usePlayGame(pinParam?: string): PlayState {
       setRoundIndex(data.roundIndex);
       setTotalRounds(data.total);
       setHints(data.hints);
+      guessTextRef.current = '';
       setGuessText('');
       setResult(null);
       setError('');
@@ -160,6 +163,7 @@ function usePlayGame(pinParam?: string): PlayState {
       setMyRaceTimeMs(null);
       bidSubmittedRef.current = false;
       if (autoSubmitTimerRef.current) clearTimeout(autoSubmitTimerRef.current);
+      if (guessAutoSubmitTimerRef.current) { clearTimeout(guessAutoSubmitTimerRef.current); guessAutoSubmitTimerRef.current = null; }
 
       const roundMode = data.mode === 'race' ? 'race' : 'classic';
       setMode(roundMode);
@@ -190,13 +194,35 @@ function usePlayGame(pinParam?: string): PlayState {
     });
 
     socket.on('your_turn', (data: { timeLimit: number; endsAt?: number }) => {
-      startCountdown(data.endsAt ?? (Date.now() + data.timeLimit * 1000));
+      const endsAt = data.endsAt ?? (Date.now() + data.timeLimit * 1000);
+      startCountdown(endsAt);
       setPhase('guessing');
       setTimeout(() => guessInputRef.current?.focus(), 100);
+      if (guessAutoSubmitTimerRef.current) clearTimeout(guessAutoSubmitTimerRef.current);
+      guessAutoSubmitTimerRef.current = setTimeout(() => {
+        guessAutoSubmitTimerRef.current = null;
+        const text = guessTextRef.current.trim();
+        stopCountdown();
+        if (text) {
+          socket.emit('submit_guess', { text }, (r: { correct: boolean; points?: number; timeMs?: number }) => {
+            if (modeRef.current === 'race') {
+              if (r.correct && r.points != null) setMyRacePoints(r.points);
+              if (r.timeMs != null) setMyRaceTimeMs(r.timeMs);
+            }
+            setPhase('passed');
+          });
+        } else {
+          socket.emit('skip_guess');
+          setPhase('passed');
+        }
+        guessTextRef.current = '';
+        setGuessText('');
+      }, Math.max(0, endsAt - Date.now()));
     });
 
     socket.on('round_result', (data: RoundResultEvent) => {
       stopCountdown();
+      if (guessAutoSubmitTimerRef.current) { clearTimeout(guessAutoSubmitTimerRef.current); guessAutoSubmitTimerRef.current = null; }
       setResult(data);
       setPhase('reveal');
     });
@@ -239,6 +265,7 @@ function usePlayGame(pinParam?: string): PlayState {
     return () => {
       stopCountdown();
       if (autoSubmitTimerRef.current) clearTimeout(autoSubmitTimerRef.current);
+      if (guessAutoSubmitTimerRef.current) clearTimeout(guessAutoSubmitTimerRef.current);
       ['connect','disconnect','round_start','betting_closed','guessing_start','your_turn',
        'round_result','score_update','leaderboard','game_over',
        'host_reconnecting','host_reconnected','host_disconnected','game_restarted']
@@ -299,19 +326,21 @@ function usePlayGame(pinParam?: string): PlayState {
 
   const submitGuess = () => {
     if (!guessText.trim()) return;
+    if (guessAutoSubmitTimerRef.current) { clearTimeout(guessAutoSubmitTimerRef.current); guessAutoSubmitTimerRef.current = null; }
     stopCountdown();
     socket.emit('submit_guess', { text: guessText }, (r: { correct: boolean; points?: number; timeMs?: number }) => {
       if (modeRef.current === 'race') {
         if (r.correct && r.points != null) setMyRacePoints(r.points);
         if (r.timeMs != null) setMyRaceTimeMs(r.timeMs);
         setPhase('passed');
-      } else {
-        if (!r.correct) setPhase('passed');
+      } else if (!r.correct) {
+        setPhase('passed');
       }
     });
   };
 
   const skipGuess = () => {
+    if (guessAutoSubmitTimerRef.current) { clearTimeout(guessAutoSubmitTimerRef.current); guessAutoSubmitTimerRef.current = null; }
     stopCountdown();
     socket.emit('skip_guess');
     setPhase('passed');
@@ -353,7 +382,7 @@ function usePlayGame(pinParam?: string): PlayState {
       return next;
     });
   },
-  setGuessText,
+  setGuessText: (v: string) => { guessTextRef.current = v; setGuessText(v); },
     join, rejoinSaved, submitBid, submitGuess, skipGuess,
   };
 }
