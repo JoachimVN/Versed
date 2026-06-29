@@ -411,6 +411,7 @@ export function recordRaceGuess(
   if (!game.players.has(socketId)) return null;
   if (game.phase !== 'guessing') return null;
   if (round.passed.has(socketId)) return null;
+  if (game.raceWinnerOnly && round.firstCorrectAt !== null) return null;
 
   const elapsedMs = Date.now() - (round.playStartAt ?? Date.now());
   round.guesses.set(socketId, text);
@@ -436,7 +437,8 @@ export function recordRaceGuess(
     if (player) player.streak = 0;
   }
 
-  const allDone = Array.from(game.players.keys()).every(id => round.passed.has(id));
+  const allDone = (game.raceWinnerOnly && correct)
+    || Array.from(game.players.keys()).every(id => round.passed.has(id));
   return { correct, points, elapsedMs, allDone };
 }
 
