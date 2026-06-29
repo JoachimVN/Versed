@@ -428,24 +428,24 @@ function SettingsPanel({ game }: Readonly<{ game: HostState }>) {
             onInc={() => setGuessingTimeSetting(Math.min(60, guessingTimeSetting + 5))} />
         </>
       ) : (
-        <>
-          <SettingRow label="Round time" value={raceTimeSetting} unit="s"
-            onDec={() => setRaceTimeSetting(Math.max(10, raceTimeSetting - 5))}
-            onInc={() => setRaceTimeSetting(Math.min(60, raceTimeSetting + 5))} />
-          <div className="flex items-center justify-between">
-            <span className="text-white/60 text-sm">Winner only</span>
-            <button
-              onClick={() => setRaceWinnerOnly(!raceWinnerOnly)}
-              className={`w-11 h-6 rounded-full transition-colors relative ${raceWinnerOnly ? 'bg-purple-600' : 'bg-white/20'}`}
-            >
-              <span className={`absolute top-1 w-4 h-4 rounded-full bg-white transition-transform ${raceWinnerOnly ? 'translate-x-6' : 'translate-x-1'}`} />
-            </button>
-          </div>
-        </>
+        <SettingRow label="Round time" value={raceTimeSetting} unit="s"
+          onDec={() => setRaceTimeSetting(Math.max(10, raceTimeSetting - 5))}
+          onInc={() => setRaceTimeSetting(Math.min(60, raceTimeSetting + 5))} />
       )}
       <SettingRow label="Rounds" value={roundsSetting} unit=""
         onDec={() => setRoundsSetting(Math.max(1, roundsSetting - 1))}
         onInc={() => setRoundsSetting(Math.min(30, roundsSetting + 1))} />
+      {mode === 'race' && (
+        <div className="flex items-center justify-between">
+          <span className="text-white/60 text-sm">Winner only</span>
+          <button
+            onClick={() => setRaceWinnerOnly(!raceWinnerOnly)}
+            className={`w-11 h-6 rounded-full transition-colors relative overflow-hidden ${raceWinnerOnly ? 'bg-purple-600' : 'bg-white/20'}`}
+          >
+            <span className={`absolute top-1 left-0 w-4 h-4 rounded-full bg-white transition-transform ${raceWinnerOnly ? 'translate-x-6' : 'translate-x-1'}`} />
+          </button>
+        </div>
+      )}
     </div>
   );
 }
