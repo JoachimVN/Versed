@@ -420,7 +420,7 @@ function JoinView({ game }: Readonly<{ game: PlayState }>) {
       <div className="w-full max-w-xs flex flex-col gap-3">
         {savedSession && <p className="text-white/30 text-xs text-center">— or join a different game —</p>}
         <input type="text" inputMode="numeric" pattern="[0-9]*" placeholder="Game PIN"
-          value={pin} onChange={e => setPin(e.target.value.replace(/\D/g, ''))} maxLength={6}
+          value={pin} onChange={e => setPin(e.target.value.replace(/\D/g, ''))} maxLength={3}
           className="w-full px-4 py-4 rounded-xl bg-white/10 text-white text-center text-2xl font-bold placeholder-white/30 outline-none focus:ring-2 focus:ring-white/30 tracking-widest" />
         <input type="text" placeholder="Your name"
           value={name} onChange={e => setName(e.target.value)}
