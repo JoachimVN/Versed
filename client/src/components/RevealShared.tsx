@@ -57,7 +57,12 @@ export function RevealSongCard({ result }: Readonly<{ result: RoundResultEvent }
       )}
       <div>
         <p className="text-white font-black text-2xl leading-tight">{result.songTitle}</p>
-        <p className="text-white/50 mt-1">{result.artist}</p>
+        <p className="text-white/50 mt-1">
+          {result.artist}
+          {result.featuredArtists && (
+            <span className="text-white/25"> feat. {result.featuredArtists}</span>
+          )}
+        </p>
         {result.year && <p className="text-white/25 text-sm mt-0.5">{result.year}</p>}
       </div>
     </div>

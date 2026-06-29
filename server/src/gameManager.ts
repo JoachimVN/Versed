@@ -113,10 +113,13 @@ function generateHints(song: Song): Hint[] {
     pool.push({ label: 'Streams', value: formatStreams(song.spotifyStreams) });
 
   // Only ever one artist reveal — initials or full name, never both.
+  const fullArtist = song.featuredArtists
+    ? `${song.artist} feat. ${song.featuredArtists}`
+    : song.artist;
   pool.push(
     randomInt(0, 2) === 0
       ? { label: 'Artist initials', value: getInitials(song.artist) }
-      : { label: 'Artist(s)', value: song.artist }
+      : { label: 'Artist(s)', value: fullArtist }
   );
 
   const count = randomInt(1, 4); // 1–3, always at least one hint

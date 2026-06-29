@@ -2,6 +2,7 @@ export interface Song {
   rank: number;
   title: string;
   artist: string;
+  featuredArtists?: string;
   year: number | null;
   decade: number | null;
   bbPeak: number | null;
