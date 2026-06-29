@@ -606,10 +606,12 @@ function GuessingView({ game }: Readonly<{ game: PlayState }>) {
         </div>
       )}
       <GuessInputSection guessText={guessText} guessInputRef={guessInputRef} setGuessText={setGuessText} submitGuess={submitGuess} artistOnly={artistOnly} />
-      <button onClick={skipGuess}
-        className="w-full py-3 rounded-2xl bg-white/5 text-white/50 font-semibold hover:bg-white/10 active:scale-95 transition-all">
-        Skip, I don't know
-      </button>
+      {!isListening && (
+        <button onClick={skipGuess}
+          className="w-full py-3 rounded-2xl bg-white/5 text-white/50 font-semibold hover:bg-white/10 active:scale-95 transition-all">
+          Skip, I don't know
+        </button>
+      )}
     </div>
   );
 }
