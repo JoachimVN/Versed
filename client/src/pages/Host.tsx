@@ -43,6 +43,7 @@ export interface HostState {
   roundsSetting: number;
   mode: 'classic' | 'race';
   raceTimeSetting: number;
+  raceWinnerOnly: boolean;
   answeredCount: number;
   reconnecting: boolean;
   reconnectingCount: number;
@@ -53,6 +54,7 @@ export interface HostState {
   setRoundsSetting: (v: number) => void;
   setMode: (m: 'classic' | 'race') => void;
   setRaceTimeSetting: (v: number) => void;
+  setRaceWinnerOnly: (v: boolean) => void;
   createGame: () => void;
   startGame: () => void;
   copyInvite: () => void;
@@ -87,6 +89,7 @@ function useHostGame(): HostState {
   const [roundsSetting, setRoundsSetting] = useState(10);
   const [mode, setMode] = useState<'classic' | 'race'>('classic');
   const [raceTimeSetting, setRaceTimeSetting] = useState(RACE_TIME);
+  const [raceWinnerOnly, setRaceWinnerOnly] = useState(false);
   const [answeredCount, setAnsweredCount] = useState(0);
   const [reconnecting, setReconnecting] = useState(false);
   const [reconnectingNames, setReconnectingNames] = useState<Set<string>>(new Set());
@@ -288,7 +291,7 @@ function useHostGame(): HostState {
     socket.emit('start_game', {
       settings: {
         bettingTime: bettingTimeSetting, guessingTime: guessingTimeSetting,
-        totalRounds: roundsSetting, mode, raceTime: raceTimeSetting,
+        totalRounds: roundsSetting, mode, raceTime: raceTimeSetting, raceWinnerOnly,
       },
     });
   };
@@ -328,11 +331,11 @@ function useHostGame(): HostState {
     bettingTime, timeLeft, bidCount, countdown, guesserNames, lowestBid, playerBids,
     result, roundDeltas, leaderboard, copied, playProgress, inviteUrl,
     settingsOpen, bettingTimeSetting, guessingTimeSetting, roundsSetting,
-    mode, raceTimeSetting, answeredCount,
+    mode, raceTimeSetting, raceWinnerOnly, answeredCount,
     reconnecting, reconnectingCount: reconnectingNames.size, gameExpired,
     toggleSettings: () => setSettingsOpen(o => !o),
     setBettingTimeSetting, setGuessingTimeSetting, setRoundsSetting,
-    setMode, setRaceTimeSetting,
+    setMode, setRaceTimeSetting, setRaceWinnerOnly,
     createGame, startGame, copyInvite, newGame,
   };
 }
@@ -453,9 +456,9 @@ function LobbyView({ game }: Readonly<{ game: HostState }>) {
   const {
     spotify, pin, players, copied, createGame, startGame, copyInvite,
     settingsOpen, bettingTimeSetting, guessingTimeSetting, roundsSetting,
-    mode, raceTimeSetting,
+    mode, raceTimeSetting, raceWinnerOnly,
     toggleSettings, setBettingTimeSetting, setGuessingTimeSetting, setRoundsSetting,
-    setMode, setRaceTimeSetting,
+    setMode, setRaceTimeSetting, setRaceWinnerOnly,
   } = game;
   const navigate = useNavigate();
   const [lobbyVisible, setLobbyVisible] = useState(false);
@@ -488,9 +491,20 @@ function LobbyView({ game }: Readonly<{ game: HostState }>) {
                 onInc={() => setGuessingTimeSetting(Math.min(60, guessingTimeSetting + 5))} />
             </>
           ) : (
-            <SettingRow label="Round time" value={raceTimeSetting} unit="s"
-              onDec={() => setRaceTimeSetting(Math.max(10, raceTimeSetting - 5))}
-              onInc={() => setRaceTimeSetting(Math.min(60, raceTimeSetting + 5))} />
+            <>
+              <SettingRow label="Round time" value={raceTimeSetting} unit="s"
+                onDec={() => setRaceTimeSetting(Math.max(10, raceTimeSetting - 5))}
+                onInc={() => setRaceTimeSetting(Math.min(60, raceTimeSetting + 5))} />
+              <div className="flex items-center justify-between">
+                <span className="text-white/60 text-sm">Winner only</span>
+                <button
+                  onClick={() => setRaceWinnerOnly(!raceWinnerOnly)}
+                  className={`w-11 h-6 rounded-full transition-colors relative ${raceWinnerOnly ? 'bg-purple-600' : 'bg-white/20'}`}
+                >
+                  <span className={`absolute top-1 w-4 h-4 rounded-full bg-white transition-transform ${raceWinnerOnly ? 'translate-x-6' : 'translate-x-1'}`} />
+                </button>
+              </div>
+            </>
           )}
           <SettingRow label="Rounds" value={roundsSetting} unit=""
             onDec={() => setRoundsSetting(Math.max(1, roundsSetting - 1))}

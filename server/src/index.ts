@@ -245,7 +245,7 @@ io.on('connection', (socket) => {
   });
 
   // ── Host: start game → first round ────────────────────────────────────────
-  socket.on('start_game', (payload?: { settings?: { bettingTime?: number; guessingTime?: number; totalRounds?: number; mode?: string; raceTime?: number } }) => {
+  socket.on('start_game', (payload?: { settings?: { bettingTime?: number; guessingTime?: number; totalRounds?: number; mode?: string; raceTime?: number; raceWinnerOnly?: boolean } }) => {
     const game = gm.getGameBySocket(socket.id);
     if (game?.hostSocketId !== socket.id || game.phase !== 'lobby') return;
     const s = payload?.settings;
@@ -254,6 +254,7 @@ io.on('connection', (socket) => {
     if (s?.totalRounds) game.totalRounds = Math.max(1, Math.min(30, Math.round(s.totalRounds)));
     game.mode = s?.mode === 'race' ? 'race' : 'classic';
     if (s?.raceTime) game.raceTime = Math.max(10, Math.min(60, Math.round(s.raceTime)));
+    game.raceWinnerOnly = s?.raceWinnerOnly === true;
     game.roundIndex = 0;
     beginRound(game);
   });

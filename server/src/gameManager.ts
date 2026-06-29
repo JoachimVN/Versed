@@ -141,6 +141,11 @@ export function calcRacePoints(
   return speed + difficultyBonus(rank);
 }
 
+export function calcRaceWinnerPoints(elapsedMs: number, raceTime: number, rank: number): number {
+  const speed = Math.max(0, Math.round(RACE_BASE * (1 - elapsedMs / (raceTime * 1000))));
+  return speed + difficultyBonus(rank);
+}
+
 function buildRound(usedSongIds: Set<string>): Round {
   const pool = songs.filter(s => !usedSongIds.has(s.spotifyTrackId));
   const song = pool.length > 0 ? pickRandom(pool) : pickRandom(songs);
@@ -182,6 +187,7 @@ export function createGame(hostSocketId: string): Game {
     guessingTime: GUESSING_TIME,
     mode: 'classic',
     raceTime: RACE_TIME,
+    raceWinnerOnly: false,
     currentRound: null,
     usedSongIds: new Set(),
     phaseTimer: null,
@@ -413,11 +419,14 @@ export function recordRaceGuess(
   if (correct) {
     const isFirst = round.firstCorrectAt === null;
     if (isFirst) round.firstCorrectAt = Date.now();
-    const firstElapsedMs = round.firstCorrectAt! - round.playStartAt!;
-    points = calcRacePoints(isFirst, elapsedMs, firstElapsedMs, round.song.rank);
     const player = game.players.get(socketId)!;
-    player.score += points;
-    player.streak += 1;
+    if (isFirst || !game.raceWinnerOnly) {
+      points = game.raceWinnerOnly
+        ? calcRaceWinnerPoints(elapsedMs, game.raceTime, round.song.rank)
+        : calcRacePoints(isFirst, elapsedMs, round.firstCorrectAt! - round.playStartAt!, round.song.rank);
+      player.score += points;
+      player.streak += 1;
+    }
     round.correctGuessers.add(socketId);
     round.guessTimes.set(socketId, elapsedMs);
   } else {
