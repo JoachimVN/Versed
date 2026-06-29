@@ -350,18 +350,11 @@ io.on('connection', (socket) => {
       io.to(game.pin).emit('round_result', {
         correct: true,
         guesserName: result.guesserName,
-        songTitle: round.song.title,
-        artist: round.song.artist,
-        featuredArtists: round.song.featuredArtists,
-        year: round.song.year,
-        coverUrl: round.coverUrl,
+        ...songFields(game, round),
         points: result.points,
         playerGuesses: gm.getRoundGuesses(game),
-        artistOnly: game.artistOnly,
       });
-      io.to(game.pin).emit('score_update', {
-        players: Array.from(game.players.values()).map(p => ({ name: p.name, score: p.score, streak: p.streak })),
-      });
+      emitScoreUpdate(game);
     } else if (result.allDone) {
       advanceTierOrReveal(game);
     }
@@ -457,7 +450,10 @@ io.on('connection', (socket) => {
   });
 
   // ── Round lifecycle (server-driven timing) ─────────────────────────────────
-  async function beginRound(game: ReturnType<typeof gm.getGame> & object) {
+  type GameObj = ReturnType<typeof gm.getGame> & object;
+  type RoundObj = NonNullable<GameObj['currentRound']>;
+
+  async function beginRound(game: GameObj) {
     if (!game) return;
     const round = gm.startRound(game);
 
@@ -543,7 +539,24 @@ io.on('connection', (socket) => {
     game.phaseTimer = setTimeout(() => closeBettingAndPlay(game), game.bettingTime * 1000 + 500);
   }
 
-  function endRaceRound(game: ReturnType<typeof gm.getGame> & object) {
+  function songFields(game: GameObj, round: RoundObj) {
+    return {
+      songTitle: round.song.title,
+      artist: round.song.artist,
+      featuredArtists: round.song.featuredArtists,
+      year: round.song.year,
+      coverUrl: round.coverUrl,
+      artistOnly: game.artistOnly,
+    };
+  }
+
+  function emitScoreUpdate(game: GameObj) {
+    io.to(game.pin).emit('score_update', {
+      players: Array.from(game.players.values()).map(p => ({ name: p.name, score: p.score, streak: p.streak })),
+    });
+  }
+
+  function endRaceRound(game: GameObj) {
     if (game.phase === 'reveal') return; // guard against timer + allDone race
     if (game.phaseTimer) clearTimeout(game.phaseTimer);
     const round = game.currentRound!;
@@ -556,21 +569,14 @@ io.on('connection', (socket) => {
       guesserName: null,
       mode: 'race',
       correctGuessers: correctNames,
-      songTitle: round.song.title,
-      artist: round.song.artist,
-      featuredArtists: round.song.featuredArtists,
-      year: round.song.year,
-      coverUrl: round.coverUrl,
+      ...songFields(game, round),
       points: 0,
       playerGuesses: gm.getRoundGuesses(game),
-      artistOnly: game.artistOnly,
     });
-    io.to(game.pin).emit('score_update', {
-      players: Array.from(game.players.values()).map(p => ({ name: p.name, score: p.score, streak: p.streak })),
-    });
+    emitScoreUpdate(game);
   }
 
-  function closeBettingAndPlay(game: ReturnType<typeof gm.getGame> & object) {
+  function closeBettingAndPlay(game: GameObj) {
     if (!game || game.phase !== 'betting') return;
     const round = game.currentRound!;
     const result = gm.closeBetting(game);
@@ -579,14 +585,9 @@ io.on('connection', (socket) => {
       io.to(game.pin).emit('round_result', {
         correct: false,
         guesserName: null,
-        songTitle: round.song.title,
-        artist: round.song.artist,
-        featuredArtists: round.song.featuredArtists,
-        year: round.song.year,
-        coverUrl: round.coverUrl,
+        ...songFields(game, round),
         points: 0,
         playerGuesses: [],
-        artistOnly: game.artistOnly,
       });
       return;
     }
@@ -596,7 +597,7 @@ io.on('connection', (socket) => {
   // Play the song for the current tier and queue its guessing phase. Reused both
   // for the opening (lowest) tier and each next-lowest tier that gets a turn.
   function playTier(
-    game: ReturnType<typeof gm.getGame> & object,
+    game: GameObj,
     turn: gm.TierTurn,
   ) {
     if (game.phaseTimer) clearTimeout(game.phaseTimer);
@@ -623,28 +624,21 @@ io.on('connection', (socket) => {
 
   // A tier ran out of guesses (all wrong, or time expired). Hand off to the
   // next-lowest bidders if there are any; otherwise reveal that nobody got it.
-  function revealRound(game: ReturnType<typeof gm.getGame> & object) {
+  function revealRound(game: GameObj) {
     const round = game.currentRound!;
     if (game.phaseTimer) clearTimeout(game.phaseTimer);
     game.phase = 'reveal';
     io.to(game.pin).emit('round_result', {
       correct: false,
       guesserName: null,
-      songTitle: round.song.title,
-      artist: round.song.artist,
-      featuredArtists: round.song.featuredArtists,
-      year: round.song.year,
-      coverUrl: round.coverUrl,
+      ...songFields(game, round),
       points: 0,
       playerGuesses: gm.getRoundGuesses(game),
-      artistOnly: game.artistOnly,
     });
-    io.to(game.pin).emit('score_update', {
-      players: Array.from(game.players.values()).map(p => ({ name: p.name, score: p.score, streak: p.streak })),
-    });
+    emitScoreUpdate(game);
   }
 
-  function advanceTierOrReveal(game: ReturnType<typeof gm.getGame> & object) {
+  function advanceTierOrReveal(game: GameObj) {
     const next = gm.advanceTier(game);
     if (next) {
       playTier(game, next);
@@ -653,7 +647,7 @@ io.on('connection', (socket) => {
     revealRound(game);
   }
 
-  function startGuessingPhase(game: ReturnType<typeof gm.getGame> & object) {
+  function startGuessingPhase(game: GameObj) {
     if (!game || game.phase !== 'playing') return;
     const round = game.currentRound!;
     const guesserSocketIds = round.guesserSocketIds;

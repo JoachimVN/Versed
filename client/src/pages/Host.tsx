@@ -1,6 +1,6 @@
 import { useState, useEffect, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { Music, Check, Loader2, Copy, ArrowLeft, Settings, Flame, X } from 'lucide-react';
+import { Music, Check, Loader2, Copy, ArrowLeft, Settings, Flame } from 'lucide-react';
 import QRCode from 'react-qr-code';
 import { socket } from '../socket';
 import { useSpotify } from '../hooks/useSpotify';
