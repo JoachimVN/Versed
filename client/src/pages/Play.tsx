@@ -690,6 +690,7 @@ export function RevealView({ game, result }: Readonly<{ game: PlayState; result:
 
 function LeaderboardView({ game }: Readonly<{ game: PlayState }>) {
   const { phase, myName, myScore, leaderboard, newGamePin, rejoinNewGame } = game;
+  const navigate = useNavigate();
   const myEntry = leaderboard.find(e => e.name === myName);
   return (
     <div className="min-h-screen flex flex-col p-6 gap-4">
@@ -723,14 +724,14 @@ function LeaderboardView({ game }: Readonly<{ game: PlayState }>) {
             className="w-full py-4 rounded-2xl bg-emerald-600 text-white font-bold text-xl hover:bg-emerald-500 transition-colors">
             Play Again
           </button>
-          <button onClick={() => { globalThis.location.href = '/'; }}
+          <button onClick={() => { navigate('/'); }}
             className="w-full py-3 rounded-2xl bg-white/10 text-white/60 font-semibold text-base hover:bg-white/20 transition-colors">
             Leave
           </button>
         </div>
       )}
       {phase === 'finished' && !newGamePin && (
-        <button onClick={() => { globalThis.location.href = '/'; }}
+        <button onClick={() => { navigate('/'); }}
           className="w-full py-4 rounded-2xl bg-white/10 text-white font-bold text-xl hover:bg-white/20 transition-colors">
           Leave
         </button>
