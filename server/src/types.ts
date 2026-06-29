@@ -7,6 +7,7 @@ export interface Song {
   bbPeak: number | null;
   bbChartWeeks: number | null;
   spotifyStreams: number | null;
+  youtubeViews: number | null;
   spotifyTrackId: string;
   finalScore: number;
 }

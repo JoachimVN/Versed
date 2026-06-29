@@ -30,6 +30,24 @@ function extractTrackId(url: string): string | null {
   return match ? match[1] : null;
 }
 
+// CSV columns (0-based):
+//  0  title
+//  1  artist
+//  2  year
+//  3  decade
+//  4  bb_peak
+//  5  bb_chart_weeks
+//  6  bb_score
+//  7  spotify_streams
+//  8  sp_score
+//  9  youtube_views
+// 10  yt_score
+// 11  itunes_total
+// 12  itunes_score
+// 13  apple_total
+// 14  apple_score
+// 15  final_score
+// 16  spotify_url
 export function loadSongs(): Song[] {
   const csvPath = path.join(__dirname, 'data', 'music_index_full.csv');
   const lines = fs.readFileSync(csvPath, 'utf-8').split('\n').filter(l => l.trim());
@@ -37,22 +55,23 @@ export function loadSongs(): Song[] {
   const songs: Song[] = [];
   for (let i = 1; i < lines.length; i++) {
     const f = parseCSVLine(lines[i]);
-    if (f.length < 12) continue;
+    if (f.length < 17) continue;
 
-    const trackId = extractTrackId(f[11] ?? '');
+    const trackId = extractTrackId(f[16] ?? '');
     if (!trackId) continue;
 
     songs.push({
-      rank: Number.parseInt(f[0]) || i,
-      title: f[1].replace(/^"|"$/g, '').trim(),
-      artist: f[2].replace(/^"|"$/g, '').trim(),
-      year: num(f[3]),
-      decade: num(f[4]),
-      bbPeak: num(f[5]),
-      bbChartWeeks: num(f[6]),
+      rank: i,
+      title: f[0].replace(/^"|"$/g, '').trim(),
+      artist: f[1].replace(/^"|"$/g, '').trim(),
+      year: num(f[2]),
+      decade: num(f[3]),
+      bbPeak: num(f[4]),
+      bbChartWeeks: num(f[5]),
       spotifyStreams: num(f[7]),
+      youtubeViews: num(f[9]),
       spotifyTrackId: trackId,
-      finalScore: num(f[10]) ?? 0,
+      finalScore: num(f[15]) ?? 0,
     });
   }
 
