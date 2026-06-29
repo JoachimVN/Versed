@@ -26,7 +26,10 @@ export function RevealStatusHeader({
     const count = result.correctGuessers?.length ?? 0;
     circle = <Check className="w-12 h-12 text-white/40" />;
     bgClass = 'bg-white/10';
-    label = <p className="text-2xl font-black text-white">{count} player{count !== 1 ? 's' : ''} got it</p>;
+    const raceLabel = count === 1
+      ? `${result.correctGuessers![0]} got it`
+      : `${count} players got it`;
+    label = <p className="text-2xl font-black text-white">{raceLabel}</p>;
   } else {
     const initial = result.guesserName?.[0]?.toUpperCase() ?? '?';
     circle = <span className="text-2xl font-black text-white/70">{initial}</span>;
