@@ -2,6 +2,7 @@ export interface Song {
   rank: number;
   title: string;
   artist: string;
+  featuredArtists?: string;
   year: number | null;
   decade: number | null;
   bbPeak: number | null;
@@ -68,6 +69,7 @@ export interface Game {
   pin: string;
   hostSocketId: string;
   players: Map<string, Player>;
+  formerPlayers: Map<string, { score: number; streak: number }>; // name.toLowerCase() → saved state
   phase: GamePhase;
   roundIndex: number;
   totalRounds: number;
@@ -76,6 +78,7 @@ export interface Game {
   mode: GameMode;
   raceTime: number;
   raceWinnerOnly: boolean;
+  artistOnly: boolean;
   currentRound: Round | null;
   usedSongIds: Set<string>;
   phaseTimer: ReturnType<typeof setTimeout> | null;

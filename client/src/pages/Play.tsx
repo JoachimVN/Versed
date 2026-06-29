@@ -31,6 +31,7 @@ export interface PlayState {
   myScore: number;
   myStreak: number;
   mode: 'classic' | 'race';
+  artistOnly: boolean;
   myRacePoints: number;
   myRaceTimeMs: number | null;
   leaderboard: LeaderboardEntry[];
@@ -75,6 +76,7 @@ function usePlayGame(pinParam?: string): PlayState {
   const [myStreak, setMyStreak] = useState(0);
   const [mode, setMode] = useState<'classic' | 'race'>('classic');
   const modeRef = useRef<'classic' | 'race'>('classic');
+  const [artistOnly, setArtistOnly] = useState(false);
   const [myRacePoints, setMyRacePoints] = useState(0);
   const [myRaceTimeMs, setMyRaceTimeMs] = useState<number | null>(null);
   const [leaderboard, setLeaderboard] = useState<LeaderboardEntry[]>([]);
@@ -170,7 +172,7 @@ function usePlayGame(pinParam?: string): PlayState {
     socket.on('round_start', (data: {
       roundIndex: number; total: number;
       hints: Hint[]; bettingTime?: number; endsAt?: number;
-      mode?: 'classic' | 'race'; raceTime?: number;
+      mode?: 'classic' | 'race'; raceTime?: number; artistOnly?: boolean;
     }) => {
       setRoundIndex(data.roundIndex);
       setTotalRounds(data.total);
@@ -188,6 +190,7 @@ function usePlayGame(pinParam?: string): PlayState {
       const roundMode = data.mode === 'race' ? 'race' : 'classic';
       setMode(roundMode);
       modeRef.current = roundMode;
+      setArtistOnly(data.artistOnly === true);
 
       if (roundMode === 'race') {
         setGuesserNames([]);
@@ -259,6 +262,14 @@ function usePlayGame(pinParam?: string): PlayState {
       setPhase('join');
     });
 
+    socket.on('kicked', () => {
+      stopCountdown();
+      setSavedSession(null);
+      localStorage.removeItem('versed_session');
+      setError('You were removed from the lobby.');
+      setPhase('join');
+    });
+
     socket.on('game_restarted', ({ newPin }: { newPin: string }) => {
       newGamePinRef.current = newPin;
       setNewGamePin(newPin);
@@ -270,7 +281,7 @@ function usePlayGame(pinParam?: string): PlayState {
       if (guessAutoSubmitTimerRef.current) clearTimeout(guessAutoSubmitTimerRef.current);
       ['connect','disconnect','round_start','betting_closed','guessing_start','your_turn',
        'round_result','score_update','leaderboard','game_over',
-       'host_reconnecting','host_reconnected','host_disconnected','game_restarted']
+       'host_reconnecting','host_reconnected','host_disconnected','game_restarted','kicked']
         .forEach(e => socket.off(e));
       socket.disconnect();
     };
@@ -373,7 +384,7 @@ function usePlayGame(pinParam?: string): PlayState {
   return {
     phase, pin, name, myName, error, roundIndex, totalRounds, hints,
     timeLeft, bettingTime, bidIndex, myBid, guesserNames, lowestBid,
-    guessText, result, myScore, myStreak, mode, myRacePoints, myRaceTimeMs,
+    guessText, result, myScore, myStreak, mode, artistOnly, myRacePoints, myRaceTimeMs,
     leaderboard, reconnecting, hostReconnecting, savedSession, guessInputRef,
     newGamePin, rejoinNewGame,
     setPin, setName,
@@ -414,7 +425,7 @@ function JoinView({ game }: Readonly<{ game: PlayState }>) {
       <div className="w-full max-w-xs flex flex-col gap-3">
         {savedSession && <p className="text-white/30 text-xs text-center">— or join a different game —</p>}
         <input type="text" inputMode="numeric" pattern="[0-9]*" placeholder="Game PIN"
-          value={pin} onChange={e => setPin(e.target.value.replace(/\D/g, ''))} maxLength={6}
+          value={pin} onChange={e => setPin(e.target.value.replace(/\D/g, ''))} maxLength={3}
           className="w-full px-4 py-4 rounded-xl bg-white/10 text-white text-center text-2xl font-bold placeholder-white/30 outline-none focus:ring-2 focus:ring-white/30 tracking-widest" />
         <input type="text" placeholder="Your name"
           value={name} onChange={e => setName(e.target.value)}
@@ -516,20 +527,21 @@ function BidSubmittedView({ game }: Readonly<{ game: PlayState }>) {
   );
 }
 
-function GuessInputSection({ guessText, guessInputRef, setGuessText, submitGuess }: Readonly<{
+function GuessInputSection({ guessText, guessInputRef, setGuessText, submitGuess, artistOnly }: Readonly<{
   guessText: string;
   guessInputRef: React.RefObject<HTMLInputElement>;
   setGuessText: (v: string) => void;
   submitGuess: () => void;
+  artistOnly?: boolean;
 }>) {
   return (
     <>
       <div className="flex-1 flex flex-col items-center justify-center gap-6">
-        <p className="text-white/60">Name the song</p>
+        <p className="text-white/60">{artistOnly ? 'Name the artist' : 'Name the song'}</p>
         <input
           ref={guessInputRef}
           type="text"
-          placeholder="Type song title..."
+          placeholder={artistOnly ? 'Type artist name...' : 'Type song title...'}
           value={guessText}
           onChange={e => setGuessText(e.target.value)}
           onKeyDown={e => e.key === 'Enter' && submitGuess()}
@@ -548,7 +560,7 @@ function GuessInputSection({ guessText, guessInputRef, setGuessText, submitGuess
 }
 
 function WatchingView({ game }: Readonly<{ game: PlayState }>) {
-  const { lowestBid, guesserNames, myName, guessText, guessInputRef, setGuessText, submitGuess, skipGuess, mode } = game;
+  const { lowestBid, guesserNames, mode } = game;
 
   if (mode === 'race') {
     return (
@@ -556,24 +568,6 @@ function WatchingView({ game }: Readonly<{ game: PlayState }>) {
         <Music className="w-14 h-14 text-white animate-pulse" />
         <p className="text-white font-black text-2xl">Get ready…</p>
         <p className="text-white/30 text-sm">Song starts soon — everyone guesses at once</p>
-      </div>
-    );
-  }
-
-  const imGuessing = guesserNames.includes(myName);
-
-  if (imGuessing) {
-    return (
-      <div className="min-h-screen flex flex-col p-5 gap-4">
-        <div className="flex justify-center items-center gap-2">
-          <Music className="w-4 h-4 text-white/40 animate-pulse" />
-          <span className="text-white/40 text-sm">Listening...</span>
-        </div>
-        <GuessInputSection guessText={guessText} guessInputRef={guessInputRef} setGuessText={setGuessText} submitGuess={submitGuess} />
-        <button onClick={skipGuess}
-          className="w-full py-3 rounded-2xl bg-white/5 text-white/50 font-semibold hover:bg-white/10 active:scale-95 transition-all">
-          Skip — I don't know
-        </button>
       </div>
     );
   }
@@ -590,19 +584,31 @@ function WatchingView({ game }: Readonly<{ game: PlayState }>) {
   );
 }
 
+// Handles both the "listening" sub-phase (watching, imGuessing) and the active
+// guessing phase. Keeping a single component across both states means the input
+// element is never unmounted — focus and text survive the transition, which
+// prevents the mobile keyboard from dismissing mid-song.
 function GuessingView({ game }: Readonly<{ game: PlayState }>) {
-  const { timeLeft, myScore, guessText, guessInputRef, setGuessText, submitGuess, skipGuess } = game;
+  const { phase, timeLeft, myScore, guessText, guessInputRef, setGuessText, submitGuess, skipGuess, artistOnly } = game;
+  const isListening = phase === 'watching';
   return (
     <div className="min-h-screen flex flex-col p-5 gap-4">
-      <div className="flex justify-between items-center">
-        <span className="text-white/50 text-sm">Your turn!</span>
-        <span className="text-white font-black text-2xl">{timeLeft}s</span>
-        <span className="text-white/50 text-sm">{myScore.toLocaleString()} pts</span>
-      </div>
-      <GuessInputSection guessText={guessText} guessInputRef={guessInputRef} setGuessText={setGuessText} submitGuess={submitGuess} />
+      {isListening ? (
+        <div className="flex justify-center items-center gap-2">
+          <Music className="w-4 h-4 text-white/40 animate-pulse" />
+          <span className="text-white/40 text-sm">Listening...</span>
+        </div>
+      ) : (
+        <div className="flex justify-between items-center">
+          <span className="text-white/50 text-sm">Your turn!</span>
+          <span className="text-white font-black text-2xl">{timeLeft}s</span>
+          <span className="text-white/50 text-sm">{myScore.toLocaleString()} pts</span>
+        </div>
+      )}
+      <GuessInputSection guessText={guessText} guessInputRef={guessInputRef} setGuessText={setGuessText} submitGuess={submitGuess} artistOnly={artistOnly} />
       <button onClick={skipGuess}
         className="w-full py-3 rounded-2xl bg-white/5 text-white/50 font-semibold hover:bg-white/10 active:scale-95 transition-all">
-        Skip — I don't know
+        Skip, I don't know
       </button>
     </div>
   );
@@ -627,7 +633,11 @@ function PassedView({ game }: Readonly<{ game: PlayState }>) {
       </div>
     );
   }
-  return <div className="min-h-screen" />;
+  return (
+    <div className="min-h-screen flex flex-col items-center justify-center gap-4 p-6 text-center">
+      <p className="text-white/50 text-xl">Waiting for others…</p>
+    </div>
+  );
 }
 
 export function RevealView({ game, result }: Readonly<{ game: PlayState; result: RoundResultEvent }>) {
@@ -684,6 +694,7 @@ export function RevealView({ game, result }: Readonly<{ game: PlayState; result:
 
 function LeaderboardView({ game }: Readonly<{ game: PlayState }>) {
   const { phase, myName, myScore, leaderboard, newGamePin, rejoinNewGame } = game;
+  const navigate = useNavigate();
   const myEntry = leaderboard.find(e => e.name === myName);
   return (
     <div className="min-h-screen flex flex-col p-6 gap-4">
@@ -717,14 +728,14 @@ function LeaderboardView({ game }: Readonly<{ game: PlayState }>) {
             className="w-full py-4 rounded-2xl bg-emerald-600 text-white font-bold text-xl hover:bg-emerald-500 transition-colors">
             Play Again
           </button>
-          <button onClick={() => { globalThis.location.href = '/'; }}
+          <button onClick={() => { navigate('/'); }}
             className="w-full py-3 rounded-2xl bg-white/10 text-white/60 font-semibold text-base hover:bg-white/20 transition-colors">
             Leave
           </button>
         </div>
       )}
       {phase === 'finished' && !newGamePin && (
-        <button onClick={() => { globalThis.location.href = '/'; }}
+        <button onClick={() => { navigate('/'); }}
           className="w-full py-4 rounded-2xl bg-white/10 text-white font-bold text-xl hover:bg-white/20 transition-colors">
           Leave
         </button>
@@ -738,7 +749,8 @@ function LeaderboardView({ game }: Readonly<{ game: PlayState }>) {
 export default function Play() {
   const { pin: pinParam } = useParams<{ pin?: string }>();
   const game = usePlayGame(pinParam);
-  const { phase, result, reconnecting, hostReconnecting } = game;
+  const { phase, result, reconnecting, hostReconnecting, guesserNames, myName } = game;
+  const imGuessing = guesserNames.includes(myName);
 
   return (
     <div className="relative">
@@ -746,21 +758,22 @@ export default function Play() {
       {phase === 'waiting' && <WaitingView game={game} />}
       {phase === 'betting' && <BettingView game={game} />}
       {phase === 'bid_submitted' && <BidSubmittedView game={game} />}
-      {phase === 'watching' && <WatchingView game={game} />}
-      {phase === 'guessing' && <GuessingView game={game} />}
+      {phase === 'watching' && !imGuessing && <WatchingView game={game} />}
+      {(phase === 'guessing' || (phase === 'watching' && imGuessing)) && <GuessingView game={game} />}
       {phase === 'passed' && <PassedView game={game} />}
       {phase === 'reveal' && result && <RevealView game={game} result={result} />}
       {(phase === 'leaderboard' || phase === 'finished') && <LeaderboardView game={game} />}
 
       {reconnecting && (
-        <div className="fixed inset-0 bg-black/80 backdrop-blur-sm flex flex-col items-center justify-center z-50 gap-4">
-          <div className="w-12 h-12 border-4 border-purple-500 border-t-transparent rounded-full animate-spin" />
-          <p className="text-white font-bold text-xl">Reconnecting...</p>
+        <div className="fixed inset-0 bg-black/70 backdrop-blur-sm flex flex-col items-center justify-center z-50 gap-3">
+          <div className="w-10 h-10 border-2 border-white/30 border-t-white rounded-full animate-spin" />
+          <p className="text-white/70 text-sm font-medium">Reconnecting...</p>
         </div>
       )}
       {hostReconnecting && !reconnecting && (
-        <div className="fixed bottom-4 left-4 right-4 bg-amber-900/60 border border-amber-500/40 rounded-xl px-4 py-3 text-center z-40">
-          <p className="text-amber-300 text-sm font-semibold">Host disconnected — waiting to reconnect...</p>
+        <div className="fixed bottom-5 right-5 flex items-center gap-2 bg-white/8 backdrop-blur-sm rounded-full px-3 py-1.5 z-40">
+          <span className="w-1.5 h-1.5 rounded-full bg-white/50 animate-pulse" />
+          <p className="text-white/50 text-xs">Host reconnecting</p>
         </div>
       )}
     </div>

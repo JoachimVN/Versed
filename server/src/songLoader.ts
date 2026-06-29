@@ -64,7 +64,10 @@ export function loadSongs(): Song[] {
     songs.push({
       rank: num(f[0]) ?? i,
       title: f[1].replace(/^"|"$/g, '').trim(),
-      artist: f[2].replace(/^"|"$/g, '').trim(),
+      artist: (f[2].replace(/^"|"$/g, '').split(';')[0] ?? '').trim(),
+      featuredArtists: f[2].replace(/^"|"$/g, '').includes(';')
+        ? f[2].replace(/^"|"$/g, '').split(';').slice(1).join(', ').trim()
+        : undefined,
       year: num(f[3]),
       decade: num(f[4]),
       bbPeak: num(f[5]),

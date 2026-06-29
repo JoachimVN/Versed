@@ -21,10 +21,12 @@ export interface RoundResultEvent {
   guesserName: string | null;
   songTitle: string;
   artist: string;
+  featuredArtists?: string;
   year?: number | null;
   coverUrl?: string;
   points: number;
   mode?: 'classic' | 'race';
+  artistOnly?: boolean;
   correctGuessers?: string[];
   playerGuesses?: { name: string; guess: string | null; timeMs?: number | null }[];
 }

@@ -44,6 +44,7 @@ export interface HostState {
   mode: 'classic' | 'race';
   raceTimeSetting: number;
   raceWinnerOnly: boolean;
+  artistOnly: boolean;
   answeredCount: number;
   reconnecting: boolean;
   reconnectingCount: number;
@@ -55,10 +56,13 @@ export interface HostState {
   setMode: (m: 'classic' | 'race') => void;
   setRaceTimeSetting: (v: number) => void;
   setRaceWinnerOnly: (v: boolean) => void;
+  setArtistOnly: (v: boolean) => void;
   createGame: () => void;
   startGame: () => void;
+  skipTurn: () => void;
   copyInvite: () => void;
   newGame: () => void;
+  removePlayer: (name: string) => void;
 }
 
 function useHostGame(): HostState {
@@ -90,12 +94,14 @@ function useHostGame(): HostState {
   const [mode, setMode] = useState<'classic' | 'race'>('classic');
   const [raceTimeSetting, setRaceTimeSetting] = useState(RACE_TIME);
   const [raceWinnerOnly, setRaceWinnerOnly] = useState(false);
+  const [artistOnly, setArtistOnly] = useState(false);
   const [answeredCount, setAnsweredCount] = useState(0);
   const [reconnecting, setReconnecting] = useState(false);
   const [reconnectingNames, setReconnectingNames] = useState<Set<string>>(new Set());
   const [gameExpired, setGameExpired] = useState(false);
   const timerRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const playRafRef = useRef<number | null>(null);
+  const playGenRef = useRef(0);
 
   useEffect(() => {
     if (spotify.isConnected && phase === 'connect') setPhase('lobby');
@@ -164,8 +170,13 @@ function useHostGame(): HostState {
     socket.on('player_reconnecting', ({ name }: { name: string }) => {
       setReconnectingNames(prev => new Set(prev).add(name));
     });
-    socket.on('player_reconnected', ({ name }: { name: string }) => {
+    socket.on('player_reconnected', ({ name, score, streak }: { name: string; score?: number; streak?: number }) => {
       setReconnectingNames(prev => { const s = new Set(prev); s.delete(name); return s; });
+      if (score !== undefined) {
+        playersRef.current = playersRef.current.map(p =>
+          p.name === name ? { ...p, score, streak: streak ?? p.streak } : p
+        );
+      }
     });
 
     socket.on('host_round_start', (data: {
@@ -204,17 +215,20 @@ function useHostGame(): HostState {
     });
 
     socket.on('play_song', async (data: { trackId: string; durationMs: number; countdownMs?: number }) => {
-      // Start buffering immediately, then run the countdown while it loads so
-      // the reveal is instant and the X-second timer matches the audible start.
+      // Bump generation so any previously-running countdown loop exits early.
+      const myGen = ++playGenRef.current;
       stopPlaybackBar(); // keep the bar empty through the countdown/buffer
       const prepared = spotify.prepareTrack(data.trackId);
       const ticks = Math.ceil((data.countdownMs ?? 3000) / 1000);
       for (let n = ticks; n > 0; n--) {
+        if (playGenRef.current !== myGen) return;
         setCountdown(n);
         await wait(1000);
       }
+      if (playGenRef.current !== myGen) return;
       setCountdown(null);
       await prepared;
+      if (playGenRef.current !== myGen) return;
       // Resolves at the real audible start; sync the timer and server to it.
       // Returns false if a round_result/guessing_start arrived and cancelled
       // playback mid-countdown — in that case skip song_started so the server
@@ -227,6 +241,7 @@ function useHostGame(): HostState {
     });
 
     socket.on('guessing_start', (data: { guesserNames: string[]; timeLimit: number }) => {
+      ++playGenRef.current;
       spotify.pauseTrack();
       stopCountdown();
       stopPlaybackBar();
@@ -236,6 +251,7 @@ function useHostGame(): HostState {
     });
 
     socket.on('round_result', (data: RoundResultEvent) => {
+      ++playGenRef.current;
       stopCountdown();
       stopPlaybackBar();
       spotify.pauseTrack();
@@ -295,7 +311,7 @@ function useHostGame(): HostState {
     socket.emit('start_game', {
       settings: {
         bettingTime: bettingTimeSetting, guessingTime: guessingTimeSetting,
-        totalRounds: roundsSetting, mode, raceTime: raceTimeSetting, raceWinnerOnly,
+        totalRounds: roundsSetting, mode, raceTime: raceTimeSetting, raceWinnerOnly, artistOnly,
       },
     });
   };
@@ -335,12 +351,14 @@ function useHostGame(): HostState {
     bettingTime, timeLeft, bidCount, countdown, guesserNames, lowestBid, playerBids,
     result, roundDeltas, leaderboard, copied, playProgress, inviteUrl,
     settingsOpen, bettingTimeSetting, guessingTimeSetting, roundsSetting,
-    mode, raceTimeSetting, raceWinnerOnly, answeredCount,
+    mode, raceTimeSetting, raceWinnerOnly, artistOnly, answeredCount,
     reconnecting, reconnectingCount: reconnectingNames.size, gameExpired,
     toggleSettings: () => setSettingsOpen(o => !o),
     setBettingTimeSetting, setGuessingTimeSetting, setRoundsSetting,
-    setMode, setRaceTimeSetting, setRaceWinnerOnly,
+    setMode, setRaceTimeSetting, setRaceWinnerOnly, setArtistOnly,
     createGame, startGame, copyInvite, newGame,
+    skipTurn: () => socket.emit('host_skip_turn'),
+    removePlayer: (name: string) => socket.emit('kick_player', { name }),
   };
 }
 
@@ -417,8 +435,8 @@ function BidTimeline({ bids, lowestBid }: Readonly<{ bids: { name: string; bid: 
 
 function SettingsPanel({ game }: Readonly<{ game: HostState }>) {
   const {
-    mode, bettingTimeSetting, guessingTimeSetting, roundsSetting, raceTimeSetting, raceWinnerOnly,
-    setBettingTimeSetting, setGuessingTimeSetting, setRoundsSetting, setRaceTimeSetting, setRaceWinnerOnly,
+    mode, bettingTimeSetting, guessingTimeSetting, roundsSetting, raceTimeSetting, raceWinnerOnly, artistOnly,
+    setBettingTimeSetting, setGuessingTimeSetting, setRoundsSetting, setRaceTimeSetting, setRaceWinnerOnly, setArtistOnly,
   } = game;
   return (
     <div className="absolute top-16 right-5 z-20 bg-[#1a1a2e] border border-white/10 rounded-2xl p-4 space-y-4 w-64 shadow-xl">
@@ -450,6 +468,15 @@ function SettingsPanel({ game }: Readonly<{ game: HostState }>) {
           </button>
         </div>
       )}
+      <div className="flex items-center justify-between">
+        <span className="text-white/60 text-sm">Artist only</span>
+        <button
+          onClick={() => setArtistOnly(!artistOnly)}
+          className={`w-11 h-6 rounded-full transition-colors relative overflow-hidden ${artistOnly ? 'bg-purple-600' : 'bg-white/20'}`}
+        >
+          <span className={`absolute top-1 left-0 w-4 h-4 rounded-full bg-white transition-transform ${artistOnly ? 'translate-x-6' : 'translate-x-1'}`} />
+        </button>
+      </div>
     </div>
   );
 }
@@ -529,7 +556,7 @@ function ConnectView({ game }: Readonly<{ game: HostState }>) {
 }
 
 function LobbyView({ game }: Readonly<{ game: HostState }>) {
-  const { spotify, pin, players, createGame, startGame, mode, settingsOpen, toggleSettings, setMode } = game;
+  const { spotify, pin, players, createGame, startGame, mode, settingsOpen, toggleSettings, setMode, removePlayer } = game;
   const navigate = useNavigate();
   const [lobbyVisible, setLobbyVisible] = useState(false);
 
@@ -591,7 +618,15 @@ function LobbyView({ game }: Readonly<{ game: HostState }>) {
             <p className="text-white/40 text-sm mb-2">{players.length} player{players.length === 1 ? '' : 's'}</p>
             <div className="flex flex-wrap gap-2">
               {players.map(p => (
-                <span key={p.name} className="px-3 py-1.5 rounded-full bg-white/10 text-white text-sm font-semibold">{p.name}</span>
+                <button
+                  key={p.name}
+                  onClick={() => removePlayer(p.name)}
+                  className="relative group px-3 py-1.5 rounded-full bg-white/10 text-white text-sm font-semibold"
+                  aria-label={`Remove ${p.name}`}
+                >
+                  {p.name}
+                  <span className="absolute inset-0 rounded-full backdrop-blur-sm opacity-0 group-hover:opacity-100 transition-opacity" />
+                </button>
               ))}
             </div>
           </div>
@@ -636,7 +671,7 @@ function HintCards({ hints }: Readonly<{ hints: readonly Hint[] }>) {
 }
 
 function BettingView({ game }: Readonly<{ game: HostState }>) {
-  const { roundIndex, totalRounds, timeLeft, bettingTime, hints, bidCount, players, pin } = game;
+  const { roundIndex, totalRounds, timeLeft, bettingTime, hints, bidCount, players, pin, skipTurn } = game;
   return (
     <div className="min-h-screen flex flex-col p-6 gap-5">
       <div className="flex justify-between items-center">
@@ -655,13 +690,16 @@ function BettingView({ game }: Readonly<{ game: HostState }>) {
           <p className="text-5xl font-black text-white">{bidCount}</p>
           <p className="text-white/40">of {players.length} have bid</p>
         </div>
+        <button onClick={skipTurn} className="text-white/20 text-xs hover:text-white/50 transition-colors">
+          Skip round
+        </button>
       </div>
     </div>
   );
 }
 
 export function PlayingView({ game }: Readonly<{ game: HostState }>) {
-  const { roundIndex, totalRounds, countdown, guesserNames, lowestBid, playerBids, playProgress, timeLeft, mode, answeredCount, players } = game;
+  const { roundIndex, totalRounds, countdown, guesserNames, lowestBid, playerBids, playProgress, timeLeft, mode, answeredCount, players, skipTurn } = game;
   const isRace = mode === 'race';
   return (
     <div className="min-h-screen flex flex-col items-center justify-center p-6 gap-6 text-center">
@@ -700,12 +738,15 @@ export function PlayingView({ game }: Readonly<{ game: HostState }>) {
           )}
         </>
       )}
+      <button onClick={skipTurn} className="text-white/20 text-xs hover:text-white/50 transition-colors mt-2">
+        Skip round
+      </button>
     </div>
   );
 }
 
 function GuessingView({ game }: Readonly<{ game: HostState }>) {
-  const { roundIndex, totalRounds, guesserNames, lowestBid, playerBids, timeLeft } = game;
+  const { roundIndex, totalRounds, guesserNames, lowestBid, playerBids, timeLeft, skipTurn } = game;
   return (
     <div className="min-h-screen flex flex-col items-center justify-center p-6 gap-6 text-center">
       <p className="text-white/50">Round {roundIndex + 1}/{totalRounds}</p>
@@ -718,6 +759,9 @@ function GuessingView({ game }: Readonly<{ game: HostState }>) {
         <BidTimeline bids={playerBids} lowestBid={lowestBid} />
       </div>
       <p className="text-white/30 text-sm">Other players are waiting...</p>
+      <button onClick={skipTurn} className="text-white/20 text-xs hover:text-white/50 transition-colors mt-2">
+        Skip turn
+      </button>
     </div>
   );
 }
@@ -831,10 +875,10 @@ export default function Host() {
       {(phase === 'leaderboard' || phase === 'finished') && <LeaderboardView game={game} />}
 
       {reconnecting && !gameExpired && (
-        <div className="fixed inset-0 bg-black/80 backdrop-blur-sm flex flex-col items-center justify-center z-50 gap-4">
-          <div className="w-12 h-12 border-4 border-purple-500 border-t-transparent rounded-full animate-spin" />
-          <p className="text-white font-bold text-xl">Reconnecting...</p>
-          <p className="text-white/40 text-sm">Game is still running</p>
+        <div className="fixed inset-0 bg-black/70 backdrop-blur-sm flex flex-col items-center justify-center z-50 gap-3">
+          <div className="w-10 h-10 border-2 border-white/30 border-t-white rounded-full animate-spin" />
+          <p className="text-white/70 text-sm font-medium">Reconnecting...</p>
+          <p className="text-white/30 text-xs">Game is still running</p>
         </div>
       )}
       {gameExpired && (
@@ -850,9 +894,10 @@ export default function Host() {
         </div>
       )}
       {reconnectingCount > 0 && !reconnecting && (
-        <div className="fixed top-4 right-4 bg-amber-900/60 border border-amber-500/40 rounded-xl px-3 py-2 z-40">
-          <p className="text-amber-300 text-xs font-semibold">
-            {reconnectingCount} player{reconnectingCount > 1 ? 's' : ''} reconnecting...
+        <div className="fixed bottom-5 right-5 flex items-center gap-2 bg-white/8 backdrop-blur-sm rounded-full px-3 py-1.5 z-40">
+          <span className="w-1.5 h-1.5 rounded-full bg-white/50 animate-pulse" />
+          <p className="text-white/50 text-xs">
+            {reconnectingCount} player{reconnectingCount > 1 ? 's' : ''} reconnecting
           </p>
         </div>
       )}

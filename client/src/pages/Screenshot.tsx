@@ -58,6 +58,7 @@ const MOCK_HOST: HostState = {
   mode: 'classic',
   raceTimeSetting: 30,
   raceWinnerOnly: false,
+  artistOnly: false,
   answeredCount: 0,
   reconnecting: false,
   reconnectingCount: 0,
@@ -69,10 +70,13 @@ const MOCK_HOST: HostState = {
   setMode: noop,
   setRaceTimeSetting: noop,
   setRaceWinnerOnly: noop,
+  setArtistOnly: noop,
   createGame: noop,
   startGame: noop,
+  skipTurn: noop,
   copyInvite: noop,
   newGame: noop,
+  removePlayer: noop,
 };
 
 const MOCK_HOST_REVEAL: HostState = {

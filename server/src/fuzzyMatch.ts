@@ -57,6 +57,13 @@ function fuzzyMatch(g: string, candidate: string): boolean {
   return levenshtein(g, candidate) <= fuzzyThreshold(candidate.length);
 }
 
+export function isCorrectArtistGuess(guess: string, artist: string): boolean {
+  const g = normalize(guess);
+  const a = normalize(artist);
+  if (!g) return false;
+  return fuzzyMatch(g, a);
+}
+
 export function isCorrectGuess(guess: string, title: string): boolean {
   const g = normalize(guess);
   const t = normalize(title);
