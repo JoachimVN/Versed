@@ -560,7 +560,7 @@ function GuessInputSection({ guessText, guessInputRef, setGuessText, submitGuess
 }
 
 function WatchingView({ game }: Readonly<{ game: PlayState }>) {
-  const { lowestBid, guesserNames, myName, guessText, guessInputRef, setGuessText, submitGuess, skipGuess, mode, artistOnly } = game;
+  const { lowestBid, guesserNames, mode } = game;
 
   if (mode === 'race') {
     return (
@@ -568,24 +568,6 @@ function WatchingView({ game }: Readonly<{ game: PlayState }>) {
         <Music className="w-14 h-14 text-white animate-pulse" />
         <p className="text-white font-black text-2xl">Get ready…</p>
         <p className="text-white/30 text-sm">Song starts soon — everyone guesses at once</p>
-      </div>
-    );
-  }
-
-  const imGuessing = guesserNames.includes(myName);
-
-  if (imGuessing) {
-    return (
-      <div className="min-h-screen flex flex-col p-5 gap-4">
-        <div className="flex justify-center items-center gap-2">
-          <Music className="w-4 h-4 text-white/40 animate-pulse" />
-          <span className="text-white/40 text-sm">Listening...</span>
-        </div>
-        <GuessInputSection guessText={guessText} guessInputRef={guessInputRef} setGuessText={setGuessText} submitGuess={submitGuess} artistOnly={artistOnly} />
-        <button onClick={skipGuess}
-          className="w-full py-3 rounded-2xl bg-white/5 text-white/50 font-semibold hover:bg-white/10 active:scale-95 transition-all">
-          Skip, I don't know
-        </button>
       </div>
     );
   }
@@ -602,15 +584,27 @@ function WatchingView({ game }: Readonly<{ game: PlayState }>) {
   );
 }
 
+// Handles both the "listening" sub-phase (watching, imGuessing) and the active
+// guessing phase. Keeping a single component across both states means the input
+// element is never unmounted — focus and text survive the transition, which
+// prevents the mobile keyboard from dismissing mid-song.
 function GuessingView({ game }: Readonly<{ game: PlayState }>) {
-  const { timeLeft, myScore, guessText, guessInputRef, setGuessText, submitGuess, skipGuess, artistOnly } = game;
+  const { phase, timeLeft, myScore, guessText, guessInputRef, setGuessText, submitGuess, skipGuess, artistOnly } = game;
+  const isListening = phase === 'watching';
   return (
     <div className="min-h-screen flex flex-col p-5 gap-4">
-      <div className="flex justify-between items-center">
-        <span className="text-white/50 text-sm">Your turn!</span>
-        <span className="text-white font-black text-2xl">{timeLeft}s</span>
-        <span className="text-white/50 text-sm">{myScore.toLocaleString()} pts</span>
-      </div>
+      {isListening ? (
+        <div className="flex justify-center items-center gap-2">
+          <Music className="w-4 h-4 text-white/40 animate-pulse" />
+          <span className="text-white/40 text-sm">Listening...</span>
+        </div>
+      ) : (
+        <div className="flex justify-between items-center">
+          <span className="text-white/50 text-sm">Your turn!</span>
+          <span className="text-white font-black text-2xl">{timeLeft}s</span>
+          <span className="text-white/50 text-sm">{myScore.toLocaleString()} pts</span>
+        </div>
+      )}
       <GuessInputSection guessText={guessText} guessInputRef={guessInputRef} setGuessText={setGuessText} submitGuess={submitGuess} artistOnly={artistOnly} />
       <button onClick={skipGuess}
         className="w-full py-3 rounded-2xl bg-white/5 text-white/50 font-semibold hover:bg-white/10 active:scale-95 transition-all">
@@ -751,7 +745,8 @@ function LeaderboardView({ game }: Readonly<{ game: PlayState }>) {
 export default function Play() {
   const { pin: pinParam } = useParams<{ pin?: string }>();
   const game = usePlayGame(pinParam);
-  const { phase, result, reconnecting, hostReconnecting } = game;
+  const { phase, result, reconnecting, hostReconnecting, guesserNames, myName } = game;
+  const imGuessing = guesserNames.includes(myName);
 
   return (
     <div className="relative">
@@ -759,8 +754,8 @@ export default function Play() {
       {phase === 'waiting' && <WaitingView game={game} />}
       {phase === 'betting' && <BettingView game={game} />}
       {phase === 'bid_submitted' && <BidSubmittedView game={game} />}
-      {phase === 'watching' && <WatchingView game={game} />}
-      {phase === 'guessing' && <GuessingView game={game} />}
+      {phase === 'watching' && !imGuessing && <WatchingView game={game} />}
+      {(phase === 'guessing' || (phase === 'watching' && imGuessing)) && <GuessingView game={game} />}
       {phase === 'passed' && <PassedView game={game} />}
       {phase === 'reveal' && result && <RevealView game={game} result={result} />}
       {(phase === 'leaderboard' || phase === 'finished') && <LeaderboardView game={game} />}

@@ -392,12 +392,14 @@ io.on('connection', (socket) => {
   socket.on('host_skip_turn', () => {
     const game = gm.getGameBySocket(socket.id);
     if (!game || game.hostSocketId !== socket.id) return;
-    if (game.phase !== 'guessing') return;
-    if (game.phaseTimer) clearTimeout(game.phaseTimer);
-    if (game.mode === 'race') {
-      endRaceRound(game);
-    } else {
-      advanceTierOrReveal(game);
+    if (game.phase === 'playing') {
+      // Song is still playing — skip directly to reveal without going through guessing
+      if (game.mode === 'race') endRaceRound(game);
+      else revealRound(game);
+    } else if (game.phase === 'guessing') {
+      if (game.phaseTimer) clearTimeout(game.phaseTimer);
+      if (game.mode === 'race') endRaceRound(game);
+      else advanceTierOrReveal(game);
     }
   });
 
@@ -616,13 +618,8 @@ io.on('connection', (socket) => {
 
   // A tier ran out of guesses (all wrong, or time expired). Hand off to the
   // next-lowest bidders if there are any; otherwise reveal that nobody got it.
-  function advanceTierOrReveal(game: ReturnType<typeof gm.getGame> & object) {
+  function revealRound(game: ReturnType<typeof gm.getGame> & object) {
     const round = game.currentRound!;
-    const next = gm.advanceTier(game);
-    if (next) {
-      playTier(game, next);
-      return;
-    }
     if (game.phaseTimer) clearTimeout(game.phaseTimer);
     game.phase = 'reveal';
     io.to(game.pin).emit('round_result', {
@@ -640,6 +637,15 @@ io.on('connection', (socket) => {
     io.to(game.pin).emit('score_update', {
       players: Array.from(game.players.values()).map(p => ({ name: p.name, score: p.score, streak: p.streak })),
     });
+  }
+
+  function advanceTierOrReveal(game: ReturnType<typeof gm.getGame> & object) {
+    const next = gm.advanceTier(game);
+    if (next) {
+      playTier(game, next);
+      return;
+    }
+    revealRound(game);
   }
 
   function startGuessingPhase(game: ReturnType<typeof gm.getGame> & object) {
