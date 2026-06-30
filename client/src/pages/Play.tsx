@@ -990,7 +990,7 @@ export function RevealView({ game, result }: Readonly<{ game: PlayState; result:
             const correct = isRace ? !!result.correctGuessers?.includes(g.name) : (g.name === result.guesserName);
             return (
               <div key={g.name} className="flex justify-between items-center gap-4">
-                <span className={`text-sm shrink-0 ${correct ? 'text-green-400' : 'text-white/50'}`}>{g.name}</span>
+                <span className={`text-sm shrink-0 ${correct ? 'text-amber-400' : 'text-white/50'}`}>{g.name}</span>
                 <span className={`text-sm text-right truncate ${g.guess === null ? 'text-white/25 italic' : correct ? 'text-green-400' : 'text-white/40'}`}>
                   {g.guess === null ? 'skipped' : `"${g.guess}"`}
                   {correct && g.timeMs != null && (

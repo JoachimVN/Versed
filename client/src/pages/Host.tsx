@@ -1068,7 +1068,7 @@ export function RevealView({ game, result }: Readonly<{ game: HostState; result:
                       <Flame className="w-3 h-3" />{streak}
                     </span>
                   )}
-                  <span className={`text-sm ${correct ? 'text-green-400' : 'text-white/50'}`}>{p.name}</span>
+                  <span className={`text-sm ${correct ? 'text-amber-400' : 'text-white/50'}`}>{p.name}</span>
                 </div>
                 {entry && (() => {
                   const skipped = entry.guess === null;
@@ -1086,7 +1086,7 @@ export function RevealView({ game, result }: Readonly<{ game: HostState; result:
                 })()}
               </div>
               <div className="text-right shrink-0">
-                {delta > 0 && <p className="text-green-400 text-xs font-semibold">+{delta.toLocaleString()}</p>}
+                {delta > 0 && <p className="text-white/50 text-xs font-semibold">+{delta.toLocaleString()}</p>}
                 <span className="text-white/60 text-sm">{(p.score ?? 0).toLocaleString()}</span>
               </div>
               <span className="absolute -inset-x-3 -inset-y-1 rounded-lg backdrop-blur-sm opacity-0 group-hover:opacity-100 transition-opacity" />
