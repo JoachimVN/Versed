@@ -22,11 +22,11 @@ function RouteTracker() {
     }
 
     // Burst on every route change, then glide to the destination speed.
-    setConfettiSpeedTarget(2.8);
+    setConfettiSpeedTarget(4);
     if (settleTimer.current) clearTimeout(settleTimer.current);
     settleTimer.current = setTimeout(() => {
       setConfettiSpeedTarget(settleSpeed);
-    }, 800);
+    }, 1000);
 
     return () => {
       if (settleTimer.current) clearTimeout(settleTimer.current);
