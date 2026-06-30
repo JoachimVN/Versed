@@ -485,7 +485,7 @@ function JoinView({ game }: Readonly<{ game: PlayState }>) {
               cornerRadius={100}
               padding="13px 48px"
             >
-              <div style={{ textAlign: 'center', whiteSpace: 'nowrap' }}>
+              <div style={{ textAlign: 'center', whiteSpace: 'nowrap', minWidth: '214px' }}>
                 <p style={{ color: 'rgba(255,255,255,0.38)', fontSize: '0.6rem', letterSpacing: '0.18em', textTransform: 'uppercase', lineHeight: 1, marginBottom: '5px' }}>
                   Continue as · {savedSession.pin}
                 </p>
