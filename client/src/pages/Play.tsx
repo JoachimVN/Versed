@@ -829,10 +829,16 @@ export function BettingView({ game }: Readonly<{ game: PlayState }>) {
   const urgent = timeLeft <= 5 && timeLeft > 0;
 
   return (
-    <div className="min-h-screen flex flex-col" style={{ background: '#080812' }}>
+    <div className="min-h-screen flex flex-col relative overflow-hidden" style={{ background: '#080812' }}>
+      <img
+        src={`${import.meta.env.BASE_URL}background2.svg`}
+        aria-hidden="true"
+        style={{ position: 'fixed', inset: 0, width: '100%', height: '100%', objectFit: 'cover', zIndex: 0, transform: 'rotate(270deg)' }}
+      />
+      <div style={{ position: 'fixed', inset: 0, zIndex: 1, background: 'rgba(5,5,14,0.82)', backdropFilter: 'blur(28px)' }} />
 
       {/* Top bar */}
-      <div className="flex items-center justify-between px-5 pt-5 pb-3">
+      <div className="flex items-center justify-between px-5 pt-5 pb-3" style={{ position: 'relative', zIndex: 2 }}>
         <span style={{ color: 'rgba(255,255,255,0.35)', fontSize: '0.85rem', fontWeight: 600 }}>
           Round {roundIndex + 1}<span style={{ color: 'rgba(255,255,255,0.18)' }}>/{totalRounds}</span>
         </span>
@@ -845,7 +851,7 @@ export function BettingView({ game }: Readonly<{ game: PlayState }>) {
       </div>
 
       {/* Timer bar */}
-      <div className="mx-5 h-0.5 rounded-full" style={{ background: 'rgba(255,255,255,0.07)' }}>
+      <div className="mx-5 h-0.5 rounded-full" style={{ background: 'rgba(255,255,255,0.07)', position: 'relative', zIndex: 2 }}>
         <div
           className="h-0.5 rounded-full"
           style={{
@@ -857,7 +863,7 @@ export function BettingView({ game }: Readonly<{ game: PlayState }>) {
       </div>
 
       {/* Bid picker */}
-      <div className="flex-1 flex flex-col items-center justify-center gap-6 px-5">
+      <div className="flex-1 flex flex-col items-center justify-center gap-6 px-5" style={{ position: 'relative', zIndex: 2 }}>
         <p style={{ color: 'rgba(255,255,255,0.32)', fontSize: '0.75rem', textTransform: 'uppercase', letterSpacing: '0.14em' }}>
           How many seconds do you need?
         </p>
@@ -903,10 +909,10 @@ export function BettingView({ game }: Readonly<{ game: PlayState }>) {
         </div>
       </div>
 
-      {error && <p className="text-red-400 text-sm text-center px-5 pb-2">{error}</p>}
+      {error && <p className="text-red-400 text-sm text-center px-5 pb-2" style={{ position: 'relative', zIndex: 2 }}>{error}</p>}
 
       {/* Lock In */}
-      <div className="px-5 pb-8 flex justify-center">
+      <div className="px-5 pb-8 flex justify-center" style={{ position: 'relative', zIndex: 2 }}>
         <button
           type="button"
           className="liquid-btn relative cursor-pointer border-0 bg-transparent p-0"
