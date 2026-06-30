@@ -474,6 +474,47 @@ const AUDIO_BARS = [
   { anim: 'audioBarC', dur: 1.2, delay: 0.26 },
 ] as const;
 
+function BidArrow({ direction, enabled, onClick }: Readonly<{ direction: 'left' | 'right'; enabled: boolean; onClick: () => void }>) {
+  const [hovered, setHovered] = useState(false);
+  const [pressed, setPressed] = useState(false);
+  const bg = !enabled
+    ? 'rgba(255,255,255,0.03)'
+    : pressed
+      ? 'rgba(150,17,193,0.28)'
+      : hovered
+        ? 'rgba(255,255,255,0.13)'
+        : 'rgba(255,255,255,0.07)';
+  const border = !enabled
+    ? '1px solid rgba(255,255,255,0.04)'
+    : pressed
+      ? '1px solid rgba(150,17,193,0.5)'
+      : hovered
+        ? '1px solid rgba(255,255,255,0.18)'
+        : '1px solid rgba(255,255,255,0.10)';
+  return (
+    <button
+      onClick={() => enabled && onClick()}
+      onMouseEnter={() => setHovered(true)}
+      onMouseLeave={() => { setHovered(false); setPressed(false); }}
+      onMouseDown={() => enabled && setPressed(true)}
+      onMouseUp={() => setPressed(false)}
+      style={{
+        width: 52, height: 52, borderRadius: '50%', border,
+        cursor: enabled ? 'pointer' : 'default',
+        background: bg,
+        opacity: enabled ? 1 : 0.22,
+        display: 'flex', alignItems: 'center', justifyContent: 'center',
+        transition: 'background 0.15s ease, border-color 0.15s ease, transform 0.1s ease',
+        transform: pressed ? 'scale(0.9)' : 'scale(1)',
+      }}
+    >
+      {direction === 'left'
+        ? <ChevronLeft className="w-5 h-5 text-white" />
+        : <ChevronRight className="w-5 h-5 text-white" />}
+    </button>
+  );
+}
+
 // ─── Phase views ─────────────────────────────────────────────────────────────
 
 function JoinView({ game }: Readonly<{ game: PlayState }>) {
@@ -814,19 +855,7 @@ export function BettingView({ game }: Readonly<{ game: PlayState }>) {
         </p>
 
         <div className="flex items-center gap-5">
-          <button
-            onClick={() => canGoLeft && setBidIndex(i => i - 1)}
-            style={{
-              width: 52, height: 52, borderRadius: '50%', border: 'none',
-              cursor: canGoLeft ? 'pointer' : 'default',
-              background: canGoLeft ? 'rgba(255,255,255,0.07)' : 'rgba(255,255,255,0.02)',
-              opacity: canGoLeft ? 1 : 0.25,
-              display: 'flex', alignItems: 'center', justifyContent: 'center',
-              transition: 'background 0.2s, opacity 0.2s',
-            }}
-          >
-            <ChevronLeft className="w-5 h-5 text-white" />
-          </button>
+          <BidArrow direction="left" enabled={canGoLeft} onClick={() => setBidIndex(i => i - 1)} />
 
           {/* Bid value — LiquidGlass */}
           <div className="liquid-btn relative" style={{ width: 160, height: 110 }}>
@@ -851,19 +880,7 @@ export function BettingView({ game }: Readonly<{ game: PlayState }>) {
             </LiquidGlass>
           </div>
 
-          <button
-            onClick={() => canGoRight && setBidIndex(i => i + 1)}
-            style={{
-              width: 52, height: 52, borderRadius: '50%', border: 'none',
-              cursor: canGoRight ? 'pointer' : 'default',
-              background: canGoRight ? 'rgba(255,255,255,0.07)' : 'rgba(255,255,255,0.02)',
-              opacity: canGoRight ? 1 : 0.25,
-              display: 'flex', alignItems: 'center', justifyContent: 'center',
-              transition: 'background 0.2s, opacity 0.2s',
-            }}
-          >
-            <ChevronRight className="w-5 h-5 text-white" />
-          </button>
+          <BidArrow direction="right" enabled={canGoRight} onClick={() => setBidIndex(i => i + 1)} />
         </div>
 
         {/* Score potential */}
