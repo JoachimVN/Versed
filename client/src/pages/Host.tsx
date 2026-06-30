@@ -970,7 +970,7 @@ function RevealPlayerRow({
   const guessText = entry ? (skipped ? 'skipped' : `"${entry.guess}"`) : null;
   const guessCls = (!skipped && correct) ? 'text-green-400 text-xs truncate' : 'text-white/20 italic text-xs truncate';
   return (
-    <button onClick={() => removePlayer(player.name)} aria-label={`Remove ${player.name}`} className="relative group w-full text-left">
+    <button onClick={() => removePlayer(player.name)} aria-label={`Remove ${player.name}`} className="relative group w-full text-left py-1">
       {/* Row 1: name + streak | delta */}
       <div className="flex justify-between items-center gap-2">
         <div className="flex items-center gap-1 min-w-0">
@@ -1029,7 +1029,7 @@ export function RevealView({ game, result, instant = false }: Readonly<{ game: H
           </LiquidGlass>
         </div>
 
-        <div style={{ background: 'rgba(255,255,255,0.05)', border: '1px solid rgba(255,255,255,0.08)', borderRadius: '16px', padding: '8px 12px', width: '25%' }} className="space-y-1">
+        <div style={{ background: 'rgba(255,255,255,0.05)', border: '1px solid rgba(255,255,255,0.08)', borderRadius: '16px', padding: '8px 12px', width: '25%' }} className="divide-y divide-white/[0.07]">
           {players.slice().sort((a, b) => (b.score ?? 0) - (a.score ?? 0)).map((p, i) => (
             <RevealPlayerRow
               key={p.name}
@@ -1092,7 +1092,7 @@ export function RevealView({ game, result, instant = false }: Readonly<{ game: H
         </LiquidGlass>
       </div>
 
-      <div style={{ background: 'rgba(255,255,255,0.05)', border: '1px solid rgba(255,255,255,0.08)', borderRadius: '16px', padding: '8px 12px', width: '25%' }} className="space-y-1">
+      <div style={{ background: 'rgba(255,255,255,0.05)', border: '1px solid rgba(255,255,255,0.08)', borderRadius: '16px', padding: '8px 12px', width: '25%' }} className="divide-y divide-white/[0.07]">
         {players.slice().sort((a, b) => (b.score ?? 0) - (a.score ?? 0)).map((p, i) => {
           const correct = isRace ? !!result.correctGuessers?.includes(p.name) : (p.name === result.guesserName);
           return (
