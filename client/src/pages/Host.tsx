@@ -923,7 +923,7 @@ function BettingView({ game }: Readonly<{ game: HostState }>) {
 
         {/* Blurred album art — centered, above timer */}
         {imageHint?.imageUrl && (
-          <div style={{ width: 180, height: 180, borderRadius: 28, overflow: 'hidden', flexShrink: 0 }}>
+          <div style={{ width: 180, height: 180, borderRadius: 28, overflow: 'hidden', flexShrink: 0, boxShadow: '0 16px 40px rgba(0,0,0,0.7)' }}>
             <img
               src={imageHint.imageUrl} alt=""
               style={{ width: '115%', height: '115%', marginLeft: '-7.5%', marginTop: '-7.5%', objectFit: 'cover', filter: 'blur(8px) brightness(0.6)', display: 'block' }}
