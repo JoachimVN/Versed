@@ -997,6 +997,7 @@ function WatchingView({ game }: Readonly<{ game: PlayState }>) {
                       animation: (isRace || songPlaying) ? `${bar.anim} ${bar.dur}s ease-in-out infinite` : 'none',
                       animationDelay: `${bar.delay}s`,
                       transformOrigin: 'center',
+                      transform: (isRace || songPlaying) ? undefined : 'scaleY(0.07)',
                     }}
                   />
                 ))}
@@ -1057,6 +1058,7 @@ function GuessingView({ game }: Readonly<{ game: PlayState }>) {
                 background: 'rgba(150,17,193,0.6)',
                 animation: songPlaying ? `${bar.anim} ${bar.dur}s ease-in-out infinite` : 'none',
                 animationDelay: `${bar.delay}s`, transformOrigin: 'center',
+                transform: songPlaying ? undefined : 'scaleY(0.07)',
               }} />
             ))}
           </div>
