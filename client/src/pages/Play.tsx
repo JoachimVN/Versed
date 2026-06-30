@@ -546,10 +546,15 @@ function JoinView({ game }: Readonly<{ game: PlayState }>) {
         onMouseLeave={() => setJoinHovered(false)}
         onClick={join}
       >
+        <div style={{
+          position: 'absolute', inset: 0, borderRadius: '100px',
+          background: 'rgba(0, 128, 126, 0.04)',
+          pointerEvents: 'none',
+        }} />
         <LiquidGlass
           style={{
             position: 'absolute', top: '50%', left: '50%',
-            filter: joinHovered ? 'drop-shadow(0 0 8px rgba(255,255,255,0.35))' : 'drop-shadow(0 0 0px rgba(255,255,255,0))',
+            filter: joinHovered ? 'drop-shadow(0 0 10px rgba(0, 128, 126, 0.65))' : 'drop-shadow(0 0 0px rgba(0, 128, 126, 0))',
             transition: 'filter 0.25s ease',
           }}
           displacementScale={64}
