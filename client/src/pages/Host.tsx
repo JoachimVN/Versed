@@ -740,9 +740,16 @@ function StartButton({ players, mode, startGame }: Readonly<{ players: PlayerInf
         cornerRadius={100}
         padding="18px 36px"
       >
-        <span className="text-white font-bold text-xl" style={{ whiteSpace: 'nowrap' }}>
-          {mode === 'race' ? 'Start Race Game' : 'Start Classic Game'}
-        </span>
+        <div style={{ position: 'relative' }}>
+          <div style={{
+            position: 'absolute', inset: '-18px -36px', borderRadius: '100px', pointerEvents: 'none',
+            background: mode === 'race' ? 'rgba(220,80,10,0.13)' : 'rgba(110,32,155,0.13)',
+            transition: 'background 0.25s ease',
+          }} />
+          <span className="text-white font-bold text-xl" style={{ whiteSpace: 'nowrap', position: 'relative' }}>
+            {mode === 'race' ? 'Start Race Game' : 'Start Classic Game'}
+          </span>
+        </div>
       </LiquidGlass>
     </button>
   );
