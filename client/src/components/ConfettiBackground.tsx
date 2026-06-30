@@ -105,7 +105,7 @@ export function ConfettiBackground({ burst = false, persistAfterBurst = false }:
     };
 
     const tick = (now: number) => {
-      if (frozen) return;
+      if (frozen && !(burst && persistAfterBurst)) return;
 
       const dt = Math.min((now - last) / 16.667, 4);
       last = now;
@@ -113,7 +113,7 @@ export function ConfettiBackground({ burst = false, persistAfterBurst = false }:
       frameCount++;
       if (now - fpsWindowStart > 2500) {
         const fps = frameCount / ((now - fpsWindowStart) / 1000);
-        if (fps < 18) { frozen = true; return; }
+        if (fps < 18) { frozen = true; if (!(burst && persistAfterBurst)) return; }
         frameCount = 0;
         fpsWindowStart = now;
       }
@@ -123,10 +123,9 @@ export function ConfettiBackground({ burst = false, persistAfterBurst = false }:
         const burstDuration = 1500;
         if (burstElapsed > burstDuration) {
           frozen = true;
-          if (!persistAfterBurst) return;
         }
         const burstProgress = burstElapsed / burstDuration;
-        _currentSpeed = 3 * (1 - burstProgress);
+        _currentSpeed = persistAfterBurst ? 0.5 : 3 * (1 - burstProgress);
         for (const p of particles) {
           if (persistAfterBurst || burstProgress < 0.6) {
             p.alpha = p.initialAlpha;

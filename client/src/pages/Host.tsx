@@ -1375,7 +1375,7 @@ function LeaderboardView({ game }: Readonly<{ game: HostState }>) {
               padding="18px 36px"
             >
               <div style={{ position: 'relative' }}>
-                <div style={{ position: 'absolute', inset: '-18px -36px', borderRadius: '100px', pointerEvents: 'none', background: 'rgba(110,32,155,0.12)' }} />
+                <div style={{ position: 'absolute', inset: '-18px -36px', borderRadius: '100px', pointerEvents: 'none', background: 'rgba(0,128,126,0.12)' }} />
                 <span className="text-white font-bold text-xl" style={{ whiteSpace: 'nowrap', position: 'relative', display: 'inline-block', minWidth: '210px', textAlign: 'center' }}>
                   New Game
                 </span>
