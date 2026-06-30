@@ -897,7 +897,7 @@ function BettingView({ game }: Readonly<{ game: HostState }>) {
         {imageHint?.imageUrl && (
           <img
             src={imageHint.imageUrl} alt=""
-            style={{ width: 120, height: 120, borderRadius: 22, objectFit: 'cover', filter: 'blur(7px) brightness(0.65)' }}
+            style={{ width: 180, height: 180, borderRadius: 28, objectFit: 'cover', filter: 'blur(8px) brightness(0.6)', display: 'block' }}
           />
         )}
 

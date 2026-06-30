@@ -51,3 +51,17 @@ body {
   0%, 100% { transform: scaleY(0.2); }
   50%       { transform: scaleY(1); }
 }
+@keyframes audioBarB {
+  0%, 100% { transform: scaleY(0.15); }
+  35%       { transform: scaleY(0.75); }
+  65%       { transform: scaleY(0.9); }
+}
+@keyframes audioBarC {
+  0%, 100% { transform: scaleY(0.3); }
+  25%       { transform: scaleY(0.95); }
+  60%       { transform: scaleY(0.55); }
+}
+@keyframes audioBarD {
+  0%, 100% { transform: scaleY(0.1); }
+  45%       { transform: scaleY(0.7); }
+}

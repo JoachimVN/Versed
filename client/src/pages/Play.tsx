@@ -461,6 +461,19 @@ function usePlayGame(pinParam?: string): PlayState {
   };
 }
 
+// Each bar gets a unique animation name, duration, and delay so they move independently.
+const AUDIO_BARS = [
+  { anim: 'audioBarC', dur: 1.1, delay: 0    },
+  { anim: 'audioBar',  dur: 1.5, delay: 0.14 },
+  { anim: 'audioBarD', dur: 0.85,delay: 0.28 },
+  { anim: 'audioBarB', dur: 1.7, delay: 0.07 },
+  { anim: 'audioBar',  dur: 1.0, delay: 0.42 },
+  { anim: 'audioBarC', dur: 1.3, delay: 0.21 },
+  { anim: 'audioBarD', dur: 0.9, delay: 0.35 },
+  { anim: 'audioBarB', dur: 1.6, delay: 0.08 },
+  { anim: 'audioBarC', dur: 1.2, delay: 0.26 },
+] as const;
+
 // ─── Phase views ─────────────────────────────────────────────────────────────
 
 function JoinView({ game }: Readonly<{ game: PlayState }>) {
@@ -914,7 +927,6 @@ function WatchingView({ game }: Readonly<{ game: PlayState }>) {
   const [visible, setVisible] = useState(false);
   useEffect(() => { const t = setTimeout(() => setVisible(true), 30); return () => clearTimeout(t); }, []);
   const isRace = mode === 'race';
-  const barDelays = [0, 0.14, 0.28, 0.07, 0.42, 0.21, 0.35, 0.08, 0.26];
 
   return (
     <div className="relative min-h-screen overflow-hidden">
@@ -951,14 +963,14 @@ function WatchingView({ game }: Readonly<{ game: PlayState }>) {
 
               {/* Animated waveform — static until song actually starts */}
               <div style={{ display: 'flex', gap: '5px', alignItems: 'center', height: '36px', transition: 'opacity 0.3s ease', opacity: (isRace || songPlaying) ? 1 : 0.35 }}>
-                {barDelays.map((delay, i) => (
+                {AUDIO_BARS.map((bar, i) => (
                   <div
                     key={i}
                     style={{
                       width: '3px', height: '100%', borderRadius: '2px',
                       background: isRace ? 'rgba(234,88,12,0.75)' : 'rgba(150,17,193,0.75)',
-                      animation: (isRace || songPlaying) ? 'audioBar 1.4s ease-in-out infinite' : 'none',
-                      animationDelay: `${delay}s`,
+                      animation: (isRace || songPlaying) ? `${bar.anim} ${bar.dur}s ease-in-out infinite` : 'none',
+                      animationDelay: `${bar.delay}s`,
                       transformOrigin: 'center',
                     }}
                   />
@@ -1006,7 +1018,6 @@ function GuessingView({ game }: Readonly<{ game: PlayState }>) {
   const isListening = phase === 'watching';
   const canSubmit = guessText.trim().length > 0;
   const urgent = !isListening && timeLeft <= 5;
-  const barDelays = [0, 0.14, 0.28, 0.07, 0.42, 0.21, 0.35, 0.08, 0.26];
 
   return (
     <div className="min-h-screen flex flex-col" style={{ background: '#080812' }}>
@@ -1015,12 +1026,12 @@ function GuessingView({ game }: Readonly<{ game: PlayState }>) {
       {isListening ? (
         <div className="flex flex-col items-center gap-2.5 pt-10 pb-4">
           <div style={{ display: 'flex', gap: '5px', alignItems: 'center', height: '28px', transition: 'opacity 0.3s ease', opacity: songPlaying ? 1 : 0.35 }}>
-            {barDelays.map((delay, i) => (
+            {AUDIO_BARS.map((bar, i) => (
               <div key={i} style={{
                 width: '3px', height: '100%', borderRadius: '2px',
                 background: 'rgba(150,17,193,0.6)',
-                animation: songPlaying ? 'audioBar 1.4s ease-in-out infinite' : 'none',
-                animationDelay: `${delay}s`, transformOrigin: 'center',
+                animation: songPlaying ? `${bar.anim} ${bar.dur}s ease-in-out infinite` : 'none',
+                animationDelay: `${bar.delay}s`, transformOrigin: 'center',
               }} />
             ))}
           </div>
