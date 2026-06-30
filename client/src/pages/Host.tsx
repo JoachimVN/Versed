@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { Music, Check, Loader2, Copy, ArrowLeft, Settings, Flame } from 'lucide-react';
+import { Music, Check, Loader2, Copy, ChevronLeft, Settings, Flame } from 'lucide-react';
+import LiquidGlass from 'liquid-glass-react';
 import QRCodeLib from 'react-qr-code';
 const QRCode = QRCodeLib as unknown as React.FC<{ value: string; size?: number }>;
 import { socket } from '../socket';
@@ -436,49 +437,64 @@ function BidTimeline({ bids, lowestBid }: Readonly<{ bids: { name: string; bid: 
 
 // ─── Lobby sub-components ─────────────────────────────────────────────────────
 
-function SettingsPanel({ game }: Readonly<{ game: HostState }>) {
+function SettingsPanel({ game, open }: Readonly<{ game: HostState; open: boolean }>) {
   const {
     mode, bettingTimeSetting, guessingTimeSetting, roundsSetting, raceTimeSetting, raceWinnerOnly, artistOnly,
     setBettingTimeSetting, setGuessingTimeSetting, setRoundsSetting, setRaceTimeSetting, setRaceWinnerOnly, setArtistOnly,
   } = game;
   return (
-    <div className="absolute top-16 right-5 z-20 bg-[#1a1a2e] border border-white/10 rounded-2xl p-4 space-y-4 w-64 shadow-xl">
-      {mode === 'classic' ? (
-        <>
-          <SettingRow label="Bet time" value={bettingTimeSetting} unit="s"
-            onDec={() => setBettingTimeSetting(Math.max(5, bettingTimeSetting - 5))}
-            onInc={() => setBettingTimeSetting(Math.min(60, bettingTimeSetting + 5))} />
-          <SettingRow label="Guess time" value={guessingTimeSetting} unit="s"
-            onDec={() => setGuessingTimeSetting(Math.max(5, guessingTimeSetting - 5))}
-            onInc={() => setGuessingTimeSetting(Math.min(60, guessingTimeSetting + 5))} />
-        </>
-      ) : (
-        <SettingRow label="Round time" value={raceTimeSetting} unit="s"
-          onDec={() => setRaceTimeSetting(Math.max(10, raceTimeSetting - 5))}
-          onInc={() => setRaceTimeSetting(Math.min(60, raceTimeSetting + 5))} />
-      )}
-      <SettingRow label="Rounds" value={roundsSetting} unit=""
-        onDec={() => setRoundsSetting(Math.max(1, roundsSetting - 1))}
-        onInc={() => setRoundsSetting(Math.min(30, roundsSetting + 1))} />
-      {mode === 'race' && (
-        <div className="flex items-center justify-between">
-          <span className="text-white/60 text-sm">Winner only</span>
-          <button
-            onClick={() => setRaceWinnerOnly(!raceWinnerOnly)}
-            className={`w-11 h-6 rounded-full transition-colors relative overflow-hidden ${raceWinnerOnly ? 'bg-purple-600' : 'bg-white/20'}`}
-          >
-            <span className={`absolute top-1 left-0 w-4 h-4 rounded-full bg-white transition-transform ${raceWinnerOnly ? 'translate-x-6' : 'translate-x-1'}`} />
-          </button>
+    <div
+      className="absolute right-5 z-20"
+      style={{
+        top: '68px',
+        opacity: open ? 1 : 0,
+        transform: open ? 'translateY(0) scale(1)' : 'translateY(-10px) scale(0.96)',
+        pointerEvents: open ? 'auto' : 'none',
+        transition: 'opacity 0.2s ease, transform 0.22s ease',
+        transformOrigin: 'top right',
+      }}
+    >
+      <div
+        className="w-72 rounded-2xl overflow-hidden"
+        style={{
+          background: 'rgba(10, 6, 26, 0.92)',
+          backdropFilter: 'blur(24px)',
+          border: '1px solid rgba(255,255,255,0.09)',
+          boxShadow: '0 24px 48px rgba(0,0,0,0.55), inset 0 0 0 1px rgba(255,255,255,0.04)',
+        }}
+      >
+        <div className="px-5 py-3.5" style={{ borderBottom: '1px solid rgba(255,255,255,0.07)' }}>
+          <p style={{ color: 'rgba(255,255,255,0.3)', fontSize: '0.6rem', letterSpacing: '0.22em', textTransform: 'uppercase' }}>
+            Game Settings
+          </p>
         </div>
-      )}
-      <div className="flex items-center justify-between">
-        <span className="text-white/60 text-sm">Artist only</span>
-        <button
-          onClick={() => setArtistOnly(!artistOnly)}
-          className={`w-11 h-6 rounded-full transition-colors relative overflow-hidden ${artistOnly ? 'bg-purple-600' : 'bg-white/20'}`}
-        >
-          <span className={`absolute top-1 left-0 w-4 h-4 rounded-full bg-white transition-transform ${artistOnly ? 'translate-x-6' : 'translate-x-1'}`} />
-        </button>
+
+        <div className="px-5 py-4 space-y-4">
+          {mode === 'classic' ? (
+            <>
+              <SettingRow label="Bet time" value={bettingTimeSetting} unit="s"
+                onDec={() => setBettingTimeSetting(Math.max(5, bettingTimeSetting - 5))}
+                onInc={() => setBettingTimeSetting(Math.min(60, bettingTimeSetting + 5))} />
+              <SettingRow label="Guess time" value={guessingTimeSetting} unit="s"
+                onDec={() => setGuessingTimeSetting(Math.max(5, guessingTimeSetting - 5))}
+                onInc={() => setGuessingTimeSetting(Math.min(60, guessingTimeSetting + 5))} />
+            </>
+          ) : (
+            <SettingRow label="Round time" value={raceTimeSetting} unit="s"
+              onDec={() => setRaceTimeSetting(Math.max(10, raceTimeSetting - 5))}
+              onInc={() => setRaceTimeSetting(Math.min(60, raceTimeSetting + 5))} />
+          )}
+          <SettingRow label="Rounds" value={roundsSetting} unit=""
+            onDec={() => setRoundsSetting(Math.max(1, roundsSetting - 1))}
+            onInc={() => setRoundsSetting(Math.min(30, roundsSetting + 1))} />
+        </div>
+
+        <div className="px-5 pb-4 space-y-4" style={{ borderTop: '1px solid rgba(255,255,255,0.07)', paddingTop: '16px' }}>
+          {mode === 'race' && (
+            <ToggleRow label="Winner only" value={raceWinnerOnly} onToggle={() => setRaceWinnerOnly(!raceWinnerOnly)} />
+          )}
+          <ToggleRow label="Artist only" value={artistOnly} onToggle={() => setArtistOnly(!artistOnly)} />
+        </div>
       </div>
     </div>
   );
@@ -515,19 +531,75 @@ function JoinCard({ pin, copied, copyInvite }: Readonly<{ pin: string; copied: b
   );
 }
 
-// ─── Settings row ─────────────────────────────────────────────────────────────
+// ─── Settings row / toggle ────────────────────────────────────────────────────
 
 function SettingRow({ label, value, unit, onDec, onInc }: Readonly<{
   label: string; value: number; unit: string; onDec: () => void; onInc: () => void;
 }>) {
   return (
     <div className="flex items-center justify-between">
-      <span className="text-white/60 text-sm">{label}</span>
-      <div className="flex items-center gap-3">
-        <button onClick={onDec} className="w-8 h-8 rounded-full bg-white/10 text-white text-lg flex items-center justify-center hover:bg-white/20 active:scale-95 transition-all">−</button>
-        <span className="text-white font-bold w-12 text-center">{value}{unit}</span>
-        <button onClick={onInc} className="w-8 h-8 rounded-full bg-white/10 text-white text-lg flex items-center justify-center hover:bg-white/20 active:scale-95 transition-all">+</button>
+      <span style={{ color: 'rgba(255,255,255,0.5)', fontSize: '0.875rem' }}>{label}</span>
+      <div className="flex items-center gap-2.5">
+        <button
+          onClick={onDec}
+          className="flex items-center justify-center active:scale-90 transition-transform"
+          style={{
+            width: '28px', height: '28px', borderRadius: '50%',
+            background: 'rgba(255,255,255,0.07)',
+            border: '1px solid rgba(255,255,255,0.09)',
+            color: 'rgba(255,255,255,0.55)',
+            fontSize: '1.1rem', lineHeight: 1,
+            cursor: 'pointer',
+          }}
+        >−</button>
+        <span style={{ color: 'white', fontWeight: 700, minWidth: '42px', textAlign: 'center', fontSize: '0.9375rem' }}>
+          {value}{unit}
+        </span>
+        <button
+          onClick={onInc}
+          className="flex items-center justify-center active:scale-90 transition-transform"
+          style={{
+            width: '28px', height: '28px', borderRadius: '50%',
+            background: 'rgba(255,255,255,0.07)',
+            border: '1px solid rgba(255,255,255,0.09)',
+            color: 'rgba(255,255,255,0.55)',
+            fontSize: '1.1rem', lineHeight: 1,
+            cursor: 'pointer',
+          }}
+        >+</button>
       </div>
+    </div>
+  );
+}
+
+function ToggleRow({ label, value, onToggle }: Readonly<{ label: string; value: boolean; onToggle: () => void }>) {
+  return (
+    <div className="flex items-center justify-between">
+      <span style={{ color: 'rgba(255,255,255,0.5)', fontSize: '0.875rem' }}>{label}</span>
+      <button
+        onClick={onToggle}
+        className="relative shrink-0"
+        style={{
+          width: '40px', height: '22px', borderRadius: '100px',
+          background: value ? 'rgba(130, 30, 175, 0.7)' : 'rgba(255,255,255,0.10)',
+          border: value ? '1px solid rgba(150, 50, 200, 0.6)' : '1px solid rgba(255,255,255,0.08)',
+          transition: 'background 0.2s ease, border-color 0.2s ease',
+          cursor: 'pointer',
+        }}
+      >
+        <span
+          className="absolute"
+          style={{
+            top: '3px', left: '3px',
+            width: '14px', height: '14px',
+            borderRadius: '50%',
+            background: 'white',
+            boxShadow: '0 1px 3px rgba(0,0,0,0.35)',
+            transition: 'transform 0.2s ease',
+            transform: value ? 'translateX(18px)' : 'translateX(0)',
+          }}
+        />
+      </button>
     </div>
   );
 }
@@ -539,8 +611,15 @@ function ConnectView({ game }: Readonly<{ game: HostState }>) {
   const navigate = useNavigate();
   return (
     <div className="min-h-screen flex flex-col items-center justify-center gap-6 p-6">
-      <button onClick={() => navigate('/')} className="absolute top-5 left-5 p-2 rounded-xl bg-white/10 text-white/60 hover:bg-white/20 hover:text-white transition-colors">
-        <ArrowLeft className="w-5 h-5" />
+      <button
+        onClick={() => navigate('/')}
+        className="absolute top-5 left-5 flex items-center gap-1.5 transition-all duration-200"
+        style={{ background: 'none', border: 'none', padding: '6px 2px', zIndex: 2, color: 'rgba(255,255,255,0.6)' }}
+        onMouseEnter={e => { (e.currentTarget as HTMLElement).style.color = 'rgba(255,255,255,0.95)'; }}
+        onMouseLeave={e => { (e.currentTarget as HTMLElement).style.color = 'rgba(255,255,255,0.6)'; }}
+      >
+        <ChevronLeft className="w-5 h-5" strokeWidth={1.5} />
+        <span style={{ fontSize: '0.875rem', fontWeight: 400 }}>Back</span>
       </button>
       <img src={`${import.meta.env.BASE_URL}logo.png`} alt={APP_NAME} className="h-48 w-auto" />
       {spotify.isConnected && !spotify.playerReady ? (
@@ -562,6 +641,7 @@ function LobbyView({ game }: Readonly<{ game: HostState }>) {
   const { spotify, pin, players, createGame, startGame, mode, settingsOpen, toggleSettings, setMode, removePlayer } = game;
   const navigate = useNavigate();
   const [lobbyVisible, setLobbyVisible] = useState(false);
+  const [startHovered, setStartHovered] = useState(false);
 
   useEffect(() => {
     if (!pin) { setLobbyVisible(false); return; }
@@ -575,14 +655,36 @@ function LobbyView({ game }: Readonly<{ game: HostState }>) {
 
   return (
     <div className="min-h-screen relative flex flex-col overflow-hidden">
-      <button onClick={() => navigate('/')} className="absolute top-5 left-5 p-2 rounded-xl bg-white/10 text-white/60 hover:bg-white/20 hover:text-white transition-colors z-10">
-        <ArrowLeft className="w-5 h-5" />
+      <button
+        onClick={() => navigate('/')}
+        className="absolute top-5 left-5 flex items-center gap-1.5 transition-all duration-200"
+        style={{ background: 'none', border: 'none', padding: '6px 2px', zIndex: 10, color: 'rgba(255,255,255,0.6)' }}
+        onMouseEnter={e => { (e.currentTarget as HTMLElement).style.color = 'rgba(255,255,255,0.95)'; }}
+        onMouseLeave={e => { (e.currentTarget as HTMLElement).style.color = 'rgba(255,255,255,0.6)'; }}
+      >
+        <ChevronLeft className="w-5 h-5" strokeWidth={1.5} />
+        <span style={{ fontSize: '0.875rem', fontWeight: 400 }}>Back</span>
       </button>
-      <button onClick={toggleSettings} className="absolute top-5 right-5 p-2 rounded-xl bg-white/10 text-white/60 hover:bg-white/20 hover:text-white transition-colors z-10">
-        <Settings className="w-5 h-5" />
+      <button
+        onClick={toggleSettings}
+        className="absolute top-5 right-5 flex items-center gap-2 rounded-full transition-all duration-200 z-10"
+        style={{
+          background: settingsOpen ? 'rgba(120, 25, 170, 0.22)' : 'rgba(255,255,255,0.06)',
+          border: settingsOpen ? '1px solid rgba(140, 40, 200, 0.45)' : '1px solid rgba(255,255,255,0.10)',
+          backdropFilter: 'blur(12px)',
+          padding: '6px 14px 6px 10px',
+          color: settingsOpen ? '#c084fc' : 'rgba(255,255,255,0.5)',
+          cursor: 'pointer',
+        }}
+      >
+        <Settings
+          className="w-3.5 h-3.5"
+          style={{ transition: 'transform 0.35s ease', transform: settingsOpen ? 'rotate(90deg)' : 'rotate(0deg)' }}
+        />
+        <span style={{ fontSize: '0.8rem', fontWeight: 500, letterSpacing: '0.01em' }}>Settings</span>
       </button>
 
-      {settingsOpen && <SettingsPanel game={game} />}
+      <SettingsPanel game={game} open={settingsOpen} />
 
       <div
         className="flex flex-col items-center gap-6 p-6 transition-transform duration-500 ease-out"
@@ -602,17 +704,44 @@ function LobbyView({ game }: Readonly<{ game: HostState }>) {
         <div className={`flex-1 flex flex-col items-center gap-5 px-6 pb-6 transition-all duration-500 ${lobbyVisible ? 'opacity-100 translate-y-0' : 'opacity-0 translate-y-6'}`}>
           <JoinCard pin={game.pin} copied={game.copied} copyInvite={game.copyInvite} />
 
-          <div className="w-full max-w-md flex rounded-xl bg-white/5 p-1 gap-1">
+          <div
+            className="w-full max-w-md relative flex rounded-2xl"
+            style={{
+              background: 'rgba(255,255,255,0.05)',
+              border: '1px solid rgba(255,255,255,0.08)',
+              padding: '4px',
+            }}
+          >
+            {/* Sliding pill indicator */}
+            <div
+              className="absolute rounded-xl"
+              style={{
+                top: '4px', bottom: '4px',
+                left: '4px',
+                width: 'calc(50% - 4px)',
+                background: mode === 'classic' ? 'rgba(130, 20, 180, 0.28)' : 'rgba(220, 80, 10, 0.2)',
+                border: mode === 'classic' ? '1px solid rgba(140, 30, 200, 0.45)' : '1px solid rgba(234, 88, 12, 0.4)',
+                transform: mode === 'race' ? 'translateX(100%)' : 'translateX(0)',
+                transition: 'transform 0.25s cubic-bezier(0.4, 0, 0.2, 1), background 0.25s ease, border-color 0.25s ease',
+                pointerEvents: 'none',
+              }}
+            />
             <button
               onClick={() => setMode('classic')}
-              className={`flex-1 py-2 rounded-lg text-sm font-bold transition-colors ${mode === 'classic' ? 'bg-purple-600 text-white' : 'text-white/40 hover:text-white/70'}`}
+              className="relative flex-1 py-2.5 rounded-xl text-sm font-semibold z-10 transition-colors duration-200"
+              style={{ color: mode === 'classic' ? 'white' : 'rgba(255,255,255,0.38)', background: 'transparent', border: 'none', cursor: 'pointer' }}
             >
               Classic
             </button>
             <button
               onClick={() => setMode('race')}
-              className={`flex-1 py-2 rounded-lg text-sm font-bold transition-colors ${mode === 'race' ? 'bg-purple-600 text-white' : 'text-white/40 hover:text-white/70'}`}
+              className="relative flex-1 py-2.5 rounded-xl text-sm font-semibold z-10 transition-colors duration-200 flex items-center justify-center gap-1.5"
+              style={{ color: mode === 'race' ? '#fed7aa' : 'rgba(255,255,255,0.38)', background: 'transparent', border: 'none', cursor: 'pointer' }}
             >
+              <Flame
+                className="w-3.5 h-3.5 transition-colors duration-200"
+                style={{ color: mode === 'race' ? '#fb923c' : 'rgba(255,255,255,0.38)' }}
+              />
               Race
             </button>
           </div>
@@ -635,11 +764,44 @@ function LobbyView({ game }: Readonly<{ game: HostState }>) {
           </div>
 
           <button
-            onClick={startGame}
-            disabled={players.length === 0}
-            className="mt-auto w-full max-w-md py-4 rounded-2xl bg-purple-600 text-white font-bold text-xl disabled:opacity-30 hover:bg-purple-500 transition-colors"
+            type="button"
+            className="liquid-btn relative cursor-pointer border-0 bg-transparent p-0 mt-auto"
+            style={{
+              width: '310px',
+              height: '64px',
+              borderRadius: '100px',
+              background: 'rgba(0,0,0,0.001)',
+              opacity: players.length === 0 ? 0.3 : 1,
+              cursor: players.length === 0 ? 'not-allowed' : 'pointer',
+              transition: 'opacity 0.25s ease',
+            }}
+            onMouseEnter={() => setStartHovered(true)}
+            onMouseLeave={() => setStartHovered(false)}
+            onClick={() => players.length > 0 && startGame()}
           >
-            {mode === 'race' ? 'Start Race Game' : 'Start Classic Game'}
+            <div style={{
+              position: 'absolute', inset: 0, borderRadius: '100px',
+              background: 'rgba(110, 32, 155, 0.04)',
+              pointerEvents: 'none',
+            }} />
+            <LiquidGlass
+              style={{
+                position: 'absolute', top: '50%', left: '50%',
+                filter: startHovered && players.length > 0 ? 'drop-shadow(0 0 12px rgba(110, 32, 155, 0.7))' : 'drop-shadow(0 0 0px rgba(110, 32, 155, 0))',
+                transition: 'filter 0.25s ease',
+              }}
+              displacementScale={64}
+              blurAmount={0.05}
+              saturation={130}
+              aberrationIntensity={2}
+              elasticity={0.12}
+              cornerRadius={100}
+              padding="18px 36px"
+            >
+              <span className="text-white font-bold text-xl" style={{ whiteSpace: 'nowrap' }}>
+                {mode === 'race' ? 'Start Race Game' : 'Start Classic Game'}
+              </span>
+            </LiquidGlass>
           </button>
         </div>
       ) : null}
