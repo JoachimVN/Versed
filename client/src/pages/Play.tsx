@@ -164,6 +164,18 @@ function usePlayGame(pinParam?: string): PlayState {
             setPhase('join');
           }
         });
+      } else {
+        try {
+          const saved = JSON.parse(localStorage.getItem('versed_session') ?? 'null');
+          if (saved?.pin) {
+            socket.emit('check_game', { pin: saved.pin }, ({ exists }: { exists: boolean }) => {
+              if (!exists) {
+                setSavedSession(null);
+                localStorage.removeItem('versed_session');
+              }
+            });
+          }
+        } catch { /* ignore */ }
       }
     });
 

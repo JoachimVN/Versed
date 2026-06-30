@@ -187,6 +187,11 @@ io.on('connection', (socket) => {
     callback({ players: Array.from(game.players.values()).map(p => ({ name: p.name })) });
   });
 
+  // ── Player: check if a game PIN is still active ───────────────────────────
+  socket.on('check_game', ({ pin }: { pin: string }, callback: (r: { exists: boolean }) => void) => {
+    callback({ exists: !!gm.getGame(pin) });
+  });
+
   // ── Player: join game (lobby or mid-game) ─────────────────────────────────
   socket.on(
     'join_game',
