@@ -1,6 +1,7 @@
 import { useState, useEffect, useRef } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { Music, ChevronLeft, ChevronRight, ArrowLeft, Flame, Pencil } from 'lucide-react';
+import LiquidGlass from 'liquid-glass-react';
 import { socket } from '../socket';
 import { RankBadge } from '../components/RankBadge';
 import { RevealStatusHeader, RevealSongCard } from '../components/RevealShared';
@@ -422,38 +423,145 @@ function usePlayGame(pinParam?: string): PlayState {
 function JoinView({ game }: Readonly<{ game: PlayState }>) {
   const { pin, name, error, savedSession, setPin, setName, join, rejoinSaved } = game;
   const navigate = useNavigate();
+  const [joinHovered, setJoinHovered] = useState(false);
+  const [pinFocused, setPinFocused] = useState(false);
+  const [nameFocused, setNameFocused] = useState(false);
+  const canJoin = pin.length === 3 && name.trim().length > 0;
+
   return (
-    <div className="min-h-screen flex flex-col items-center justify-center p-6 gap-5">
-      <button onClick={() => navigate('/')} className="absolute top-5 left-5 p-2 rounded-xl bg-white/10 text-white/60 hover:bg-white/20 hover:text-white transition-colors">
+    <div
+      className="page-enter relative min-h-screen flex flex-col items-center justify-center p-6 gap-10"
+      style={{ zIndex: 1 }}
+    >
+      <button
+        onClick={() => navigate('/')}
+        className="absolute top-5 left-5 p-2 rounded-xl text-white/50 hover:text-white transition-colors"
+        style={{ background: 'rgba(255,255,255,0.08)', zIndex: 2 }}
+        onMouseEnter={e => { (e.currentTarget as HTMLElement).style.background = 'rgba(255,255,255,0.15)'; }}
+        onMouseLeave={e => { (e.currentTarget as HTMLElement).style.background = 'rgba(255,255,255,0.08)'; }}
+      >
         <ArrowLeft className="w-5 h-5" />
       </button>
-      <img src={`${import.meta.env.BASE_URL}logo.png`} alt={APP_NAME} className="h-48 w-auto" />
+
+      <img
+        src={`${import.meta.env.BASE_URL}logo.png`}
+        alt={APP_NAME}
+        className="h-32 w-auto drop-shadow-2xl"
+      />
 
       {savedSession && (
-        <div className="w-full max-w-xs">
-          <button onClick={rejoinSaved}
-            className="w-full py-4 rounded-2xl bg-purple-600 text-white font-bold text-xl hover:bg-purple-500 transition-colors">
-            Rejoin as {savedSession.name}
+        <div className="w-full flex flex-col items-center gap-2" style={{ maxWidth: '310px' }}>
+          <button
+            onClick={rejoinSaved}
+            className="w-full py-3.5 rounded-2xl text-white font-bold text-base transition-all hover:brightness-125"
+            style={{
+              background: 'rgba(110,32,155,0.28)',
+              border: '1px solid rgba(150,17,193,0.4)',
+            }}
+          >
+            Rejoin as <span className="font-black">{savedSession.name}</span>
+            <span className="ml-2 text-white/35 text-sm font-normal">· {savedSession.pin}</span>
           </button>
-          <p className="text-white/30 text-xs text-center mt-2">PIN {savedSession.pin}</p>
+          <p className="text-white/20 text-xs tracking-wider">— or enter a new game below —</p>
         </div>
       )}
 
-      <div className="w-full max-w-xs flex flex-col gap-3">
-        {savedSession && <p className="text-white/30 text-xs text-center">— or join a different game —</p>}
-        <input type="text" inputMode="numeric" pattern="[0-9]*" placeholder="Game PIN"
-          value={pin} onChange={e => setPin(e.target.value.replace(/\D/g, ''))} maxLength={3}
-          className="w-full px-4 py-4 rounded-xl bg-white/10 text-white text-center text-2xl font-bold placeholder-white/30 outline-none focus:ring-2 focus:ring-white/30 tracking-widest" />
-        <input type="text" placeholder="Your name"
-          value={name} onChange={e => setName(e.target.value)}
-          onKeyDown={e => e.key === 'Enter' && join()} maxLength={20}
-          className="w-full px-4 py-4 rounded-xl bg-white/10 text-white text-center text-xl placeholder-white/30 outline-none focus:ring-2 focus:ring-white/30" />
-        {error && <p className="text-red-400 text-sm text-center">{error}</p>}
-        <button onClick={join} disabled={!pin.trim() || !name.trim()}
-          className="w-full py-4 rounded-2xl bg-white/10 text-white font-bold text-xl disabled:opacity-30 hover:bg-white/20 transition-colors">
-          Join
-        </button>
+      {/* Input card — LiquidGlass */}
+      <div className="liquid-btn relative" style={{ width: '310px', height: '165px' }}>
+        <LiquidGlass
+          style={{ position: 'absolute', top: '50%', left: '50%' }}
+          displacementScale={55}
+          blurAmount={0.06}
+          saturation={130}
+          aberrationIntensity={1.5}
+          elasticity={0.08}
+          cornerRadius={20}
+          padding="20px 24px"
+        >
+          <div style={{ width: '262px', textAlign: 'center' }}>
+            {/* PIN */}
+            <div style={{ marginBottom: '14px' }}>
+              <span style={{
+                display: 'block',
+                color: pinFocused ? 'rgba(255,255,255,0.6)' : 'rgba(255,255,255,0.28)',
+                fontSize: '0.6rem', letterSpacing: '0.18em', textTransform: 'uppercase',
+                marginBottom: '6px', transition: 'color 0.2s ease',
+              }}>Game PIN</span>
+              <input
+                type="text"
+                inputMode="numeric"
+                pattern="[0-9]*"
+                placeholder="1 2 3"
+                value={pin}
+                onChange={e => setPin(e.target.value.replace(/\D/g, ''))}
+                maxLength={3}
+                onFocus={() => setPinFocused(true)}
+                onBlur={() => setPinFocused(false)}
+                className="text-white font-black outline-none bg-transparent w-full text-center placeholder-white/20"
+                style={{ fontSize: '2rem', letterSpacing: '0.4em', textIndent: '0.4em', lineHeight: '1', display: 'block' }}
+              />
+            </div>
+            <div style={{ height: '1px', background: 'rgba(255,255,255,0.10)', marginBottom: '14px' }} />
+            {/* Name */}
+            <div>
+              <span style={{
+                display: 'block',
+                color: nameFocused ? 'rgba(255,255,255,0.6)' : 'rgba(255,255,255,0.28)',
+                fontSize: '0.6rem', letterSpacing: '0.18em', textTransform: 'uppercase',
+                marginBottom: '6px', transition: 'color 0.2s ease',
+              }}>Your name</span>
+              <input
+                type="text"
+                placeholder="Enter your name"
+                value={name}
+                onChange={e => setName(e.target.value)}
+                onKeyDown={e => e.key === 'Enter' && join()}
+                onFocus={() => setNameFocused(true)}
+                onBlur={() => setNameFocused(false)}
+                maxLength={20}
+                className="text-white text-xl font-semibold placeholder-white/22 outline-none bg-transparent w-full text-center"
+                style={{ lineHeight: '1.4', display: 'block' }}
+              />
+            </div>
+          </div>
+        </LiquidGlass>
       </div>
+
+      {error && <p className="text-red-400 text-sm text-center" style={{ width: '310px' }}>{error}</p>}
+
+      <button
+        type="button"
+        className="liquid-btn relative cursor-pointer border-0 bg-transparent p-0"
+        style={{
+          width: '310px',
+          height: '64px',
+          borderRadius: '100px',
+          background: 'rgba(0,0,0,0.001)',
+          opacity: canJoin ? 1 : 0.3,
+          pointerEvents: canJoin ? 'auto' : 'none',
+          transition: 'opacity 0.25s ease',
+        }}
+        onMouseEnter={() => setJoinHovered(true)}
+        onMouseLeave={() => setJoinHovered(false)}
+        onClick={join}
+      >
+        <LiquidGlass
+          style={{
+            position: 'absolute', top: '50%', left: '50%',
+            filter: joinHovered ? 'drop-shadow(0 0 8px rgba(255,255,255,0.35))' : 'drop-shadow(0 0 0px rgba(255,255,255,0))',
+            transition: 'filter 0.25s ease',
+          }}
+          displacementScale={64}
+          blurAmount={0.05}
+          saturation={130}
+          aberrationIntensity={2}
+          elasticity={0.12}
+          cornerRadius={100}
+          padding="18px 96px"
+        >
+          <span className="text-white font-bold text-xl" style={{ whiteSpace: 'nowrap' }}>Join game</span>
+        </LiquidGlass>
+      </button>
     </div>
   );
 }
@@ -595,7 +703,7 @@ function GuessInputSection({ guessText, guessInputRef, setGuessText, submitGuess
           value={guessText}
           onChange={e => setGuessText(e.target.value)}
           onKeyDown={e => e.key === 'Enter' && submitGuess()}
-          className="w-full px-4 py-4 rounded-xl bg-white/10 text-white text-center text-xl placeholder-white/30 outline-none focus:ring-2 focus:ring-purple-500"
+          className="w-full px-4 py-4 rounded-xl bg-white/10 text-white text-center text-xl placeholder-white/30 outline-none focus:ring-2 focus:ring-white/20"
           autoComplete="off"
           autoCorrect="off"
           spellCheck={false}
@@ -801,9 +909,29 @@ export default function Play() {
   const game = usePlayGame(pinParam);
   const { phase, result, reconnecting, hostReconnecting, guesserNames, myName } = game;
   const imGuessing = guesserNames.includes(myName);
+  const isJoin = phase === 'join';
+
+  // Fade the glow in after mount, out when leaving join phase.
+  const [glowMounted, setGlowMounted] = useState(false);
+  useEffect(() => {
+    const id = requestAnimationFrame(() => setGlowMounted(true));
+    return () => cancelAnimationFrame(id);
+  }, []);
 
   return (
-    <div className="relative">
+    <div
+      className="relative"
+      style={isJoin ? undefined : { background: '#080812', minHeight: '100vh' }}
+    >
+      <div
+        className="fixed inset-0 pointer-events-none"
+        style={{
+          background: 'radial-gradient(ellipse 80% 55% at 50% 115%, rgba(86,20,140,0.26) 0%, rgba(52,39,88,0.10) 45%, transparent 65%)',
+          opacity: glowMounted && isJoin ? 1 : 0,
+          transition: 'opacity 0.45s ease',
+          zIndex: 0,
+        }}
+      />
       {phase === 'join' && <JoinView game={game} />}
       {phase === 'waiting' && <WaitingView game={game} />}
       {phase === 'betting' && <BettingView game={game} />}

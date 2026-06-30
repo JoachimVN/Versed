@@ -36,6 +36,14 @@ function makeParticle(W: number, H: number, scattered = false): Particle {
   };
 }
 
+// Module-level speed so any component can nudge it without React re-renders.
+let _speedTarget = 1;
+let _currentSpeed = 1;
+
+export function setConfettiSpeedTarget(speed: number) {
+  _speedTarget = speed;
+}
+
 export function ConfettiBackground() {
   const canvasRef = useRef<HTMLCanvasElement>(null);
 
@@ -100,10 +108,13 @@ export function ConfettiBackground() {
         fpsWindowStart = now;
       }
 
+      // Smooth-lerp toward the current speed target.
+      _currentSpeed += (_speedTarget - _currentSpeed) * 0.055;
+
       for (const p of particles) {
-        p.x += p.vx * dt;
-        p.y += p.vy * dt;
-        p.rot += p.rotV * dt;
+        p.x += p.vx * dt * _currentSpeed;
+        p.y += p.vy * dt * _currentSpeed;
+        p.rot += p.rotV * dt * _currentSpeed;
         if (p.y > H + 30) Object.assign(p, makeParticle(W, H, false));
       }
 
