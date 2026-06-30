@@ -31,6 +31,7 @@ export interface PlayState {
   guessText: string;
   result: RoundResultEvent | null;
   myScore: number;
+  myScoreDelta: number;
   myStreak: number;
   mode: 'classic' | 'race';
   artistOnly: boolean;
@@ -77,6 +78,8 @@ function usePlayGame(pinParam?: string): PlayState {
   const [guessText, setGuessText] = useState('');
   const [result, setResult] = useState<RoundResultEvent | null>(null);
   const [myScore, setMyScore] = useState(0);
+  const myScoreRef = useRef(0);
+  const [myScoreDelta, setMyScoreDelta] = useState(0);
   const [myStreak, setMyStreak] = useState(0);
   const [mode, setMode] = useState<'classic' | 'race'>('classic');
   const modeRef = useRef<'classic' | 'race'>('classic');
@@ -198,6 +201,7 @@ function usePlayGame(pinParam?: string): PlayState {
       guessTextRef.current = '';
       setGuessText('');
       setResult(null);
+      setMyScoreDelta(0);
       setError('');
       setMyRacePoints(0);
       setMyRaceTimeMs(null);
@@ -252,7 +256,12 @@ function usePlayGame(pinParam?: string): PlayState {
 
     socket.on('score_update', ({ players }: { players: { name: string; score: number; streak: number }[] }) => {
       const me = players.find(p => p.name === myNameRef.current);
-      if (me) { setMyScore(me.score); setMyStreak(me.streak); }
+      if (me) {
+        setMyScoreDelta(Math.max(0, me.score - myScoreRef.current));
+        myScoreRef.current = me.score;
+        setMyScore(me.score);
+        setMyStreak(me.streak);
+      }
     });
 
     const applyLeaderboard = (lb: LeaderboardEntry[]) => {
@@ -431,7 +440,7 @@ function usePlayGame(pinParam?: string): PlayState {
   return {
     phase, pin, name, myName, error, roundIndex, totalRounds, hints,
     timeLeft, bettingTime, bidIndex, myBid, guesserNames, lowestBid,
-    guessText, result, myScore, myStreak, mode, artistOnly, myRacePoints, myRaceTimeMs,
+    guessText, result, myScore, myScoreDelta, myStreak, mode, artistOnly, myRacePoints, myRaceTimeMs,
     leaderboard, leaderboardDeltas, reconnecting, hostReconnecting, savedSession, guessInputRef,
     newGamePin, rejoinNewGame,
     setPin, setName,
@@ -934,7 +943,7 @@ function PassedView({ game }: Readonly<{ game: PlayState }>) {
 }
 
 export function RevealView({ game, result }: Readonly<{ game: PlayState; result: RoundResultEvent }>) {
-  const { myName, myScore, myStreak, myRacePoints, myRaceTimeMs } = game;
+  const { myName, myScore, myScoreDelta, myStreak, myRacePoints, myRaceTimeMs } = game;
   const isRace = result.mode === 'race';
   const iGotItInRace = isRace && !!result.correctGuessers?.includes(myName);
 
@@ -971,6 +980,9 @@ export function RevealView({ game, result }: Readonly<{ game: PlayState; result:
         )}
 
         <div style={{ background: 'rgba(255,255,255,0.05)', border: '1px solid rgba(255,255,255,0.08)', borderRadius: '16px', padding: '16px 32px', textAlign: 'center' }}>
+          {myScoreDelta > 0 && (
+            <p className="text-sky-400 text-sm font-bold tabular-nums">+{myScoreDelta.toLocaleString()} pts</p>
+          )}
           <p className="text-3xl font-black text-white">{myScore.toLocaleString()}</p>
           <p className="text-white/40 text-sm">your score</p>
           {myStreak >= 2 && (
@@ -1021,6 +1033,9 @@ export function RevealView({ game, result }: Readonly<{ game: PlayState; result:
       )}
 
       <div style={{ background: 'rgba(255,255,255,0.05)', border: '1px solid rgba(255,255,255,0.08)', borderRadius: '16px', padding: '16px 32px', textAlign: 'center' }}>
+        {myScoreDelta > 0 && (
+          <p className="text-sky-400 text-sm font-bold tabular-nums">+{myScoreDelta.toLocaleString()} pts</p>
+        )}
         <p className="text-3xl font-black text-white">{myScore.toLocaleString()}</p>
         <p className="text-white/40 text-sm">your score</p>
         {iGotItInRace && myRaceTimeMs != null && (
