@@ -1066,7 +1066,7 @@ function RevealPlayerRow({
   if (entry) {
     guessText = skipped ? 'skipped' : `"${entry.guess}"`;
   }
-  const guessCls = (!skipped && correct) ? 'text-green-400 text-xs truncate' : 'text-white/20 italic text-xs truncate';
+  const guessCls = (!skipped && correct) ? 'text-green-400 text-xs truncate min-w-0' : 'text-white/20 italic text-xs truncate min-w-0';
   return (
     <button onClick={() => removePlayer(player.name)} aria-label={`Remove ${player.name}`} className="relative group w-full text-left py-1">
       {/* Row 1: name + streak | delta */}
