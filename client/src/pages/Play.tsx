@@ -480,7 +480,7 @@ function WaitingView({ game }: Readonly<{ game: PlayState }>) {
             type="text"
             value={draftName}
             onChange={e => setDraftName(e.target.value)}
-            onKeyDown={e => { if (e.key === 'Enter') confirmEdit(); if (e.key === 'Escape') cancelEdit(); }}
+            onKeyDown={e => { if (e.key === 'Enter') confirmEdit(); else if (e.key === 'Escape') cancelEdit(); }}
             maxLength={20}
             className="w-full px-4 py-3 rounded-xl bg-white/10 text-white text-center text-xl placeholder-white/30 outline-none focus:ring-2 focus:ring-white/30"
           />

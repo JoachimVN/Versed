@@ -166,7 +166,8 @@ function useHostGame(): HostState {
       setPlayers(p);
       const remaining = new Set(p.map(pl => pl.name));
       setReconnectingNames(prev => { const s = new Set(prev); for (const n of s) { if (!remaining.has(n)) s.delete(n); } return s; });
-      setLeaderboard(prev => prev.filter(e => remaining.has(e.name)));
+      const stillInGame = (e: { name: string }) => remaining.has(e.name);
+      setLeaderboard(prev => prev.filter(stillInGame));
     });
     socket.on('player_reconnecting', ({ name }: { name: string }) => {
       setReconnectingNames(prev => new Set(prev).add(name));
