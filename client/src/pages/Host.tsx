@@ -1331,14 +1331,18 @@ function LeaderboardView({ game }: Readonly<{ game: HostState }>) {
           <div
             className="fixed inset-0 pointer-events-none"
             style={{
-              background: 'rgba(8,8,18,0.92)',
+              background: 'rgba(8,8,18,0.96)',
               backdropFilter: 'blur(48px)',
               zIndex: 1,
             }}
           />
-          <div style={{ position: 'fixed', inset: 0, zIndex: 2, pointerEvents: 'none' }}>
-            <ConfettiBackground burst persistAfterBurst />
+          <div style={{ position: 'fixed', inset: 0, zIndex: 2, pointerEvents: 'none', filter: 'blur(10px)' }}>
+            <ConfettiBackground burst persistAfterBurst speedMultiplier={3} />
           </div>
+          <div
+            className="fixed inset-0 pointer-events-none"
+            style={{ background: 'rgba(8,8,18,0.45)', zIndex: 3 }}
+          />
         </>
       )}
 
@@ -1376,7 +1380,7 @@ function LeaderboardView({ game }: Readonly<{ game: HostState }>) {
               padding="18px 36px"
             >
               <div style={{ position: 'relative' }}>
-                <div style={{ position: 'absolute', inset: '-18px -36px', borderRadius: '100px', pointerEvents: 'none', background: 'rgba(0,128,126,0.06)' }} />
+                <div style={{ position: 'absolute', inset: '-18px -36px', borderRadius: '100px', pointerEvents: 'none', background: 'rgba(110,32,155,0.12)' }} />
                 <span className="text-white font-bold text-xl" style={{ whiteSpace: 'nowrap', position: 'relative', display: 'inline-block', minWidth: '210px', textAlign: 'center' }}>
                   New Game
                 </span>

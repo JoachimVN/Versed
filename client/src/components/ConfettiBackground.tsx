@@ -52,7 +52,7 @@ export function setConfettiSpeedTarget(speed: number) {
   _speedTarget = speed;
 }
 
-export function ConfettiBackground({ burst = false, persistAfterBurst = false }: Readonly<{ burst?: boolean; persistAfterBurst?: boolean }>) {
+export function ConfettiBackground({ burst = false, persistAfterBurst = false, speedMultiplier = 1 }: Readonly<{ burst?: boolean; persistAfterBurst?: boolean; speedMultiplier?: number }>) {
   const canvasRef = useRef<HTMLCanvasElement>(null);
 
   useEffect(() => {
@@ -125,7 +125,7 @@ export function ConfettiBackground({ burst = false, persistAfterBurst = false }:
           frozen = true;
         }
         const burstProgress = burstElapsed / burstDuration;
-        _currentSpeed = persistAfterBurst ? 0.5 : 3 * (1 - burstProgress);
+        _currentSpeed = (persistAfterBurst ? 0.5 : 3 * (1 - burstProgress)) * speedMultiplier;
         for (const p of particles) {
           if (persistAfterBurst || burstProgress < 0.6) {
             p.alpha = p.initialAlpha;

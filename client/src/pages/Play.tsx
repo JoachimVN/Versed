@@ -231,6 +231,7 @@ function usePlayGame(pinParam?: string): PlayState {
 
     socket.on('betting_closed', (data: { lowestBid: number; guesserNames: string[] }) => {
       stopCountdown();
+      if (autoSubmitTimerRef.current) { clearTimeout(autoSubmitTimerRef.current); autoSubmitTimerRef.current = null; }
       setSongPlaying(false);
       setLowestBid(data.lowestBid);
       setGuesserNames(data.guesserNames);
@@ -1415,9 +1416,24 @@ function PlayerLeaderboardRow({ entry, delay, isMe }: Readonly<{ entry: Leaderbo
 function MyScoreCard({ entry, delay }: Readonly<{ entry: LeaderboardEntry; delay: number }>) {
   const { displayScore } = useAnimatedScore(entry.score, 0, delay);
   return (
-    <div className="bg-white/10 border border-white/20 rounded-2xl px-6 py-4 text-center">
-      <p className="text-white/60 text-sm">You're #{entry.rank}</p>
-      <p className="text-white font-black text-2xl tabular-nums">{displayScore.toLocaleString()} pts</p>
+    <div className="liquid-btn relative mx-auto" style={{ width: '240px', height: '92px' }}>
+      <LiquidGlass
+        style={{ position: 'absolute', top: '50%', left: '50%' }}
+        displacementScale={50}
+        blurAmount={0.06}
+        saturation={130}
+        aberrationIntensity={1.5}
+        elasticity={0.08}
+        cornerRadius={18}
+        padding="16px 24px"
+      >
+        <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 2, width: '192px' }}>
+          <span style={{ display: 'inline-block', color: 'rgba(255,255,255,0.6)', fontSize: '0.875rem' }}>You're #{entry.rank}</span>
+          <span className="tabular-nums" style={{ display: 'inline-block', color: 'white', fontWeight: 900, fontSize: '1.5rem' }}>
+            {displayScore.toLocaleString()} pts
+          </span>
+        </div>
+      </LiquidGlass>
     </div>
   );
 }
@@ -1441,7 +1457,7 @@ function LeaderboardView({ game }: Readonly<{ game: PlayState }>) {
           <div
             className="fixed inset-0 pointer-events-none"
             style={{
-              background: 'rgba(8,8,18,0.70)',
+              background: 'rgba(8,8,18,0.88)',
               backdropFilter: 'blur(48px)',
               zIndex: 1,
             }}
@@ -1479,8 +1495,15 @@ function LeaderboardView({ game }: Readonly<{ game: PlayState }>) {
         <div className="relative z-10 flex flex-col items-center gap-3">
           {newGamePin && (
             <>
-              <div className="bg-emerald-900/40 border border-emerald-500/40 rounded-2xl px-4 py-3 text-center">
-                <p className="text-emerald-300 text-sm font-semibold">Host started a new game!</p>
+              <div
+                className="flex items-center justify-center gap-2 rounded-2xl px-4 py-3 text-center"
+                style={{
+                  background: 'linear-gradient(90deg, rgba(0,128,126,0.16) 0%, rgba(150,17,193,0.16) 100%)',
+                  border: '1px solid rgba(0,197,182,0.35)',
+                  boxShadow: '0 0 24px rgba(0,128,126,0.12)',
+                }}
+              >
+                <p className="text-sm font-semibold" style={{ color: '#5eead4' }}>Host started a new game!</p>
               </div>
               <button
                 type="button"
@@ -1499,7 +1522,7 @@ function LeaderboardView({ game }: Readonly<{ game: PlayState }>) {
                   padding="18px 36px"
                 >
                   <div style={{ position: 'relative' }}>
-                    <div style={{ position: 'absolute', inset: '-18px -36px', borderRadius: '100px', pointerEvents: 'none', background: 'rgba(0,128,126,0.06)' }} />
+                    <div style={{ position: 'absolute', inset: '-18px -36px', borderRadius: '100px', pointerEvents: 'none', background: 'rgba(0,128,126,0.18)' }} />
                     <span className="text-white font-bold text-xl" style={{ whiteSpace: 'nowrap', position: 'relative', display: 'inline-block', minWidth: '210px', textAlign: 'center' }}>
                       Play Again
                     </span>
