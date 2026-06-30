@@ -764,8 +764,7 @@ export function BettingView({ game }: Readonly<{ game: PlayState }>) {
   const currentBid = BID_OPTIONS[bidIndex];
   const canGoLeft = bidIndex > 0;
   const canGoRight = bidIndex < BID_OPTIONS.length - 1;
-  const riskLevel = bidIndex <= 2 ? 4 : bidIndex <= 6 ? 3 : bidIndex <= 10 ? 2 : 1;
-  const riskLabel = riskLevel === 4 ? 'Max' : riskLevel === 3 ? 'High' : riskLevel === 2 ? 'Mid' : 'Safe';
+  const estPoints = 500 + Math.round(1000 * Math.max(0, 1 - currentBid / 60));
   const urgent = timeLeft <= 5 && timeLeft > 0;
 
   return (
@@ -855,26 +854,14 @@ export function BettingView({ game }: Readonly<{ game: PlayState }>) {
         </div>
 
         {/* Score potential */}
-        <div className="flex flex-col items-center gap-2">
-          <div className="flex items-center gap-2">
-            <div className="flex items-center gap-1">
-              {[1, 2, 3, 4].map(i => (
-                <div
-                  key={i}
-                  className="rounded-full transition-all duration-300"
-                  style={{
-                    width: 20, height: 5,
-                    background: i <= riskLevel ? 'rgba(150,17,193,0.85)' : 'rgba(255,255,255,0.1)',
-                    boxShadow: i <= riskLevel ? '0 0 6px rgba(150,17,193,0.5)' : 'none',
-                  }}
-                />
-              ))}
-            </div>
-            <span style={{ color: 'rgba(150,17,193,0.85)', fontSize: '0.75rem', fontWeight: 700 }}>
-              {riskLabel} score
-            </span>
-          </div>
-          <p style={{ color: 'rgba(255,255,255,0.18)', fontSize: '0.7rem' }}>Fewer seconds = more points</p>
+        <div className="flex flex-col items-center gap-1">
+          <span
+            className="tabular-nums transition-all duration-200"
+            style={{ color: 'rgba(150,17,193,0.9)', fontWeight: 900, fontSize: '1.6rem', lineHeight: 1 }}
+          >
+            ~{estPoints.toLocaleString()}
+          </span>
+          <p style={{ color: 'rgba(255,255,255,0.22)', fontSize: '0.68rem' }}>pts + difficulty bonus</p>
         </div>
       </div>
 
