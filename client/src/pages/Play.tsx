@@ -631,68 +631,80 @@ function WaitingView({ game }: Readonly<{ game: PlayState }>) {
   };
 
   return (
-    <div
-      className="min-h-screen flex flex-col items-center justify-center gap-10 p-6"
-      style={{ transition: 'opacity 0.5s ease, transform 0.5s ease', opacity: visible ? 1 : 0, transform: visible ? 'translateY(0)' : 'translateY(16px)' }}
-    >
-      <img src={`${import.meta.env.BASE_URL}logo.png`} alt={APP_NAME} className="h-28 w-auto drop-shadow-2xl" />
+    <div className="relative min-h-screen overflow-hidden">
+      {/* Background */}
+      <img
+        src={`${import.meta.env.BASE_URL}background.svg`}
+        aria-hidden="true"
+        style={{ position: 'fixed', inset: 0, width: '100%', height: '100%', objectFit: 'cover', zIndex: 0, transform: 'scale(1.06)' }}
+      />
+      {/* Blur + dark scrim */}
+      <div style={{ position: 'fixed', inset: 0, zIndex: 1, background: 'rgba(5,5,14,0.52)', backdropFilter: 'blur(18px)' }} />
 
-      <div className="liquid-btn relative" style={{ width: '310px', height: '130px' }}>
-        <LiquidGlass
-          style={{ position: 'absolute', top: '50%', left: '50%' }}
-          displacementScale={55}
-          blurAmount={0.06}
-          saturation={130}
-          aberrationIntensity={1.5}
-          elasticity={0.08}
-          cornerRadius={20}
-          padding="24px 28px"
-        >
-          <div style={{ width: '254px', display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '10px' }}>
-            <span style={{ color: 'rgba(0,128,126,0.9)', fontSize: '0.6rem', letterSpacing: '0.18em', textTransform: 'uppercase', fontWeight: 700 }}>
-              You're in!
-            </span>
-            <span style={{ color: 'rgba(255,255,255,0.28)', fontSize: '0.6rem', letterSpacing: '0.14em', textTransform: 'uppercase' }}>
-              Playing as
-            </span>
-            {editing ? (
-              <>
-                <input
-                  autoFocus
-                  type="text"
-                  value={draftName}
-                  onChange={e => setDraftName(e.target.value)}
-                  onKeyDown={e => { if (e.key === 'Enter') confirmEdit(); else if (e.key === 'Escape') cancelEdit(); }}
-                  onBlur={confirmEdit}
-                  maxLength={20}
-                  style={{
-                    background: 'none', border: 'none', borderBottom: '1px solid rgba(255,255,255,0.25)',
-                    color: 'white', fontSize: '1.5rem', fontWeight: 800, textAlign: 'center',
-                    outline: 'none', width: '100%', letterSpacing: '-0.01em',
-                    padding: '2px 0 4px', fontFamily: 'inherit',
-                  }}
-                />
-                {game.error && <p style={{ color: '#f87171', fontSize: '0.7rem' }}>{game.error}</p>}
-              </>
-            ) : (
-              <button onClick={startEdit} style={{ display: 'flex', alignItems: 'center', gap: '7px', background: 'none', border: 'none', cursor: 'pointer', color: 'white', fontSize: '1.5rem', fontWeight: 800, letterSpacing: '-0.01em' }}>
-                {game.myName}
-                <Pencil style={{ width: '14px', height: '14px', color: 'rgba(255,255,255,0.28)', flexShrink: 0 }} />
-              </button>
-            )}
-          </div>
-        </LiquidGlass>
-      </div>
+      {/* Content */}
+      <div
+        className="relative flex flex-col items-center justify-center min-h-screen gap-10 p-6"
+        style={{ zIndex: 2, transition: 'opacity 0.5s ease, transform 0.5s ease', opacity: visible ? 1 : 0, transform: visible ? 'translateY(0)' : 'translateY(16px)' }}
+      >
+        <img src={`${import.meta.env.BASE_URL}logo.png`} alt={APP_NAME} className="h-28 w-auto drop-shadow-2xl" />
 
-      <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '14px' }}>
-        <div style={{ display: 'flex', gap: '7px' }}>
-          {[0, 1, 2].map(i => (
-            <div key={i} style={{ width: '7px', height: '7px', borderRadius: '50%', background: 'rgba(0,128,126,0.8)', animation: 'dotBounce 1.4s ease-in-out infinite', animationDelay: `${i * 0.18}s` }} />
-          ))}
+        <div className="liquid-btn relative" style={{ width: '310px', height: '130px' }}>
+          <LiquidGlass
+            style={{ position: 'absolute', top: '50%', left: '50%' }}
+            displacementScale={55}
+            blurAmount={0.06}
+            saturation={130}
+            aberrationIntensity={1.5}
+            elasticity={0.08}
+            cornerRadius={20}
+            padding="24px 28px"
+          >
+            <div style={{ width: '254px', display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '10px' }}>
+              <span style={{ color: 'rgba(0,128,126,0.9)', fontSize: '0.6rem', letterSpacing: '0.18em', textTransform: 'uppercase', fontWeight: 700 }}>
+                You're in!
+              </span>
+              <span style={{ color: 'rgba(255,255,255,0.28)', fontSize: '0.6rem', letterSpacing: '0.14em', textTransform: 'uppercase' }}>
+                Playing as
+              </span>
+              {editing ? (
+                <>
+                  <input
+                    autoFocus
+                    type="text"
+                    value={draftName}
+                    onChange={e => setDraftName(e.target.value)}
+                    onKeyDown={e => { if (e.key === 'Enter') confirmEdit(); else if (e.key === 'Escape') cancelEdit(); }}
+                    onBlur={confirmEdit}
+                    maxLength={20}
+                    style={{
+                      background: 'none', border: 'none', borderBottom: '1px solid rgba(255,255,255,0.25)',
+                      color: 'white', fontSize: '1.5rem', fontWeight: 800, textAlign: 'center',
+                      outline: 'none', width: '100%', letterSpacing: '-0.01em',
+                      padding: '2px 0 4px', fontFamily: 'inherit',
+                    }}
+                  />
+                  {game.error && <p style={{ color: '#f87171', fontSize: '0.7rem' }}>{game.error}</p>}
+                </>
+              ) : (
+                <button onClick={startEdit} style={{ display: 'flex', alignItems: 'center', gap: '7px', background: 'none', border: 'none', cursor: 'pointer', color: 'white', fontSize: '1.5rem', fontWeight: 800, letterSpacing: '-0.01em' }}>
+                  {game.myName}
+                  <Pencil style={{ width: '14px', height: '14px', color: 'rgba(255,255,255,0.28)', flexShrink: 0 }} />
+                </button>
+              )}
+            </div>
+          </LiquidGlass>
         </div>
-        <p style={{ color: 'rgba(255,255,255,0.28)', fontSize: '0.8rem', letterSpacing: '0.04em' }}>
-          Waiting for the host to start…
-        </p>
+
+        <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '14px' }}>
+          <div style={{ display: 'flex', gap: '7px' }}>
+            {[0, 1, 2].map(i => (
+              <div key={i} style={{ width: '7px', height: '7px', borderRadius: '50%', background: 'rgba(0,128,126,0.8)', animation: 'dotBounce 1.4s ease-in-out infinite', animationDelay: `${i * 0.18}s` }} />
+            ))}
+          </div>
+          <p style={{ color: 'rgba(255,255,255,0.28)', fontSize: '0.8rem', letterSpacing: '0.04em' }}>
+            Waiting for the host to start…
+          </p>
+        </div>
       </div>
     </div>
   );
