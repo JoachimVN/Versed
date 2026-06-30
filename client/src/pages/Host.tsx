@@ -382,7 +382,28 @@ function CircularTimer({ timeLeft, total }: Readonly<{ timeLeft: number; total: 
   const sw = 5;
   const r = (size - sw * 2) / 2;
   const circ = 2 * Math.PI * r;
-  const pct = total > 0 ? Math.max(0, Math.min(1, timeLeft / total)) : 0;
+
+  const endsAtRef = useRef(0);
+  const [pct, setPct] = useState(total > 0 ? Math.max(0, Math.min(1, timeLeft / total)) : 0);
+
+  useEffect(() => {
+    if (total <= 0) return;
+    if (timeLeft <= 0) {
+      setPct(0);
+      return;
+    }
+    endsAtRef.current = Date.now() + timeLeft * 1000;
+    let rafId: number;
+    const tick = () => {
+      const remaining = endsAtRef.current - Date.now();
+      const p = Math.max(0, Math.min(1, remaining / (total * 1000)));
+      setPct(p);
+      if (p > 0) rafId = requestAnimationFrame(tick);
+    };
+    rafId = requestAnimationFrame(tick);
+    return () => cancelAnimationFrame(rafId);
+  }, [timeLeft, total]);
+
   return (
     <div className="relative" style={{ width: size, height: size }}>
       <svg width={size} height={size} className="absolute inset-0" style={{ transform: 'rotate(-90deg)' }}>
@@ -394,11 +415,7 @@ function CircularTimer({ timeLeft, total }: Readonly<{ timeLeft: number; total: 
           strokeDasharray={circ}
           strokeDashoffset={circ * (1 - pct)}
           strokeLinecap="round"
-          style={{
-            transition: timeLeft === 0
-              ? 'stroke-dashoffset 0s, stroke 0.4s ease'
-              : 'stroke-dashoffset 0.82s linear, stroke 0.4s ease',
-          }}
+          style={{ transition: 'stroke 0.4s ease' }}
         />
       </svg>
       <div className="absolute inset-0 flex flex-col items-center justify-center">
