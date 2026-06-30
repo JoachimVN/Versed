@@ -754,10 +754,8 @@ function WaitingView({ game }: Readonly<{ game: PlayState }>) {
 }
 
 export function BettingView({ game }: Readonly<{ game: PlayState }>) {
-  const { roundIndex, totalRounds, timeLeft, bettingTime, hints, bidIndex, error, submitBid, setBidIndex } = game;
+  const { roundIndex, totalRounds, timeLeft, bettingTime, bidIndex, error, submitBid, setBidIndex } = game;
   const timerPct = bettingTime > 0 ? Math.max(0, (timeLeft / bettingTime)) * 100 : 0;
-  const imageHint = hints.find(h => h.imageUrl);
-  const textHints = hints.filter(h => !h.imageUrl);
   const currentBid = BID_OPTIONS[bidIndex];
   const canGoLeft = bidIndex > 0;
   const canGoRight = bidIndex < BID_OPTIONS.length - 1;
@@ -791,42 +789,6 @@ export function BettingView({ game }: Readonly<{ game: PlayState }>) {
           }}
         />
       </div>
-
-      {/* Hints strip */}
-      {hints.length > 0 && (
-        <div className="mx-5 mt-5">
-          <div
-            className="flex items-center gap-4 rounded-2xl"
-            style={{
-              padding: '14px 16px',
-              background: 'rgba(255,255,255,0.04)',
-              border: '1px solid rgba(255,255,255,0.07)',
-            }}
-          >
-            {imageHint?.imageUrl && (
-              <img
-                src={imageHint.imageUrl} alt=""
-                style={{
-                  width: 52, height: 52, borderRadius: 12, objectFit: 'cover',
-                  flexShrink: 0, filter: 'blur(6px) brightness(0.7)',
-                }}
-              />
-            )}
-            <div className="flex flex-wrap gap-5">
-              {textHints.map(h => (
-                <div key={h.label}>
-                  <p style={{ color: 'rgba(255,255,255,0.25)', fontSize: '0.6rem', textTransform: 'uppercase', letterSpacing: '0.2em', marginBottom: 2 }}>
-                    {h.label}
-                  </p>
-                  <p style={{ color: 'white', fontWeight: 900, fontSize: '1.5rem', lineHeight: 1 }}>
-                    {h.value}
-                  </p>
-                </div>
-              ))}
-            </div>
-          </div>
-        </div>
-      )}
 
       {/* Bid picker */}
       <div className="flex-1 flex flex-col items-center justify-center gap-6 px-5">

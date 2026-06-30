@@ -893,32 +893,34 @@ function BettingView({ game }: Readonly<{ game: HostState }>) {
       {/* Main content */}
       <div className="flex-1 relative flex flex-col items-center justify-center gap-10 px-8 py-4" style={{ zIndex: 2 }}>
 
-        {/* Circular timer */}
-        <CircularTimer timeLeft={timeLeft} total={bettingTime} />
+        {/* Album art + timer side by side */}
+        <div className="flex items-center gap-8">
+          {imageHint?.imageUrl && (
+            <img
+              src={imageHint.imageUrl} alt=""
+              style={{ width: 120, height: 120, borderRadius: 20, objectFit: 'cover', filter: 'blur(6px) brightness(0.75)' }}
+            />
+          )}
+          <CircularTimer timeLeft={timeLeft} total={bettingTime} />
+        </div>
 
-        {/* Hints */}
-        {(imageHint || textHints.length > 0) && (
+        {/* Text hints */}
+        {textHints.length > 0 && (
           <div
-            className="flex items-center justify-center gap-8 w-full max-w-2xl rounded-3xl"
+            className="flex items-center justify-center gap-12 w-full max-w-3xl rounded-3xl"
             style={{
-              padding: '20px 36px',
+              padding: '22px 48px',
               background: 'rgba(255,255,255,0.04)',
               border: '1px solid rgba(255,255,255,0.08)',
               backdropFilter: 'blur(16px)',
             }}
           >
-            {imageHint?.imageUrl && (
-              <img
-                src={imageHint.imageUrl} alt=""
-                style={{ width: 64, height: 64, borderRadius: 14, objectFit: 'cover', flexShrink: 0, filter: 'blur(5px) brightness(0.75)' }}
-              />
-            )}
             {textHints.map(h => (
               <div key={h.label} className="flex flex-col items-center gap-1.5">
                 <span style={{ color: 'rgba(255,255,255,0.28)', fontSize: '0.6rem', textTransform: 'uppercase', letterSpacing: '0.22em' }}>
                   {h.label}
                 </span>
-                <span style={{ color: 'white', fontWeight: 900, fontSize: '2.25rem', lineHeight: 1, letterSpacing: '-0.02em' }}>
+                <span style={{ color: 'white', fontWeight: 900, fontSize: '3rem', lineHeight: 1, letterSpacing: '-0.02em' }}>
                   {h.value}
                 </span>
               </div>
