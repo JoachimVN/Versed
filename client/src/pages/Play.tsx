@@ -451,19 +451,37 @@ function JoinView({ game }: Readonly<{ game: PlayState }>) {
       />
 
       {savedSession && (
-        <div className="w-full flex flex-col items-center gap-2" style={{ maxWidth: '310px' }}>
+        <div className="flex flex-col items-center gap-3">
           <button
+            type="button"
             onClick={rejoinSaved}
-            className="w-full py-3.5 rounded-2xl text-white font-bold text-base transition-all hover:brightness-125"
-            style={{
-              background: 'rgba(110,32,155,0.28)',
-              border: '1px solid rgba(150,17,193,0.4)',
-            }}
+            className="liquid-btn relative cursor-pointer border-0 bg-transparent p-0"
+            style={{ width: '310px', height: '70px', borderRadius: '100px', background: 'rgba(0,0,0,0.001)' }}
           >
-            Rejoin as <span className="font-black">{savedSession.name}</span>
-            <span className="ml-2 text-white/35 text-sm font-normal">· {savedSession.pin}</span>
+            <div style={{
+              position: 'absolute', inset: 0, borderRadius: '100px',
+              background: 'rgba(110, 32, 155, 0.05)',
+              pointerEvents: 'none',
+            }} />
+            <LiquidGlass
+              style={{ position: 'absolute', top: '50%', left: '50%' }}
+              displacementScale={64}
+              blurAmount={0.05}
+              saturation={130}
+              aberrationIntensity={2}
+              elasticity={0.12}
+              cornerRadius={100}
+              padding="13px 48px"
+            >
+              <div style={{ textAlign: 'center', whiteSpace: 'nowrap' }}>
+                <p style={{ color: 'rgba(255,255,255,0.38)', fontSize: '0.6rem', letterSpacing: '0.18em', textTransform: 'uppercase', lineHeight: 1, marginBottom: '5px' }}>
+                  Continue as · {savedSession.pin}
+                </p>
+                <p className="text-white font-black text-xl" style={{ lineHeight: 1.2 }}>{savedSession.name}</p>
+              </div>
+            </LiquidGlass>
           </button>
-          <p className="text-white/20 text-xs tracking-wider">— or enter a new game below —</p>
+          <p className="text-white/20 text-xs tracking-wider">— or join a different game —</p>
         </div>
       )}
 
@@ -528,7 +546,25 @@ function JoinView({ game }: Readonly<{ game: PlayState }>) {
         </LiquidGlass>
       </div>
 
-      {error && <p className="text-red-400 text-sm text-center" style={{ width: '310px' }}>{error}</p>}
+      <div style={{
+        display: 'grid',
+        gridTemplateRows: error ? '1fr' : '0fr',
+        transition: 'grid-template-rows 0.25s ease',
+      }}>
+        <div style={{ overflow: 'hidden' }}>
+          <p
+            className="text-sm text-center"
+            style={{
+              width: '310px',
+              paddingTop: '2px',
+              opacity: error ? 1 : 0,
+              transition: 'opacity 0.2s ease',
+              color: 'rgba(248, 113, 113, 0.9)',
+              letterSpacing: '0.01em',
+            }}
+          >{error}</p>
+        </div>
+      </div>
 
       <button
         type="button"
