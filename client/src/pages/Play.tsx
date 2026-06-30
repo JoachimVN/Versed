@@ -134,7 +134,7 @@ function usePlayGame(pinParam?: string): PlayState {
     setPhase('bid_submitted');
     socket.emit('submit_bid', { seconds }, (res?: { ok: boolean }) => {
       if (res && !res.ok) {
-        setError("That didn't go through — try again.");
+        setError("That didn't go through, try again.");
         setPhase('betting');
       }
     });
@@ -376,7 +376,7 @@ function usePlayGame(pinParam?: string): PlayState {
       // "waiting for others"; drop them back so they can lock in again.
       if (res && !res.ok) {
         bidSubmittedRef.current = false;
-        setError("That didn't go through - try again.");
+        setError("That didn't go through, try again.");
         setPhase('betting');
       }
     });
