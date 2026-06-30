@@ -462,6 +462,11 @@ function usePlayGame(pinParam?: string): PlayState {
   };
 }
 
+function guessTextClass(guess: string | null, correct: boolean): string {
+  if (guess === null) return 'text-white/15 italic';
+  return correct ? 'text-green-400' : 'text-white/20 italic';
+}
+
 function timerColor(pct: number): string {
   if (pct > 0.6) return 'rgba(52,211,153,0.85)';
   if (pct > 0.35) return 'rgba(251,191,36,0.85)';
@@ -475,30 +480,24 @@ const AUDIO_BARS = [
   { anim: 'audioBar',  dur: 1.5, delay: 0.14 },
   { anim: 'audioBarD', dur: 0.85,delay: 0.28 },
   { anim: 'audioBarB', dur: 1.7, delay: 0.07 },
-  { anim: 'audioBar',  dur: 1.0, delay: 0.42 },
+  { anim: 'audioBar',  dur: 1, delay: 0.42 },
   { anim: 'audioBarC', dur: 1.3, delay: 0.21 },
   { anim: 'audioBarD', dur: 0.9, delay: 0.35 },
   { anim: 'audioBarB', dur: 1.6, delay: 0.08 },
   { anim: 'audioBarC', dur: 1.2, delay: 0.26 },
 ] as const;
 
+function bidArrowStyle(enabled: boolean, pressed: boolean, hovered: boolean): { bg: string; border: string } {
+  if (!enabled) return { bg: 'rgba(255,255,255,0.03)', border: '1px solid rgba(255,255,255,0.04)' };
+  if (pressed) return { bg: 'rgba(150,17,193,0.28)', border: '1px solid rgba(150,17,193,0.5)' };
+  if (hovered) return { bg: 'rgba(255,255,255,0.13)', border: '1px solid rgba(255,255,255,0.18)' };
+  return { bg: 'rgba(255,255,255,0.07)', border: '1px solid rgba(255,255,255,0.10)' };
+}
+
 function BidArrow({ direction, enabled, onClick }: Readonly<{ direction: 'left' | 'right'; enabled: boolean; onClick: () => void }>) {
   const [hovered, setHovered] = useState(false);
   const [pressed, setPressed] = useState(false);
-  const bg = !enabled
-    ? 'rgba(255,255,255,0.03)'
-    : pressed
-      ? 'rgba(150,17,193,0.28)'
-      : hovered
-        ? 'rgba(255,255,255,0.13)'
-        : 'rgba(255,255,255,0.07)';
-  const border = !enabled
-    ? '1px solid rgba(255,255,255,0.04)'
-    : pressed
-      ? '1px solid rgba(150,17,193,0.5)'
-      : hovered
-        ? '1px solid rgba(255,255,255,0.18)'
-        : '1px solid rgba(255,255,255,0.10)';
+  const { bg, border } = bidArrowStyle(enabled, pressed, hovered);
   return (
     <button
       onClick={() => enabled && onClick()}
@@ -828,7 +827,6 @@ export function BettingView({ game }: Readonly<{ game: PlayState }>) {
   const canGoLeft = bidIndex > 0;
   const canGoRight = bidIndex < BID_OPTIONS.length - 1;
   const estPoints = 500 + Math.round(1000 * Math.max(0, 1 - currentBid / 60));
-  const urgent = timeLeft <= 5 && timeLeft > 0;
 
   return (
     <div className="min-h-screen flex flex-col relative overflow-hidden" style={{ background: '#080812' }}>
@@ -998,9 +996,9 @@ function WatchingView({ game }: Readonly<{ game: PlayState }>) {
 
               {/* Animated waveform — static until song actually starts */}
               <div style={{ display: 'flex', gap: '5px', alignItems: 'center', height: '36px', transition: 'opacity 0.3s ease', opacity: (isRace || songPlaying) ? 1 : 0.35 }}>
-                {AUDIO_BARS.map((bar, i) => (
+                {AUDIO_BARS.map((bar) => (
                   <div
-                    key={i}
+                    key={bar.delay}
                     style={{
                       width: '3px', height: '100%', borderRadius: '2px',
                       background: isRace ? 'rgba(234,88,12,0.75)' : 'rgba(150,17,193,0.75)',
@@ -1049,11 +1047,57 @@ function WatchingView({ game }: Readonly<{ game: PlayState }>) {
 // guessing phase. Keeping a single component across both states means the input
 // element is never unmounted — focus and text survive the transition, which
 // prevents the mobile keyboard from dismissing mid-song.
+function ListeningHeader({ songPlaying }: Readonly<{ songPlaying: boolean }>) {
+  return (
+    <div className="flex flex-col items-center gap-2.5 pt-10 pb-4">
+      <div style={{ display: 'flex', gap: '5px', alignItems: 'center', height: '28px', transition: 'opacity 0.3s ease', opacity: songPlaying ? 1 : 0.35 }}>
+        {AUDIO_BARS.map((bar) => (
+          <div key={bar.delay} style={{
+            width: '3px', height: '100%', borderRadius: '2px',
+            background: 'rgba(150,17,193,0.6)',
+            animation: songPlaying ? `${bar.anim} ${bar.dur}s ease-in-out infinite` : 'none',
+            animationDelay: `${bar.delay}s`, transformOrigin: 'center',
+            transform: songPlaying ? undefined : 'scaleY(0.07)',
+          }} />
+        ))}
+      </div>
+      <span style={{ color: 'rgba(255,255,255,0.28)', fontSize: '0.72rem', letterSpacing: '0.08em' }}>
+        {songPlaying ? 'Your song is playing…' : 'Get ready…'}
+      </span>
+    </div>
+  );
+}
+
+function ActiveHeader({ urgent, timeLeft, myScore }: Readonly<{ urgent: boolean; timeLeft: number; myScore: number }>) {
+  return (
+    <div className="flex items-center justify-between px-5 pt-5 pb-3">
+      <span style={{ color: 'rgba(255,255,255,0.32)', fontSize: '0.85rem', fontWeight: 600 }}>Your turn</span>
+      <span
+        className="font-black text-4xl tabular-nums"
+        style={{ color: urgent ? timerColor(0) : 'white', transition: 'color 0.3s ease' }}
+      >
+        {timeLeft}s
+      </span>
+      <span style={{ color: 'rgba(255,255,255,0.28)', fontSize: '0.8rem', fontWeight: 500 }}>
+        {myScore.toLocaleString()} pts
+      </span>
+    </div>
+  );
+}
+
+function guessInputBoxStyle(isListening: boolean): { border: string; background: string; boxShadow: string } {
+  if (isListening) {
+    return { border: '1px solid rgba(255,255,255,0.07)', background: 'rgba(255,255,255,0.03)', boxShadow: 'none' };
+  }
+  return { border: '1px solid rgba(150,17,193,0.4)', background: 'rgba(150,17,193,0.08)', boxShadow: '0 0 24px rgba(150,17,193,0.1)' };
+}
+
 function GuessingView({ game }: Readonly<{ game: PlayState }>) {
   const { phase, timeLeft, myScore, guessText, guessInputRef, setGuessText, submitGuess, skipGuess, artistOnly, songPlaying } = game;
   const isListening = phase === 'watching';
   const canSubmit = guessText.trim().length > 0;
   const urgent = !isListening && timeLeft <= 5;
+  const inputBoxStyle = guessInputBoxStyle(isListening);
 
   return (
     <div className="relative min-h-screen flex flex-col overflow-hidden" style={{ background: '#080812' }}>
@@ -1063,37 +1107,9 @@ function GuessingView({ game }: Readonly<{ game: PlayState }>) {
       <div className="relative flex flex-col flex-1" style={{ zIndex: 2 }}>
 
       {/* Header — waveform while listening, timer + score when active */}
-      {isListening ? (
-        <div className="flex flex-col items-center gap-2.5 pt-10 pb-4">
-          <div style={{ display: 'flex', gap: '5px', alignItems: 'center', height: '28px', transition: 'opacity 0.3s ease', opacity: songPlaying ? 1 : 0.35 }}>
-            {AUDIO_BARS.map((bar, i) => (
-              <div key={i} style={{
-                width: '3px', height: '100%', borderRadius: '2px',
-                background: 'rgba(150,17,193,0.6)',
-                animation: songPlaying ? `${bar.anim} ${bar.dur}s ease-in-out infinite` : 'none',
-                animationDelay: `${bar.delay}s`, transformOrigin: 'center',
-                transform: songPlaying ? undefined : 'scaleY(0.07)',
-              }} />
-            ))}
-          </div>
-          <span style={{ color: 'rgba(255,255,255,0.28)', fontSize: '0.72rem', letterSpacing: '0.08em' }}>
-            {songPlaying ? 'Your song is playing…' : 'Get ready…'}
-          </span>
-        </div>
-      ) : (
-        <div className="flex items-center justify-between px-5 pt-5 pb-3">
-          <span style={{ color: 'rgba(255,255,255,0.32)', fontSize: '0.85rem', fontWeight: 600 }}>Your turn</span>
-          <span
-            className="font-black text-4xl tabular-nums"
-            style={{ color: urgent ? timerColor(0) : 'white', transition: 'color 0.3s ease' }}
-          >
-            {timeLeft}s
-          </span>
-          <span style={{ color: 'rgba(255,255,255,0.28)', fontSize: '0.8rem', fontWeight: 500 }}>
-            {myScore.toLocaleString()} pts
-          </span>
-        </div>
-      )}
+      {isListening
+        ? <ListeningHeader songPlaying={songPlaying} />
+        : <ActiveHeader urgent={urgent} timeLeft={timeLeft} myScore={myScore} />}
 
       {/* Input area */}
       <div className="flex-1 flex flex-col items-center justify-center gap-5 px-5">
@@ -1107,9 +1123,9 @@ function GuessingView({ game }: Readonly<{ game: PlayState }>) {
 
         <div style={{
           width: '100%', borderRadius: '16px', overflow: 'hidden',
-          border: `1px solid ${isListening ? 'rgba(255,255,255,0.07)' : 'rgba(150,17,193,0.4)'}`,
-          background: isListening ? 'rgba(255,255,255,0.03)' : 'rgba(150,17,193,0.08)',
-          boxShadow: isListening ? 'none' : '0 0 24px rgba(150,17,193,0.1)',
+          border: inputBoxStyle.border,
+          background: inputBoxStyle.background,
+          boxShadow: inputBoxStyle.boxShadow,
           transition: 'border-color 0.5s ease, background 0.5s ease, box-shadow 0.5s ease',
         }}>
           <input
@@ -1345,10 +1361,11 @@ export function RevealView({ game, result }: Readonly<{ game: PlayState; result:
           <div style={{ background: 'rgba(255,255,255,0.05)', border: '1px solid rgba(255,255,255,0.08)', borderRadius: '16px', padding: '8px 12px', width: '25%' }} className="space-y-1">
             {result.playerGuesses.map(g => {
               const correct = isRace ? !!result.correctGuessers?.includes(g.name) : (g.name === result.guesserName);
+              const guessClass = guessTextClass(g.guess, correct);
               return (
                 <div key={g.name} className="flex justify-between items-center gap-2">
                   <span className={`text-xs min-w-0 truncate ${correct ? 'text-white font-semibold' : 'text-white/30'}`}>{g.name}</span>
-                  <span className={`text-xs text-right min-w-0 truncate ${g.guess === null ? 'text-white/15 italic' : correct ? 'text-green-400' : 'text-white/20 italic'}`}>
+                  <span className={`text-xs text-right min-w-0 truncate ${guessClass}`}>
                     {g.guess === null ? 'skipped' : `"${g.guess}"`}
                     {correct && g.timeMs != null && (
                       <span className="ml-1 text-white/25 text-xs">{(g.timeMs / 1000).toFixed(1)}s</span>

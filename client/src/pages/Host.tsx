@@ -971,9 +971,9 @@ function BettingView({ game }: Readonly<{ game: HostState }>) {
         {/* Bid status dots */}
         <div className="flex flex-col items-center gap-3">
           <div className="flex gap-2.5 flex-wrap justify-center">
-            {players.map((_, i) => (
+            {players.map((p, i) => (
               <div
-                key={i}
+                key={p.name}
                 className="rounded-full transition-all duration-500"
                 style={{
                   width: 12, height: 12,
