@@ -699,9 +699,9 @@ function ModeToggle({ mode, setMode }: Readonly<{ mode: 'classic' | 'race'; setM
       <button
         onClick={() => setMode('race')}
         className="relative flex-1 py-2.5 rounded-xl text-sm font-semibold z-10 transition-colors duration-200 flex items-center justify-center gap-1.5"
-        style={{ color: !isClassic ? '#fed7aa' : 'rgba(255,255,255,0.38)', background: 'transparent', border: 'none', cursor: 'pointer' }}
+        style={{ color: isClassic ? 'rgba(255,255,255,0.38)' : '#fed7aa', background: 'transparent', border: 'none', cursor: 'pointer' }}
       >
-        <Flame className="w-3.5 h-3.5 transition-colors duration-200" style={{ color: !isClassic ? '#fb923c' : 'rgba(255,255,255,0.38)' }} />
+        <Flame className="w-3.5 h-3.5 transition-colors duration-200" style={{ color: isClassic ? 'rgba(255,255,255,0.38)' : '#fb923c' }} />
         Race
       </button>
     </div>
