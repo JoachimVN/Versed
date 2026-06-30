@@ -34,7 +34,7 @@ export function useAnimatedScore(finalScore: number, delta: number, startDelay: 
         }
       };
       rafId = requestAnimationFrame(step);
-    }, startDelay);
+    }, startDelay + 1000);
 
     return () => {
       clearTimeout(timeoutId);
