@@ -982,23 +982,23 @@ export function RevealView({ game, result }: Readonly<{ game: HostState; result:
             const entry = result.playerGuesses?.find(g => g.name === p.name);
             const streak = p.streak ?? 0;
             return (
-              <button key={p.name} onClick={() => removePlayer(p.name)} aria-label={`Remove ${p.name}`} className="relative group w-full flex justify-between items-center gap-4 text-left">
-                <div className="text-left">
-                  <div className="flex items-center gap-1.5">
+              <button key={p.name} onClick={() => removePlayer(p.name)} aria-label={`Remove ${p.name}`} className="relative group w-full flex justify-between items-center gap-2 text-left">
+                <div className="text-left min-w-0 flex-1">
+                  <div className="flex items-center gap-1">
                     {streak >= 2 && (
-                      <span className="flex items-center gap-0.5 text-orange-400 text-xs font-bold">
+                      <span className="flex items-center gap-0.5 text-orange-400 text-xs font-bold shrink-0">
                         <Flame className="w-3 h-3" />{streak}
                       </span>
                     )}
-                    <span className="text-white/50 text-sm">{p.name}</span>
+                    <span className="text-white/40 text-xs truncate">{p.name}</span>
                   </div>
                   {entry && (
-                    <p className={entry.guess === null ? 'text-white/25 italic text-xs' : 'text-white/40 text-xs'}>
+                    <p className={`text-xs italic truncate ${entry.guess === null ? 'text-white/15' : 'text-white/20'}`}>
                       {entry.guess === null ? 'skipped' : `"${entry.guess}"`}
                     </p>
                   )}
                 </div>
-                <span className="text-white/60 text-sm shrink-0">{(p.score ?? 0).toLocaleString()}</span>
+                <span className="text-white/60 text-xs shrink-0 tabular-nums">{(p.score ?? 0).toLocaleString()}</span>
                 <span className="absolute -inset-x-3 -inset-y-1 rounded-lg backdrop-blur-sm opacity-0 group-hover:opacity-100 transition-opacity" />
               </button>
             );
@@ -1060,34 +1060,32 @@ export function RevealView({ game, result }: Readonly<{ game: HostState; result:
           const streak = p.streak ?? 0;
           const correct = isRace ? !!result.correctGuessers?.includes(p.name) : (p.name === result.guesserName);
           return (
-            <button key={p.name} onClick={() => removePlayer(p.name)} aria-label={`Remove ${p.name}`} className="relative group w-full flex justify-between items-center gap-4 text-left">
-              <div className="text-left">
-                <div className="flex items-center gap-1.5">
+            <button key={p.name} onClick={() => removePlayer(p.name)} aria-label={`Remove ${p.name}`} className="relative group w-full flex justify-between items-center gap-2 text-left">
+              <div className="text-left min-w-0 flex-1">
+                <div className="flex items-center gap-1">
                   {streak >= 2 && (
-                    <span className="flex items-center gap-0.5 text-orange-400 text-xs font-bold">
+                    <span className="flex items-center gap-0.5 text-orange-400 text-xs font-bold shrink-0">
                       <Flame className="w-3 h-3" />{streak}
                     </span>
                   )}
-                  <span className={`text-sm ${correct ? 'text-amber-400' : 'text-white/50'}`}>{p.name}</span>
+                  <span className={`text-xs truncate ${correct ? 'text-white font-semibold' : 'text-white/30'}`}>{p.name}</span>
                 </div>
                 {entry && (() => {
                   const skipped = entry.guess === null;
-                  let cls = 'text-white/40 text-xs';
-                  if (skipped) cls = 'text-white/25 italic text-xs';
-                  else if (correct) cls = 'text-green-400 text-xs';
+                  const cls = (!skipped && correct) ? 'text-green-400 text-xs truncate' : 'text-white/20 italic text-xs truncate';
                   return (
                     <p className={cls}>
                       {skipped ? 'skipped' : `"${entry.guess}"`}
                       {correct && entry.timeMs != null && (
-                        <span className="ml-1.5 text-white/30">{(entry.timeMs / 1000).toFixed(1)}s</span>
+                        <span className="ml-1 text-white/25 text-xs">{(entry.timeMs / 1000).toFixed(1)}s</span>
                       )}
                     </p>
                   );
                 })()}
               </div>
               <div className="text-right shrink-0">
-                {delta > 0 && <p className="text-white/50 text-xs font-semibold">+{delta.toLocaleString()}</p>}
-                <span className="text-white/60 text-sm">{(p.score ?? 0).toLocaleString()}</span>
+                {delta > 0 && <p className="text-sky-400 text-xs tabular-nums">+{delta.toLocaleString()}</p>}
+                <p className="text-white/60 text-xs tabular-nums">{(p.score ?? 0).toLocaleString()}</p>
               </div>
               <span className="absolute -inset-x-3 -inset-y-1 rounded-lg backdrop-blur-sm opacity-0 group-hover:opacity-100 transition-opacity" />
             </button>

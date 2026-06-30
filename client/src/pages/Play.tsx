@@ -943,9 +943,9 @@ export function RevealView({ game, result }: Readonly<{ game: PlayState; result:
         {result.playerGuesses && result.playerGuesses.length > 0 && (
           <div style={{ background: 'rgba(255,255,255,0.05)', border: '1px solid rgba(255,255,255,0.08)', borderRadius: '16px', padding: '8px 12px', width: '25%' }} className="space-y-1">
             {result.playerGuesses.map(g => (
-              <div key={g.name} className="flex justify-between items-center gap-4">
-                <span className="text-white/50 text-sm shrink-0">{g.name}</span>
-                <span className={`text-sm text-right truncate ${g.guess === null ? 'text-white/25 italic' : 'text-white/40'}`}>
+              <div key={g.name} className="flex justify-between items-center gap-2">
+                <span className="text-white/40 text-xs min-w-0 truncate">{g.name}</span>
+                <span className={`text-xs text-right shrink-0 italic ${g.guess === null ? 'text-white/15' : 'text-white/20'}`}>
                   {g.guess === null ? 'skipped' : `"${g.guess}"`}
                 </span>
               </div>
@@ -989,12 +989,12 @@ export function RevealView({ game, result }: Readonly<{ game: PlayState; result:
           {result.playerGuesses.map(g => {
             const correct = isRace ? !!result.correctGuessers?.includes(g.name) : (g.name === result.guesserName);
             return (
-              <div key={g.name} className="flex justify-between items-center gap-4">
-                <span className={`text-sm shrink-0 ${correct ? 'text-amber-400' : 'text-white/50'}`}>{g.name}</span>
-                <span className={`text-sm text-right truncate ${g.guess === null ? 'text-white/25 italic' : correct ? 'text-green-400' : 'text-white/40'}`}>
+              <div key={g.name} className="flex justify-between items-center gap-2">
+                <span className={`text-xs min-w-0 truncate ${correct ? 'text-white font-semibold' : 'text-white/30'}`}>{g.name}</span>
+                <span className={`text-xs text-right shrink-0 ${g.guess === null ? 'text-white/15 italic' : correct ? 'text-green-400' : 'text-white/20 italic'}`}>
                   {g.guess === null ? 'skipped' : `"${g.guess}"`}
                   {correct && g.timeMs != null && (
-                    <span className="ml-1 text-white/30 text-xs">{(g.timeMs / 1000).toFixed(1)}s</span>
+                    <span className="ml-1 text-white/25 text-xs">{(g.timeMs / 1000).toFixed(1)}s</span>
                   )}
                 </span>
               </div>
