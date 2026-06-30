@@ -8,6 +8,7 @@ import { socket } from '../socket';
 import { useSpotify } from '../hooks/useSpotify';
 import { RankBadge } from '../components/RankBadge';
 import { useAnimatedScore } from '../hooks/useAnimatedScore';
+import { ConfettiBackground } from '../components/ConfettiBackground';
 import { NoOneGotItCardContent, GotItCardContent } from '../components/RevealShared';
 import { APP_NAME, BACKEND_URL, RACE_TIME } from '../config';
 import type { Hint, LeaderboardEntry, PlayerInfo, RoundResultEvent } from '../types';
@@ -1296,49 +1297,84 @@ export function RevealView({ game, result, instant = false }: Readonly<{ game: H
   );
 }
 
-function LeaderboardRow({ entry, delta, delay, highlight }: Readonly<{ entry: LeaderboardEntry; delta: number; delay: number; highlight: boolean }>) {
-  const { displayScore, displayDelta, deltaFading } = useAnimatedScore(entry.score, delta, delay);
+function LeaderboardRow({ entry, delay, highlight }: Readonly<{ entry: LeaderboardEntry; delay: number; highlight: boolean }>) {
+  const { displayScore } = useAnimatedScore(entry.score, 0, delay);
   return (
     <div className={`flex items-center gap-4 px-4 py-3 rounded-xl ${highlight ? 'bg-white/10' : 'bg-white/5'}`}>
       <span className="w-8 flex justify-center">
         <RankBadge rank={entry.rank} />
       </span>
       <span className="text-white font-bold flex-1">{entry.name}</span>
-      <div className="text-right min-w-[64px]">
-        {delta > 0 && (
-          <p className={`text-sky-400 text-xs tabular-nums transition-opacity duration-500 ${deltaFading ? 'opacity-0' : 'opacity-100'}`}>
-            +{displayDelta > 0 ? displayDelta.toLocaleString() : ''}
-          </p>
-        )}
-        <p className="text-white/60 font-semibold tabular-nums">{displayScore.toLocaleString()}</p>
-      </div>
+      <p className="text-white/60 font-semibold tabular-nums min-w-[64px] text-right">{displayScore.toLocaleString()}</p>
     </div>
   );
 }
 
 function LeaderboardView({ game }: Readonly<{ game: HostState }>) {
   const { phase, leaderboard, roundDeltas } = game;
+  const isFinished = phase === 'finished';
+
   return (
-    <div className="min-h-screen flex flex-col p-6 gap-4">
-      <h2 className="text-3xl font-black text-white text-center">
-        {phase === 'finished' ? 'Final Scores' : 'Leaderboard'}
+    <div className="relative min-h-screen flex flex-col p-6 gap-4">
+      {isFinished && (
+        <>
+          <img
+            src={`${import.meta.env.BASE_URL}background6.svg`}
+            aria-hidden="true"
+            style={{ position: 'fixed', inset: 0, width: '100%', height: '100%', objectFit: 'cover', zIndex: 0 }}
+          />
+          <div
+            className="fixed inset-0 pointer-events-none"
+            style={{
+              background: 'rgba(8,8,18,0.92)',
+              backdropFilter: 'blur(48px)',
+              zIndex: 1,
+            }}
+          />
+          <ConfettiBackground burst />
+        </>
+      )}
+      {!isFinished && <div style={{ background: '#080812', position: 'fixed', inset: 0, zIndex: 0 }} />}
+
+      <h2 className="text-3xl font-black text-white text-center relative z-10">
+        {isFinished ? 'Final Scores' : 'Leaderboard'}
       </h2>
-      <div className="flex-1 space-y-3">
+
+      <div className="flex-1 space-y-3 relative z-10">
         {leaderboard.map((e, i) => (
           <LeaderboardRow
             key={e.name}
             entry={e}
-            delta={roundDeltas[e.name] ?? 0}
             delay={200 + i * 80}
             highlight={e.rank <= 3}
           />
         ))}
       </div>
-      {phase === 'finished' && (
-        <button onClick={game.newGame}
-          className="w-full py-4 rounded-2xl bg-purple-600 text-white font-bold text-xl hover:bg-purple-500 transition-colors">
-          New Game
-        </button>
+
+      {isFinished && (
+        <div className="relative z-10 flex flex-col gap-3">
+          <button
+            type="button"
+            className="liquid-btn relative cursor-pointer border-0 bg-transparent p-0"
+            style={{ width: '100%', height: '80px', borderRadius: '20px', background: 'rgba(0,0,0,0.001)' }}
+            onClick={game.newGame}
+          >
+            <LiquidGlass
+              style={{ position: 'absolute', top: '50%', left: '50%' }}
+              displacementScale={55}
+              blurAmount={0.06}
+              saturation={130}
+              aberrationIntensity={1.5}
+              elasticity={0.08}
+              cornerRadius={20}
+              padding="0"
+            >
+              <span className="text-white font-bold text-2xl" style={{ whiteSpace: 'nowrap', position: 'relative', display: 'inline-block', minWidth: '160px', textAlign: 'center' }}>
+                New Game
+              </span>
+            </LiquidGlass>
+          </button>
+        </div>
       )}
     </div>
   );

@@ -1377,36 +1377,24 @@ export function RevealView({ game, result }: Readonly<{ game: PlayState; result:
   );
 }
 
-function PlayerLeaderboardRow({ entry, delta, delay, isMe }: Readonly<{ entry: LeaderboardEntry; delta: number; delay: number; isMe: boolean }>) {
-  const { displayScore, displayDelta, deltaFading } = useAnimatedScore(entry.score, delta, delay);
+function PlayerLeaderboardRow({ entry, delay, isMe }: Readonly<{ entry: LeaderboardEntry; delay: number; isMe: boolean }>) {
+  const { displayScore } = useAnimatedScore(entry.score, 0, delay);
   return (
-    <div className={`flex items-center gap-4 px-4 py-3 rounded-xl ${isMe ? 'bg-purple-600/20 border border-purple-500/40' : 'bg-white/5'}`}>
+    <div className={`flex items-center gap-4 px-4 py-3 rounded-xl ${isMe ? 'bg-white/10' : 'bg-white/5'}`}>
       <span className="w-8 flex justify-center">
         <RankBadge rank={entry.rank} />
       </span>
       <span className="text-white font-bold flex-1">{entry.name}</span>
-      <div className="text-right min-w-[56px]">
-        {delta > 0 && (
-          <p className={`text-sky-400 text-xs tabular-nums transition-opacity duration-500 ${deltaFading ? 'opacity-0' : 'opacity-100'}`}>
-            +{displayDelta > 0 ? displayDelta.toLocaleString() : ''}
-          </p>
-        )}
-        <p className="text-white/60 font-semibold tabular-nums">{displayScore.toLocaleString()}</p>
-      </div>
+      <p className="text-white/60 font-semibold tabular-nums min-w-[56px] text-right">{displayScore.toLocaleString()}</p>
     </div>
   );
 }
 
-function MyScoreCard({ entry, delta, delay }: Readonly<{ entry: LeaderboardEntry; delta: number; delay: number }>) {
-  const { displayScore, displayDelta, deltaFading } = useAnimatedScore(entry.score, delta, delay);
+function MyScoreCard({ entry, delay }: Readonly<{ entry: LeaderboardEntry; delay: number }>) {
+  const { displayScore } = useAnimatedScore(entry.score, 0, delay);
   return (
-    <div className="bg-purple-600/30 border border-purple-500/40 rounded-2xl px-6 py-3 text-center">
+    <div className="bg-white/10 border border-white/20 rounded-2xl px-6 py-4 text-center">
       <p className="text-white/60 text-sm">You're #{entry.rank}</p>
-      {delta > 0 && (
-        <p className={`text-sky-300 text-sm font-bold tabular-nums transition-opacity duration-500 ${deltaFading ? 'opacity-0' : 'opacity-100'}`}>
-          +{displayDelta > 0 ? displayDelta.toLocaleString() : ''} pts
-        </p>
-      )}
       <p className="text-white font-black text-2xl tabular-nums">{displayScore.toLocaleString()} pts</p>
     </div>
   );
@@ -1416,50 +1404,107 @@ function LeaderboardView({ game }: Readonly<{ game: PlayState }>) {
   const { phase, myName, leaderboard, leaderboardDeltas, newGamePin, rejoinNewGame } = game;
   const navigate = useNavigate();
   const myEntry = leaderboard.find(e => e.name === myName);
+  const isFinished = phase === 'finished';
+
   return (
-    <div className="min-h-screen flex flex-col p-6 gap-4">
-      <h2 className="text-3xl font-black text-white text-center">
-        {phase === 'finished' ? 'Final Scores' : 'Leaderboard'}
-      </h2>
-      {myEntry && (
-        <MyScoreCard
-          entry={myEntry}
-          delta={leaderboardDeltas[myName] ?? 0}
-          delay={0}
-        />
+    <div className="relative min-h-screen flex flex-col p-6 gap-4">
+      {isFinished && (
+        <>
+          <img
+            src={`${import.meta.env.BASE_URL}background6.svg`}
+            aria-hidden="true"
+            style={{ position: 'fixed', inset: 0, width: '100%', height: '100%', objectFit: 'cover', zIndex: 0 }}
+          />
+          <div
+            className="fixed inset-0 pointer-events-none"
+            style={{
+              background: 'rgba(8,8,18,0.92)',
+              backdropFilter: 'blur(48px)',
+              zIndex: 1,
+            }}
+          />
+        </>
       )}
-      <div className="flex-1 space-y-3">
+
+      <h2 className="text-3xl font-black text-white text-center relative z-10">
+        {isFinished ? 'Final Scores' : 'Leaderboard'}
+      </h2>
+
+      {myEntry && (
+        <div className="relative z-10">
+          <MyScoreCard
+            entry={myEntry}
+            delay={0}
+          />
+        </div>
+      )}
+
+      <div className="flex-1 space-y-3 relative z-10">
         {leaderboard.slice(0, 10).map((e, i) => (
           <PlayerLeaderboardRow
             key={e.name}
             entry={e}
-            delta={leaderboardDeltas[e.name] ?? 0}
             delay={100 + i * 80}
             isMe={e.name === myName}
           />
         ))}
       </div>
-      {phase === 'leaderboard' && <p className="text-center text-white/30 text-sm">Waiting for the host to start the next round…</p>}
-      {phase === 'finished' && newGamePin && (
-        <div className="space-y-3">
-          <div className="bg-emerald-900/40 border border-emerald-500/40 rounded-2xl px-4 py-3 text-center">
-            <p className="text-emerald-300 text-sm font-semibold">Host started a new game!</p>
-          </div>
-          <button onClick={rejoinNewGame}
-            className="w-full py-4 rounded-2xl bg-emerald-600 text-white font-bold text-xl hover:bg-emerald-500 transition-colors">
-            Play Again
-          </button>
-          <button onClick={() => { navigate('/'); }}
-            className="w-full py-3 rounded-2xl bg-white/10 text-white/60 font-semibold text-base hover:bg-white/20 transition-colors">
-            Leave
+
+      {phase === 'leaderboard' && <p className="text-center text-white/30 text-sm relative z-10">Waiting for the host to start the next round…</p>}
+
+      {isFinished && (
+        <div className="relative z-10 flex flex-col gap-3">
+          {newGamePin && (
+            <>
+              <div className="bg-emerald-900/40 border border-emerald-500/40 rounded-2xl px-4 py-3 text-center">
+                <p className="text-emerald-300 text-sm font-semibold">Host started a new game!</p>
+              </div>
+              <button
+                type="button"
+                className="liquid-btn relative cursor-pointer border-0 bg-transparent p-0"
+                style={{ width: '100%', height: '80px', borderRadius: '20px', background: 'rgba(0,0,0,0.001)' }}
+                onClick={rejoinNewGame}
+              >
+                <LiquidGlass
+                  style={{ position: 'absolute', top: '50%', left: '50%' }}
+                  displacementScale={55}
+                  blurAmount={0.06}
+                  saturation={130}
+                  aberrationIntensity={1.5}
+                  elasticity={0.08}
+                  cornerRadius={20}
+                  padding="0"
+                >
+                  <span className="text-white font-bold text-2xl" style={{ whiteSpace: 'nowrap', position: 'relative', display: 'inline-block', minWidth: '150px', textAlign: 'center' }}>
+                    Play Again
+                  </span>
+                </LiquidGlass>
+              </button>
+            </>
+          )}
+
+          <button
+            type="button"
+            className="liquid-btn relative cursor-pointer border-0 bg-transparent p-0"
+            style={{ width: '100%', height: '80px', borderRadius: '20px', background: 'rgba(0,0,0,0.001)' }}
+            onClick={() => navigate('/')}
+          >
+            <LiquidGlass
+              style={{ position: 'absolute', top: '50%', left: '50%' }}
+              displacementScale={55}
+              blurAmount={0.06}
+              saturation={130}
+              aberrationIntensity={1.5}
+              elasticity={0.08}
+              cornerRadius={20}
+              padding="0"
+            >
+              <span className="text-white font-bold text-2xl" style={{ whiteSpace: 'nowrap', position: 'relative', display: 'inline-block', minWidth: '110px', textAlign: 'center' }}>
+                Leave
+              </span>
+            </LiquidGlass>
           </button>
         </div>
-      )}
-      {phase === 'finished' && !newGamePin && (
-        <button onClick={() => { navigate('/'); }}
-          className="w-full py-4 rounded-2xl bg-white/10 text-white font-bold text-xl hover:bg-white/20 transition-colors">
-          Leave
-        </button>
       )}
     </div>
   );

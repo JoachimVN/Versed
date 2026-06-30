@@ -8,6 +8,7 @@ interface Particle {
   color: string;
   circle: boolean;
   alpha: number;
+  initialAlpha: number;
 }
 
 const COLORS = [
@@ -26,6 +27,7 @@ function seededRand(seed: number) {
 
 function makeParticle(W: number, H: number, scattered = false, rand: () => number = Math.random): Particle {
   const circle = rand() > 0.72;
+  const alpha = 0.55 + rand() * 0.45;
   return {
     x: rand() * W,
     y: scattered ? rand() * H : -30 - rand() * 80,
@@ -37,7 +39,8 @@ function makeParticle(W: number, H: number, scattered = false, rand: () => numbe
     rotV: (rand() - 0.5) * 0.025,
     color: COLORS[Math.floor(rand() * COLORS.length)],
     circle,
-    alpha: 0.55 + rand() * 0.45,
+    alpha,
+    initialAlpha: alpha,
   };
 }
 
@@ -49,7 +52,7 @@ export function setConfettiSpeedTarget(speed: number) {
   _speedTarget = speed;
 }
 
-export function ConfettiBackground() {
+export function ConfettiBackground({ burst = false }: Readonly<{ burst?: boolean }>) {
   const canvasRef = useRef<HTMLCanvasElement>(null);
 
   useEffect(() => {
@@ -93,6 +96,7 @@ export function ConfettiBackground() {
     let frozen = false;
     let frameCount = 0;
     let fpsWindowStart = performance.now();
+    let burstStartTime = burst ? performance.now() : 0;
 
     const resetTiming = () => {
       last = performance.now();
@@ -114,14 +118,34 @@ export function ConfettiBackground() {
         fpsWindowStart = now;
       }
 
-      // Smooth-lerp toward the current speed target.
-      _currentSpeed += (_speedTarget - _currentSpeed) * 0.055;
+      if (burst) {
+        const burstElapsed = now - burstStartTime;
+        const burstDuration = 1500;
+        if (burstElapsed > burstDuration) {
+          frozen = true;
+          return;
+        }
+        const burstProgress = burstElapsed / burstDuration;
+        _currentSpeed = 3 * (1 - burstProgress);
+        for (const p of particles) {
+          const fadeStart = 0.6;
+          if (burstProgress < fadeStart) {
+            p.alpha = p.initialAlpha;
+          } else {
+            const fadeProgress = (burstProgress - fadeStart) / (1 - fadeStart);
+            p.alpha = p.initialAlpha * Math.max(0, 1 - fadeProgress);
+          }
+        }
+      } else {
+        // Smooth-lerp toward the current speed target.
+        _currentSpeed += (_speedTarget - _currentSpeed) * 0.055;
+      }
 
       for (const p of particles) {
         p.x += p.vx * dt * _currentSpeed;
         p.y += p.vy * dt * _currentSpeed;
         p.rot += p.rotV * dt * _currentSpeed;
-        if (p.y > H + 30) Object.assign(p, makeParticle(W, H, false));
+        if (p.y > H + 30 && !burst) Object.assign(p, makeParticle(W, H, false));
       }
 
       render();
@@ -155,5 +179,5 @@ export function ConfettiBackground() {
     };
   }, []);
 
-  return <canvas ref={canvasRef} className="fixed inset-0 pointer-events-none" style={{ zIndex: 0 }} />;
+  return <canvas ref={canvasRef} className="fixed inset-0 pointer-events-none" style={{ zIndex: 2 }} />;
 }

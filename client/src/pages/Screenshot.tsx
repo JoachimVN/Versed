@@ -1,7 +1,7 @@
 import { useSearchParams } from 'react-router-dom';
 import { PlayingView, RevealView } from './Host';
 import type { HostState } from './Host';
-import type { RoundResultEvent } from '../types';
+import type { RoundResultEvent, LeaderboardEntry } from '../types';
 
 // ─── Fixture data ─────────────────────────────────────────────────────────────
 
@@ -84,6 +84,21 @@ const MOCK_HOST_REVEAL: HostState = {
   phase: 'reveal',
   result: MOCK_RESULT,
   roundDeltas: { Anna: 1250 },
+};
+
+const MOCK_LEADERBOARD: LeaderboardEntry[] = [
+  { rank: 1, name: 'Anna', score: 5350 },
+  { rank: 2, name: 'John', score: 4100 },
+  { rank: 3, name: 'Olivia', score: 3200 },
+  { rank: 4, name: 'Marcus', score: 2850 },
+  { rank: 5, name: 'Sofia', score: 2100 },
+];
+
+const MOCK_HOST_FINISHED: HostState = {
+  ...MOCK_HOST,
+  phase: 'finished',
+  leaderboard: MOCK_LEADERBOARD,
+  roundDeltas: { Anna: 2250, John: 1450, Olivia: 1350, Marcus: 1000, Sofia: 250 },
 };
 
 // ─── Entry ────────────────────────────────────────────────────────────────────
