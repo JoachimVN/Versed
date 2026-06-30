@@ -199,26 +199,29 @@ io.on('connection', (socket) => {
       const game = gm.getGame(pin);
       if (!game) return callback({ error: 'Game not found' });
 
-      // Mid-game: if this name is already in the game, it's a full-disconnect
-      // rejoin — cancel any pending removal timer, migrate the socket ID, and
-      // snap to the current phase.
-      if (game.phase !== 'lobby') {
-        const oldEntry = Array.from(game.players.entries())
-          .find(([, p]) => p.name.toLowerCase() === name.trim().toLowerCase());
-        if (oldEntry) {
-          const [oldId] = oldEntry;
-          const t = playerDisconnectTimers.get(oldId);
-          if (t) { clearTimeout(t); playerDisconnectTimers.delete(oldId); }
-        }
-        const rejoined = gm.rejoinPlayer(game, socket.id, name);
-        if (rejoined) {
-          socket.join(pin);
-          socket.join(`player:${pin}`);
-          callback({ success: true });
+      // If this name is already in the game (lobby or mid-game), it's a
+      // reconnect — cancel any pending removal timer, migrate the socket ID,
+      // and snap to the current phase.
+      const oldEntry = Array.from(game.players.entries())
+        .find(([, p]) => p.name.toLowerCase() === name.trim().toLowerCase());
+      if (oldEntry) {
+        const [oldId] = oldEntry;
+        const t = playerDisconnectTimers.get(oldId);
+        if (t) { clearTimeout(t); playerDisconnectTimers.delete(oldId); }
+      }
+      const rejoined = gm.rejoinPlayer(game, socket.id, name);
+      if (rejoined) {
+        socket.join(pin);
+        socket.join(`player:${pin}`);
+        callback({ success: true });
+        if (game.phase === 'lobby') {
+          const players = Array.from(game.players.values()).map(p => ({ name: p.name }));
+          io.to(`host:${pin}`).emit('player_joined', { players });
+        } else {
           syncState(game);
           io.to(`host:${pin}`).emit('player_reconnected', { name: rejoined.name, score: rejoined.score, streak: rejoined.streak });
-          return;
         }
+        return;
       }
 
       const player = gm.addPlayer(game, socket.id, name);
