@@ -38,7 +38,7 @@ export interface PlayState {
   reconnecting: boolean;
   hostReconnecting: boolean;
   savedSession: { pin: string; name: string } | null;
-  guessInputRef: React.RefObject<HTMLInputElement>;
+  guessInputRef: React.RefObject<HTMLInputElement | null>;
   setPin: (v: string) => void;
   setName: (v: string) => void;
   setBidIndex: (i: number | ((prev: number) => number)) => void;
@@ -579,7 +579,7 @@ function BidSubmittedView({ game }: Readonly<{ game: PlayState }>) {
 
 function GuessInputSection({ guessText, guessInputRef, setGuessText, submitGuess, artistOnly }: Readonly<{
   guessText: string;
-  guessInputRef: React.RefObject<HTMLInputElement>;
+  guessInputRef: React.RefObject<HTMLInputElement | null>;
   setGuessText: (v: string) => void;
   submitGuess: () => void;
   artistOnly?: boolean;

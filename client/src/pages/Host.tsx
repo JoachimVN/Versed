@@ -1,7 +1,8 @@
-import { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Music, Check, Loader2, Copy, ArrowLeft, Settings, Flame } from 'lucide-react';
-import QRCode from 'react-qr-code';
+import QRCodeLib from 'react-qr-code';
+const QRCode = QRCodeLib as unknown as React.FC<{ value: string; size?: number }>;
 import { socket } from '../socket';
 import { useSpotify } from '../hooks/useSpotify';
 import { RankBadge } from '../components/RankBadge';
