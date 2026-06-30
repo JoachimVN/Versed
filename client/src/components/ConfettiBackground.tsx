@@ -52,7 +52,7 @@ export function setConfettiSpeedTarget(speed: number) {
   _speedTarget = speed;
 }
 
-export function ConfettiBackground({ burst = false }: Readonly<{ burst?: boolean }>) {
+export function ConfettiBackground({ burst = false, persistAfterBurst = false }: Readonly<{ burst?: boolean; persistAfterBurst?: boolean }>) {
   const canvasRef = useRef<HTMLCanvasElement>(null);
 
   useEffect(() => {
@@ -123,16 +123,15 @@ export function ConfettiBackground({ burst = false }: Readonly<{ burst?: boolean
         const burstDuration = 1500;
         if (burstElapsed > burstDuration) {
           frozen = true;
-          return;
+          if (!persistAfterBurst) return;
         }
         const burstProgress = burstElapsed / burstDuration;
         _currentSpeed = 3 * (1 - burstProgress);
         for (const p of particles) {
-          const fadeStart = 0.6;
-          if (burstProgress < fadeStart) {
+          if (persistAfterBurst || burstProgress < 0.6) {
             p.alpha = p.initialAlpha;
           } else {
-            const fadeProgress = (burstProgress - fadeStart) / (1 - fadeStart);
+            const fadeProgress = (burstProgress - 0.6) / 0.4;
             p.alpha = p.initialAlpha * Math.max(0, 1 - fadeProgress);
           }
         }
@@ -179,5 +178,5 @@ export function ConfettiBackground({ burst = false }: Readonly<{ burst?: boolean
     };
   }, []);
 
-  return <canvas ref={canvasRef} className="fixed inset-0 pointer-events-none" style={{ zIndex: 2 }} />;
+  return <canvas ref={canvasRef} className="fixed inset-0 pointer-events-none" style={{ zIndex: 0 }} />;
 }

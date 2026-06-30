@@ -5,6 +5,7 @@ import LiquidGlass from 'liquid-glass-react';
 import { socket } from '../socket';
 import { RankBadge } from '../components/RankBadge';
 import { useAnimatedScore } from '../hooks/useAnimatedScore';
+import { ConfettiBackground } from '../components/ConfettiBackground';
 import { NoOneGotItCardContent, GotItCardContent } from '../components/RevealShared';
 import { APP_NAME, BID_OPTIONS } from '../config';
 import type { Hint, LeaderboardEntry, RoundResultEvent } from '../types';
@@ -1401,7 +1402,7 @@ function MyScoreCard({ entry, delay }: Readonly<{ entry: LeaderboardEntry; delay
 }
 
 function LeaderboardView({ game }: Readonly<{ game: PlayState }>) {
-  const { phase, myName, leaderboard, leaderboardDeltas, newGamePin, rejoinNewGame } = game;
+  const { phase, myName, leaderboard, newGamePin, rejoinNewGame } = game;
   const navigate = useNavigate();
   const myEntry = leaderboard.find(e => e.name === myName);
   const isFinished = phase === 'finished';
@@ -1423,6 +1424,9 @@ function LeaderboardView({ game }: Readonly<{ game: PlayState }>) {
               zIndex: 1,
             }}
           />
+          <div style={{ position: 'fixed', inset: 0, zIndex: 2, pointerEvents: 'none' }}>
+            <ConfettiBackground burst persistAfterBurst />
+          </div>
         </>
       )}
 
@@ -1453,7 +1457,7 @@ function LeaderboardView({ game }: Readonly<{ game: PlayState }>) {
       {phase === 'leaderboard' && <p className="text-center text-white/30 text-sm relative z-10">Waiting for the host to start the next round…</p>}
 
       {isFinished && (
-        <div className="relative z-10 flex flex-col gap-3">
+        <div className="relative z-10 flex flex-col items-center gap-3">
           {newGamePin && (
             <>
               <div className="bg-emerald-900/40 border border-emerald-500/40 rounded-2xl px-4 py-3 text-center">
@@ -1462,22 +1466,25 @@ function LeaderboardView({ game }: Readonly<{ game: PlayState }>) {
               <button
                 type="button"
                 className="liquid-btn relative cursor-pointer border-0 bg-transparent p-0"
-                style={{ width: '100%', height: '80px', borderRadius: '20px', background: 'rgba(0,0,0,0.001)' }}
+                style={{ width: '310px', height: '64px', borderRadius: '100px', background: 'rgba(0,0,0,0.001)' }}
                 onClick={rejoinNewGame}
               >
                 <LiquidGlass
                   style={{ position: 'absolute', top: '50%', left: '50%' }}
-                  displacementScale={55}
-                  blurAmount={0.06}
+                  displacementScale={64}
+                  blurAmount={0.05}
                   saturation={130}
-                  aberrationIntensity={1.5}
-                  elasticity={0.08}
-                  cornerRadius={20}
-                  padding="0"
+                  aberrationIntensity={2}
+                  elasticity={0.12}
+                  cornerRadius={100}
+                  padding="18px 36px"
                 >
-                  <span className="text-white font-bold text-2xl" style={{ whiteSpace: 'nowrap', position: 'relative', display: 'inline-block', minWidth: '150px', textAlign: 'center' }}>
-                    Play Again
-                  </span>
+                  <div style={{ position: 'relative' }}>
+                    <div style={{ position: 'absolute', inset: '-18px -36px', borderRadius: '100px', pointerEvents: 'none', background: 'rgba(110,32,155,0.12)' }} />
+                    <span className="text-white font-bold text-xl" style={{ whiteSpace: 'nowrap', position: 'relative', display: 'inline-block', minWidth: '210px', textAlign: 'center' }}>
+                      Play Again
+                    </span>
+                  </div>
                 </LiquidGlass>
               </button>
             </>
@@ -1486,22 +1493,25 @@ function LeaderboardView({ game }: Readonly<{ game: PlayState }>) {
           <button
             type="button"
             className="liquid-btn relative cursor-pointer border-0 bg-transparent p-0"
-            style={{ width: '100%', height: '80px', borderRadius: '20px', background: 'rgba(0,0,0,0.001)' }}
+            style={{ width: '310px', height: '64px', borderRadius: '100px', background: 'rgba(0,0,0,0.001)' }}
             onClick={() => navigate('/')}
           >
             <LiquidGlass
               style={{ position: 'absolute', top: '50%', left: '50%' }}
-              displacementScale={55}
-              blurAmount={0.06}
+              displacementScale={64}
+              blurAmount={0.05}
               saturation={130}
-              aberrationIntensity={1.5}
-              elasticity={0.08}
-              cornerRadius={20}
-              padding="0"
+              aberrationIntensity={2}
+              elasticity={0.12}
+              cornerRadius={100}
+              padding="18px 36px"
             >
-              <span className="text-white font-bold text-2xl" style={{ whiteSpace: 'nowrap', position: 'relative', display: 'inline-block', minWidth: '110px', textAlign: 'center' }}>
-                Leave
-              </span>
+              <div style={{ position: 'relative' }}>
+                <div style={{ position: 'absolute', inset: '-18px -36px', borderRadius: '100px', pointerEvents: 'none', background: 'rgba(110,32,155,0.12)' }} />
+                <span className="text-white font-bold text-xl" style={{ whiteSpace: 'nowrap', position: 'relative', display: 'inline-block', minWidth: '210px', textAlign: 'center' }}>
+                  Leave
+                </span>
+              </div>
             </LiquidGlass>
           </button>
         </div>
