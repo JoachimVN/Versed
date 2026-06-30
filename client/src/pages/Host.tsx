@@ -711,6 +711,9 @@ function ModeToggle({ mode, setMode }: Readonly<{ mode: 'classic' | 'race'; setM
 function StartButton({ players, mode, startGame }: Readonly<{ players: PlayerInfo[]; mode: 'classic' | 'race'; startGame: () => void }>) {
   const [hovered, setHovered] = useState(false);
   const disabled = players.length === 0;
+  const hoverShadow = mode === 'race'
+    ? 'drop-shadow(0 0 12px rgba(220, 80, 10, 0.7))'
+    : 'drop-shadow(0 0 12px rgba(110, 32, 155, 0.7))';
   return (
     <button
       type="button"
@@ -729,7 +732,7 @@ function StartButton({ players, mode, startGame }: Readonly<{ players: PlayerInf
       <LiquidGlass
         style={{
           position: 'absolute', top: '50%', left: '50%',
-          filter: hovered && !disabled ? 'drop-shadow(0 0 12px rgba(110, 32, 155, 0.7))' : 'drop-shadow(0 0 0px rgba(110, 32, 155, 0))',
+          filter: hovered && !disabled ? hoverShadow : 'drop-shadow(0 0 0px rgba(0,0,0,0))',
           transition: 'filter 0.25s ease',
         }}
         displacementScale={64}
@@ -743,10 +746,10 @@ function StartButton({ players, mode, startGame }: Readonly<{ players: PlayerInf
         <div style={{ position: 'relative' }}>
           <div style={{
             position: 'absolute', inset: '-18px -36px', borderRadius: '100px', pointerEvents: 'none',
-            background: mode === 'race' ? 'rgba(220,80,10,0.13)' : 'rgba(110,32,155,0.13)',
+            background: mode === 'race' ? 'rgba(220,80,10,0.12)' : 'rgba(110,32,155,0.12)',
             transition: 'background 0.25s ease',
           }} />
-          <span className="text-white font-bold text-xl" style={{ whiteSpace: 'nowrap', position: 'relative' }}>
+          <span className="text-white font-bold text-xl" style={{ whiteSpace: 'nowrap', position: 'relative', display: 'inline-block', minWidth: '210px', textAlign: 'center' }}>
             {mode === 'race' ? 'Start Race Game' : 'Start Classic Game'}
           </span>
         </div>
