@@ -1482,7 +1482,7 @@ function LeaderboardView({ game }: Readonly<{ game: PlayState }>) {
                   padding="18px 36px"
                 >
                   <div style={{ position: 'relative' }}>
-                    <div style={{ position: 'absolute', inset: '-18px -36px', borderRadius: '100px', pointerEvents: 'none', background: 'rgba(0,128,126,0.12)' }} />
+                    <div style={{ position: 'absolute', inset: '-18px -36px', borderRadius: '100px', pointerEvents: 'none', background: 'rgba(0,128,126,0.06)' }} />
                     <span className="text-white font-bold text-xl" style={{ whiteSpace: 'nowrap', position: 'relative', display: 'inline-block', minWidth: '210px', textAlign: 'center' }}>
                       Play Again
                     </span>
@@ -1508,12 +1508,9 @@ function LeaderboardView({ game }: Readonly<{ game: PlayState }>) {
               cornerRadius={100}
               padding="18px 36px"
             >
-              <div style={{ position: 'relative' }}>
-                <div style={{ position: 'absolute', inset: '-18px -36px', borderRadius: '100px', pointerEvents: 'none', background: 'rgba(0,128,126,0.12)' }} />
-                <span className="text-white font-bold text-xl" style={{ whiteSpace: 'nowrap', position: 'relative', display: 'inline-block', minWidth: '210px', textAlign: 'center' }}>
-                  Leave
-                </span>
-              </div>
+              <span className="text-white font-bold text-xl" style={{ whiteSpace: 'nowrap', position: 'relative', display: 'inline-block', minWidth: '210px', textAlign: 'center' }}>
+                Leave
+              </span>
             </LiquidGlass>
           </button>
         </div>
