@@ -954,21 +954,26 @@ function GuessingView({ game }: Readonly<{ game: HostState }>) {
 }
 
 function RevealPlayerRow({
-  player, entry, delta, delay, correct, removePlayer,
+  player, entry, delta, delay, correct, instant, removePlayer,
 }: Readonly<{
   player: PlayerInfo;
   entry?: { guess: string | null; timeMs?: number | null };
   delta: number;
   delay: number;
   correct: boolean;
+  instant: boolean;
   removePlayer: (name: string) => void;
 }>) {
-  const { displayScore, displayDelta, deltaFading } = useAnimatedScore(player.score ?? 0, delta, delay);
+  const { displayScore, displayDelta, deltaFading } = useAnimatedScore(player.score ?? 0, delta, delay, instant);
   const streak = player.streak ?? 0;
+  const skipped = entry?.guess === null;
+  const guessText = entry ? (skipped ? 'skipped' : `"${entry.guess}"`) : null;
+  const guessCls = (!skipped && correct) ? 'text-green-400 text-xs truncate' : 'text-white/20 italic text-xs truncate';
   return (
-    <button onClick={() => removePlayer(player.name)} aria-label={`Remove ${player.name}`} className="relative group w-full flex justify-between items-center gap-2 text-left">
-      <div className="text-left min-w-0 flex-1">
-        <div className="flex items-center gap-1">
+    <button onClick={() => removePlayer(player.name)} aria-label={`Remove ${player.name}`} className="relative group w-full text-left">
+      {/* Row 1: name + streak | delta */}
+      <div className="flex justify-between items-center gap-2">
+        <div className="flex items-center gap-1 min-w-0">
           {streak >= 2 && (
             <span className="flex items-center gap-0.5 text-orange-400 text-xs font-bold shrink-0">
               <Flame className="w-3 h-3" />{streak}
@@ -976,33 +981,30 @@ function RevealPlayerRow({
           )}
           <span className={`text-xs truncate ${correct ? 'text-white font-semibold' : 'text-white/30'}`}>{player.name}</span>
         </div>
-        {entry && (() => {
-          const skipped = entry.guess === null;
-          const cls = (!skipped && correct) ? 'text-green-400 text-xs truncate' : 'text-white/20 italic text-xs truncate';
-          return (
-            <p className={cls}>
-              {skipped ? 'skipped' : `"${entry.guess}"`}
-              {correct && entry.timeMs != null && (
-                <span className="ml-1 text-white/25 text-xs">{(entry.timeMs / 1000).toFixed(1)}s</span>
-              )}
-            </p>
-          );
-        })()}
-      </div>
-      <div className="text-right shrink-0 min-w-[48px]">
         {delta > 0 && (
-          <p className={`text-sky-400 text-xs tabular-nums transition-opacity duration-500 ${deltaFading ? 'opacity-0' : 'opacity-100'}`}>
+          <p className={`text-sky-400 text-xs tabular-nums shrink-0 transition-opacity duration-500 ${deltaFading ? 'opacity-0' : 'opacity-100'}`}>
             +{displayDelta > 0 ? displayDelta.toLocaleString() : ''}
           </p>
         )}
-        <p className="text-white/60 text-xs tabular-nums">{displayScore.toLocaleString()}</p>
+      </div>
+      {/* Row 2: guess | total score */}
+      <div className="flex justify-between items-center gap-2">
+        {guessText ? (
+          <p className={guessCls}>
+            {guessText}
+            {correct && entry?.timeMs != null && (
+              <span className="ml-1 text-white/25 text-xs">{(entry.timeMs / 1000).toFixed(1)}s</span>
+            )}
+          </p>
+        ) : <span />}
+        <p className="text-white/60 text-xs tabular-nums shrink-0">{displayScore.toLocaleString()}</p>
       </div>
       <span className="absolute -inset-x-3 -inset-y-1 rounded-lg backdrop-blur-sm opacity-0 group-hover:opacity-100 transition-opacity" />
     </button>
   );
 }
 
-export function RevealView({ game, result }: Readonly<{ game: HostState; result: RoundResultEvent }>) {
+export function RevealView({ game, result, instant = false }: Readonly<{ game: HostState; result: RoundResultEvent; instant?: boolean }>) {
   const { roundIndex, totalRounds, players, roundDeltas, removePlayer } = game;
   const isRace = result.mode === 'race';
 
@@ -1036,6 +1038,7 @@ export function RevealView({ game, result }: Readonly<{ game: HostState; result:
               delta={roundDeltas[p.name] ?? 0}
               delay={400 + i * 80}
               correct={false}
+              instant={instant}
               removePlayer={removePlayer}
             />
           ))}
@@ -1100,6 +1103,7 @@ export function RevealView({ game, result }: Readonly<{ game: HostState; result:
               delta={roundDeltas[p.name] ?? 0}
               delay={400 + i * 80}
               correct={correct}
+              instant={instant}
               removePlayer={removePlayer}
             />
           );

@@ -1,12 +1,16 @@
 import { useState, useEffect } from 'react';
 
-export function useAnimatedScore(finalScore: number, delta: number, startDelay: number) {
-  const [displayScore, setDisplayScore] = useState(delta > 0 ? finalScore - delta : finalScore);
+export function useAnimatedScore(finalScore: number, delta: number, startDelay: number, instant = false) {
+  const [displayScore, setDisplayScore] = useState(finalScore);
   const [displayDelta, setDisplayDelta] = useState(delta);
   const [deltaFading, setDeltaFading] = useState(false);
 
   useEffect(() => {
-    if (delta <= 0) return;
+    if (instant || delta <= 0) {
+      setDisplayScore(finalScore);
+      return;
+    }
+    setDisplayScore(finalScore - delta);
 
     const startScore = finalScore - delta;
     const DURATION = 900;

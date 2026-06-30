@@ -92,6 +92,6 @@ export default function Screenshot() {
   const [params] = useSearchParams();
   const v = params.get('v');
   if (v === 'playing') return <PlayingView game={MOCK_HOST} />;
-  if (v === 'reveal')  return <RevealView game={MOCK_HOST_REVEAL} result={MOCK_RESULT} />;
+  if (v === 'reveal')  return <RevealView game={MOCK_HOST_REVEAL} result={MOCK_RESULT} instant />;
   return <p className="text-white p-6 font-mono">?v=playing|reveal</p>;
 }
