@@ -12,8 +12,5 @@
   },
   "devDependencies": {
     "concurrently": "^8.2.2"
-  },
-  "dependencies": {
-    "liquid-glass-react": "^1.1.1"
   }
 }
