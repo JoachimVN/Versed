@@ -1,6 +1,6 @@
 import { useState, useEffect, useRef } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
-import { Music, ChevronLeft, ChevronRight, Flame, Pencil } from 'lucide-react';
+import { ChevronLeft, ChevronRight, Flame, Pencil } from 'lucide-react';
 import LiquidGlass from 'liquid-glass-react';
 import { socket } from '../socket';
 import { RankBadge } from '../components/RankBadge';
@@ -754,67 +754,192 @@ function WaitingView({ game }: Readonly<{ game: PlayState }>) {
 }
 
 export function BettingView({ game }: Readonly<{ game: PlayState }>) {
-  const { roundIndex, totalRounds, timeLeft, bettingTime, hints, bidIndex, myScore, error, submitBid, setBidIndex } = game;
-  const timerPct = (timeLeft / bettingTime) * 100;
+  const { roundIndex, totalRounds, timeLeft, bettingTime, hints, bidIndex, error, submitBid, setBidIndex } = game;
+  const timerPct = bettingTime > 0 ? Math.max(0, (timeLeft / bettingTime)) * 100 : 0;
+  const imageHint = hints.find(h => h.imageUrl);
+  const textHints = hints.filter(h => !h.imageUrl);
+  const currentBid = BID_OPTIONS[bidIndex];
+  const canGoLeft = bidIndex > 0;
+  const canGoRight = bidIndex < BID_OPTIONS.length - 1;
+  const riskLevel = bidIndex <= 2 ? 4 : bidIndex <= 6 ? 3 : bidIndex <= 10 ? 2 : 1;
+  const riskLabel = riskLevel === 4 ? 'Max' : riskLevel === 3 ? 'High' : riskLevel === 2 ? 'Mid' : 'Safe';
+  const urgent = timeLeft <= 5 && timeLeft > 0;
+
   return (
-    <div className="min-h-screen flex flex-col p-5 gap-4">
-      <div className="flex justify-between items-center">
-        <span className="text-white/50 text-sm">{roundIndex + 1}/{totalRounds}</span>
-        <span className="text-white font-black text-xl">{timeLeft}s</span>
-        <span className="text-white/50 text-sm">{myScore.toLocaleString()} pts</span>
-      </div>
-      <div className="w-full bg-white/10 rounded-full h-1.5">
-        <div className="bg-purple-500 h-1.5 rounded-full transition-all duration-1000"
-          style={{ width: `${timerPct}%` }} />
+    <div className="min-h-screen flex flex-col" style={{ background: '#080812' }}>
+
+      {/* Top bar */}
+      <div className="flex items-center justify-between px-5 pt-5 pb-3">
+        <span style={{ color: 'rgba(255,255,255,0.35)', fontSize: '0.85rem', fontWeight: 600 }}>
+          Round {roundIndex + 1}<span style={{ color: 'rgba(255,255,255,0.18)' }}>/{totalRounds}</span>
+        </span>
+        <span
+          className="font-black text-2xl tabular-nums"
+          style={{ color: urgent ? '#f87171' : 'white', transition: 'color 0.3s ease' }}
+        >
+          {timeLeft}s
+        </span>
       </div>
 
+      {/* Timer bar */}
+      <div className="mx-5 h-0.5 rounded-full" style={{ background: 'rgba(255,255,255,0.07)' }}>
+        <div
+          className="h-0.5 rounded-full transition-all duration-1000"
+          style={{
+            width: `${timerPct}%`,
+            background: urgent ? 'rgba(248,113,113,0.8)' : 'rgba(150,17,193,0.7)',
+          }}
+        />
+      </div>
+
+      {/* Hints strip */}
       {hints.length > 0 && (
-        <div className="flex flex-col items-center gap-6">
-          {hints.find(h => h.imageUrl)?.imageUrl && (
-            <img
-              src={hints.find(h => h.imageUrl)!.imageUrl}
-              alt="Album art"
-              className="w-40 h-40 rounded-3xl object-cover shadow-2xl blur-sm"
-            />
-          )}
-          {hints.some(h => !h.imageUrl) && (
-            <div className="flex flex-wrap justify-center gap-8">
-              {hints.filter(h => !h.imageUrl).map(h => (
-                <div key={h.label} className="flex flex-col items-center gap-1">
-                  <span className="text-white/30 text-xs uppercase tracking-[0.2em]">{h.label}</span>
-                  <span className="text-white font-black text-3xl">{h.value}</span>
+        <div className="mx-5 mt-5">
+          <div
+            className="flex items-center gap-4 rounded-2xl"
+            style={{
+              padding: '14px 16px',
+              background: 'rgba(255,255,255,0.04)',
+              border: '1px solid rgba(255,255,255,0.07)',
+            }}
+          >
+            {imageHint?.imageUrl && (
+              <img
+                src={imageHint.imageUrl} alt=""
+                style={{
+                  width: 52, height: 52, borderRadius: 12, objectFit: 'cover',
+                  flexShrink: 0, filter: 'blur(6px) brightness(0.7)',
+                }}
+              />
+            )}
+            <div className="flex flex-wrap gap-5">
+              {textHints.map(h => (
+                <div key={h.label}>
+                  <p style={{ color: 'rgba(255,255,255,0.25)', fontSize: '0.6rem', textTransform: 'uppercase', letterSpacing: '0.2em', marginBottom: 2 }}>
+                    {h.label}
+                  </p>
+                  <p style={{ color: 'white', fontWeight: 900, fontSize: '1.5rem', lineHeight: 1 }}>
+                    {h.value}
+                  </p>
                 </div>
               ))}
             </div>
-          )}
+          </div>
         </div>
       )}
 
-      <div className="flex-1 flex flex-col items-center justify-center gap-6">
-        <p className="text-white/60 text-center">How fast can you name this song?</p>
+      {/* Bid picker */}
+      <div className="flex-1 flex flex-col items-center justify-center gap-6 px-5">
+        <p style={{ color: 'rgba(255,255,255,0.32)', fontSize: '0.75rem', textTransform: 'uppercase', letterSpacing: '0.14em' }}>
+          How many seconds do you need?
+        </p>
 
-        <div className="flex items-center gap-6">
+        <div className="flex items-center gap-5">
           <button
-            onClick={() => setBidIndex(i => Math.max(0, i - 1))}
-            className="w-14 h-14 rounded-full bg-white/10 text-white flex items-center justify-center hover:bg-white/20 active:scale-95 transition-all"
-          ><ChevronLeft className="w-6 h-6" /></button>
-          <div className="text-center w-28">
-            <p className="text-white font-black text-5xl">{BID_OPTIONS[bidIndex]}</p>
-            <p className="text-white/40 text-sm">seconds</p>
+            onClick={() => canGoLeft && setBidIndex(i => i - 1)}
+            style={{
+              width: 52, height: 52, borderRadius: '50%', border: 'none',
+              cursor: canGoLeft ? 'pointer' : 'default',
+              background: canGoLeft ? 'rgba(255,255,255,0.07)' : 'rgba(255,255,255,0.02)',
+              opacity: canGoLeft ? 1 : 0.25,
+              display: 'flex', alignItems: 'center', justifyContent: 'center',
+              transition: 'background 0.2s, opacity 0.2s',
+            }}
+          >
+            <ChevronLeft className="w-5 h-5 text-white" />
+          </button>
+
+          {/* Bid value — LiquidGlass */}
+          <div className="liquid-btn relative" style={{ width: 160, height: 110 }}>
+            <LiquidGlass
+              style={{ position: 'absolute', top: '50%', left: '50%' }}
+              displacementScale={55}
+              blurAmount={0.06}
+              saturation={130}
+              aberrationIntensity={1.5}
+              elasticity={0.08}
+              cornerRadius={22}
+              padding="20px 32px"
+            >
+              <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 4, width: '96px' }}>
+                <span style={{ display: 'inline-block', minWidth: '60px', textAlign: 'center', color: 'white', fontWeight: 900, fontSize: '2.8rem', lineHeight: 1 }}>
+                  {currentBid}
+                </span>
+                <span style={{ display: 'inline-block', color: 'rgba(255,255,255,0.35)', fontSize: '0.65rem', letterSpacing: '0.14em', textTransform: 'uppercase' }}>
+                  seconds
+                </span>
+              </div>
+            </LiquidGlass>
           </div>
+
           <button
-            onClick={() => setBidIndex(i => Math.min(BID_OPTIONS.length - 1, i + 1))}
-            className="w-14 h-14 rounded-full bg-white/10 text-white flex items-center justify-center hover:bg-white/20 active:scale-95 transition-all"
-          ><ChevronRight className="w-6 h-6" /></button>
+            onClick={() => canGoRight && setBidIndex(i => i + 1)}
+            style={{
+              width: 52, height: 52, borderRadius: '50%', border: 'none',
+              cursor: canGoRight ? 'pointer' : 'default',
+              background: canGoRight ? 'rgba(255,255,255,0.07)' : 'rgba(255,255,255,0.02)',
+              opacity: canGoRight ? 1 : 0.25,
+              display: 'flex', alignItems: 'center', justifyContent: 'center',
+              transition: 'background 0.2s, opacity 0.2s',
+            }}
+          >
+            <ChevronRight className="w-5 h-5 text-white" />
+          </button>
+        </div>
+
+        {/* Score potential */}
+        <div className="flex flex-col items-center gap-2">
+          <div className="flex items-center gap-2">
+            <div className="flex items-center gap-1">
+              {[1, 2, 3, 4].map(i => (
+                <div
+                  key={i}
+                  className="rounded-full transition-all duration-300"
+                  style={{
+                    width: 20, height: 5,
+                    background: i <= riskLevel ? 'rgba(150,17,193,0.85)' : 'rgba(255,255,255,0.1)',
+                    boxShadow: i <= riskLevel ? '0 0 6px rgba(150,17,193,0.5)' : 'none',
+                  }}
+                />
+              ))}
+            </div>
+            <span style={{ color: 'rgba(150,17,193,0.85)', fontSize: '0.75rem', fontWeight: 700 }}>
+              {riskLabel} score
+            </span>
+          </div>
+          <p style={{ color: 'rgba(255,255,255,0.18)', fontSize: '0.7rem' }}>Fewer seconds = more points</p>
         </div>
       </div>
 
-      {error && <p className="text-red-400 text-sm text-center">{error}</p>}
+      {error && <p className="text-red-400 text-sm text-center px-5 pb-2">{error}</p>}
 
-      <button onClick={submitBid}
-        className="w-full py-4 rounded-2xl bg-purple-600 text-white font-bold text-xl hover:bg-purple-500 active:scale-95 transition-all">
-        Lock In
-      </button>
+      {/* Lock In */}
+      <div className="px-5 pb-8 flex justify-center">
+        <button
+          type="button"
+          className="liquid-btn relative cursor-pointer border-0 bg-transparent p-0"
+          style={{ width: '310px', height: '64px', borderRadius: '100px', background: 'rgba(0,0,0,0.001)' }}
+          onClick={submitBid}
+        >
+          <LiquidGlass
+            style={{ position: 'absolute', top: '50%', left: '50%' }}
+            displacementScale={64}
+            blurAmount={0.05}
+            saturation={130}
+            aberrationIntensity={2}
+            elasticity={0.12}
+            cornerRadius={100}
+            padding="18px 36px"
+          >
+            <div style={{ position: 'relative' }}>
+              <div style={{ position: 'absolute', inset: '-18px -36px', borderRadius: '100px', pointerEvents: 'none', background: 'rgba(110,32,155,0.15)' }} />
+              <span className="text-white font-bold text-xl" style={{ whiteSpace: 'nowrap', position: 'relative', display: 'inline-block', minWidth: '238px', textAlign: 'center' }}>
+                Lock In · {currentBid}s
+              </span>
+            </div>
+          </LiquidGlass>
+        </button>
+      </div>
     </div>
   );
 }
@@ -829,59 +954,91 @@ function BidSubmittedView({ game }: Readonly<{ game: PlayState }>) {
   );
 }
 
-function GuessInputSection({ guessText, guessInputRef, setGuessText, submitGuess, artistOnly }: Readonly<{
-  guessText: string;
-  guessInputRef: React.RefObject<HTMLInputElement | null>;
-  setGuessText: (v: string) => void;
-  submitGuess: () => void;
-  artistOnly?: boolean;
-}>) {
-  return (
-    <>
-      <div className="flex-1 flex flex-col items-center justify-center gap-6">
-        <p className="text-white/60">{artistOnly ? 'Name the artist' : 'Name the song'}</p>
-        <input
-          ref={guessInputRef}
-          type="text"
-          placeholder={artistOnly ? 'Type artist name...' : 'Type song title...'}
-          value={guessText}
-          onChange={e => setGuessText(e.target.value)}
-          onKeyDown={e => e.key === 'Enter' && submitGuess()}
-          className="w-full px-4 py-4 rounded-xl bg-white/10 text-white text-center text-xl placeholder-white/30 outline-none focus:ring-2 focus:ring-white/20"
-          autoComplete="off"
-          autoCorrect="off"
-          spellCheck={false}
-        />
-      </div>
-      <button onClick={submitGuess} disabled={!guessText.trim()}
-        className="w-full py-4 rounded-2xl bg-purple-600 text-white font-bold text-xl disabled:opacity-30 hover:bg-purple-500 active:scale-95 transition-all">
-        Submit
-      </button>
-    </>
-  );
-}
 
 function WatchingView({ game }: Readonly<{ game: PlayState }>) {
   const { lowestBid, guesserNames, mode } = game;
-
-  if (mode === 'race') {
-    return (
-      <div className="min-h-screen flex flex-col items-center justify-center gap-4 p-6 text-center">
-        <Music className="w-14 h-14 text-white animate-pulse" />
-        <p className="text-white font-black text-2xl">Get ready…</p>
-        <p className="text-white/30 text-sm">Song starts soon — everyone guesses at once</p>
-      </div>
-    );
-  }
+  const [visible, setVisible] = useState(false);
+  useEffect(() => { const t = setTimeout(() => setVisible(true), 30); return () => clearTimeout(t); }, []);
+  const isRace = mode === 'race';
+  const barDelays = [0, 0.14, 0.28, 0.07, 0.42, 0.21, 0.35, 0.08, 0.26];
 
   return (
-    <div className="min-h-screen flex flex-col items-center justify-center gap-4 p-6 text-center">
-      <Music className="w-14 h-14 text-white animate-pulse" />
-      <div>
-        <p className="text-white/40 text-sm mb-1">Guessing after {lowestBid}s</p>
-        <p className="text-white font-black text-2xl">{guesserNames.join(' & ')}</p>
+    <div className="relative min-h-screen overflow-hidden">
+      {/* Background */}
+      <img
+        src={`${import.meta.env.BASE_URL}background2.svg`}
+        aria-hidden="true"
+        style={{ position: 'fixed', inset: 0, width: '100%', height: '100%', objectFit: 'cover', zIndex: 0 }}
+      />
+      <div style={{ position: 'fixed', inset: 0, zIndex: 1, background: 'rgba(5,5,14,0.82)', backdropFilter: 'blur(28px)' }} />
+
+      {/* Content */}
+      <div
+        className="relative flex flex-col items-center justify-center min-h-screen gap-8 p-6"
+        style={{
+          zIndex: 2,
+          transition: 'opacity 0.4s ease, transform 0.4s ease',
+          opacity: visible ? 1 : 0,
+          transform: visible ? 'translateY(0)' : 'translateY(14px)',
+        }}
+      >
+        <div className="liquid-btn relative" style={{ width: '310px', height: '240px' }}>
+          <LiquidGlass
+            style={{ position: 'absolute', top: '50%', left: '50%' }}
+            displacementScale={55}
+            blurAmount={0.06}
+            saturation={130}
+            aberrationIntensity={1.5}
+            elasticity={0.08}
+            cornerRadius={20}
+            padding="28px 28px"
+          >
+            <div style={{ width: '254px', display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '18px' }}>
+
+              {/* Animated waveform */}
+              <div style={{ display: 'flex', gap: '5px', alignItems: 'center', height: '36px' }}>
+                {barDelays.map((delay, i) => (
+                  <div
+                    key={i}
+                    style={{
+                      width: '3px', height: '100%', borderRadius: '2px',
+                      background: isRace ? 'rgba(234,88,12,0.75)' : 'rgba(150,17,193,0.75)',
+                      animation: 'audioBar 1.4s ease-in-out infinite',
+                      animationDelay: `${delay}s`,
+                      transformOrigin: 'center',
+                    }}
+                  />
+                ))}
+              </div>
+
+              <div style={{ width: '100%', height: '1px', background: 'rgba(255,255,255,0.07)' }} />
+
+              {isRace ? (
+                <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '8px' }}>
+                  <span style={{ color: 'rgba(255,255,255,0.32)', fontSize: '0.6rem', letterSpacing: '0.2em', textTransform: 'uppercase' }}>
+                    Get ready
+                  </span>
+                  <span style={{ display: 'inline-block', minWidth: '200px', color: 'white', fontWeight: 900, fontSize: '1.4rem', lineHeight: 1.3, textAlign: 'center' }}>
+                    Everyone guesses at once
+                  </span>
+                </div>
+              ) : (
+                <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '6px' }}>
+                  <span style={{ color: 'rgba(255,255,255,0.32)', fontSize: '0.6rem', letterSpacing: '0.2em', textTransform: 'uppercase' }}>
+                    Listen closely
+                  </span>
+                  <span style={{ display: 'inline-block', minWidth: '200px', color: 'white', fontWeight: 900, fontSize: '1.5rem', lineHeight: 1.25, textAlign: 'center' }}>
+                    {guesserNames.join(' & ')}
+                  </span>
+                  <span style={{ display: 'inline-block', minWidth: '160px', color: 'rgba(255,255,255,0.3)', fontSize: '0.82rem', textAlign: 'center' }}>
+                    guesses after {lowestBid}s
+                  </span>
+                </div>
+              )}
+            </div>
+          </LiquidGlass>
+        </div>
       </div>
-      <p className="text-white/30 text-sm">Listen closely...</p>
     </div>
   );
 }
@@ -893,51 +1050,196 @@ function WatchingView({ game }: Readonly<{ game: PlayState }>) {
 function GuessingView({ game }: Readonly<{ game: PlayState }>) {
   const { phase, timeLeft, myScore, guessText, guessInputRef, setGuessText, submitGuess, skipGuess, artistOnly } = game;
   const isListening = phase === 'watching';
+  const canSubmit = guessText.trim().length > 0;
+  const urgent = !isListening && timeLeft <= 5;
+  const barDelays = [0, 0.14, 0.28, 0.07, 0.42, 0.21, 0.35, 0.08, 0.26];
+
   return (
-    <div className="min-h-screen flex flex-col p-5 gap-4">
+    <div className="min-h-screen flex flex-col" style={{ background: '#080812' }}>
+
+      {/* Header — waveform while listening, timer + score when active */}
       {isListening ? (
-        <div className="flex justify-center items-center gap-2">
-          <Music className="w-4 h-4 text-white/40 animate-pulse" />
-          <span className="text-white/40 text-sm">Listening...</span>
+        <div className="flex flex-col items-center gap-2.5 pt-10 pb-4">
+          <div style={{ display: 'flex', gap: '5px', alignItems: 'center', height: '28px' }}>
+            {barDelays.map((delay, i) => (
+              <div key={i} style={{
+                width: '3px', height: '100%', borderRadius: '2px',
+                background: 'rgba(150,17,193,0.6)',
+                animation: 'audioBar 1.4s ease-in-out infinite',
+                animationDelay: `${delay}s`, transformOrigin: 'center',
+              }} />
+            ))}
+          </div>
+          <span style={{ color: 'rgba(255,255,255,0.28)', fontSize: '0.72rem', letterSpacing: '0.08em' }}>
+            Your song is playing…
+          </span>
         </div>
       ) : (
-        <div className="flex justify-between items-center">
-          <span className="text-white/50 text-sm">Your turn!</span>
-          <span className="text-white font-black text-2xl">{timeLeft}s</span>
-          <span className="text-white/50 text-sm">{myScore.toLocaleString()} pts</span>
+        <div className="flex items-center justify-between px-5 pt-5 pb-3">
+          <span style={{ color: 'rgba(255,255,255,0.32)', fontSize: '0.85rem', fontWeight: 600 }}>Your turn</span>
+          <span
+            className="font-black text-4xl tabular-nums"
+            style={{ color: urgent ? '#f87171' : 'white', transition: 'color 0.3s ease' }}
+          >
+            {timeLeft}s
+          </span>
+          <span style={{ color: 'rgba(255,255,255,0.28)', fontSize: '0.8rem', fontWeight: 500 }}>
+            {myScore.toLocaleString()} pts
+          </span>
         </div>
       )}
-      <GuessInputSection guessText={guessText} guessInputRef={guessInputRef} setGuessText={setGuessText} submitGuess={submitGuess} artistOnly={artistOnly} />
-      <button onClick={skipGuess}
-        className="w-full py-3 rounded-2xl bg-white/5 text-white/50 font-semibold hover:bg-white/10 active:scale-95 transition-all">
-        Skip, I don't know
-      </button>
+
+      {/* Input area */}
+      <div className="flex-1 flex flex-col items-center justify-center gap-5 px-5">
+        <p style={{
+          color: isListening ? 'rgba(255,255,255,0.2)' : 'rgba(255,255,255,0.6)',
+          fontSize: '0.9rem', fontWeight: 600, letterSpacing: '0.03em',
+          transition: 'color 0.5s ease',
+        }}>
+          {artistOnly ? 'Name the artist' : 'Name the song'}
+        </p>
+
+        <div style={{
+          width: '100%', borderRadius: '16px', overflow: 'hidden',
+          border: `1px solid ${isListening ? 'rgba(255,255,255,0.07)' : (urgent ? 'rgba(248,113,113,0.4)' : 'rgba(150,17,193,0.4)')}`,
+          background: isListening ? 'rgba(255,255,255,0.03)' : (urgent ? 'rgba(248,113,113,0.06)' : 'rgba(150,17,193,0.08)'),
+          boxShadow: (!isListening && !urgent) ? '0 0 24px rgba(150,17,193,0.1)' : 'none',
+          transition: 'border-color 0.5s ease, background 0.5s ease, box-shadow 0.5s ease',
+        }}>
+          <input
+            ref={guessInputRef}
+            type="text"
+            placeholder={artistOnly ? 'Type artist name…' : 'Type song title…'}
+            value={guessText}
+            onChange={e => setGuessText(e.target.value)}
+            onKeyDown={e => e.key === 'Enter' && canSubmit && submitGuess()}
+            autoComplete="off" autoCorrect="off" spellCheck={false}
+            style={{
+              display: 'block', width: '100%', background: 'transparent', border: 'none',
+              color: 'white', fontSize: '1.3rem', fontWeight: 700, textAlign: 'center',
+              padding: '20px 16px', outline: 'none', fontFamily: 'inherit',
+            }}
+            className="placeholder-white/20"
+          />
+        </div>
+      </div>
+
+      {/* Actions */}
+      <div className="px-5 pb-8 flex flex-col items-center gap-4">
+        <button
+          type="button"
+          className="liquid-btn relative cursor-pointer border-0 bg-transparent p-0"
+          style={{
+            width: '310px', height: '64px', borderRadius: '100px',
+            background: 'rgba(0,0,0,0.001)',
+            opacity: canSubmit ? 1 : 0.28,
+            cursor: canSubmit ? 'pointer' : 'not-allowed',
+            transition: 'opacity 0.25s ease',
+          }}
+          onClick={() => canSubmit && submitGuess()}
+        >
+          <LiquidGlass
+            style={{ position: 'absolute', top: '50%', left: '50%' }}
+            displacementScale={64} blurAmount={0.05} saturation={130}
+            aberrationIntensity={2} elasticity={0.12} cornerRadius={100}
+            padding="18px 36px"
+          >
+            <div style={{ position: 'relative' }}>
+              <div style={{ position: 'absolute', inset: '-18px -36px', borderRadius: '100px', pointerEvents: 'none', background: 'rgba(110,32,155,0.15)' }} />
+              <span className="text-white font-bold text-xl" style={{ whiteSpace: 'nowrap', position: 'relative', display: 'inline-block', minWidth: '238px', textAlign: 'center' }}>
+                Submit
+              </span>
+            </div>
+          </LiquidGlass>
+        </button>
+
+        <button
+          onClick={skipGuess}
+          style={{ background: 'none', border: 'none', color: 'rgba(255,255,255,0.2)', fontSize: '0.82rem', cursor: 'pointer', transition: 'color 0.2s ease' }}
+          onMouseEnter={e => { (e.currentTarget as HTMLElement).style.color = 'rgba(255,255,255,0.5)'; }}
+          onMouseLeave={e => { (e.currentTarget as HTMLElement).style.color = 'rgba(255,255,255,0.2)'; }}
+        >
+          Skip, I don't know
+        </button>
+      </div>
     </div>
   );
 }
 
 function PassedView({ game }: Readonly<{ game: PlayState }>) {
   const { mode, myRacePoints, myRaceTimeMs } = game;
-  if (mode === 'race') {
-    return (
-      <div className="min-h-screen flex flex-col items-center justify-center gap-4 p-6 text-center">
-        {myRacePoints > 0 ? (
-          <>
-            <p className="text-green-400 font-black text-2xl">Locked in!</p>
-            <p className="text-white/50">
-              {myRaceTimeMs !== null && `${(myRaceTimeMs / 1000).toFixed(1)}s`}
-              {myRacePoints > 0 && ` · +${myRacePoints} pts`}
-            </p>
-          </>
-        ) : (
-          <p className="text-white/50 text-xl">Waiting for others…</p>
-        )}
-      </div>
-    );
-  }
+  const [visible, setVisible] = useState(false);
+  useEffect(() => { const t = setTimeout(() => setVisible(true), 30); return () => clearTimeout(t); }, []);
+  const gotIt = mode === 'race' && myRacePoints > 0;
+
   return (
-    <div className="min-h-screen flex flex-col items-center justify-center gap-4 p-6 text-center">
-      <p className="text-white/50 text-xl">Waiting for others…</p>
+    <div className="relative min-h-screen overflow-hidden">
+      <img
+        src={`${import.meta.env.BASE_URL}background3.svg`}
+        aria-hidden="true"
+        style={{ position: 'fixed', inset: 0, width: '100%', height: '100%', objectFit: 'cover', zIndex: 0 }}
+      />
+      <div style={{ position: 'fixed', inset: 0, zIndex: 1, background: 'rgba(5,5,14,0.82)', backdropFilter: 'blur(28px)' }} />
+
+      <div
+        className="relative flex flex-col items-center justify-center min-h-screen p-6"
+        style={{
+          zIndex: 2,
+          transition: 'opacity 0.4s ease, transform 0.4s ease',
+          opacity: visible ? 1 : 0,
+          transform: visible ? 'translateY(0)' : 'translateY(14px)',
+        }}
+      >
+        <div className="liquid-btn relative" style={{ width: '310px', height: gotIt ? '180px' : '150px' }}>
+          <LiquidGlass
+            style={{ position: 'absolute', top: '50%', left: '50%' }}
+            displacementScale={55}
+            blurAmount={0.06}
+            saturation={130}
+            aberrationIntensity={1.5}
+            elasticity={0.08}
+            cornerRadius={20}
+            padding="28px 28px"
+          >
+            <div style={{ width: '254px', display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '14px' }}>
+              {gotIt ? (
+                <>
+                  <span style={{ display: 'inline-block', minWidth: '120px', color: '#4ade80', fontWeight: 900, fontSize: '1.6rem', textAlign: 'center' }}>
+                    Got it!
+                  </span>
+                  <div style={{ width: '100%', height: '1px', background: 'rgba(255,255,255,0.07)' }} />
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+                    {myRaceTimeMs !== null && (
+                      <span style={{ display: 'inline-block', color: 'rgba(255,255,255,0.45)', fontSize: '0.9rem' }}>
+                        {(myRaceTimeMs / 1000).toFixed(1)}s
+                      </span>
+                    )}
+                    <span style={{ display: 'inline-block', color: '#38bdf8', fontWeight: 700, fontSize: '1rem' }}>
+                      +{myRacePoints} pts
+                    </span>
+                  </div>
+                </>
+              ) : (
+                <>
+                  <div style={{ display: 'flex', gap: '6px' }}>
+                    {[0, 1, 2].map(i => (
+                      <div key={i} style={{
+                        width: '6px', height: '6px', borderRadius: '50%',
+                        background: 'rgba(0,128,126,0.8)',
+                        animation: 'dotBounce 1.4s ease-in-out infinite',
+                        animationDelay: `${i * 0.18}s`,
+                      }} />
+                    ))}
+                  </div>
+                  <span style={{ display: 'inline-block', minWidth: '180px', color: 'rgba(255,255,255,0.38)', fontSize: '0.9rem', textAlign: 'center' }}>
+                    Waiting for others…
+                  </span>
+                </>
+              )}
+            </div>
+          </LiquidGlass>
+        </div>
+      </div>
     </div>
   );
 }
@@ -947,10 +1249,73 @@ export function RevealView({ game, result }: Readonly<{ game: PlayState; result:
   const isRace = result.mode === 'race';
   const iGotItInRace = isRace && !!result.correctGuessers?.includes(myName);
 
+  const bg3 = (
+    <>
+      <img
+        src={`${import.meta.env.BASE_URL}background3.svg`}
+        aria-hidden="true"
+        style={{ position: 'fixed', inset: 0, width: '100%', height: '100%', objectFit: 'cover', zIndex: 0 }}
+      />
+      <div style={{ position: 'fixed', inset: 0, zIndex: 1, background: 'rgba(5,5,14,0.82)', backdropFilter: 'blur(28px)' }} />
+    </>
+  );
+
   if (!result.correct) {
     const cardH = result.coverUrl ? 440 : 240;
     return (
-      <div className="page-enter min-h-screen flex flex-col items-center justify-center p-6 gap-5" style={{ zIndex: 1 }}>
+      <div className="page-enter relative min-h-screen flex flex-col items-center justify-center p-6 gap-5 overflow-hidden">
+        {bg3}
+        <div className="relative flex flex-col items-center gap-5 w-full" style={{ zIndex: 2 }}>
+          <div className="liquid-btn relative" style={{ width: '310px', height: `${cardH}px` }}>
+            <LiquidGlass
+              style={{ position: 'absolute', top: '50%', left: '50%' }}
+              displacementScale={55}
+              blurAmount={0.06}
+              saturation={130}
+              aberrationIntensity={1.5}
+              elasticity={0.08}
+              cornerRadius={20}
+              padding="24px 24px"
+            >
+              <NoOneGotItCardContent result={result} />
+            </LiquidGlass>
+          </div>
+
+          {result.playerGuesses && result.playerGuesses.length > 0 && (
+            <div style={{ background: 'rgba(255,255,255,0.05)', border: '1px solid rgba(255,255,255,0.08)', borderRadius: '16px', padding: '8px 12px', width: '25%' }} className="space-y-1">
+              {result.playerGuesses.map(g => (
+                <div key={g.name} className="flex justify-between items-center gap-2">
+                  <span className="text-white/40 text-xs min-w-0 truncate">{g.name}</span>
+                  <span className={`text-xs text-right shrink-0 italic ${g.guess === null ? 'text-white/15' : 'text-white/20'}`}>
+                    {g.guess === null ? 'skipped' : `"${g.guess}"`}
+                  </span>
+                </div>
+              ))}
+            </div>
+          )}
+
+          <div style={{ background: 'rgba(255,255,255,0.05)', border: '1px solid rgba(255,255,255,0.08)', borderRadius: '16px', padding: '16px 32px', textAlign: 'center' }}>
+            {myScoreDelta > 0 && (
+              <p className="text-sky-400 text-sm font-bold tabular-nums">+{myScoreDelta.toLocaleString()} pts</p>
+            )}
+            <p className="text-3xl font-black text-white">{myScore.toLocaleString()}</p>
+            <p className="text-white/40 text-sm">your score</p>
+            {myStreak >= 2 && (
+              <p className="flex items-center justify-center gap-1 text-orange-400 text-xs font-bold mt-1">
+                <Flame className="w-3 h-3" />{myStreak} in a row
+              </p>
+            )}
+          </div>
+        </div>
+      </div>
+    );
+  }
+
+  const cardH = result.coverUrl ? 440 : 240;
+  return (
+    <div className="page-enter relative min-h-screen flex flex-col items-center justify-center p-6 gap-5 overflow-hidden">
+      {bg3}
+      <div className="relative flex flex-col items-center gap-5 w-full" style={{ zIndex: 2 }}>
         <div className="liquid-btn relative" style={{ width: '310px', height: `${cardH}px` }}>
           <LiquidGlass
             style={{ position: 'absolute', top: '50%', left: '50%' }}
@@ -962,20 +1327,26 @@ export function RevealView({ game, result }: Readonly<{ game: PlayState; result:
             cornerRadius={20}
             padding="24px 24px"
           >
-            <NoOneGotItCardContent result={result} />
+            <GotItCardContent result={result} myName={myName} />
           </LiquidGlass>
         </div>
 
         {result.playerGuesses && result.playerGuesses.length > 0 && (
           <div style={{ background: 'rgba(255,255,255,0.05)', border: '1px solid rgba(255,255,255,0.08)', borderRadius: '16px', padding: '8px 12px', width: '25%' }} className="space-y-1">
-            {result.playerGuesses.map(g => (
-              <div key={g.name} className="flex justify-between items-center gap-2">
-                <span className="text-white/40 text-xs min-w-0 truncate">{g.name}</span>
-                <span className={`text-xs text-right shrink-0 italic ${g.guess === null ? 'text-white/15' : 'text-white/20'}`}>
-                  {g.guess === null ? 'skipped' : `"${g.guess}"`}
-                </span>
-              </div>
-            ))}
+            {result.playerGuesses.map(g => {
+              const correct = isRace ? !!result.correctGuessers?.includes(g.name) : (g.name === result.guesserName);
+              return (
+                <div key={g.name} className="flex justify-between items-center gap-2">
+                  <span className={`text-xs min-w-0 truncate ${correct ? 'text-white font-semibold' : 'text-white/30'}`}>{g.name}</span>
+                  <span className={`text-xs text-right shrink-0 ${g.guess === null ? 'text-white/15 italic' : correct ? 'text-green-400' : 'text-white/20 italic'}`}>
+                    {g.guess === null ? 'skipped' : `"${g.guess}"`}
+                    {correct && g.timeMs != null && (
+                      <span className="ml-1 text-white/25 text-xs">{(g.timeMs / 1000).toFixed(1)}s</span>
+                    )}
+                  </span>
+                </div>
+              );
+            })}
           </div>
         )}
 
@@ -985,69 +1356,17 @@ export function RevealView({ game, result }: Readonly<{ game: PlayState; result:
           )}
           <p className="text-3xl font-black text-white">{myScore.toLocaleString()}</p>
           <p className="text-white/40 text-sm">your score</p>
+          {iGotItInRace && myRaceTimeMs != null && (
+            <p className="text-green-400 text-xs font-semibold mt-1">
+              You got it in {(myRaceTimeMs / 1000).toFixed(1)}s · +{myRacePoints}
+            </p>
+          )}
           {myStreak >= 2 && (
             <p className="flex items-center justify-center gap-1 text-orange-400 text-xs font-bold mt-1">
               <Flame className="w-3 h-3" />{myStreak} in a row
             </p>
           )}
         </div>
-      </div>
-    );
-  }
-
-  const cardH = result.coverUrl ? 440 : 240;
-  return (
-    <div className="page-enter min-h-screen flex flex-col items-center justify-center p-6 gap-5" style={{ zIndex: 1 }}>
-      <div className="liquid-btn relative" style={{ width: '310px', height: `${cardH}px` }}>
-        <LiquidGlass
-          style={{ position: 'absolute', top: '50%', left: '50%' }}
-          displacementScale={55}
-          blurAmount={0.06}
-          saturation={130}
-          aberrationIntensity={1.5}
-          elasticity={0.08}
-          cornerRadius={20}
-          padding="24px 24px"
-        >
-          <GotItCardContent result={result} myName={myName} />
-        </LiquidGlass>
-      </div>
-
-      {result.playerGuesses && result.playerGuesses.length > 0 && (
-        <div style={{ background: 'rgba(255,255,255,0.05)', border: '1px solid rgba(255,255,255,0.08)', borderRadius: '16px', padding: '8px 12px', width: '25%' }} className="space-y-1">
-          {result.playerGuesses.map(g => {
-            const correct = isRace ? !!result.correctGuessers?.includes(g.name) : (g.name === result.guesserName);
-            return (
-              <div key={g.name} className="flex justify-between items-center gap-2">
-                <span className={`text-xs min-w-0 truncate ${correct ? 'text-white font-semibold' : 'text-white/30'}`}>{g.name}</span>
-                <span className={`text-xs text-right shrink-0 ${g.guess === null ? 'text-white/15 italic' : correct ? 'text-green-400' : 'text-white/20 italic'}`}>
-                  {g.guess === null ? 'skipped' : `"${g.guess}"`}
-                  {correct && g.timeMs != null && (
-                    <span className="ml-1 text-white/25 text-xs">{(g.timeMs / 1000).toFixed(1)}s</span>
-                  )}
-                </span>
-              </div>
-            );
-          })}
-        </div>
-      )}
-
-      <div style={{ background: 'rgba(255,255,255,0.05)', border: '1px solid rgba(255,255,255,0.08)', borderRadius: '16px', padding: '16px 32px', textAlign: 'center' }}>
-        {myScoreDelta > 0 && (
-          <p className="text-sky-400 text-sm font-bold tabular-nums">+{myScoreDelta.toLocaleString()} pts</p>
-        )}
-        <p className="text-3xl font-black text-white">{myScore.toLocaleString()}</p>
-        <p className="text-white/40 text-sm">your score</p>
-        {iGotItInRace && myRaceTimeMs != null && (
-          <p className="text-green-400 text-xs font-semibold mt-1">
-            You got it in {(myRaceTimeMs / 1000).toFixed(1)}s · +{myRacePoints}
-          </p>
-        )}
-        {myStreak >= 2 && (
-          <p className="flex items-center justify-center gap-1 text-orange-400 text-xs font-bold mt-1">
-            <Flame className="w-3 h-3" />{myStreak} in a row
-          </p>
-        )}
       </div>
     </div>
   );

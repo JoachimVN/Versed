@@ -367,6 +367,37 @@ function useHostGame(): HostState {
   };
 }
 
+// ─── Circular countdown timer ─────────────────────────────────────────────────
+
+function CircularTimer({ timeLeft, total }: Readonly<{ timeLeft: number; total: number }>) {
+  const size = 128;
+  const sw = 5;
+  const r = (size - sw * 2) / 2;
+  const circ = 2 * Math.PI * r;
+  const pct = total > 0 ? Math.max(0, Math.min(1, timeLeft / total)) : 0;
+  const urgent = timeLeft <= 5 && timeLeft > 0;
+  return (
+    <div className="relative" style={{ width: size, height: size }}>
+      <svg width={size} height={size} className="absolute inset-0" style={{ transform: 'rotate(-90deg)' }}>
+        <circle cx={size / 2} cy={size / 2} r={r} fill="none" stroke="rgba(255,255,255,0.07)" strokeWidth={sw} />
+        <circle
+          cx={size / 2} cy={size / 2} r={r} fill="none"
+          stroke={urgent ? 'rgba(248,113,113,0.85)' : 'rgba(150,17,193,0.85)'}
+          strokeWidth={sw}
+          strokeDasharray={circ}
+          strokeDashoffset={circ * (1 - pct)}
+          strokeLinecap="round"
+          style={{ transition: 'stroke-dashoffset 0.95s linear, stroke 0.4s ease' }}
+        />
+      </svg>
+      <div className="absolute inset-0 flex flex-col items-center justify-center">
+        <span className="text-white font-black" style={{ fontSize: '1.9rem', lineHeight: 1 }}>{timeLeft}</span>
+        <span style={{ color: 'rgba(255,255,255,0.3)', fontSize: '0.6rem', textTransform: 'uppercase', letterSpacing: '0.14em' }}>sec</span>
+      </div>
+    </div>
+  );
+}
+
 // ─── Bid timeline ────────────────────────────────────────────────────────────
 
 function BidTimeline({ bids, lowestBid }: Readonly<{ bids: { name: string; bid: number }[]; lowestBid: number }>) {
@@ -831,53 +862,105 @@ function LobbyView({ game }: Readonly<{ game: HostState }>) {
   );
 }
 
-function HintCards({ hints }: Readonly<{ hints: readonly Hint[] }>) {
-  const imageHint = hints.find(h => h.imageUrl);
-  const textHints = hints.filter(h => !h.imageUrl);
-  return (
-    <div className="flex flex-col items-center gap-8 w-full">
-      {imageHint?.imageUrl && (
-        <img
-          src={imageHint.imageUrl}
-          alt="Album art"
-          className="w-52 h-52 rounded-3xl object-cover shadow-2xl blur-sm"
-        />
-      )}
-      {textHints.length > 0 && (
-        <div className="flex flex-wrap justify-center gap-10">
-          {textHints.map(h => (
-            <div key={h.label} className="flex flex-col items-center gap-1">
-              <span className="text-white/30 text-xs uppercase tracking-[0.2em]">{h.label}</span>
-              <span className="text-white font-black text-4xl">{h.value}</span>
-            </div>
-          ))}
-        </div>
-      )}
-    </div>
-  );
-}
-
 function BettingView({ game }: Readonly<{ game: HostState }>) {
   const { roundIndex, totalRounds, timeLeft, bettingTime, hints, bidCount, players, pin, skipTurn } = game;
+  const imageHint = hints.find(h => h.imageUrl);
+  const textHints = hints.filter(h => !h.imageUrl);
+
   return (
-    <div className="min-h-screen flex flex-col p-6 gap-5">
-      <div className="flex justify-between items-center">
-        <p className="text-white/50 font-semibold">Round {roundIndex + 1}/{totalRounds}</p>
-        <p className="text-white font-black text-2xl">{timeLeft}s</p>
-        <p className="text-white/50 font-semibold">PIN: {pin}</p>
-      </div>
-      <div className="w-full bg-white/10 rounded-full h-1.5">
-        <div className="bg-purple-500 h-1.5 rounded-full transition-all duration-1000"
-          style={{ width: `${(timeLeft / bettingTime) * 100}%` }} />
+    <div className="relative min-h-screen flex flex-col overflow-hidden">
+
+      {/* Background */}
+      <img
+        src={`${import.meta.env.BASE_URL}background2.svg`}
+        aria-hidden="true"
+        style={{ position: 'fixed', inset: 0, width: '100%', height: '100%', objectFit: 'cover', zIndex: 0 }}
+      />
+      <div style={{ position: 'fixed', inset: 0, zIndex: 1, background: 'rgba(5,5,14,0.82)', backdropFilter: 'blur(28px)' }} />
+
+      {/* Top bar */}
+      <div className="relative flex items-center justify-between px-9 pt-7" style={{ zIndex: 2 }}>
+        <span style={{ color: 'rgba(255,255,255,0.35)', fontWeight: 600, fontSize: '1rem' }}>
+          Round{' '}
+          <span style={{ color: 'rgba(255,255,255,0.72)', fontWeight: 800 }}>{roundIndex + 1}</span>
+          <span style={{ color: 'rgba(255,255,255,0.18)' }}>/{totalRounds}</span>
+        </span>
+        <span style={{ color: 'rgba(255,255,255,0.2)', fontFamily: 'monospace', letterSpacing: '0.12em', fontSize: '0.9rem' }}>
+          PIN {pin}
+        </span>
       </div>
 
-      <div className="flex-1 flex flex-col items-center justify-center gap-8">
-        <HintCards hints={hints} />
-        <div className="text-center">
-          <p className="text-5xl font-black text-white">{bidCount}</p>
-          <p className="text-white/40">of {players.length} have bid</p>
+      {/* Main content */}
+      <div className="flex-1 relative flex flex-col items-center justify-center gap-10 px-8 py-4" style={{ zIndex: 2 }}>
+
+        {/* Circular timer */}
+        <CircularTimer timeLeft={timeLeft} total={bettingTime} />
+
+        {/* Hints */}
+        <div className="flex flex-col items-center gap-7 w-full max-w-3xl">
+          {imageHint?.imageUrl && (
+            <img
+              src={imageHint.imageUrl} alt="Album art"
+              className="w-52 h-52 rounded-3xl object-cover shadow-2xl blur-sm"
+            />
+          )}
+          {textHints.length > 0 && (
+            <div className="flex flex-wrap justify-center gap-5">
+              {textHints.map(h => (
+                <div
+                  key={h.label}
+                  className="flex flex-col items-center gap-2 rounded-3xl"
+                  style={{
+                    padding: '20px 36px',
+                    background: 'rgba(255,255,255,0.04)',
+                    border: '1px solid rgba(255,255,255,0.08)',
+                    backdropFilter: 'blur(16px)',
+                  }}
+                >
+                  <span style={{ color: 'rgba(255,255,255,0.28)', fontSize: '0.6rem', textTransform: 'uppercase', letterSpacing: '0.22em' }}>
+                    {h.label}
+                  </span>
+                  <span style={{ color: 'white', fontWeight: 900, fontSize: '3.25rem', lineHeight: 1, letterSpacing: '-0.02em' }}>
+                    {h.value}
+                  </span>
+                </div>
+              ))}
+            </div>
+          )}
         </div>
-        <button onClick={skipTurn} className="text-white/20 text-xs hover:text-white/50 transition-colors">
+
+        {/* Bid status dots */}
+        <div className="flex flex-col items-center gap-3">
+          <div className="flex gap-2.5 flex-wrap justify-center">
+            {players.map((_, i) => (
+              <div
+                key={i}
+                className="rounded-full transition-all duration-500"
+                style={{
+                  width: 12, height: 12,
+                  background: i < bidCount ? 'rgba(150,17,193,0.9)' : 'rgba(255,255,255,0.12)',
+                  boxShadow: i < bidCount ? '0 0 8px rgba(150,17,193,0.55)' : 'none',
+                  transform: i < bidCount ? 'scale(1)' : 'scale(0.78)',
+                }}
+              />
+            ))}
+          </div>
+          <p style={{ color: 'rgba(255,255,255,0.32)', fontSize: '0.85rem' }}>
+            {bidCount === players.length && players.length > 0
+              ? 'All players locked in!'
+              : `${bidCount} / ${players.length} locked in`}
+          </p>
+        </div>
+      </div>
+
+      {/* Skip */}
+      <div className="relative flex justify-center pb-7" style={{ zIndex: 2 }}>
+        <button
+          onClick={skipTurn}
+          style={{ background: 'none', border: 'none', color: 'rgba(255,255,255,0.12)', fontSize: '0.75rem', cursor: 'pointer', transition: 'color 0.2s ease' }}
+          onMouseEnter={e => { (e.currentTarget as HTMLElement).style.color = 'rgba(255,255,255,0.4)'; }}
+          onMouseLeave={e => { (e.currentTarget as HTMLElement).style.color = 'rgba(255,255,255,0.12)'; }}
+        >
           Skip round
         </button>
       </div>
@@ -1014,10 +1097,16 @@ export function RevealView({ game, result, instant = false }: Readonly<{ game: H
   if (!result.correct) {
     const cardH = result.coverUrl ? 440 : 240;
     return (
-      <div className="page-enter min-h-screen flex flex-col items-center p-6 gap-5" style={{ zIndex: 1 }}>
-        <p className="text-white/40 text-sm self-start">{roundIndex + 1} / {totalRounds}</p>
+      <div className="page-enter relative min-h-screen flex flex-col items-center p-6 gap-5 overflow-hidden">
+        <img
+          src={`${import.meta.env.BASE_URL}background3.svg`}
+          aria-hidden="true"
+          style={{ position: 'fixed', inset: 0, width: '100%', height: '100%', objectFit: 'cover', zIndex: 0, transform: 'rotate(180deg)' }}
+        />
+        <div style={{ position: 'fixed', inset: 0, zIndex: 1, background: 'rgba(5,5,14,0.82)', backdropFilter: 'blur(28px)' }} />
+        <p className="text-white/40 text-sm self-start" style={{ position: 'relative', zIndex: 2 }}>{roundIndex + 1} / {totalRounds}</p>
 
-        <div className="liquid-btn relative" style={{ width: '310px', height: `${cardH}px` }}>
+        <div className="liquid-btn relative" style={{ width: '310px', height: `${cardH}px`, zIndex: 2 }}>
           <LiquidGlass
             style={{ position: 'absolute', top: '50%', left: '50%' }}
             displacementScale={55}
@@ -1032,7 +1121,7 @@ export function RevealView({ game, result, instant = false }: Readonly<{ game: H
           </LiquidGlass>
         </div>
 
-        <div style={{ background: 'rgba(255,255,255,0.05)', border: '1px solid rgba(255,255,255,0.08)', borderRadius: '16px', padding: '8px 12px', width: '25%' }} className="divide-y divide-white/[0.07]">
+        <div style={{ position: 'relative', zIndex: 2, background: 'rgba(255,255,255,0.05)', border: '1px solid rgba(255,255,255,0.08)', borderRadius: '16px', padding: '8px 12px', width: '25%' }} className="divide-y divide-white/[0.07]">
           {players.slice().sort((a, b) => (b.score ?? 0) - (a.score ?? 0)).map((p, i) => (
             <RevealPlayerRow
               key={p.name}
@@ -1050,7 +1139,7 @@ export function RevealView({ game, result, instant = false }: Readonly<{ game: H
         <button
           type="button"
           className="liquid-btn relative cursor-pointer border-0 bg-transparent p-0"
-          style={{ width: '310px', height: '64px', borderRadius: '100px', background: 'rgba(0,0,0,0.001)' }}
+          style={{ width: '310px', height: '64px', borderRadius: '100px', background: 'rgba(0,0,0,0.001)', zIndex: 2 }}
           onClick={() => socket.emit('next_round')}
         >
           <LiquidGlass
@@ -1077,10 +1166,17 @@ export function RevealView({ game, result, instant = false }: Readonly<{ game: H
 
   const cardH = result.coverUrl ? 440 : 240;
   return (
-    <div className="page-enter min-h-screen flex flex-col items-center p-6 gap-5" style={{ zIndex: 1 }}>
-      <p className="text-white/40 text-sm self-start">{roundIndex + 1} / {totalRounds}</p>
+    <div className="page-enter relative min-h-screen flex flex-col items-center p-6 gap-5 overflow-hidden">
+      <img
+        src={`${import.meta.env.BASE_URL}background3.svg`}
+        aria-hidden="true"
+        style={{ position: 'fixed', inset: 0, width: '100%', height: '100%', objectFit: 'cover', zIndex: 0, transform: 'rotate(180deg)' }}
+      />
+      <div style={{ position: 'fixed', inset: 0, zIndex: 1, background: 'rgba(5,5,14,0.82)', backdropFilter: 'blur(28px)' }} />
 
-      <div className="liquid-btn relative" style={{ width: '310px', height: `${cardH}px` }}>
+      <p className="text-white/40 text-sm self-start" style={{ position: 'relative', zIndex: 2 }}>{roundIndex + 1} / {totalRounds}</p>
+
+      <div className="liquid-btn relative" style={{ width: '310px', height: `${cardH}px`, zIndex: 2 }}>
         <LiquidGlass
           style={{ position: 'absolute', top: '50%', left: '50%' }}
           displacementScale={55}
@@ -1095,7 +1191,7 @@ export function RevealView({ game, result, instant = false }: Readonly<{ game: H
         </LiquidGlass>
       </div>
 
-      <div style={{ background: 'rgba(255,255,255,0.05)', border: '1px solid rgba(255,255,255,0.08)', borderRadius: '16px', padding: '8px 12px', width: '25%' }} className="divide-y divide-white/[0.07]">
+      <div style={{ position: 'relative', zIndex: 2, background: 'rgba(255,255,255,0.05)', border: '1px solid rgba(255,255,255,0.08)', borderRadius: '16px', padding: '8px 12px', width: '25%' }} className="divide-y divide-white/[0.07]">
         {players.slice().sort((a, b) => (b.score ?? 0) - (a.score ?? 0)).map((p, i) => {
           const correct = isRace ? !!result.correctGuessers?.includes(p.name) : (p.name === result.guesserName);
           return (
@@ -1116,7 +1212,7 @@ export function RevealView({ game, result, instant = false }: Readonly<{ game: H
       <button
         type="button"
         className="liquid-btn relative cursor-pointer border-0 bg-transparent p-0"
-        style={{ width: '310px', height: '64px', borderRadius: '100px', background: 'rgba(0,0,0,0.001)' }}
+        style={{ width: '310px', height: '64px', borderRadius: '100px', background: 'rgba(0,0,0,0.001)', zIndex: 2 }}
         onClick={() => socket.emit('next_round')}
       >
         <LiquidGlass

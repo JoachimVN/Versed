@@ -46,3 +46,8 @@ body {
   0%, 80%, 100% { transform: translateY(0); opacity: 0.35; }
   40%            { transform: translateY(-6px); opacity: 1; }
 }
+
+@keyframes audioBar {
+  0%, 100% { transform: scaleY(0.2); }
+  50%       { transform: scaleY(1); }
+}
