@@ -19,20 +19,25 @@ const COLORS = [
 ];
 const COUNT = 120;
 
-function makeParticle(W: number, H: number, scattered = false): Particle {
-  const circle = Math.random() > 0.72;
+function seededRand(seed: number) {
+  let s = seed;
+  return () => { s = (s * 1664525 + 1013904223) >>> 0; return s / 0xffffffff; };
+}
+
+function makeParticle(W: number, H: number, scattered = false, rand: () => number = Math.random): Particle {
+  const circle = rand() > 0.72;
   return {
-    x: Math.random() * W,
-    y: scattered ? Math.random() * H : -30 - Math.random() * 80,
-    vx: (Math.random() - 0.5) * 0.5,
-    vy: 0.4 + Math.random() * 0.6,
-    w: circle ? 6 + Math.random() * 8 : 10 + Math.random() * 16,
-    h: circle ? 6 + Math.random() * 8 : 4 + Math.random() * 7,
-    rot: Math.random() * Math.PI * 2,
-    rotV: (Math.random() - 0.5) * 0.025,
-    color: COLORS[Math.floor(Math.random() * COLORS.length)],
+    x: rand() * W,
+    y: scattered ? rand() * H : -30 - rand() * 80,
+    vx: (rand() - 0.5) * 0.5,
+    vy: 0.4 + rand() * 0.6,
+    w: circle ? 6 + rand() * 8 : 10 + rand() * 16,
+    h: circle ? 6 + rand() * 8 : 4 + rand() * 7,
+    rot: rand() * Math.PI * 2,
+    rotV: (rand() - 0.5) * 0.025,
+    color: COLORS[Math.floor(rand() * COLORS.length)],
     circle,
-    alpha: 0.55 + Math.random() * 0.45,
+    alpha: 0.55 + rand() * 0.45,
   };
 }
 
@@ -58,8 +63,9 @@ export function ConfettiBackground() {
     canvas.width = W;
     canvas.height = H;
 
-    const particles: Particle[] = Array.from({ length: COUNT }, () => makeParticle(W, H, true));
     const reduced = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+    const rand = reduced ? seededRand(0x5eed42) : Math.random;
+    const particles: Particle[] = Array.from({ length: COUNT }, () => makeParticle(W, H, true, rand));
 
     const render = () => {
       ctx.clearRect(0, 0, W, H);

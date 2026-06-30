@@ -1,6 +1,6 @@
 import { useState, useEffect, useRef } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
-import { Music, ChevronLeft, ChevronRight, ArrowLeft, Flame, Pencil } from 'lucide-react';
+import { Music, ChevronLeft, ChevronRight, Flame, Pencil } from 'lucide-react';
 import LiquidGlass from 'liquid-glass-react';
 import { socket } from '../socket';
 import { RankBadge } from '../components/RankBadge';
@@ -435,12 +435,13 @@ function JoinView({ game }: Readonly<{ game: PlayState }>) {
     >
       <button
         onClick={() => navigate('/')}
-        className="absolute top-5 left-5 p-2 rounded-xl text-white/50 hover:text-white transition-colors"
-        style={{ background: 'rgba(255,255,255,0.08)', zIndex: 2 }}
-        onMouseEnter={e => { (e.currentTarget as HTMLElement).style.background = 'rgba(255,255,255,0.15)'; }}
-        onMouseLeave={e => { (e.currentTarget as HTMLElement).style.background = 'rgba(255,255,255,0.08)'; }}
+        className="absolute top-5 left-5 flex items-center gap-1.5 transition-all duration-200"
+        style={{ background: 'none', border: 'none', padding: '6px 2px', zIndex: 2, color: 'rgba(255,255,255,0.6)' }}
+        onMouseEnter={e => { (e.currentTarget as HTMLElement).style.color = 'rgba(255,255,255,0.95)'; }}
+        onMouseLeave={e => { (e.currentTarget as HTMLElement).style.color = 'rgba(255,255,255,0.6)'; }}
       >
-        <ArrowLeft className="w-5 h-5" />
+        <ChevronLeft className="w-5 h-5" strokeWidth={1.5} />
+        <span style={{ fontSize: '0.875rem', fontWeight: 400 }}>Back</span>
       </button>
 
       <img
