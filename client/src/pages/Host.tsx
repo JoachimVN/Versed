@@ -967,7 +967,10 @@ function RevealPlayerRow({
   const { displayScore, displayDelta, deltaFading } = useAnimatedScore(player.score ?? 0, delta, delay, instant);
   const streak = player.streak ?? 0;
   const skipped = entry?.guess === null;
-  const guessText = entry ? (skipped ? 'skipped' : `"${entry.guess}"`) : null;
+  let guessText: string | null = null;
+  if (entry) {
+    guessText = skipped ? 'skipped' : `"${entry.guess}"`;
+  }
   const guessCls = (!skipped && correct) ? 'text-green-400 text-xs truncate' : 'text-white/20 italic text-xs truncate';
   return (
     <button onClick={() => removePlayer(player.name)} aria-label={`Remove ${player.name}`} className="relative group w-full text-left py-1">
