@@ -1146,7 +1146,7 @@ export function RevealView({ game, result, instant = false }: Readonly<{ game: H
   const isRace = result.mode === 'race';
 
   if (!result.correct) {
-    const cardH = result.coverUrl ? 440 : 240;
+    const cardH = result.coverUrl ? 480 : 240;
     return (
       <div className="page-enter relative min-h-screen flex flex-col items-center p-6 gap-5 overflow-hidden">
         <img

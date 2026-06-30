@@ -41,7 +41,7 @@ function SongInfo({ result }: Readonly<{ result: RoundResultEvent }>) {
       {result.coverUrl && (
         <img
           src={result.coverUrl} alt="Album art"
-          style={{ width: '160px', height: '160px', borderRadius: '14px', objectFit: 'cover', marginBottom: '12px', boxShadow: '0 10px 36px rgba(0,0,0,0.65)' }}
+          style={{ width: '200px', height: '200px', borderRadius: '16px', objectFit: 'cover', marginBottom: '12px', boxShadow: '0 10px 36px rgba(0,0,0,0.65)' }}
         />
       )}
       {artistOnly ? (

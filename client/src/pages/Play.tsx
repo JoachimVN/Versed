@@ -1253,7 +1253,7 @@ export function RevealView({ game, result }: Readonly<{ game: PlayState; result:
   );
 
   if (!result.correct) {
-    const cardH = result.coverUrl ? 440 : 240;
+    const cardH = result.coverUrl ? 480 : 240;
     return (
       <div className="page-enter relative min-h-screen flex flex-col items-center justify-center p-6 gap-5 overflow-hidden">
         {bg3}
