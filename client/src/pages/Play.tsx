@@ -580,19 +580,19 @@ function JoinView({ game }: Readonly<{ game: PlayState }>) {
 
       <button
         type="button"
-        className="liquid-btn relative cursor-pointer border-0 bg-transparent p-0"
+        className="liquid-btn relative border-0 bg-transparent p-0"
         style={{
           width: '310px',
           height: '64px',
           borderRadius: '100px',
           background: 'rgba(0,0,0,0.001)',
           opacity: canJoin ? 1 : 0.3,
-          pointerEvents: canJoin ? 'auto' : 'none',
+          cursor: canJoin ? 'pointer' : 'not-allowed',
           transition: 'opacity 0.25s ease',
         }}
         onMouseEnter={() => setJoinHovered(true)}
         onMouseLeave={() => setJoinHovered(false)}
-        onClick={join}
+        onClick={() => canJoin && join()}
       >
         <div style={{
           position: 'absolute', inset: 0, borderRadius: '100px',
