@@ -1,8 +1,7 @@
 name: Update screenshots
 
 "on":
-  push:
-    branches: [dev]
+  pull_request:
     paths:
       - 'client/src/**'
       - 'client/index.html'
