@@ -461,6 +461,13 @@ function usePlayGame(pinParam?: string): PlayState {
   };
 }
 
+function timerColor(pct: number): string {
+  if (pct > 0.6) return 'rgba(52,211,153,0.85)';
+  if (pct > 0.35) return 'rgba(251,191,36,0.85)';
+  if (pct > 0.12) return 'rgba(249,115,22,0.85)';
+  return 'rgba(239,68,68,0.85)';
+}
+
 // Each bar gets a unique animation name, duration, and delay so they move independently.
 const AUDIO_BARS = [
   { anim: 'audioBarC', dur: 1.1, delay: 0    },
@@ -831,7 +838,7 @@ export function BettingView({ game }: Readonly<{ game: PlayState }>) {
         </span>
         <span
           className="font-black text-2xl tabular-nums"
-          style={{ color: urgent ? '#f87171' : 'white', transition: 'color 0.3s ease' }}
+          style={{ color: 'white', transition: 'color 0.3s ease' }}
         >
           {timeLeft}s
         </span>
@@ -840,10 +847,11 @@ export function BettingView({ game }: Readonly<{ game: PlayState }>) {
       {/* Timer bar */}
       <div className="mx-5 h-0.5 rounded-full" style={{ background: 'rgba(255,255,255,0.07)' }}>
         <div
-          className="h-0.5 rounded-full transition-all duration-1000"
+          className="h-0.5 rounded-full"
           style={{
             width: `${timerPct}%`,
-            background: urgent ? 'rgba(248,113,113,0.8)' : 'rgba(150,17,193,0.7)',
+            background: timerColor(timerPct / 100),
+            transition: timerPct === 0 ? 'none' : 'width 1s linear, background 0.4s ease',
           }}
         />
       </div>
@@ -1061,7 +1069,7 @@ function GuessingView({ game }: Readonly<{ game: PlayState }>) {
           <span style={{ color: 'rgba(255,255,255,0.32)', fontSize: '0.85rem', fontWeight: 600 }}>Your turn</span>
           <span
             className="font-black text-4xl tabular-nums"
-            style={{ color: urgent ? '#f87171' : 'white', transition: 'color 0.3s ease' }}
+            style={{ color: urgent ? timerColor(0) : 'white', transition: 'color 0.3s ease' }}
           >
             {timeLeft}s
           </span>

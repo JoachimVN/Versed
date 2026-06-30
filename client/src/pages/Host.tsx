@@ -370,25 +370,35 @@ function useHostGame(): HostState {
 
 // ─── Circular countdown timer ─────────────────────────────────────────────────
 
+function timerColor(pct: number): string {
+  if (pct > 0.6) return 'rgba(52,211,153,0.9)';
+  if (pct > 0.35) return 'rgba(251,191,36,0.9)';
+  if (pct > 0.12) return 'rgba(249,115,22,0.9)';
+  return 'rgba(239,68,68,0.9)';
+}
+
 function CircularTimer({ timeLeft, total }: Readonly<{ timeLeft: number; total: number }>) {
   const size = 128;
   const sw = 5;
   const r = (size - sw * 2) / 2;
   const circ = 2 * Math.PI * r;
   const pct = total > 0 ? Math.max(0, Math.min(1, timeLeft / total)) : 0;
-  const urgent = timeLeft <= 5 && timeLeft > 0;
   return (
     <div className="relative" style={{ width: size, height: size }}>
       <svg width={size} height={size} className="absolute inset-0" style={{ transform: 'rotate(-90deg)' }}>
         <circle cx={size / 2} cy={size / 2} r={r} fill="none" stroke="rgba(255,255,255,0.07)" strokeWidth={sw} />
         <circle
           cx={size / 2} cy={size / 2} r={r} fill="none"
-          stroke={urgent ? 'rgba(248,113,113,0.85)' : 'rgba(150,17,193,0.85)'}
+          stroke={timerColor(pct)}
           strokeWidth={sw}
           strokeDasharray={circ}
           strokeDashoffset={circ * (1 - pct)}
           strokeLinecap="round"
-          style={{ transition: 'stroke-dashoffset 0.95s linear, stroke 0.4s ease' }}
+          style={{
+            transition: timeLeft === 0
+              ? 'stroke-dashoffset 0s, stroke 0.4s ease'
+              : 'stroke-dashoffset 0.82s linear, stroke 0.4s ease',
+          }}
         />
       </svg>
       <div className="absolute inset-0 flex flex-col items-center justify-center">
@@ -896,10 +906,12 @@ function BettingView({ game }: Readonly<{ game: HostState }>) {
 
         {/* Blurred album art — centered, above timer */}
         {imageHint?.imageUrl && (
-          <img
-            src={imageHint.imageUrl} alt=""
-            style={{ width: 180, height: 180, borderRadius: 28, objectFit: 'cover', filter: 'blur(8px) brightness(0.6)', display: 'block' }}
-          />
+          <div style={{ width: 180, height: 180, borderRadius: 28, overflow: 'hidden', flexShrink: 0 }}>
+            <img
+              src={imageHint.imageUrl} alt=""
+              style={{ width: '115%', height: '115%', marginLeft: '-7.5%', marginTop: '-7.5%', objectFit: 'cover', filter: 'blur(8px) brightness(0.6)', display: 'block' }}
+            />
+          </div>
         )}
 
         {/* Circular timer */}
@@ -950,11 +962,6 @@ function BettingView({ game }: Readonly<{ game: HostState }>) {
               />
             ))}
           </div>
-          <p style={{ color: 'rgba(255,255,255,0.32)', fontSize: '0.85rem' }}>
-            {bidCount === players.length && players.length > 0
-              ? 'All players locked in!'
-              : `${bidCount} / ${players.length} locked in`}
-          </p>
         </div>
       </div>
 
