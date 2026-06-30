@@ -966,7 +966,7 @@ function WatchingView({ game }: Readonly<{ game: PlayState }>) {
       <img
         src={`${import.meta.env.BASE_URL}background4.svg`}
         aria-hidden="true"
-        style={{ position: 'fixed', inset: 0, width: '100%', height: '100%', objectFit: 'cover', zIndex: 0 }}
+        style={{ position: 'fixed', inset: 0, width: '100%', height: '100%', objectFit: 'cover', zIndex: 0, transform: 'rotate(180deg)' }}
       />
       <div style={{ position: 'fixed', inset: 0, zIndex: 1, background: 'rgba(5,5,14,0.82)', backdropFilter: 'blur(28px)' }} />
 
@@ -1054,7 +1054,7 @@ function GuessingView({ game }: Readonly<{ game: PlayState }>) {
 
   return (
     <div className="relative min-h-screen flex flex-col overflow-hidden" style={{ background: '#080812' }}>
-      <img src={`${import.meta.env.BASE_URL}background4.svg`} aria-hidden="true" style={{ position: 'fixed', inset: 0, width: '100%', height: '100%', objectFit: 'cover', zIndex: 0 }} />
+      <img src={`${import.meta.env.BASE_URL}background4.svg`} aria-hidden="true" style={{ position: 'fixed', inset: 0, width: '100%', height: '100%', objectFit: 'cover', zIndex: 0, transform: 'rotate(180deg)' }} />
       <div style={{ position: 'fixed', inset: 0, zIndex: 1, background: 'rgba(5,5,14,0.82)', backdropFilter: 'blur(28px)' }} />
 
       <div className="relative flex flex-col flex-1" style={{ zIndex: 2 }}>
@@ -1104,9 +1104,9 @@ function GuessingView({ game }: Readonly<{ game: PlayState }>) {
 
         <div style={{
           width: '100%', borderRadius: '16px', overflow: 'hidden',
-          border: `1px solid ${isListening ? 'rgba(255,255,255,0.07)' : (urgent ? 'rgba(248,113,113,0.4)' : 'rgba(150,17,193,0.4)')}`,
-          background: isListening ? 'rgba(255,255,255,0.03)' : (urgent ? 'rgba(248,113,113,0.06)' : 'rgba(150,17,193,0.08)'),
-          boxShadow: (!isListening && !urgent) ? '0 0 24px rgba(150,17,193,0.1)' : 'none',
+          border: `1px solid ${isListening ? 'rgba(255,255,255,0.07)' : 'rgba(150,17,193,0.4)'}`,
+          background: isListening ? 'rgba(255,255,255,0.03)' : 'rgba(150,17,193,0.08)',
+          boxShadow: isListening ? 'none' : '0 0 24px rgba(150,17,193,0.1)',
           transition: 'border-color 0.5s ease, background 0.5s ease, box-shadow 0.5s ease',
         }}>
           <input
