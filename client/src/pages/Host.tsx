@@ -1161,6 +1161,7 @@ export function RevealView({ game, result, instant = false }: Readonly<{ game: H
       <div className="page-enter relative min-h-screen flex flex-col items-center p-6 gap-5 overflow-hidden">
         <img
           src={`${import.meta.env.BASE_URL}background3.svg`}
+          alt=""
           aria-hidden="true"
           style={{ position: 'fixed', inset: 0, width: '100%', height: '100%', objectFit: 'cover', zIndex: 0, transform: 'rotate(180deg)' }}
         />

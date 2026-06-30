@@ -5,7 +5,6 @@ import LiquidGlass from 'liquid-glass-react';
 import { socket } from '../socket';
 import { RankBadge } from '../components/RankBadge';
 import { useAnimatedScore } from '../hooks/useAnimatedScore';
-import { ConfettiBackground } from '../components/ConfettiBackground';
 import { NoOneGotItCardContent, GotItCardContent } from '../components/RevealShared';
 import { APP_NAME, BID_OPTIONS } from '../config';
 import type { Hint, LeaderboardEntry, RoundResultEvent } from '../types';
@@ -968,6 +967,7 @@ function WatchingView({ game }: Readonly<{ game: PlayState }>) {
       {/* Background */}
       <img
         src={`${import.meta.env.BASE_URL}background4.svg`}
+        alt=""
         aria-hidden="true"
         style={{ position: 'fixed', inset: 0, width: '100%', height: '100%', objectFit: 'cover', zIndex: 0, transform: 'rotate(180deg)' }}
       />
@@ -1416,7 +1416,7 @@ function LeaderboardView({ game }: Readonly<{ game: PlayState }>) {
       {isFinished && (
         <>
           <img
-            src={`${import.meta.env.BASE_URL}background6.svg`}
+            src={`${import.meta.env.BASE_URL}background5.svg`}
             alt=""
             aria-hidden="true"
             style={{ position: 'fixed', inset: 0, width: '100%', height: '100%', objectFit: 'cover', zIndex: 0 }}
@@ -1424,7 +1424,7 @@ function LeaderboardView({ game }: Readonly<{ game: PlayState }>) {
           <div
             className="fixed inset-0 pointer-events-none"
             style={{
-              background: 'rgba(8,8,18,0.92)',
+              background: 'rgba(8,8,18,0.70)',
               backdropFilter: 'blur(48px)',
               zIndex: 1,
             }}
