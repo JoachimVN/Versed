@@ -230,6 +230,17 @@ io.on('connection', (socket) => {
     }
   );
 
+  // ── Player: rename in lobby ────────────────────────────────────────────────
+  socket.on('rename_player', ({ newName }: { newName: string }, callback: (r: { error?: string; success?: boolean }) => void) => {
+    const game = gm.getGameBySocket(socket.id);
+    if (!game || game.phase !== 'lobby') return callback({ error: 'Cannot rename now' });
+    const player = gm.renamePlayer(game, socket.id, newName);
+    if (!player) return callback({ error: 'Name already taken' });
+    callback({ success: true });
+    const players = Array.from(game.players.values()).map(p => ({ name: p.name }));
+    io.to(`host:${game.pin}`).emit('player_joined', { players });
+  });
+
   // ── Player: rejoin after reconnect ─────────────────────────────────────────
   socket.on('rejoin_player', ({ pin, name }: { pin: string; name: string }, callback?: (r: { ok: boolean }) => void) => {
     const game = gm.getGame(pin);

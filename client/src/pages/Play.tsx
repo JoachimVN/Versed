@@ -1,6 +1,6 @@
 import { useState, useEffect, useRef } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
-import { Music, ChevronLeft, ChevronRight, ArrowLeft, Flame } from 'lucide-react';
+import { Music, ChevronLeft, ChevronRight, ArrowLeft, Flame, Pencil } from 'lucide-react';
 import { socket } from '../socket';
 import { RankBadge } from '../components/RankBadge';
 import { RevealStatusHeader, RevealSongCard } from '../components/RevealShared';
@@ -50,6 +50,7 @@ export interface PlayState {
   skipGuess: () => void;
   newGamePin: string | null;
   rejoinNewGame: () => void;
+  renamePlayer: (newName: string) => void;
 }
 
 function usePlayGame(pinParam?: string): PlayState {
@@ -381,6 +382,22 @@ function usePlayGame(pinParam?: string): PlayState {
     });
   };
 
+  const renamePlayer = (newName: string) => {
+    const trimmed = newName.trim();
+    if (!trimmed) return;
+    socket.emit('rename_player', { newName: trimmed }, ({ success, error: e }: { success?: boolean; error?: string }) => {
+      if (e) { setError(e); return; }
+      if (success) {
+        myNameRef.current = trimmed;
+        setMyName(trimmed);
+        setError('');
+        const session = { pin: pinRef.current, name: trimmed };
+        setSavedSession(session);
+        localStorage.setItem('versed_session', JSON.stringify(session));
+      }
+    });
+  };
+
   return {
     phase, pin, name, myName, error, roundIndex, totalRounds, hints,
     timeLeft, bettingTime, bidIndex, myBid, guesserNames, lowestBid,
@@ -396,7 +413,7 @@ function usePlayGame(pinParam?: string): PlayState {
     });
   },
   setGuessText: (v: string) => { guessTextRef.current = v; setGuessText(v); },
-    join, rejoinSaved, submitBid, submitGuess, skipGuess,
+    join, rejoinSaved, submitBid, submitGuess, skipGuess, renamePlayer,
   };
 }
 
@@ -442,10 +459,43 @@ function JoinView({ game }: Readonly<{ game: PlayState }>) {
 }
 
 function WaitingView({ game }: Readonly<{ game: PlayState }>) {
+  const [editing, setEditing] = useState(false);
+  const [draftName, setDraftName] = useState('');
+
+  const startEdit = () => { setDraftName(game.myName); setEditing(true); };
+  const cancelEdit = () => { setEditing(false); };
+  const confirmEdit = () => {
+    if (!draftName.trim() || draftName.trim() === game.myName) { setEditing(false); return; }
+    game.renamePlayer(draftName);
+    setEditing(false);
+  };
+
   return (
     <div className="min-h-screen flex flex-col items-center justify-center gap-4 p-6">
       <div className="w-12 h-12 border-4 border-purple-500 border-t-transparent rounded-full animate-spin" />
-      <p className="text-white text-xl font-bold">{game.myName}</p>
+      {editing ? (
+        <div className="flex flex-col items-center gap-2 w-full max-w-xs">
+          <input
+            autoFocus
+            type="text"
+            value={draftName}
+            onChange={e => setDraftName(e.target.value)}
+            onKeyDown={e => { if (e.key === 'Enter') confirmEdit(); if (e.key === 'Escape') cancelEdit(); }}
+            maxLength={20}
+            className="w-full px-4 py-3 rounded-xl bg-white/10 text-white text-center text-xl placeholder-white/30 outline-none focus:ring-2 focus:ring-white/30"
+          />
+          {game.error && <p className="text-red-400 text-sm">{game.error}</p>}
+          <div className="flex gap-2 w-full">
+            <button onClick={cancelEdit} className="flex-1 py-2 rounded-xl bg-white/10 text-white/60 hover:bg-white/20 transition-colors text-sm">Cancel</button>
+            <button onClick={confirmEdit} disabled={!draftName.trim()} className="flex-1 py-2 rounded-xl bg-purple-600 text-white font-bold hover:bg-purple-500 transition-colors text-sm disabled:opacity-30">Save</button>
+          </div>
+        </div>
+      ) : (
+        <button onClick={startEdit} className="flex items-center gap-2 text-white text-xl font-bold hover:text-white/80 transition-colors group">
+          {game.myName}
+          <Pencil className="w-4 h-4 text-white/30 group-hover:text-white/60 transition-colors" />
+        </button>
+      )}
       <p className="text-white/50">You're in! Hang tight…</p>
     </div>
   );
