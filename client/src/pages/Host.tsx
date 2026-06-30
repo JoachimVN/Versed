@@ -216,7 +216,8 @@ function useHostGame(): HostState {
       setGuesserNames(data.guesserNames);
       setPlayerBids(data.playerBids ?? []);
       stopCountdown();
-      setPhase('playing');
+      // Brief pause so the last dot's fill animation is visible before transitioning.
+      setTimeout(() => setPhase('playing'), 600);
     });
 
     socket.on('play_song', async (data: { trackId: string; durationMs: number; countdownMs?: number }) => {
