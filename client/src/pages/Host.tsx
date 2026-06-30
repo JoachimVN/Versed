@@ -637,12 +637,122 @@ function ConnectView({ game }: Readonly<{ game: HostState }>) {
   );
 }
 
+function SettingsButton({ settingsOpen, toggleSettings }: Readonly<{ settingsOpen: boolean; toggleSettings: () => void }>) {
+  const [hovered, setHovered] = useState(false);
+  let bg = 'rgba(255,255,255,0.06)';
+  if (settingsOpen) bg = 'rgba(120, 25, 170, 0.28)';
+  else if (hovered) bg = 'rgba(255,255,255,0.11)';
+  let color = 'rgba(255,255,255,0.5)';
+  if (settingsOpen) color = '#c084fc';
+  else if (hovered) color = 'rgba(255,255,255,0.85)';
+  return (
+    <button
+      onClick={toggleSettings}
+      onMouseEnter={() => setHovered(true)}
+      onMouseLeave={() => setHovered(false)}
+      className="absolute top-5 right-5 flex items-center gap-2 rounded-full transition-all duration-200 z-10"
+      style={{
+        background: bg,
+        border: settingsOpen ? '1px solid rgba(140, 40, 200, 0.45)' : '1px solid rgba(255,255,255,0.10)',
+        backdropFilter: 'blur(12px)',
+        padding: '6px 14px 6px 10px',
+        color,
+        cursor: 'pointer',
+      }}
+    >
+      <Settings
+        className="w-3.5 h-3.5"
+        style={{ transition: 'transform 0.35s ease', transform: settingsOpen ? 'rotate(90deg)' : 'rotate(0deg)' }}
+      />
+      <span style={{ fontSize: '0.8rem', fontWeight: 500, letterSpacing: '0.01em' }}>Settings</span>
+    </button>
+  );
+}
+
+function ModeToggle({ mode, setMode }: Readonly<{ mode: 'classic' | 'race'; setMode: (m: 'classic' | 'race') => void }>) {
+  const isClassic = mode === 'classic';
+  return (
+    <div
+      className="w-full max-w-md relative flex rounded-2xl"
+      style={{ background: 'rgba(255,255,255,0.05)', border: '1px solid rgba(255,255,255,0.08)', padding: '4px' }}
+    >
+      <div
+        className="absolute rounded-xl"
+        style={{
+          top: '4px', bottom: '4px', left: '4px',
+          width: 'calc(50% - 4px)',
+          background: isClassic ? 'rgba(130, 20, 180, 0.28)' : 'rgba(220, 80, 10, 0.2)',
+          border: isClassic ? '1px solid rgba(140, 30, 200, 0.45)' : '1px solid rgba(234, 88, 12, 0.4)',
+          transform: isClassic ? 'translateX(0)' : 'translateX(100%)',
+          transition: 'transform 0.25s cubic-bezier(0.4, 0, 0.2, 1), background 0.25s ease, border-color 0.25s ease',
+          pointerEvents: 'none',
+        }}
+      />
+      <button
+        onClick={() => setMode('classic')}
+        className="relative flex-1 py-2.5 rounded-xl text-sm font-semibold z-10 transition-colors duration-200 flex items-center justify-center gap-1.5"
+        style={{ color: isClassic ? 'white' : 'rgba(255,255,255,0.38)', background: 'transparent', border: 'none', cursor: 'pointer' }}
+      >
+        <Coins className="w-3.5 h-3.5 transition-colors duration-200" style={{ color: isClassic ? '#c084fc' : 'rgba(255,255,255,0.38)' }} />
+        Classic
+      </button>
+      <button
+        onClick={() => setMode('race')}
+        className="relative flex-1 py-2.5 rounded-xl text-sm font-semibold z-10 transition-colors duration-200 flex items-center justify-center gap-1.5"
+        style={{ color: !isClassic ? '#fed7aa' : 'rgba(255,255,255,0.38)', background: 'transparent', border: 'none', cursor: 'pointer' }}
+      >
+        <Flame className="w-3.5 h-3.5 transition-colors duration-200" style={{ color: !isClassic ? '#fb923c' : 'rgba(255,255,255,0.38)' }} />
+        Race
+      </button>
+    </div>
+  );
+}
+
+function StartButton({ players, mode, startGame }: Readonly<{ players: PlayerInfo[]; mode: 'classic' | 'race'; startGame: () => void }>) {
+  const [hovered, setHovered] = useState(false);
+  const disabled = players.length === 0;
+  return (
+    <button
+      type="button"
+      className="liquid-btn relative cursor-pointer border-0 bg-transparent p-0 mt-auto"
+      style={{
+        width: '310px', height: '64px', borderRadius: '100px',
+        background: 'rgba(0,0,0,0.001)',
+        opacity: disabled ? 0.3 : 1,
+        cursor: disabled ? 'not-allowed' : 'pointer',
+        transition: 'opacity 0.25s ease',
+      }}
+      onMouseEnter={() => setHovered(true)}
+      onMouseLeave={() => setHovered(false)}
+      onClick={() => !disabled && startGame()}
+    >
+      <div style={{ position: 'absolute', inset: 0, borderRadius: '100px', background: 'rgba(110, 32, 155, 0.04)', pointerEvents: 'none' }} />
+      <LiquidGlass
+        style={{
+          position: 'absolute', top: '50%', left: '50%',
+          filter: hovered && !disabled ? 'drop-shadow(0 0 12px rgba(110, 32, 155, 0.7))' : 'drop-shadow(0 0 0px rgba(110, 32, 155, 0))',
+          transition: 'filter 0.25s ease',
+        }}
+        displacementScale={64}
+        blurAmount={0.05}
+        saturation={130}
+        aberrationIntensity={2}
+        elasticity={0.12}
+        cornerRadius={100}
+        padding="18px 36px"
+      >
+        <span className="text-white font-bold text-xl" style={{ whiteSpace: 'nowrap' }}>
+          {mode === 'race' ? 'Start Race Game' : 'Start Classic Game'}
+        </span>
+      </LiquidGlass>
+    </button>
+  );
+}
+
 function LobbyView({ game }: Readonly<{ game: HostState }>) {
   const { spotify, pin, players, createGame, startGame, mode, settingsOpen, toggleSettings, setMode, removePlayer } = game;
   const navigate = useNavigate();
   const [lobbyVisible, setLobbyVisible] = useState(false);
-  const [startHovered, setStartHovered] = useState(false);
-  const [settingsHovered, setSettingsHovered] = useState(false);
 
   useEffect(() => {
     if (!pin) { setLobbyVisible(false); return; }
@@ -666,30 +776,7 @@ function LobbyView({ game }: Readonly<{ game: HostState }>) {
         <ChevronLeft className="w-5 h-5" strokeWidth={1.5} />
         <span style={{ fontSize: '0.875rem', fontWeight: 400 }}>Back</span>
       </button>
-      <button
-        onClick={toggleSettings}
-        onMouseEnter={() => setSettingsHovered(true)}
-        onMouseLeave={() => setSettingsHovered(false)}
-        className="absolute top-5 right-5 flex items-center gap-2 rounded-full transition-all duration-200 z-10"
-        style={{
-          background: settingsOpen
-            ? 'rgba(120, 25, 170, 0.28)'
-            : settingsHovered
-              ? 'rgba(255,255,255,0.11)'
-              : 'rgba(255,255,255,0.06)',
-          border: settingsOpen ? '1px solid rgba(140, 40, 200, 0.45)' : '1px solid rgba(255,255,255,0.10)',
-          backdropFilter: 'blur(12px)',
-          padding: '6px 14px 6px 10px',
-          color: settingsOpen ? '#c084fc' : settingsHovered ? 'rgba(255,255,255,0.85)' : 'rgba(255,255,255,0.5)',
-          cursor: 'pointer',
-        }}
-      >
-        <Settings
-          className="w-3.5 h-3.5"
-          style={{ transition: 'transform 0.35s ease', transform: settingsOpen ? 'rotate(90deg)' : 'rotate(0deg)' }}
-        />
-        <span style={{ fontSize: '0.8rem', fontWeight: 500, letterSpacing: '0.01em' }}>Settings</span>
-      </button>
+      <SettingsButton settingsOpen={settingsOpen} toggleSettings={toggleSettings} />
 
       <SettingsPanel game={game} open={settingsOpen} />
 
@@ -710,53 +797,7 @@ function LobbyView({ game }: Readonly<{ game: HostState }>) {
       {pin ? (
         <div className={`flex-1 flex flex-col items-center gap-5 px-6 pb-6 transition-all duration-500 ${lobbyVisible ? 'opacity-100 translate-y-0' : 'opacity-0 translate-y-6'}`}>
           <JoinCard pin={game.pin} copied={game.copied} copyInvite={game.copyInvite} />
-
-          <div
-            className="w-full max-w-md relative flex rounded-2xl"
-            style={{
-              background: 'rgba(255,255,255,0.05)',
-              border: '1px solid rgba(255,255,255,0.08)',
-              padding: '4px',
-            }}
-          >
-            {/* Sliding pill indicator */}
-            <div
-              className="absolute rounded-xl"
-              style={{
-                top: '4px', bottom: '4px',
-                left: '4px',
-                width: 'calc(50% - 4px)',
-                background: mode === 'classic' ? 'rgba(130, 20, 180, 0.28)' : 'rgba(220, 80, 10, 0.2)',
-                border: mode === 'classic' ? '1px solid rgba(140, 30, 200, 0.45)' : '1px solid rgba(234, 88, 12, 0.4)',
-                transform: mode === 'race' ? 'translateX(100%)' : 'translateX(0)',
-                transition: 'transform 0.25s cubic-bezier(0.4, 0, 0.2, 1), background 0.25s ease, border-color 0.25s ease',
-                pointerEvents: 'none',
-              }}
-            />
-            <button
-              onClick={() => setMode('classic')}
-              className="relative flex-1 py-2.5 rounded-xl text-sm font-semibold z-10 transition-colors duration-200 flex items-center justify-center gap-1.5"
-              style={{ color: mode === 'classic' ? 'white' : 'rgba(255,255,255,0.38)', background: 'transparent', border: 'none', cursor: 'pointer' }}
-            >
-              <Coins
-                className="w-3.5 h-3.5 transition-colors duration-200"
-                style={{ color: mode === 'classic' ? '#c084fc' : 'rgba(255,255,255,0.38)' }}
-              />
-              Classic
-            </button>
-            <button
-              onClick={() => setMode('race')}
-              className="relative flex-1 py-2.5 rounded-xl text-sm font-semibold z-10 transition-colors duration-200 flex items-center justify-center gap-1.5"
-              style={{ color: mode === 'race' ? '#fed7aa' : 'rgba(255,255,255,0.38)', background: 'transparent', border: 'none', cursor: 'pointer' }}
-            >
-              <Flame
-                className="w-3.5 h-3.5 transition-colors duration-200"
-                style={{ color: mode === 'race' ? '#fb923c' : 'rgba(255,255,255,0.38)' }}
-              />
-              Race
-            </button>
-          </div>
-
+          <ModeToggle mode={mode} setMode={setMode} />
           <div className="w-full max-w-md">
             <p className="text-white/40 text-sm mb-2">{players.length} player{players.length === 1 ? '' : 's'}</p>
             <div className="flex flex-wrap gap-2">
@@ -773,47 +814,7 @@ function LobbyView({ game }: Readonly<{ game: HostState }>) {
               ))}
             </div>
           </div>
-
-          <button
-            type="button"
-            className="liquid-btn relative cursor-pointer border-0 bg-transparent p-0 mt-auto"
-            style={{
-              width: '310px',
-              height: '64px',
-              borderRadius: '100px',
-              background: 'rgba(0,0,0,0.001)',
-              opacity: players.length === 0 ? 0.3 : 1,
-              cursor: players.length === 0 ? 'not-allowed' : 'pointer',
-              transition: 'opacity 0.25s ease',
-            }}
-            onMouseEnter={() => setStartHovered(true)}
-            onMouseLeave={() => setStartHovered(false)}
-            onClick={() => players.length > 0 && startGame()}
-          >
-            <div style={{
-              position: 'absolute', inset: 0, borderRadius: '100px',
-              background: 'rgba(110, 32, 155, 0.04)',
-              pointerEvents: 'none',
-            }} />
-            <LiquidGlass
-              style={{
-                position: 'absolute', top: '50%', left: '50%',
-                filter: startHovered && players.length > 0 ? 'drop-shadow(0 0 12px rgba(110, 32, 155, 0.7))' : 'drop-shadow(0 0 0px rgba(110, 32, 155, 0))',
-                transition: 'filter 0.25s ease',
-              }}
-              displacementScale={64}
-              blurAmount={0.05}
-              saturation={130}
-              aberrationIntensity={2}
-              elasticity={0.12}
-              cornerRadius={100}
-              padding="18px 36px"
-            >
-              <span className="text-white font-bold text-xl" style={{ whiteSpace: 'nowrap' }}>
-                {mode === 'race' ? 'Start Race Game' : 'Start Classic Game'}
-              </span>
-            </LiquidGlass>
-          </button>
+          <StartButton players={players} mode={mode} startGame={startGame} />
         </div>
       ) : null}
     </div>
