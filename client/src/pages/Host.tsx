@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { Music, Check, Loader2, Copy, ChevronLeft, Settings, Flame } from 'lucide-react';
+import { Music, Check, Loader2, Copy, ChevronLeft, Settings, Flame, Coins } from 'lucide-react';
 import LiquidGlass from 'liquid-glass-react';
 import QRCodeLib from 'react-qr-code';
 const QRCode = QRCodeLib as unknown as React.FC<{ value: string; size?: number }>;
@@ -457,10 +457,10 @@ function SettingsPanel({ game, open }: Readonly<{ game: HostState; open: boolean
       <div
         className="w-72 rounded-2xl overflow-hidden"
         style={{
-          background: 'rgba(10, 6, 26, 0.92)',
-          backdropFilter: 'blur(24px)',
+          background: 'rgba(10, 6, 26, 0.65)',
+          backdropFilter: 'blur(32px)',
           border: '1px solid rgba(255,255,255,0.09)',
-          boxShadow: '0 24px 48px rgba(0,0,0,0.55), inset 0 0 0 1px rgba(255,255,255,0.04)',
+          boxShadow: '0 24px 48px rgba(0,0,0,0.4), inset 0 0 0 1px rgba(255,255,255,0.04)',
         }}
       >
         <div className="px-5 py-3.5" style={{ borderBottom: '1px solid rgba(255,255,255,0.07)' }}>
@@ -642,6 +642,7 @@ function LobbyView({ game }: Readonly<{ game: HostState }>) {
   const navigate = useNavigate();
   const [lobbyVisible, setLobbyVisible] = useState(false);
   const [startHovered, setStartHovered] = useState(false);
+  const [settingsHovered, setSettingsHovered] = useState(false);
 
   useEffect(() => {
     if (!pin) { setLobbyVisible(false); return; }
@@ -667,13 +668,19 @@ function LobbyView({ game }: Readonly<{ game: HostState }>) {
       </button>
       <button
         onClick={toggleSettings}
+        onMouseEnter={() => setSettingsHovered(true)}
+        onMouseLeave={() => setSettingsHovered(false)}
         className="absolute top-5 right-5 flex items-center gap-2 rounded-full transition-all duration-200 z-10"
         style={{
-          background: settingsOpen ? 'rgba(120, 25, 170, 0.22)' : 'rgba(255,255,255,0.06)',
+          background: settingsOpen
+            ? 'rgba(120, 25, 170, 0.28)'
+            : settingsHovered
+              ? 'rgba(255,255,255,0.11)'
+              : 'rgba(255,255,255,0.06)',
           border: settingsOpen ? '1px solid rgba(140, 40, 200, 0.45)' : '1px solid rgba(255,255,255,0.10)',
           backdropFilter: 'blur(12px)',
           padding: '6px 14px 6px 10px',
-          color: settingsOpen ? '#c084fc' : 'rgba(255,255,255,0.5)',
+          color: settingsOpen ? '#c084fc' : settingsHovered ? 'rgba(255,255,255,0.85)' : 'rgba(255,255,255,0.5)',
           cursor: 'pointer',
         }}
       >
@@ -728,9 +735,13 @@ function LobbyView({ game }: Readonly<{ game: HostState }>) {
             />
             <button
               onClick={() => setMode('classic')}
-              className="relative flex-1 py-2.5 rounded-xl text-sm font-semibold z-10 transition-colors duration-200"
+              className="relative flex-1 py-2.5 rounded-xl text-sm font-semibold z-10 transition-colors duration-200 flex items-center justify-center gap-1.5"
               style={{ color: mode === 'classic' ? 'white' : 'rgba(255,255,255,0.38)', background: 'transparent', border: 'none', cursor: 'pointer' }}
             >
+              <Coins
+                className="w-3.5 h-3.5 transition-colors duration-200"
+                style={{ color: mode === 'classic' ? '#c084fc' : 'rgba(255,255,255,0.38)' }}
+              />
               Classic
             </button>
             <button
