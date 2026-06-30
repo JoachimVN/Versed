@@ -153,6 +153,7 @@ function usePlayGame(pinParam?: string): PlayState {
 
   function stopCountdown() {
     if (timerRef.current) { clearInterval(timerRef.current); timerRef.current = null; }
+    setTimeLeft(0);
   }
 
   useEffect(() => {
