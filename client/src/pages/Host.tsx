@@ -7,7 +7,7 @@ const QRCode = QRCodeLib as unknown as React.FC<{ value: string; size?: number }
 import { socket } from '../socket';
 import { useSpotify } from '../hooks/useSpotify';
 import { RankBadge } from '../components/RankBadge';
-import { RevealStatusHeader, RevealSongCard, NoOneGotItCardContent } from '../components/RevealShared';
+import { NoOneGotItCardContent, GotItCardContent } from '../components/RevealShared';
 import { APP_NAME, BACKEND_URL, RACE_TIME } from '../config';
 import type { Hint, LeaderboardEntry, PlayerInfo, RoundResultEvent } from '../types';
 
@@ -1033,62 +1033,91 @@ export function RevealView({ game, result }: Readonly<{ game: HostState; result:
     );
   }
 
+  const cardH = result.coverUrl ? 440 : 240;
   return (
-    <div className="min-h-screen flex flex-col items-center p-6 gap-6 text-center">
-      <p className="text-white/50 text-sm">{roundIndex + 1} / {totalRounds}</p>
-      <RevealStatusHeader result={result} />
-      <RevealSongCard result={result} />
-      <div className="bg-white/5 rounded-2xl p-4 w-full space-y-1.5">
-        {players
-          .slice()
-          .sort((a, b) => (b.score ?? 0) - (a.score ?? 0))
-          .map(p => {
-            const entry = result.playerGuesses?.find(g => g.name === p.name);
-            const delta = roundDeltas[p.name] ?? 0;
-            const streak = p.streak ?? 0;
-            const correct = isRace
-              ? !!result.correctGuessers?.includes(p.name)
-              : (result.correct && p.name === result.guesserName);
-            return (
-              <button key={p.name} onClick={() => removePlayer(p.name)} aria-label={`Remove ${p.name}`} className="relative group w-full flex justify-between items-center gap-4 text-left">
-                <div className="text-left">
-                  <div className="flex items-center gap-1.5">
-                    {streak >= 2 && (
-                      <span className="flex items-center gap-0.5 text-orange-400 text-xs font-bold">
-                        <Flame className="w-3 h-3" />{streak}
-                      </span>
-                    )}
-                    <span className="text-white/50 text-sm">{p.name}</span>
-                  </div>
-                  {entry && (() => {
-                    const skipped = entry.guess === null;
-                    let cls = 'text-white/40 text-xs';
-                    if (skipped) cls = 'text-white/25 italic text-xs';
-                    else if (correct) cls = 'text-green-400 text-xs';
-                    return (
-                      <p className={cls}>
-                        {skipped ? 'skipped' : `"${entry.guess}"`}
-                        {correct && entry.timeMs != null && (
-                          <span className="ml-1.5 text-white/30">{(entry.timeMs / 1000).toFixed(1)}s</span>
-                        )}
-                      </p>
-                    );
-                  })()}
-                </div>
-                <div className="text-right shrink-0">
-                  {delta > 0 && <p className="text-green-400 text-xs font-semibold">+{delta.toLocaleString()}</p>}
-                  <span className="text-white/60 text-sm">{(p.score ?? 0).toLocaleString()}</span>
-                </div>
-                <span className="absolute -inset-x-3 -inset-y-1 rounded-lg backdrop-blur-sm opacity-0 group-hover:opacity-100 transition-opacity" />
-              </button>
-            );
-          })}
+    <div className="page-enter min-h-screen flex flex-col items-center p-6 gap-5" style={{ zIndex: 1 }}>
+      <p className="text-white/40 text-sm self-start">{roundIndex + 1} / {totalRounds}</p>
+
+      <div className="liquid-btn relative" style={{ width: '310px', height: `${cardH}px` }}>
+        <LiquidGlass
+          style={{ position: 'absolute', top: '50%', left: '50%' }}
+          displacementScale={55}
+          blurAmount={0.06}
+          saturation={130}
+          aberrationIntensity={1.5}
+          elasticity={0.08}
+          cornerRadius={20}
+          padding="24px 24px"
+        >
+          <GotItCardContent result={result} />
+        </LiquidGlass>
       </div>
+
+      <div style={{ background: 'rgba(255,255,255,0.05)', border: '1px solid rgba(255,255,255,0.08)', borderRadius: '16px', padding: '8px 12px', width: '25%' }} className="space-y-1">
+        {players.slice().sort((a, b) => (b.score ?? 0) - (a.score ?? 0)).map(p => {
+          const entry = result.playerGuesses?.find(g => g.name === p.name);
+          const delta = roundDeltas[p.name] ?? 0;
+          const streak = p.streak ?? 0;
+          const correct = isRace ? !!result.correctGuessers?.includes(p.name) : (p.name === result.guesserName);
+          return (
+            <button key={p.name} onClick={() => removePlayer(p.name)} aria-label={`Remove ${p.name}`} className="relative group w-full flex justify-between items-center gap-4 text-left">
+              <div className="text-left">
+                <div className="flex items-center gap-1.5">
+                  {streak >= 2 && (
+                    <span className="flex items-center gap-0.5 text-orange-400 text-xs font-bold">
+                      <Flame className="w-3 h-3" />{streak}
+                    </span>
+                  )}
+                  <span className={`text-sm ${correct ? 'text-green-400' : 'text-white/50'}`}>{p.name}</span>
+                </div>
+                {entry && (() => {
+                  const skipped = entry.guess === null;
+                  let cls = 'text-white/40 text-xs';
+                  if (skipped) cls = 'text-white/25 italic text-xs';
+                  else if (correct) cls = 'text-green-400 text-xs';
+                  return (
+                    <p className={cls}>
+                      {skipped ? 'skipped' : `"${entry.guess}"`}
+                      {correct && entry.timeMs != null && (
+                        <span className="ml-1.5 text-white/30">{(entry.timeMs / 1000).toFixed(1)}s</span>
+                      )}
+                    </p>
+                  );
+                })()}
+              </div>
+              <div className="text-right shrink-0">
+                {delta > 0 && <p className="text-green-400 text-xs font-semibold">+{delta.toLocaleString()}</p>}
+                <span className="text-white/60 text-sm">{(p.score ?? 0).toLocaleString()}</span>
+              </div>
+              <span className="absolute -inset-x-3 -inset-y-1 rounded-lg backdrop-blur-sm opacity-0 group-hover:opacity-100 transition-opacity" />
+            </button>
+          );
+        })}
+      </div>
+
       <button
+        type="button"
+        className="liquid-btn relative cursor-pointer border-0 bg-transparent p-0"
+        style={{ width: '310px', height: '64px', borderRadius: '100px', background: 'rgba(0,0,0,0.001)' }}
         onClick={() => socket.emit('next_round')}
-        className="w-full py-4 rounded-2xl bg-purple-600 text-white font-bold text-xl hover:bg-purple-500 transition-colors"
       >
-        {roundIndex + 1 >= totalRounds ? 'Final Results' : 'Next Round'}
+        <LiquidGlass
+          style={{ position: 'absolute', top: '50%', left: '50%' }}
+          displacementScale={64}
+          blurAmount={0.05}
+          saturation={130}
+          aberrationIntensity={2}
+          elasticity={0.12}
+          cornerRadius={100}
+          padding="18px 36px"
+        >
+          <div style={{ position: 'relative' }}>
+            <div style={{ position: 'absolute', inset: '-18px -36px', borderRadius: '100px', pointerEvents: 'none', background: 'rgba(110,32,155,0.12)' }} />
+            <span className="text-white font-bold text-xl" style={{ whiteSpace: 'nowrap', position: 'relative', display: 'inline-block', minWidth: '210px', textAlign: 'center' }}>
+              {roundIndex + 1 >= totalRounds ? 'Final Results' : 'Next Round'}
+            </span>
+          </div>
+        </LiquidGlass>
       </button>
     </div>
   );

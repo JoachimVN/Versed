@@ -4,7 +4,7 @@ import { Music, ChevronLeft, ChevronRight, Flame, Pencil } from 'lucide-react';
 import LiquidGlass from 'liquid-glass-react';
 import { socket } from '../socket';
 import { RankBadge } from '../components/RankBadge';
-import { RevealStatusHeader, RevealSongCard, NoOneGotItCardContent } from '../components/RevealShared';
+import { NoOneGotItCardContent, GotItCardContent } from '../components/RevealShared';
 import { APP_NAME, BID_OPTIONS } from '../config';
 import type { Hint, LeaderboardEntry, RoundResultEvent } from '../types';
 
@@ -966,37 +966,44 @@ export function RevealView({ game, result }: Readonly<{ game: PlayState; result:
     );
   }
 
+  const cardH = result.coverUrl ? 440 : 240;
   return (
-    <div className="min-h-screen flex flex-col items-center justify-center p-6 gap-6 text-center">
-      <RevealStatusHeader result={result} myName={myName} />
-      <RevealSongCard result={result} />
+    <div className="page-enter min-h-screen flex flex-col items-center justify-center p-6 gap-5" style={{ zIndex: 1 }}>
+      <div className="liquid-btn relative" style={{ width: '310px', height: `${cardH}px` }}>
+        <LiquidGlass
+          style={{ position: 'absolute', top: '50%', left: '50%' }}
+          displacementScale={55}
+          blurAmount={0.06}
+          saturation={130}
+          aberrationIntensity={1.5}
+          elasticity={0.08}
+          cornerRadius={20}
+          padding="24px 24px"
+        >
+          <GotItCardContent result={result} myName={myName} />
+        </LiquidGlass>
+      </div>
+
       {result.playerGuesses && result.playerGuesses.length > 0 && (
-        <div className="bg-white/5 rounded-2xl p-4 w-full space-y-1.5">
-          {result.playerGuesses.map(g => (
-            <div key={g.name} className="flex justify-between items-center gap-4">
-              <span className="text-white/50 text-sm shrink-0">{g.name}</span>
-              {(() => {
-                const skipped = g.guess === null;
-                const correct = isRace
-                  ? !!result.correctGuessers?.includes(g.name)
-                  : (result.correct && g.name === result.guesserName);
-                let cls = 'text-white/40';
-                if (skipped) cls = 'text-white/25 italic';
-                else if (correct) cls = 'text-green-400';
-                return (
-                  <span className={`text-sm text-right truncate ${cls}`}>
-                    {skipped ? 'skipped' : `"${g.guess}"`}
-                    {correct && g.timeMs != null && (
-                      <span className="ml-1.5 text-white/30 text-xs">{(g.timeMs / 1000).toFixed(1)}s</span>
-                    )}
-                  </span>
-                );
-              })()}
-            </div>
-          ))}
+        <div style={{ background: 'rgba(255,255,255,0.05)', border: '1px solid rgba(255,255,255,0.08)', borderRadius: '16px', padding: '8px 12px', width: '25%' }} className="space-y-1">
+          {result.playerGuesses.map(g => {
+            const correct = isRace ? !!result.correctGuessers?.includes(g.name) : (g.name === result.guesserName);
+            return (
+              <div key={g.name} className="flex justify-between items-center gap-4">
+                <span className={`text-sm shrink-0 ${correct ? 'text-green-400' : 'text-white/50'}`}>{g.name}</span>
+                <span className={`text-sm text-right truncate ${g.guess === null ? 'text-white/25 italic' : correct ? 'text-green-400' : 'text-white/40'}`}>
+                  {g.guess === null ? 'skipped' : `"${g.guess}"`}
+                  {correct && g.timeMs != null && (
+                    <span className="ml-1 text-white/30 text-xs">{(g.timeMs / 1000).toFixed(1)}s</span>
+                  )}
+                </span>
+              </div>
+            );
+          })}
         </div>
       )}
-      <div className="bg-white/5 rounded-2xl px-8 py-4">
+
+      <div style={{ background: 'rgba(255,255,255,0.05)', border: '1px solid rgba(255,255,255,0.08)', borderRadius: '16px', padding: '16px 32px', textAlign: 'center' }}>
         <p className="text-3xl font-black text-white">{myScore.toLocaleString()}</p>
         <p className="text-white/40 text-sm">your score</p>
         {iGotItInRace && myRaceTimeMs != null && (

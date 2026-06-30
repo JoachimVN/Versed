@@ -29,6 +29,15 @@ export function NoOneGotItCardContent({ result }: Readonly<{ result: RoundResult
       }}>
         {artistOnly ? 'The artist was' : 'The song was'}
       </span>
+      <SongInfo result={result} />
+    </div>
+  );
+}
+
+function SongInfo({ result }: Readonly<{ result: RoundResultEvent }>) {
+  const artistOnly = result.artistOnly;
+  return (
+    <>
       {result.coverUrl && (
         <img
           src={result.coverUrl} alt="Album art"
@@ -60,94 +69,71 @@ export function NoOneGotItCardContent({ result }: Readonly<{ result: RoundResult
           {result.year}
         </span>
       )}
-    </div>
+    </>
   );
 }
 
-export function RevealStatusHeader({
-  result,
-  myName,
-}: Readonly<{ result: RoundResultEvent; myName?: string }>) {
+export function GotItCardContent({ result, myName }: Readonly<{ result: RoundResultEvent; myName?: string }>) {
+  const artistOnly = result.artistOnly;
   const isRace = result.mode === 'race';
   const iWon = isRace
     ? (myName != null && !!result.correctGuessers?.includes(myName))
     : (result.correct && myName != null && result.guesserName === myName);
 
-  let circle: React.ReactNode;
-  let bgClass: string;
-  let label: React.ReactNode;
+  let iconNode: React.ReactNode;
+  let iconBg: string;
+  let iconBorder: string;
+  let labelText: string;
+  let labelGradient: string;
 
-  if (!result.correct) {
-    circle = <X className="w-12 h-12 text-white/30" />;
-    bgClass = 'bg-white/5';
-    label = <p className="text-white/60 text-xl">No one got it</p>;
-  } else if (iWon) {
-    circle = <Trophy className="w-12 h-12 text-amber-400" />;
-    bgClass = 'bg-amber-500/20';
-    label = <p className="text-2xl font-black text-green-400">You got it!</p>;
+  if (iWon) {
+    iconNode = <Trophy style={{ width: '24px', height: '24px', color: '#fbbf24' }} />;
+    iconBg = 'rgba(245,158,11,0.16)';
+    iconBorder = 'rgba(245,158,11,0.32)';
+    labelText = 'You got it!';
+    labelGradient = 'linear-gradient(to bottom left, rgba(30,200,90,0.5) 0%, transparent 52%), linear-gradient(to top right, rgba(250,185,40,0.4) 0%, transparent 52%), #fff';
   } else if (isRace) {
     const count = result.correctGuessers?.length ?? 0;
-    circle = <Check className="w-12 h-12 text-white/40" />;
-    bgClass = 'bg-white/10';
-    const raceLabel = count === 1
-      ? `${result.correctGuessers![0]} got it`
-      : `${count} players got it`;
-    label = <p className="text-2xl font-black text-white">{raceLabel}</p>;
+    iconNode = <Check style={{ width: '24px', height: '24px', color: 'rgba(255,255,255,0.5)' }} />;
+    iconBg = 'rgba(255,255,255,0.07)';
+    iconBorder = 'rgba(255,255,255,0.12)';
+    labelText = count === 1 ? `${result.correctGuessers![0]} got it` : `${count} players got it`;
+    labelGradient = 'linear-gradient(to bottom left, rgba(110,32,155,0.4) 0%, transparent 52%), linear-gradient(to top right, rgba(0,200,195,0.3) 0%, transparent 52%), #fff';
   } else {
     const initial = result.guesserName?.[0]?.toUpperCase() ?? '?';
-    circle = <span className="text-2xl font-black text-white/70">{initial}</span>;
-    bgClass = 'bg-white/10';
-    label = <p className="text-2xl font-black text-white">{result.guesserName} got it</p>;
+    iconNode = <span style={{ fontSize: '1.25rem', fontWeight: 900, color: 'rgba(255,255,255,0.7)' }}>{initial}</span>;
+    iconBg = 'rgba(255,255,255,0.07)';
+    iconBorder = 'rgba(255,255,255,0.12)';
+    labelText = `${result.guesserName} got it`;
+    labelGradient = 'linear-gradient(to bottom left, rgba(110,32,155,0.4) 0%, transparent 52%), linear-gradient(to top right, rgba(0,200,195,0.3) 0%, transparent 52%), #fff';
   }
 
   return (
-    <div className="flex flex-col items-center gap-3">
-      <div className={`w-24 h-24 rounded-full flex items-center justify-center ${bgClass}`}>
-        {circle}
+    <div style={{ width: '262px', display: 'flex', flexDirection: 'column', alignItems: 'center', textAlign: 'center' }}>
+      <div style={{
+        width: '52px', height: '52px', borderRadius: '50%',
+        background: iconBg, border: `1px solid ${iconBorder}`,
+        display: 'flex', alignItems: 'center', justifyContent: 'center',
+        marginBottom: '10px',
+      }}>
+        {iconNode}
       </div>
-      {label}
-    </div>
-  );
-}
-
-export function RevealSongCard({ result }: Readonly<{ result: RoundResultEvent }>) {
-  const artistOnly = result.artistOnly;
-  return (
-    <div className="flex flex-col items-center text-center gap-3 w-full">
-      <p className="text-white/30 text-xs uppercase tracking-widest">
+      <span style={{
+        fontSize: '1.4rem', fontWeight: 900, letterSpacing: '0.01em',
+        background: labelGradient,
+        WebkitBackgroundClip: 'text', WebkitTextFillColor: 'transparent', backgroundClip: 'text',
+        marginBottom: '14px', display: 'inline-block', minWidth: '200px',
+      }}>
+        {labelText}
+      </span>
+      <div style={{ width: '100%', height: '1px', background: 'rgba(255,255,255,0.08)', marginBottom: '14px' }} />
+      <span style={{
+        color: 'rgba(255,255,255,0.28)', fontSize: '0.6rem', letterSpacing: '0.18em', textTransform: 'uppercase',
+        marginBottom: '10px', display: 'inline-block',
+      }}>
         {artistOnly ? 'The artist was' : 'The song was'}
-      </p>
-      {result.coverUrl && (
-        <img
-          src={result.coverUrl}
-          alt="Album art"
-          className="w-40 h-40 rounded-2xl object-cover shadow-[0_8px_40px_rgba(0,0,0,0.7)]"
-        />
-      )}
-      <div>
-        {artistOnly ? (
-          <>
-            <p className="text-white font-black text-2xl leading-tight">
-              {result.artist}
-              {result.featuredArtists && (
-                <span className="text-white/40 font-normal text-lg"> feat. {result.featuredArtists}</span>
-              )}
-            </p>
-            <p className="text-white/50 mt-1">{result.songTitle}</p>
-          </>
-        ) : (
-          <>
-            <p className="text-white font-black text-2xl leading-tight">{result.songTitle}</p>
-            <p className="text-white/50 mt-1">
-              {result.artist}
-              {result.featuredArtists && (
-                <span className="text-white/25"> feat. {result.featuredArtists}</span>
-              )}
-            </p>
-          </>
-        )}
-        {result.year && <p className="text-white/25 text-sm mt-0.5">{result.year}</p>}
-      </div>
+      </span>
+      <SongInfo result={result} />
     </div>
   );
 }
