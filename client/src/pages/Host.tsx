@@ -1004,45 +1004,49 @@ export function PlayingView({ game }: Readonly<{ game: HostState }>) {
   const { roundIndex, totalRounds, countdown, guesserNames, lowestBid, playerBids, playProgress, timeLeft, mode, answeredCount, players, skipTurn } = game;
   const isRace = mode === 'race';
   return (
-    <div className="min-h-screen flex flex-col items-center justify-center p-6 gap-6 text-center">
-      <p className="text-white/50">Round {roundIndex + 1}/{totalRounds}</p>
-      {countdown === null ? (
-        <>
-          <Music className="w-16 h-16 text-white animate-pulse" />
-          {isRace ? (
-            <p className="text-white/50">{answeredCount} / {players.length} answered</p>
-          ) : (
-            <p className="text-white/50">{guesserNames.join(' & ')} will guess</p>
-          )}
-          <div className="w-full max-w-sm bg-white/10 rounded-full h-2 overflow-hidden">
-            <div className="bg-purple-500 h-2 rounded-full" style={{ width: `${playProgress * 100}%` }} />
-          </div>
-          <p className="text-white font-black text-2xl">{timeLeft}s</p>
-          {!isRace && (
-            <div className="w-full max-w-sm">
-              <BidTimeline bids={playerBids} lowestBid={lowestBid} />
-            </div>
-          )}
-        </>
-      ) : (
-        <>
-          <p className="text-white/40 text-sm uppercase tracking-widest">Get ready</p>
-          <div className="text-8xl font-black text-white animate-pulse">{countdown}</div>
-          {isRace ? (
-            <p className="text-white/50">Everyone will guess</p>
-          ) : (
-            <>
+    <div className="relative min-h-screen flex flex-col items-center justify-center p-6 gap-6 text-center overflow-hidden">
+      <img src={`${import.meta.env.BASE_URL}background4.svg`} aria-hidden="true" style={{ position: 'fixed', inset: 0, width: '100%', height: '100%', objectFit: 'cover', zIndex: 0 }} />
+      <div style={{ position: 'fixed', inset: 0, zIndex: 1, background: 'rgba(5,5,14,0.82)', backdropFilter: 'blur(28px)' }} />
+      <div className="flex flex-col items-center gap-6 text-center w-full" style={{ position: 'relative', zIndex: 2 }}>
+        <p className="text-white/50">Round {roundIndex + 1}/{totalRounds}</p>
+        {countdown === null ? (
+          <>
+            <Music className="w-16 h-16 text-white animate-pulse" />
+            {isRace ? (
+              <p className="text-white/50">{answeredCount} / {players.length} answered</p>
+            ) : (
               <p className="text-white/50">{guesserNames.join(' & ')} will guess</p>
+            )}
+            <div className="w-full max-w-sm bg-white/10 rounded-full h-2 overflow-hidden">
+              <div className="bg-purple-500 h-2 rounded-full" style={{ width: `${playProgress * 100}%` }} />
+            </div>
+            <p className="text-white font-black text-2xl">{timeLeft}s</p>
+            {!isRace && (
               <div className="w-full max-w-sm">
                 <BidTimeline bids={playerBids} lowestBid={lowestBid} />
               </div>
-            </>
-          )}
-        </>
-      )}
-      <button onClick={skipTurn} className="text-white/20 text-xs hover:text-white/50 transition-colors mt-2">
-        Skip round
-      </button>
+            )}
+          </>
+        ) : (
+          <>
+            <p className="text-white/40 text-sm uppercase tracking-widest">Get ready</p>
+            <div className="text-8xl font-black text-white animate-pulse">{countdown}</div>
+            {isRace ? (
+              <p className="text-white/50">Everyone will guess</p>
+            ) : (
+              <>
+                <p className="text-white/50">{guesserNames.join(' & ')} will guess</p>
+                <div className="w-full max-w-sm">
+                  <BidTimeline bids={playerBids} lowestBid={lowestBid} />
+                </div>
+              </>
+            )}
+          </>
+        )}
+        <button onClick={skipTurn} className="text-white/20 text-xs hover:text-white/50 transition-colors mt-2">
+          Skip round
+        </button>
+      </div>
     </div>
   );
 }
@@ -1050,20 +1054,24 @@ export function PlayingView({ game }: Readonly<{ game: HostState }>) {
 function GuessingView({ game }: Readonly<{ game: HostState }>) {
   const { roundIndex, totalRounds, guesserNames, lowestBid, playerBids, timeLeft, skipTurn } = game;
   return (
-    <div className="min-h-screen flex flex-col items-center justify-center p-6 gap-6 text-center">
-      <p className="text-white/50">Round {roundIndex + 1}/{totalRounds}</p>
-      <div>
-        <p className="text-white/50 text-sm mb-1">Guessing</p>
-        <p className="text-white font-black text-2xl">{guesserNames.join(' & ')}</p>
+    <div className="relative min-h-screen flex flex-col items-center justify-center p-6 gap-6 text-center overflow-hidden">
+      <img src={`${import.meta.env.BASE_URL}background4.svg`} aria-hidden="true" style={{ position: 'fixed', inset: 0, width: '100%', height: '100%', objectFit: 'cover', zIndex: 0 }} />
+      <div style={{ position: 'fixed', inset: 0, zIndex: 1, background: 'rgba(5,5,14,0.82)', backdropFilter: 'blur(28px)' }} />
+      <div className="flex flex-col items-center gap-6 text-center w-full" style={{ position: 'relative', zIndex: 2 }}>
+        <p className="text-white/50">Round {roundIndex + 1}/{totalRounds}</p>
+        <div>
+          <p className="text-white/50 text-sm mb-1">Guessing</p>
+          <p className="text-white font-black text-2xl">{guesserNames.join(' & ')}</p>
+        </div>
+        <p className="text-white font-black text-5xl">{timeLeft}s</p>
+        <div className="w-full max-w-sm">
+          <BidTimeline bids={playerBids} lowestBid={lowestBid} />
+        </div>
+        <p className="text-white/30 text-sm">Other players are waiting...</p>
+        <button onClick={skipTurn} className="text-white/20 text-xs hover:text-white/50 transition-colors mt-2">
+          Skip turn
+        </button>
       </div>
-      <p className="text-white font-black text-5xl">{timeLeft}s</p>
-      <div className="w-full max-w-sm">
-        <BidTimeline bids={playerBids} lowestBid={lowestBid} />
-      </div>
-      <p className="text-white/30 text-sm">Other players are waiting...</p>
-      <button onClick={skipTurn} className="text-white/20 text-xs hover:text-white/50 transition-colors mt-2">
-        Skip turn
-      </button>
     </div>
   );
 }
