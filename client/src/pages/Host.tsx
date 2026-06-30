@@ -893,37 +893,42 @@ function BettingView({ game }: Readonly<{ game: HostState }>) {
       {/* Main content */}
       <div className="flex-1 relative flex flex-col items-center justify-center gap-10 px-8 py-4" style={{ zIndex: 2 }}>
 
-        {/* Album art + timer side by side */}
-        <div className="flex items-center gap-8">
-          {imageHint?.imageUrl && (
-            <img
-              src={imageHint.imageUrl} alt=""
-              style={{ width: 120, height: 120, borderRadius: 20, objectFit: 'cover', filter: 'blur(6px) brightness(0.75)' }}
-            />
-          )}
-          <CircularTimer timeLeft={timeLeft} total={bettingTime} />
-        </div>
+        {/* Blurred album art — centered, above timer */}
+        {imageHint?.imageUrl && (
+          <img
+            src={imageHint.imageUrl} alt=""
+            style={{ width: 120, height: 120, borderRadius: 22, objectFit: 'cover', filter: 'blur(7px) brightness(0.65)' }}
+          />
+        )}
+
+        {/* Circular timer */}
+        <CircularTimer timeLeft={timeLeft} total={bettingTime} />
 
         {/* Text hints */}
         {textHints.length > 0 && (
           <div
-            className="flex items-center justify-center gap-12 w-full max-w-3xl rounded-3xl"
+            className="flex items-center justify-center w-full max-w-3xl rounded-3xl"
             style={{
-              padding: '22px 48px',
+              padding: '24px 52px',
               background: 'rgba(255,255,255,0.04)',
               border: '1px solid rgba(255,255,255,0.08)',
               backdropFilter: 'blur(16px)',
             }}
           >
-            {textHints.map(h => (
-              <div key={h.label} className="flex flex-col items-center gap-1.5">
-                <span style={{ color: 'rgba(255,255,255,0.28)', fontSize: '0.6rem', textTransform: 'uppercase', letterSpacing: '0.22em' }}>
-                  {h.label}
-                </span>
-                <span style={{ color: 'white', fontWeight: 900, fontSize: '3rem', lineHeight: 1, letterSpacing: '-0.02em' }}>
-                  {h.value}
-                </span>
-              </div>
+            {textHints.map((h, i) => (
+              <React.Fragment key={h.label}>
+                {i > 0 && (
+                  <div style={{ width: 1, alignSelf: 'stretch', background: 'rgba(255,255,255,0.08)', margin: '0 40px' }} />
+                )}
+                <div className="flex flex-col items-center gap-2">
+                  <span style={{ color: 'rgba(255,255,255,0.32)', fontSize: '0.65rem', textTransform: 'uppercase', letterSpacing: '0.2em' }}>
+                    {h.label}
+                  </span>
+                  <span style={{ color: 'white', fontWeight: 900, fontSize: '2.75rem', lineHeight: 1, letterSpacing: '-0.02em' }}>
+                    {h.value}
+                  </span>
+                </div>
+              </React.Fragment>
             ))}
           </div>
         )}

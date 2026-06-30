@@ -963,7 +963,7 @@ function WatchingView({ game }: Readonly<{ game: PlayState }>) {
             <div style={{ width: '254px', display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '18px' }}>
 
               {/* Animated waveform — static until song actually starts */}
-              <div style={{ display: 'flex', gap: '5px', alignItems: 'center', height: '36px' }}>
+              <div style={{ display: 'flex', gap: '5px', alignItems: 'center', height: '36px', transition: 'opacity 0.3s ease', opacity: (isRace || songPlaying) ? 1 : 0.35 }}>
                 {barDelays.map((delay, i) => (
                   <div
                     key={i}
@@ -973,9 +973,6 @@ function WatchingView({ game }: Readonly<{ game: PlayState }>) {
                       animation: (isRace || songPlaying) ? 'audioBar 1.4s ease-in-out infinite' : 'none',
                       animationDelay: `${delay}s`,
                       transformOrigin: 'center',
-                      transform: (isRace || songPlaying) ? undefined : 'scaleY(0.25)',
-                      transition: 'transform 0.3s ease',
-                      opacity: (isRace || songPlaying) ? 1 : 0.4,
                     }}
                   />
                 ))}
@@ -1030,16 +1027,13 @@ function GuessingView({ game }: Readonly<{ game: PlayState }>) {
       {/* Header — waveform while listening, timer + score when active */}
       {isListening ? (
         <div className="flex flex-col items-center gap-2.5 pt-10 pb-4">
-          <div style={{ display: 'flex', gap: '5px', alignItems: 'center', height: '28px' }}>
+          <div style={{ display: 'flex', gap: '5px', alignItems: 'center', height: '28px', transition: 'opacity 0.3s ease', opacity: songPlaying ? 1 : 0.35 }}>
             {barDelays.map((delay, i) => (
               <div key={i} style={{
                 width: '3px', height: '100%', borderRadius: '2px',
                 background: 'rgba(150,17,193,0.6)',
                 animation: songPlaying ? 'audioBar 1.4s ease-in-out infinite' : 'none',
                 animationDelay: `${delay}s`, transformOrigin: 'center',
-                transform: songPlaying ? undefined : 'scaleY(0.25)',
-                opacity: songPlaying ? 1 : 0.35,
-                transition: 'transform 0.3s ease, opacity 0.3s ease',
               }} />
             ))}
           </div>
