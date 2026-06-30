@@ -953,6 +953,55 @@ function GuessingView({ game }: Readonly<{ game: HostState }>) {
   );
 }
 
+function RevealPlayerRow({
+  player, entry, delta, delay, correct, removePlayer,
+}: Readonly<{
+  player: PlayerInfo;
+  entry?: { guess: string | null; timeMs?: number | null };
+  delta: number;
+  delay: number;
+  correct: boolean;
+  removePlayer: (name: string) => void;
+}>) {
+  const { displayScore, displayDelta, deltaFading } = useAnimatedScore(player.score ?? 0, delta, delay);
+  const streak = player.streak ?? 0;
+  return (
+    <button onClick={() => removePlayer(player.name)} aria-label={`Remove ${player.name}`} className="relative group w-full flex justify-between items-center gap-2 text-left">
+      <div className="text-left min-w-0 flex-1">
+        <div className="flex items-center gap-1">
+          {streak >= 2 && (
+            <span className="flex items-center gap-0.5 text-orange-400 text-xs font-bold shrink-0">
+              <Flame className="w-3 h-3" />{streak}
+            </span>
+          )}
+          <span className={`text-xs truncate ${correct ? 'text-white font-semibold' : 'text-white/30'}`}>{player.name}</span>
+        </div>
+        {entry && (() => {
+          const skipped = entry.guess === null;
+          const cls = (!skipped && correct) ? 'text-green-400 text-xs truncate' : 'text-white/20 italic text-xs truncate';
+          return (
+            <p className={cls}>
+              {skipped ? 'skipped' : `"${entry.guess}"`}
+              {correct && entry.timeMs != null && (
+                <span className="ml-1 text-white/25 text-xs">{(entry.timeMs / 1000).toFixed(1)}s</span>
+              )}
+            </p>
+          );
+        })()}
+      </div>
+      <div className="text-right shrink-0 min-w-[48px]">
+        {delta > 0 && (
+          <p className={`text-sky-400 text-xs tabular-nums transition-opacity duration-500 ${deltaFading ? 'opacity-0' : 'opacity-100'}`}>
+            +{displayDelta > 0 ? displayDelta.toLocaleString() : ''}
+          </p>
+        )}
+        <p className="text-white/60 text-xs tabular-nums">{displayScore.toLocaleString()}</p>
+      </div>
+      <span className="absolute -inset-x-3 -inset-y-1 rounded-lg backdrop-blur-sm opacity-0 group-hover:opacity-100 transition-opacity" />
+    </button>
+  );
+}
+
 export function RevealView({ game, result }: Readonly<{ game: HostState; result: RoundResultEvent }>) {
   const { roundIndex, totalRounds, players, roundDeltas, removePlayer } = game;
   const isRace = result.mode === 'race';
@@ -979,31 +1028,17 @@ export function RevealView({ game, result }: Readonly<{ game: HostState; result:
         </div>
 
         <div style={{ background: 'rgba(255,255,255,0.05)', border: '1px solid rgba(255,255,255,0.08)', borderRadius: '16px', padding: '8px 12px', width: '25%' }} className="space-y-1">
-          {players.slice().sort((a, b) => (b.score ?? 0) - (a.score ?? 0)).map(p => {
-            const entry = result.playerGuesses?.find(g => g.name === p.name);
-            const streak = p.streak ?? 0;
-            return (
-              <button key={p.name} onClick={() => removePlayer(p.name)} aria-label={`Remove ${p.name}`} className="relative group w-full flex justify-between items-center gap-2 text-left">
-                <div className="text-left min-w-0 flex-1">
-                  <div className="flex items-center gap-1">
-                    {streak >= 2 && (
-                      <span className="flex items-center gap-0.5 text-orange-400 text-xs font-bold shrink-0">
-                        <Flame className="w-3 h-3" />{streak}
-                      </span>
-                    )}
-                    <span className="text-white/40 text-xs truncate">{p.name}</span>
-                  </div>
-                  {entry && (
-                    <p className={`text-xs italic truncate ${entry.guess === null ? 'text-white/15' : 'text-white/20'}`}>
-                      {entry.guess === null ? 'skipped' : `"${entry.guess}"`}
-                    </p>
-                  )}
-                </div>
-                <span className="text-white/60 text-xs shrink-0 tabular-nums">{(p.score ?? 0).toLocaleString()}</span>
-                <span className="absolute -inset-x-3 -inset-y-1 rounded-lg backdrop-blur-sm opacity-0 group-hover:opacity-100 transition-opacity" />
-              </button>
-            );
-          })}
+          {players.slice().sort((a, b) => (b.score ?? 0) - (a.score ?? 0)).map((p, i) => (
+            <RevealPlayerRow
+              key={p.name}
+              player={p}
+              entry={result.playerGuesses?.find(g => g.name === p.name)}
+              delta={roundDeltas[p.name] ?? 0}
+              delay={400 + i * 80}
+              correct={false}
+              removePlayer={removePlayer}
+            />
+          ))}
         </div>
 
         <button
@@ -1055,41 +1090,18 @@ export function RevealView({ game, result }: Readonly<{ game: HostState; result:
       </div>
 
       <div style={{ background: 'rgba(255,255,255,0.05)', border: '1px solid rgba(255,255,255,0.08)', borderRadius: '16px', padding: '8px 12px', width: '25%' }} className="space-y-1">
-        {players.slice().sort((a, b) => (b.score ?? 0) - (a.score ?? 0)).map(p => {
-          const entry = result.playerGuesses?.find(g => g.name === p.name);
-          const delta = roundDeltas[p.name] ?? 0;
-          const streak = p.streak ?? 0;
+        {players.slice().sort((a, b) => (b.score ?? 0) - (a.score ?? 0)).map((p, i) => {
           const correct = isRace ? !!result.correctGuessers?.includes(p.name) : (p.name === result.guesserName);
           return (
-            <button key={p.name} onClick={() => removePlayer(p.name)} aria-label={`Remove ${p.name}`} className="relative group w-full flex justify-between items-center gap-2 text-left">
-              <div className="text-left min-w-0 flex-1">
-                <div className="flex items-center gap-1">
-                  {streak >= 2 && (
-                    <span className="flex items-center gap-0.5 text-orange-400 text-xs font-bold shrink-0">
-                      <Flame className="w-3 h-3" />{streak}
-                    </span>
-                  )}
-                  <span className={`text-xs truncate ${correct ? 'text-white font-semibold' : 'text-white/30'}`}>{p.name}</span>
-                </div>
-                {entry && (() => {
-                  const skipped = entry.guess === null;
-                  const cls = (!skipped && correct) ? 'text-green-400 text-xs truncate' : 'text-white/20 italic text-xs truncate';
-                  return (
-                    <p className={cls}>
-                      {skipped ? 'skipped' : `"${entry.guess}"`}
-                      {correct && entry.timeMs != null && (
-                        <span className="ml-1 text-white/25 text-xs">{(entry.timeMs / 1000).toFixed(1)}s</span>
-                      )}
-                    </p>
-                  );
-                })()}
-              </div>
-              <div className="text-right shrink-0">
-                {delta > 0 && <p className="text-sky-400 text-xs tabular-nums">+{delta.toLocaleString()}</p>}
-                <p className="text-white/60 text-xs tabular-nums">{(p.score ?? 0).toLocaleString()}</p>
-              </div>
-              <span className="absolute -inset-x-3 -inset-y-1 rounded-lg backdrop-blur-sm opacity-0 group-hover:opacity-100 transition-opacity" />
-            </button>
+            <RevealPlayerRow
+              key={p.name}
+              player={p}
+              entry={result.playerGuesses?.find(g => g.name === p.name)}
+              delta={roundDeltas[p.name] ?? 0}
+              delay={400 + i * 80}
+              correct={correct}
+              removePlayer={removePlayer}
+            />
           );
         })}
       </div>
