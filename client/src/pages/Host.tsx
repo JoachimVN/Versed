@@ -1067,6 +1067,25 @@ function RevealPlayerRow({
     guessText = skipped ? 'skipped' : `"${entry.guess}"`;
   }
   const guessCls = (!skipped && correct) ? 'text-green-400 text-xs truncate min-w-0' : 'text-white/20 italic text-xs truncate min-w-0';
+  if (!entry) {
+    return (
+      <button onClick={() => removePlayer(player.name)} aria-label={`Remove ${player.name}`} className="relative group w-full text-left py-1">
+        <div className="flex justify-between items-center gap-2">
+          <div className="flex items-center gap-1 min-w-0">
+            {streak >= 2 && (
+              <span className="flex items-center gap-0.5 text-orange-400 text-xs font-bold shrink-0">
+                <Flame className="w-3 h-3" />{streak}
+              </span>
+            )}
+            <span className="text-xs truncate text-white/30">{player.name}</span>
+          </div>
+          <p className="text-white/60 text-xs tabular-nums shrink-0">{displayScore.toLocaleString()}</p>
+        </div>
+        <span className="absolute -inset-x-3 -inset-y-1 rounded-lg backdrop-blur-sm opacity-0 group-hover:opacity-100 transition-opacity" />
+      </button>
+    );
+  }
+
   return (
     <button onClick={() => removePlayer(player.name)} aria-label={`Remove ${player.name}`} className="relative group w-full text-left py-1">
       {/* Row 1: name + streak | delta */}
