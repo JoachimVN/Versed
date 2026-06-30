@@ -7,6 +7,7 @@ const QRCode = QRCodeLib as unknown as React.FC<{ value: string; size?: number }
 import { socket } from '../socket';
 import { useSpotify } from '../hooks/useSpotify';
 import { RankBadge } from '../components/RankBadge';
+import { useAnimatedScore } from '../hooks/useAnimatedScore';
 import { NoOneGotItCardContent, GotItCardContent } from '../components/RevealShared';
 import { APP_NAME, BACKEND_URL, RACE_TIME } from '../config';
 import type { Hint, LeaderboardEntry, PlayerInfo, RoundResultEvent } from '../types';
@@ -1121,22 +1122,42 @@ export function RevealView({ game, result }: Readonly<{ game: HostState; result:
   );
 }
 
+function LeaderboardRow({ entry, delta, delay, highlight }: Readonly<{ entry: LeaderboardEntry; delta: number; delay: number; highlight: boolean }>) {
+  const { displayScore, displayDelta, deltaFading } = useAnimatedScore(entry.score, delta, delay);
+  return (
+    <div className={`flex items-center gap-4 px-4 py-3 rounded-xl ${highlight ? 'bg-white/10' : 'bg-white/5'}`}>
+      <span className="w-8 flex justify-center">
+        <RankBadge rank={entry.rank} />
+      </span>
+      <span className="text-white font-bold flex-1">{entry.name}</span>
+      <div className="text-right min-w-[64px]">
+        {delta > 0 && (
+          <p className={`text-sky-400 text-xs tabular-nums transition-opacity duration-500 ${deltaFading ? 'opacity-0' : 'opacity-100'}`}>
+            +{displayDelta > 0 ? displayDelta.toLocaleString() : ''}
+          </p>
+        )}
+        <p className="text-white/60 font-semibold tabular-nums">{displayScore.toLocaleString()}</p>
+      </div>
+    </div>
+  );
+}
+
 function LeaderboardView({ game }: Readonly<{ game: HostState }>) {
-  const { phase, leaderboard } = game;
+  const { phase, leaderboard, roundDeltas } = game;
   return (
     <div className="min-h-screen flex flex-col p-6 gap-4">
       <h2 className="text-3xl font-black text-white text-center">
         {phase === 'finished' ? 'Final Scores' : 'Leaderboard'}
       </h2>
       <div className="flex-1 space-y-3">
-        {leaderboard.map(e => (
-          <div key={e.name} className={`flex items-center gap-4 px-4 py-3 rounded-xl ${e.rank <= 3 ? 'bg-white/10' : 'bg-white/5'}`}>
-            <span className="w-8 flex justify-center">
-              <RankBadge rank={e.rank} />
-            </span>
-            <span className="text-white font-bold flex-1">{e.name}</span>
-            <span className="text-white/60 font-semibold">{e.score.toLocaleString()}</span>
-          </div>
+        {leaderboard.map((e, i) => (
+          <LeaderboardRow
+            key={e.name}
+            entry={e}
+            delta={roundDeltas[e.name] ?? 0}
+            delay={200 + i * 80}
+            highlight={e.rank <= 3}
+          />
         ))}
       </div>
       {phase === 'finished' && (

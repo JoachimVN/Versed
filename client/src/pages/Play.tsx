@@ -4,6 +4,7 @@ import { Music, ChevronLeft, ChevronRight, Flame, Pencil } from 'lucide-react';
 import LiquidGlass from 'liquid-glass-react';
 import { socket } from '../socket';
 import { RankBadge } from '../components/RankBadge';
+import { useAnimatedScore } from '../hooks/useAnimatedScore';
 import { NoOneGotItCardContent, GotItCardContent } from '../components/RevealShared';
 import { APP_NAME, BID_OPTIONS } from '../config';
 import type { Hint, LeaderboardEntry, RoundResultEvent } from '../types';
@@ -36,6 +37,7 @@ export interface PlayState {
   myRacePoints: number;
   myRaceTimeMs: number | null;
   leaderboard: LeaderboardEntry[];
+  leaderboardDeltas: Record<string, number>;
   reconnecting: boolean;
   hostReconnecting: boolean;
   savedSession: { pin: string; name: string } | null;
@@ -82,6 +84,8 @@ function usePlayGame(pinParam?: string): PlayState {
   const [myRacePoints, setMyRacePoints] = useState(0);
   const [myRaceTimeMs, setMyRaceTimeMs] = useState<number | null>(null);
   const [leaderboard, setLeaderboard] = useState<LeaderboardEntry[]>([]);
+  const leaderboardRef = useRef<LeaderboardEntry[]>([]);
+  const [leaderboardDeltas, setLeaderboardDeltas] = useState<Record<string, number>>({});
   const [reconnecting, setReconnecting] = useState(false);
   const [hostReconnecting, setHostReconnecting] = useState(false);
   const [newGamePin, setNewGamePin] = useState<string | null>(null);
@@ -251,13 +255,24 @@ function usePlayGame(pinParam?: string): PlayState {
       if (me) { setMyScore(me.score); setMyStreak(me.streak); }
     });
 
-    socket.on('leaderboard', ({ leaderboard: lb }: { leaderboard: LeaderboardEntry[] }) => {
+    const applyLeaderboard = (lb: LeaderboardEntry[]) => {
+      const deltas: Record<string, number> = {};
+      for (const entry of lb) {
+        const prev = leaderboardRef.current.find(e => e.name === entry.name);
+        deltas[entry.name] = prev ? Math.max(0, entry.score - prev.score) : entry.score;
+      }
+      setLeaderboardDeltas(deltas);
+      leaderboardRef.current = lb;
       setLeaderboard(lb);
+    };
+
+    socket.on('leaderboard', ({ leaderboard: lb }: { leaderboard: LeaderboardEntry[] }) => {
+      applyLeaderboard(lb);
       setPhase('leaderboard');
     });
 
     socket.on('game_over', ({ leaderboard: lb }: { leaderboard: LeaderboardEntry[] }) => {
-      setLeaderboard(lb);
+      applyLeaderboard(lb);
       setPhase('finished');
     });
 
@@ -389,6 +404,8 @@ function usePlayGame(pinParam?: string): PlayState {
         setSavedSession(session);
         localStorage.setItem('versed_session', JSON.stringify(session));
         setLeaderboard([]);
+        leaderboardRef.current = [];
+        setLeaderboardDeltas({});
         setResult(null);
         setPhase('waiting');
       }
@@ -415,7 +432,7 @@ function usePlayGame(pinParam?: string): PlayState {
     phase, pin, name, myName, error, roundIndex, totalRounds, hints,
     timeLeft, bettingTime, bidIndex, myBid, guesserNames, lowestBid,
     guessText, result, myScore, myStreak, mode, artistOnly, myRacePoints, myRaceTimeMs,
-    leaderboard, reconnecting, hostReconnecting, savedSession, guessInputRef,
+    leaderboard, leaderboardDeltas, reconnecting, hostReconnecting, savedSession, guessInputRef,
     newGamePin, rejoinNewGame,
     setPin, setName,
   setBidIndex: (i: number | ((prev: number) => number)) => {
@@ -1021,8 +1038,43 @@ export function RevealView({ game, result }: Readonly<{ game: PlayState; result:
   );
 }
 
+function PlayerLeaderboardRow({ entry, delta, delay, isMe }: Readonly<{ entry: LeaderboardEntry; delta: number; delay: number; isMe: boolean }>) {
+  const { displayScore, displayDelta, deltaFading } = useAnimatedScore(entry.score, delta, delay);
+  return (
+    <div className={`flex items-center gap-4 px-4 py-3 rounded-xl ${isMe ? 'bg-purple-600/20 border border-purple-500/40' : 'bg-white/5'}`}>
+      <span className="w-8 flex justify-center">
+        <RankBadge rank={entry.rank} />
+      </span>
+      <span className="text-white font-bold flex-1">{entry.name}</span>
+      <div className="text-right min-w-[56px]">
+        {delta > 0 && (
+          <p className={`text-sky-400 text-xs tabular-nums transition-opacity duration-500 ${deltaFading ? 'opacity-0' : 'opacity-100'}`}>
+            +{displayDelta > 0 ? displayDelta.toLocaleString() : ''}
+          </p>
+        )}
+        <p className="text-white/60 font-semibold tabular-nums">{displayScore.toLocaleString()}</p>
+      </div>
+    </div>
+  );
+}
+
+function MyScoreCard({ entry, delta, delay }: Readonly<{ entry: LeaderboardEntry; delta: number; delay: number }>) {
+  const { displayScore, displayDelta, deltaFading } = useAnimatedScore(entry.score, delta, delay);
+  return (
+    <div className="bg-purple-600/30 border border-purple-500/40 rounded-2xl px-6 py-3 text-center">
+      <p className="text-white/60 text-sm">You're #{entry.rank}</p>
+      {delta > 0 && (
+        <p className={`text-sky-300 text-sm font-bold tabular-nums transition-opacity duration-500 ${deltaFading ? 'opacity-0' : 'opacity-100'}`}>
+          +{displayDelta > 0 ? displayDelta.toLocaleString() : ''} pts
+        </p>
+      )}
+      <p className="text-white font-black text-2xl tabular-nums">{displayScore.toLocaleString()} pts</p>
+    </div>
+  );
+}
+
 function LeaderboardView({ game }: Readonly<{ game: PlayState }>) {
-  const { phase, myName, myScore, leaderboard, newGamePin, rejoinNewGame } = game;
+  const { phase, myName, leaderboard, leaderboardDeltas, newGamePin, rejoinNewGame } = game;
   const navigate = useNavigate();
   const myEntry = leaderboard.find(e => e.name === myName);
   return (
@@ -1031,20 +1083,21 @@ function LeaderboardView({ game }: Readonly<{ game: PlayState }>) {
         {phase === 'finished' ? 'Final Scores' : 'Leaderboard'}
       </h2>
       {myEntry && (
-        <div className="bg-purple-600/30 border border-purple-500/40 rounded-2xl px-6 py-3 text-center">
-          <p className="text-white/60 text-sm">You're #{myEntry.rank}</p>
-          <p className="text-white font-black text-2xl">{myScore.toLocaleString()} pts</p>
-        </div>
+        <MyScoreCard
+          entry={myEntry}
+          delta={leaderboardDeltas[myName] ?? 0}
+          delay={0}
+        />
       )}
       <div className="flex-1 space-y-3">
-        {leaderboard.slice(0, 10).map(e => (
-          <div key={e.name} className={`flex items-center gap-4 px-4 py-3 rounded-xl ${e.name === myName ? 'bg-purple-600/20 border border-purple-500/40' : 'bg-white/5'}`}>
-            <span className="w-8 flex justify-center">
-              <RankBadge rank={e.rank} />
-            </span>
-            <span className="text-white font-bold flex-1">{e.name}</span>
-            <span className="text-white/60 font-semibold">{e.score.toLocaleString()}</span>
-          </div>
+        {leaderboard.slice(0, 10).map((e, i) => (
+          <PlayerLeaderboardRow
+            key={e.name}
+            entry={e}
+            delta={leaderboardDeltas[e.name] ?? 0}
+            delay={100 + i * 80}
+            isMe={e.name === myName}
+          />
         ))}
       </div>
       {phase === 'leaderboard' && <p className="text-center text-white/30 text-sm">Waiting for the host to start the next round…</p>}
