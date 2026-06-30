@@ -427,7 +427,7 @@ function JoinView({ game }: Readonly<{ game: PlayState }>) {
       <button onClick={() => navigate('/')} className="absolute top-5 left-5 p-2 rounded-xl bg-white/10 text-white/60 hover:bg-white/20 hover:text-white transition-colors">
         <ArrowLeft className="w-5 h-5" />
       </button>
-      <img src={`${import.meta.env.BASE_URL}logo.png`} alt={APP_NAME} className="h-32 w-auto" />
+      <img src={`${import.meta.env.BASE_URL}logo.png`} alt={APP_NAME} className="h-48 w-auto" />
 
       {savedSession && (
         <div className="w-full max-w-xs">

@@ -541,7 +541,7 @@ function ConnectView({ game }: Readonly<{ game: HostState }>) {
       <button onClick={() => navigate('/')} className="absolute top-5 left-5 p-2 rounded-xl bg-white/10 text-white/60 hover:bg-white/20 hover:text-white transition-colors">
         <ArrowLeft className="w-5 h-5" />
       </button>
-      <img src={`${import.meta.env.BASE_URL}logo.png`} alt={APP_NAME} className="h-32 w-auto" />
+      <img src={`${import.meta.env.BASE_URL}logo.png`} alt={APP_NAME} className="h-48 w-auto" />
       {spotify.isConnected && !spotify.playerReady ? (
         <p className="text-white/50">Connecting to Spotify...</p>
       ) : (
@@ -587,7 +587,7 @@ function LobbyView({ game }: Readonly<{ game: HostState }>) {
         className="flex flex-col items-center gap-6 p-6 transition-transform duration-500 ease-out"
         style={{ transform: pin ? 'translateY(0)' : 'translateY(30vh)' }}
       >
-        <img src={`${import.meta.env.BASE_URL}logo.png`} alt={APP_NAME} className="h-32 w-auto" />
+        <img src={`${import.meta.env.BASE_URL}logo.png`} alt={APP_NAME} className="h-48 w-auto" />
         <span className="text-white/40 text-sm flex items-center gap-2">
           {spotify.playerReady ? (
             <><span className="w-2 h-2 rounded-full bg-green-500" />Spotify ready</>

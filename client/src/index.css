@@ -16,3 +16,8 @@ body {
   margin: 0;
   padding: 0;
 }
+
+/* Hide LiquidGlass hover glow divs that cause white circle artifact in Chrome */
+.liquid-btn > :nth-child(n+6) {
+  display: none !important;
+}

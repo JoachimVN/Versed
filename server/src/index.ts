@@ -41,6 +41,7 @@ const allowedOrigins = new Set(
 const corsOptions = {
   origin: (origin: string | undefined, callback: (err: Error | null, allow?: boolean) => void) => {
     if (!origin) return callback(null, true);
+    if (process.env.NODE_ENV !== 'production') return callback(null, true);
     if (allowedOrigins.has(origin)) return callback(null, true);
     return callback(new Error('CORS origin not allowed'));
   },
