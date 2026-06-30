@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { Music, Check, Loader2, Copy, ChevronLeft, Settings, Flame, Coins } from 'lucide-react';
+import { Music, Check, Loader2, Copy, ChevronLeft, Settings, Flame, Coins, Clock } from 'lucide-react';
 import LiquidGlass from 'liquid-glass-react';
 import QRCodeLib from 'react-qr-code';
 const QRCode = QRCodeLib as unknown as React.FC<{ value: string; size?: number }>;
@@ -726,7 +726,6 @@ function StartButton({ players, mode, startGame }: Readonly<{ players: PlayerInf
       onMouseLeave={() => setHovered(false)}
       onClick={() => !disabled && startGame()}
     >
-      <div style={{ position: 'absolute', inset: 0, borderRadius: '100px', background: 'rgba(110, 32, 155, 0.04)', pointerEvents: 'none' }} />
       <LiquidGlass
         style={{
           position: 'absolute', top: '50%', left: '50%',
@@ -1060,15 +1059,36 @@ export default function Host() {
         </div>
       )}
       {gameExpired && (
-        <div className="fixed inset-0 bg-black/90 backdrop-blur-sm flex flex-col items-center justify-center z-50 gap-4">
-          <p className="text-white font-bold text-xl">Game expired</p>
-          <p className="text-white/40 text-sm text-center">You were away too long and the game was closed.</p>
-          <button
-            onClick={() => navigate('/')}
-            className="mt-2 px-6 py-2 bg-purple-600 hover:bg-purple-500 text-white font-semibold rounded-xl transition-colors"
-          >
-            Go home
-          </button>
+        <div className="fixed inset-0 flex items-center justify-center z-50" style={{ background: 'rgba(8,8,18,0.92)', backdropFilter: 'blur(12px)' }}>
+          <div style={{ position: 'absolute', inset: 0, pointerEvents: 'none', background: 'radial-gradient(ellipse 60% 40% at 50% 50%, rgba(86,20,140,0.22) 0%, transparent 65%)' }} />
+          <div className="liquid-btn relative" style={{ width: '310px', height: '230px' }}>
+            <LiquidGlass
+              style={{ position: 'absolute', top: '50%', left: '50%' }}
+              displacementScale={55}
+              blurAmount={0.06}
+              saturation={130}
+              aberrationIntensity={1.5}
+              elasticity={0.08}
+              cornerRadius={20}
+              padding="32px 28px"
+            >
+              <div style={{ width: '254px', display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '12px' }}>
+                <Clock style={{ width: '30px', height: '30px', color: 'rgba(255,255,255,0.22)' }} strokeWidth={1.5} />
+                <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '6px' }}>
+                  <p style={{ color: 'white', fontWeight: 800, fontSize: '1.2rem', letterSpacing: '-0.01em' }}>Game expired</p>
+                  <p style={{ color: 'rgba(255,255,255,0.38)', fontSize: '0.8rem', textAlign: 'center', lineHeight: 1.5 }}>You were away too long and the game was closed.</p>
+                </div>
+                <button
+                  onClick={() => navigate('/')}
+                  style={{ marginTop: '6px', width: '100%', padding: '10px', borderRadius: '12px', border: '1px solid rgba(255,255,255,0.12)', cursor: 'pointer', background: 'rgba(255,255,255,0.07)', color: 'rgba(255,255,255,0.72)', fontWeight: 600, fontSize: '0.875rem', transition: 'background 0.2s ease, border-color 0.2s ease, color 0.2s ease' }}
+                  onMouseEnter={e => { const el = e.currentTarget as HTMLElement; el.style.background = 'rgba(255,255,255,0.13)'; el.style.borderColor = 'rgba(255,255,255,0.22)'; el.style.color = 'white'; }}
+                  onMouseLeave={e => { const el = e.currentTarget as HTMLElement; el.style.background = 'rgba(255,255,255,0.07)'; el.style.borderColor = 'rgba(255,255,255,0.12)'; el.style.color = 'rgba(255,255,255,0.72)'; }}
+                >
+                  Go home
+                </button>
+              </div>
+            </LiquidGlass>
+          </div>
         </div>
       )}
       {reconnectingCount > 0 && !reconnecting && (

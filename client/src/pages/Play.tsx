@@ -594,11 +594,6 @@ function JoinView({ game }: Readonly<{ game: PlayState }>) {
         onMouseLeave={() => setJoinHovered(false)}
         onClick={() => canJoin && join()}
       >
-        <div style={{
-          position: 'absolute', inset: 0, borderRadius: '100px',
-          background: 'rgba(0, 128, 126, 0.04)',
-          pointerEvents: 'none',
-        }} />
         <LiquidGlass
           style={{
             position: 'absolute', top: '50%', left: '50%',
@@ -623,9 +618,12 @@ function JoinView({ game }: Readonly<{ game: PlayState }>) {
 function WaitingView({ game }: Readonly<{ game: PlayState }>) {
   const [editing, setEditing] = useState(false);
   const [draftName, setDraftName] = useState('');
+  const [visible, setVisible] = useState(false);
+
+  useEffect(() => { const t = setTimeout(() => setVisible(true), 40); return () => clearTimeout(t); }, []);
 
   const startEdit = () => { setDraftName(game.myName); setEditing(true); };
-  const cancelEdit = () => { setEditing(false); };
+  const cancelEdit = () => setEditing(false);
   const confirmEdit = () => {
     if (!draftName.trim() || draftName.trim() === game.myName) { setEditing(false); return; }
     game.renamePlayer(draftName);
@@ -633,32 +631,67 @@ function WaitingView({ game }: Readonly<{ game: PlayState }>) {
   };
 
   return (
-    <div className="min-h-screen flex flex-col items-center justify-center gap-4 p-6">
-      <div className="w-12 h-12 border-4 border-purple-500 border-t-transparent rounded-full animate-spin" />
-      {editing ? (
-        <div className="flex flex-col items-center gap-2 w-full max-w-xs">
-          <input
-            autoFocus
-            type="text"
-            value={draftName}
-            onChange={e => setDraftName(e.target.value)}
-            onKeyDown={e => { if (e.key === 'Enter') confirmEdit(); else if (e.key === 'Escape') cancelEdit(); }}
-            maxLength={20}
-            className="w-full px-4 py-3 rounded-xl bg-white/10 text-white text-center text-xl placeholder-white/30 outline-none focus:ring-2 focus:ring-white/30"
-          />
-          {game.error && <p className="text-red-400 text-sm">{game.error}</p>}
-          <div className="flex gap-2 w-full">
-            <button onClick={cancelEdit} className="flex-1 py-2 rounded-xl bg-white/10 text-white/60 hover:bg-white/20 transition-colors text-sm">Cancel</button>
-            <button onClick={confirmEdit} disabled={!draftName.trim()} className="flex-1 py-2 rounded-xl bg-purple-600 text-white font-bold hover:bg-purple-500 transition-colors text-sm disabled:opacity-30">Save</button>
+    <div
+      className="min-h-screen flex flex-col items-center justify-center gap-10 p-6"
+      style={{ transition: 'opacity 0.5s ease, transform 0.5s ease', opacity: visible ? 1 : 0, transform: visible ? 'translateY(0)' : 'translateY(16px)' }}
+    >
+      <img src={`${import.meta.env.BASE_URL}logo.png`} alt={APP_NAME} className="h-28 w-auto drop-shadow-2xl" />
+
+      <div className="liquid-btn relative" style={{ width: '310px', height: '130px' }}>
+        <LiquidGlass
+          style={{ position: 'absolute', top: '50%', left: '50%' }}
+          displacementScale={55}
+          blurAmount={0.06}
+          saturation={130}
+          aberrationIntensity={1.5}
+          elasticity={0.08}
+          cornerRadius={20}
+          padding="24px 28px"
+        >
+          <div style={{ width: '254px', display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '10px' }}>
+            <span style={{ color: 'rgba(0,128,126,0.9)', fontSize: '0.6rem', letterSpacing: '0.18em', textTransform: 'uppercase', fontWeight: 700 }}>
+              You're in!
+            </span>
+            <span style={{ color: 'rgba(255,255,255,0.28)', fontSize: '0.6rem', letterSpacing: '0.14em', textTransform: 'uppercase' }}>
+              Playing as
+            </span>
+            {editing ? (
+              <div style={{ display: 'flex', flexDirection: 'column', gap: '8px', width: '100%' }}>
+                <input
+                  autoFocus
+                  type="text"
+                  value={draftName}
+                  onChange={e => setDraftName(e.target.value)}
+                  onKeyDown={e => { if (e.key === 'Enter') confirmEdit(); else if (e.key === 'Escape') cancelEdit(); }}
+                  maxLength={20}
+                  className="w-full px-4 py-2 rounded-xl bg-white/10 text-white text-center text-lg placeholder-white/30 outline-none focus:ring-2 focus:ring-white/20"
+                />
+                {game.error && <p style={{ color: '#f87171', fontSize: '0.75rem' }}>{game.error}</p>}
+                <div style={{ display: 'flex', gap: '8px' }}>
+                  <button onClick={cancelEdit} style={{ flex: 1, padding: '7px', borderRadius: '10px', background: 'rgba(255,255,255,0.08)', color: 'rgba(255,255,255,0.55)', border: 'none', cursor: 'pointer', fontSize: '0.8rem' }}>Cancel</button>
+                  <button onClick={confirmEdit} disabled={!draftName.trim()} style={{ flex: 1, padding: '7px', borderRadius: '10px', background: draftName.trim() ? 'rgba(0,128,126,0.55)' : 'rgba(255,255,255,0.06)', color: draftName.trim() ? 'white' : 'rgba(255,255,255,0.25)', border: 'none', cursor: draftName.trim() ? 'pointer' : 'not-allowed', fontSize: '0.8rem', fontWeight: 600, transition: 'all 0.15s ease' }}>Save</button>
+                </div>
+              </div>
+            ) : (
+              <button onClick={startEdit} style={{ display: 'flex', alignItems: 'center', gap: '7px', background: 'none', border: 'none', cursor: 'pointer', color: 'white', fontSize: '1.5rem', fontWeight: 800, letterSpacing: '-0.01em' }}>
+                {game.myName}
+                <Pencil style={{ width: '14px', height: '14px', color: 'rgba(255,255,255,0.28)', flexShrink: 0 }} />
+              </button>
+            )}
           </div>
+        </LiquidGlass>
+      </div>
+
+      <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '14px' }}>
+        <div style={{ display: 'flex', gap: '7px' }}>
+          {[0, 1, 2].map(i => (
+            <div key={i} style={{ width: '7px', height: '7px', borderRadius: '50%', background: 'rgba(0,128,126,0.8)', animation: 'dotBounce 1.4s ease-in-out infinite', animationDelay: `${i * 0.18}s` }} />
+          ))}
         </div>
-      ) : (
-        <button onClick={startEdit} className="flex items-center gap-2 text-white text-xl font-bold hover:text-white/80 transition-colors group">
-          {game.myName}
-          <Pencil className="w-4 h-4 text-white/30 group-hover:text-white/60 transition-colors" />
-        </button>
-      )}
-      <p className="text-white/50">You're in! Hang tight…</p>
+        <p style={{ color: 'rgba(255,255,255,0.28)', fontSize: '0.8rem', letterSpacing: '0.04em' }}>
+          Waiting for the host to start…
+        </p>
+      </div>
     </div>
   );
 }
