@@ -362,6 +362,7 @@ io.on('connection', (socket) => {
       io.to(`player:${game.pin}`).emit('your_turn', { timeLimit: game.raceTime, endsAt });
       game.phaseTimer = setTimeout(() => endRaceRound(game), game.raceTime * 1000);
     } else {
+      io.to(`player:${game.pin}`).emit('song_playing');
       game.phaseTimer = setTimeout(() => startGuessingPhase(game), gm.playMsFor(game.currentRound!.lowestBid));
     }
   });

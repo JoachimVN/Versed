@@ -39,6 +39,7 @@ export interface PlayState {
   myRaceTimeMs: number | null;
   leaderboard: LeaderboardEntry[];
   leaderboardDeltas: Record<string, number>;
+  songPlaying: boolean;
   reconnecting: boolean;
   hostReconnecting: boolean;
   savedSession: { pin: string; name: string } | null;
@@ -89,6 +90,7 @@ function usePlayGame(pinParam?: string): PlayState {
   const [leaderboard, setLeaderboard] = useState<LeaderboardEntry[]>([]);
   const leaderboardRef = useRef<LeaderboardEntry[]>([]);
   const [leaderboardDeltas, setLeaderboardDeltas] = useState<Record<string, number>>({});
+  const [songPlaying, setSongPlaying] = useState(false);
   const [reconnecting, setReconnecting] = useState(false);
   const [hostReconnecting, setHostReconnecting] = useState(false);
   const [newGamePin, setNewGamePin] = useState<string | null>(null);
@@ -228,10 +230,13 @@ function usePlayGame(pinParam?: string): PlayState {
 
     socket.on('betting_closed', (data: { lowestBid: number; guesserNames: string[] }) => {
       stopCountdown();
+      setSongPlaying(false);
       setLowestBid(data.lowestBid);
       setGuesserNames(data.guesserNames);
       setPhase('watching');
     });
+
+    socket.on('song_playing', () => setSongPlaying(true));
 
     socket.on('guessing_start', (data: { guesserNames: string[]; timeLimit: number; endsAt?: number }) => {
       setGuesserNames(data.guesserNames);
@@ -317,7 +322,7 @@ function usePlayGame(pinParam?: string): PlayState {
       stopCountdown();
       if (autoSubmitTimerRef.current) clearTimeout(autoSubmitTimerRef.current);
       if (guessAutoSubmitTimerRef.current) clearTimeout(guessAutoSubmitTimerRef.current);
-      ['connect','disconnect','round_start','betting_closed','guessing_start','your_turn',
+      ['connect','disconnect','round_start','betting_closed','song_playing','guessing_start','your_turn',
        'round_result','score_update','leaderboard','game_over',
        'host_reconnecting','host_reconnected','host_disconnected','game_restarted','kicked']
         .forEach(e => socket.off(e));
@@ -441,7 +446,7 @@ function usePlayGame(pinParam?: string): PlayState {
     phase, pin, name, myName, error, roundIndex, totalRounds, hints,
     timeLeft, bettingTime, bidIndex, myBid, guesserNames, lowestBid,
     guessText, result, myScore, myScoreDelta, myStreak, mode, artistOnly, myRacePoints, myRaceTimeMs,
-    leaderboard, leaderboardDeltas, reconnecting, hostReconnecting, savedSession, guessInputRef,
+    leaderboard, leaderboardDeltas, songPlaying, reconnecting, hostReconnecting, savedSession, guessInputRef,
     newGamePin, rejoinNewGame,
     setPin, setName,
   setBidIndex: (i: number | ((prev: number) => number)) => {
@@ -918,7 +923,7 @@ function BidSubmittedView({ game }: Readonly<{ game: PlayState }>) {
 
 
 function WatchingView({ game }: Readonly<{ game: PlayState }>) {
-  const { lowestBid, guesserNames, mode } = game;
+  const { lowestBid, guesserNames, mode, songPlaying } = game;
   const [visible, setVisible] = useState(false);
   useEffect(() => { const t = setTimeout(() => setVisible(true), 30); return () => clearTimeout(t); }, []);
   const isRace = mode === 'race';
@@ -957,7 +962,7 @@ function WatchingView({ game }: Readonly<{ game: PlayState }>) {
           >
             <div style={{ width: '254px', display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '18px' }}>
 
-              {/* Animated waveform */}
+              {/* Animated waveform — static until song actually starts */}
               <div style={{ display: 'flex', gap: '5px', alignItems: 'center', height: '36px' }}>
                 {barDelays.map((delay, i) => (
                   <div
@@ -965,9 +970,12 @@ function WatchingView({ game }: Readonly<{ game: PlayState }>) {
                     style={{
                       width: '3px', height: '100%', borderRadius: '2px',
                       background: isRace ? 'rgba(234,88,12,0.75)' : 'rgba(150,17,193,0.75)',
-                      animation: 'audioBar 1.4s ease-in-out infinite',
+                      animation: (isRace || songPlaying) ? 'audioBar 1.4s ease-in-out infinite' : 'none',
                       animationDelay: `${delay}s`,
                       transformOrigin: 'center',
+                      transform: (isRace || songPlaying) ? undefined : 'scaleY(0.25)',
+                      transition: 'transform 0.3s ease',
+                      opacity: (isRace || songPlaying) ? 1 : 0.4,
                     }}
                   />
                 ))}
@@ -987,7 +995,7 @@ function WatchingView({ game }: Readonly<{ game: PlayState }>) {
               ) : (
                 <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '6px' }}>
                   <span style={{ color: 'rgba(255,255,255,0.32)', fontSize: '0.6rem', letterSpacing: '0.2em', textTransform: 'uppercase' }}>
-                    Listen closely
+                    {songPlaying ? 'Listen closely' : 'Get ready'}
                   </span>
                   <span style={{ display: 'inline-block', minWidth: '200px', color: 'white', fontWeight: 900, fontSize: '1.5rem', lineHeight: 1.25, textAlign: 'center' }}>
                     {guesserNames.join(' & ')}
@@ -1010,7 +1018,7 @@ function WatchingView({ game }: Readonly<{ game: PlayState }>) {
 // element is never unmounted — focus and text survive the transition, which
 // prevents the mobile keyboard from dismissing mid-song.
 function GuessingView({ game }: Readonly<{ game: PlayState }>) {
-  const { phase, timeLeft, myScore, guessText, guessInputRef, setGuessText, submitGuess, skipGuess, artistOnly } = game;
+  const { phase, timeLeft, myScore, guessText, guessInputRef, setGuessText, submitGuess, skipGuess, artistOnly, songPlaying } = game;
   const isListening = phase === 'watching';
   const canSubmit = guessText.trim().length > 0;
   const urgent = !isListening && timeLeft <= 5;
@@ -1027,13 +1035,16 @@ function GuessingView({ game }: Readonly<{ game: PlayState }>) {
               <div key={i} style={{
                 width: '3px', height: '100%', borderRadius: '2px',
                 background: 'rgba(150,17,193,0.6)',
-                animation: 'audioBar 1.4s ease-in-out infinite',
+                animation: songPlaying ? 'audioBar 1.4s ease-in-out infinite' : 'none',
                 animationDelay: `${delay}s`, transformOrigin: 'center',
+                transform: songPlaying ? undefined : 'scaleY(0.25)',
+                opacity: songPlaying ? 1 : 0.35,
+                transition: 'transform 0.3s ease, opacity 0.3s ease',
               }} />
             ))}
           </div>
           <span style={{ color: 'rgba(255,255,255,0.28)', fontSize: '0.72rem', letterSpacing: '0.08em' }}>
-            Your song is playing…
+            {songPlaying ? 'Your song is playing…' : 'Get ready…'}
           </span>
         </div>
       ) : (
