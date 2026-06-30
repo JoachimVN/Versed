@@ -923,11 +923,14 @@ function BettingView({ game }: Readonly<{ game: HostState }>) {
 
         {/* Blurred album art — centered, above timer */}
         {imageHint?.imageUrl && (
-          <div style={{ width: 180, height: 180, borderRadius: 28, overflow: 'hidden', flexShrink: 0, boxShadow: '0 16px 40px rgba(0,0,0,0.7)' }}>
-            <img
-              src={imageHint.imageUrl} alt=""
-              style={{ width: '130%', height: '130%', marginLeft: '-15%', marginTop: '-15%', objectFit: 'cover', filter: 'blur(8px) brightness(0.6)', display: 'block' }}
-            />
+          <div style={{ width: 180, height: 180, borderRadius: 28, overflow: 'hidden', flexShrink: 0, boxShadow: '0 16px 40px rgba(0,0,0,0.7)', position: 'relative' }}>
+            {/* Inner div extends 30px beyond all edges so blur has real pixels to sample at every boundary */}
+            <div style={{ position: 'absolute', inset: -30, filter: 'blur(8px) brightness(0.6)' }}>
+              <img
+                src={imageHint.imageUrl} alt=""
+                style={{ width: '100%', height: '100%', objectFit: 'cover', display: 'block' }}
+              />
+            </div>
           </div>
         )}
 
