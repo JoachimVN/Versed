@@ -383,6 +383,7 @@ export function recordGuess(
 
   if (correct) {
     round.answered = true;
+    round.correctGuesserName = guesserName;
     const player = game.players.get(socketId)!;
     const points = calcPoints(round.lowestBid, round.song.rank);
     player.score += points;
