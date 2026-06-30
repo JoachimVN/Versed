@@ -656,22 +656,24 @@ function WaitingView({ game }: Readonly<{ game: PlayState }>) {
               Playing as
             </span>
             {editing ? (
-              <div style={{ display: 'flex', flexDirection: 'column', gap: '8px', width: '100%' }}>
+              <>
                 <input
                   autoFocus
                   type="text"
                   value={draftName}
                   onChange={e => setDraftName(e.target.value)}
                   onKeyDown={e => { if (e.key === 'Enter') confirmEdit(); else if (e.key === 'Escape') cancelEdit(); }}
+                  onBlur={confirmEdit}
                   maxLength={20}
-                  className="w-full px-4 py-2 rounded-xl bg-white/10 text-white text-center text-lg placeholder-white/30 outline-none focus:ring-2 focus:ring-white/20"
+                  style={{
+                    background: 'none', border: 'none', borderBottom: '1px solid rgba(255,255,255,0.25)',
+                    color: 'white', fontSize: '1.5rem', fontWeight: 800, textAlign: 'center',
+                    outline: 'none', width: '100%', letterSpacing: '-0.01em',
+                    padding: '2px 0 4px', fontFamily: 'inherit',
+                  }}
                 />
-                {game.error && <p style={{ color: '#f87171', fontSize: '0.75rem' }}>{game.error}</p>}
-                <div style={{ display: 'flex', gap: '8px' }}>
-                  <button onClick={cancelEdit} style={{ flex: 1, padding: '7px', borderRadius: '10px', background: 'rgba(255,255,255,0.08)', color: 'rgba(255,255,255,0.55)', border: 'none', cursor: 'pointer', fontSize: '0.8rem' }}>Cancel</button>
-                  <button onClick={confirmEdit} disabled={!draftName.trim()} style={{ flex: 1, padding: '7px', borderRadius: '10px', background: draftName.trim() ? 'rgba(0,128,126,0.55)' : 'rgba(255,255,255,0.06)', color: draftName.trim() ? 'white' : 'rgba(255,255,255,0.25)', border: 'none', cursor: draftName.trim() ? 'pointer' : 'not-allowed', fontSize: '0.8rem', fontWeight: 600, transition: 'all 0.15s ease' }}>Save</button>
-                </div>
-              </div>
+                {game.error && <p style={{ color: '#f87171', fontSize: '0.7rem' }}>{game.error}</p>}
+              </>
             ) : (
               <button onClick={startEdit} style={{ display: 'flex', alignItems: 'center', gap: '7px', background: 'none', border: 'none', cursor: 'pointer', color: 'white', fontSize: '1.5rem', fontWeight: 800, letterSpacing: '-0.01em' }}>
                 {game.myName}
