@@ -6,6 +6,7 @@ import { socket } from '../socket';
 import { RankBadge } from '../components/RankBadge';
 import { useAnimatedScore } from '../hooks/useAnimatedScore';
 import { NoOneGotItCardContent, GotItCardContent } from '../components/RevealShared';
+import { BackButton } from '../components/BackButton';
 import { APP_NAME, BID_OPTIONS } from '../config';
 import type { Hint, LeaderboardEntry, RoundResultEvent } from '../types';
 
@@ -527,7 +528,6 @@ function BidArrow({ direction, enabled, onClick }: Readonly<{ direction: 'left' 
 
 function JoinView({ game }: Readonly<{ game: PlayState }>) {
   const { pin, name, error, savedSession, setPin, setName, join, rejoinSaved } = game;
-  const navigate = useNavigate();
   const [joinHovered, setJoinHovered] = useState(false);
   const [pinFocused, setPinFocused] = useState(false);
   const [nameFocused, setNameFocused] = useState(false);
@@ -538,16 +538,7 @@ function JoinView({ game }: Readonly<{ game: PlayState }>) {
       className="page-enter relative min-h-screen flex flex-col items-center justify-center p-6 gap-10"
       style={{ zIndex: 1 }}
     >
-      <button
-        onClick={() => navigate('/')}
-        className="absolute top-5 left-5 flex items-center gap-1.5 transition-all duration-200"
-        style={{ background: 'none', border: 'none', padding: '6px 2px', zIndex: 2, color: 'rgba(255,255,255,0.6)' }}
-        onMouseEnter={e => { (e.currentTarget as HTMLElement).style.color = 'rgba(255,255,255,0.95)'; }}
-        onMouseLeave={e => { (e.currentTarget as HTMLElement).style.color = 'rgba(255,255,255,0.6)'; }}
-      >
-        <ChevronLeft className="w-5 h-5" strokeWidth={1.5} />
-        <span style={{ fontSize: '0.875rem', fontWeight: 400 }}>Back</span>
-      </button>
+      <BackButton />
 
       <img
         src={`${import.meta.env.BASE_URL}logo.png`}
@@ -712,7 +703,6 @@ function WaitingView({ game }: Readonly<{ game: PlayState }>) {
   const [editing, setEditing] = useState(false);
   const [draftName, setDraftName] = useState('');
   const [visible, setVisible] = useState(false);
-  const navigate = useNavigate();
 
   useEffect(() => { const t = setTimeout(() => setVisible(true), 40); return () => clearTimeout(t); }, []);
 
@@ -741,16 +731,7 @@ function WaitingView({ game }: Readonly<{ game: PlayState }>) {
         className="relative flex flex-col items-center justify-center min-h-screen gap-10 p-6"
         style={{ zIndex: 2, transition: 'opacity 0.5s ease, transform 0.5s ease', opacity: visible ? 1 : 0, transform: visible ? 'translateY(0)' : 'translateY(16px)' }}
       >
-        <button
-          onClick={() => navigate('/')}
-          className="absolute top-5 left-5 flex items-center gap-1.5 transition-all duration-200"
-          style={{ background: 'none', border: 'none', padding: '6px 2px', zIndex: 2, color: 'rgba(255,255,255,0.6)' }}
-          onMouseEnter={e => { (e.currentTarget as HTMLElement).style.color = 'rgba(255,255,255,0.95)'; }}
-          onMouseLeave={e => { (e.currentTarget as HTMLElement).style.color = 'rgba(255,255,255,0.6)'; }}
-        >
-          <ChevronLeft className="w-5 h-5" strokeWidth={1.5} />
-          <span style={{ fontSize: '0.875rem', fontWeight: 400 }}>Back</span>
-        </button>
+        <BackButton />
         <img src={`${import.meta.env.BASE_URL}logo.png`} alt={APP_NAME} className="w-auto drop-shadow-2xl" style={{ height: '168px' }} />
 
         <div className="liquid-btn relative" style={{ width: '310px', height: '330px' }}>

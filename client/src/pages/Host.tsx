@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { Music, Check, Loader2, Copy, ChevronLeft, Settings, Flame, Coins, Clock } from 'lucide-react';
+import { Music, Check, Loader2, Copy, Settings, Flame, Coins, Clock } from 'lucide-react';
 import LiquidGlass from 'liquid-glass-react';
 import QRCodeLib from 'react-qr-code';
 const QRCode = QRCodeLib as unknown as React.FC<{ value: string; size?: number }>;
@@ -10,6 +10,7 @@ import { RankBadge } from '../components/RankBadge';
 import { useAnimatedScore } from '../hooks/useAnimatedScore';
 import { ConfettiBackground } from '../components/ConfettiBackground';
 import { NoOneGotItCardContent, GotItCardContent } from '../components/RevealShared';
+import { BackButton } from '../components/BackButton';
 import { APP_NAME, BACKEND_URL, RACE_TIME } from '../config';
 import type { Hint, LeaderboardEntry, PlayerInfo, RoundResultEvent } from '../types';
 
@@ -669,19 +670,9 @@ function ToggleRow({ label, value, onToggle }: Readonly<{ label: string; value: 
 
 function ConnectView({ game }: Readonly<{ game: HostState }>) {
   const { spotify } = game;
-  const navigate = useNavigate();
   return (
     <div className="min-h-screen flex flex-col items-center justify-center gap-6 p-6">
-      <button
-        onClick={() => navigate('/')}
-        className="absolute top-5 left-5 flex items-center gap-1.5 transition-all duration-200"
-        style={{ background: 'none', border: 'none', padding: '6px 2px', zIndex: 2, color: 'rgba(255,255,255,0.6)' }}
-        onMouseEnter={e => { (e.currentTarget as HTMLElement).style.color = 'rgba(255,255,255,0.95)'; }}
-        onMouseLeave={e => { (e.currentTarget as HTMLElement).style.color = 'rgba(255,255,255,0.6)'; }}
-      >
-        <ChevronLeft className="w-5 h-5" strokeWidth={1.5} />
-        <span style={{ fontSize: '0.875rem', fontWeight: 400 }}>Back</span>
-      </button>
+      <BackButton />
       <img src={`${import.meta.env.BASE_URL}logo.png`} alt={APP_NAME} className="h-48 w-auto" />
       {spotify.isConnected && !spotify.playerReady ? (
         <p className="text-white/50">Connecting to Spotify...</p>
@@ -821,7 +812,6 @@ function StartButton({ players, mode, startGame }: Readonly<{ players: PlayerInf
 
 function LobbyView({ game }: Readonly<{ game: HostState }>) {
   const { spotify, pin, players, createGame, startGame, mode, settingsOpen, toggleSettings, setMode, removePlayer } = game;
-  const navigate = useNavigate();
   const [lobbyVisible, setLobbyVisible] = useState(false);
 
   useEffect(() => {
@@ -836,16 +826,7 @@ function LobbyView({ game }: Readonly<{ game: HostState }>) {
 
   return (
     <div className="min-h-screen relative flex flex-col overflow-hidden">
-      <button
-        onClick={() => navigate('/')}
-        className="absolute top-5 left-5 flex items-center gap-1.5 transition-all duration-200"
-        style={{ background: 'none', border: 'none', padding: '6px 2px', zIndex: 10, color: 'rgba(255,255,255,0.6)' }}
-        onMouseEnter={e => { (e.currentTarget as HTMLElement).style.color = 'rgba(255,255,255,0.95)'; }}
-        onMouseLeave={e => { (e.currentTarget as HTMLElement).style.color = 'rgba(255,255,255,0.6)'; }}
-      >
-        <ChevronLeft className="w-5 h-5" strokeWidth={1.5} />
-        <span style={{ fontSize: '0.875rem', fontWeight: 400 }}>Back</span>
-      </button>
+      <BackButton zIndex={10} />
       <SettingsButton settingsOpen={settingsOpen} toggleSettings={toggleSettings} />
 
       <SettingsPanel game={game} open={settingsOpen} />
@@ -1151,82 +1132,17 @@ function RevealPlayerRow({
   );
 }
 
-export function RevealView({ game, result, instant = false }: Readonly<{ game: HostState; result: RoundResultEvent; instant?: boolean }>) {
+function RevealShell({
+  game, result, instant, cardHeight, cardContent, isCorrectFor,
+}: Readonly<{
+  game: HostState;
+  result: RoundResultEvent;
+  instant: boolean;
+  cardHeight: number;
+  cardContent: React.ReactNode;
+  isCorrectFor: (player: PlayerInfo) => boolean;
+}>) {
   const { roundIndex, totalRounds, players, roundDeltas, removePlayer } = game;
-  const isRace = result.mode === 'race';
-
-  if (!result.correct) {
-    const cardH = result.coverUrl ? 480 : 240;
-    return (
-      <div className="page-enter relative min-h-screen flex flex-col items-center p-6 gap-5 overflow-hidden">
-        <img
-          src={`${import.meta.env.BASE_URL}background3.svg`}
-          alt=""
-          aria-hidden="true"
-          style={{ position: 'fixed', inset: 0, width: '100%', height: '100%', objectFit: 'cover', zIndex: 0, transform: 'rotate(180deg)' }}
-        />
-        <div style={{ position: 'fixed', inset: 0, zIndex: 1, background: 'rgba(5,5,14,0.82)', backdropFilter: 'blur(28px)' }} />
-        <p className="text-white/40 text-sm self-start" style={{ position: 'relative', zIndex: 2 }}>{roundIndex + 1} / {totalRounds}</p>
-
-        <div className="liquid-btn relative" style={{ width: '310px', height: `${cardH}px`, zIndex: 2 }}>
-          <LiquidGlass
-            style={{ position: 'absolute', top: '50%', left: '50%' }}
-            displacementScale={55}
-            blurAmount={0.06}
-            saturation={130}
-            aberrationIntensity={1.5}
-            elasticity={0.08}
-            cornerRadius={20}
-            padding="24px 24px"
-          >
-            <NoOneGotItCardContent result={result} />
-          </LiquidGlass>
-        </div>
-
-        <div style={{ position: 'relative', zIndex: 2, background: 'rgba(255,255,255,0.05)', border: '1px solid rgba(255,255,255,0.08)', borderRadius: '16px', padding: '8px 12px', width: '25%' }} className="divide-y divide-white/[0.07]">
-          {players.slice().sort((a, b) => (b.score ?? 0) - (a.score ?? 0)).map((p, i) => (
-            <RevealPlayerRow
-              key={p.name}
-              player={p}
-              entry={result.playerGuesses?.find(g => g.name === p.name)}
-              delta={roundDeltas[p.name] ?? 0}
-              delay={400 + i * 80}
-              correct={false}
-              instant={instant}
-              removePlayer={removePlayer}
-            />
-          ))}
-        </div>
-
-        <button
-          type="button"
-          className="liquid-btn relative cursor-pointer border-0 bg-transparent p-0"
-          style={{ width: '310px', height: '64px', borderRadius: '100px', background: 'rgba(0,0,0,0.001)', zIndex: 2 }}
-          onClick={() => socket.emit('next_round')}
-        >
-          <LiquidGlass
-            style={{ position: 'absolute', top: '50%', left: '50%' }}
-            displacementScale={64}
-            blurAmount={0.05}
-            saturation={130}
-            aberrationIntensity={2}
-            elasticity={0.12}
-            cornerRadius={100}
-            padding="18px 36px"
-          >
-            <div style={{ position: 'relative' }}>
-              <div style={{ position: 'absolute', inset: '-18px -36px', borderRadius: '100px', pointerEvents: 'none', background: 'rgba(110,32,155,0.12)' }} />
-              <span className="text-white font-bold text-xl" style={{ whiteSpace: 'nowrap', position: 'relative', display: 'inline-block', minWidth: '210px', textAlign: 'center' }}>
-                {roundIndex + 1 >= totalRounds ? 'Final Results' : 'Next Round'}
-              </span>
-            </div>
-          </LiquidGlass>
-        </button>
-      </div>
-    );
-  }
-
-  const cardH = result.coverUrl ? 440 : 240;
   return (
     <div className="page-enter relative min-h-screen flex flex-col items-center p-6 gap-5 overflow-hidden">
       <img
@@ -1236,10 +1152,9 @@ export function RevealView({ game, result, instant = false }: Readonly<{ game: H
         style={{ position: 'fixed', inset: 0, width: '100%', height: '100%', objectFit: 'cover', zIndex: 0, transform: 'rotate(180deg)' }}
       />
       <div style={{ position: 'fixed', inset: 0, zIndex: 1, background: 'rgba(5,5,14,0.82)', backdropFilter: 'blur(28px)' }} />
-
       <p className="text-white/40 text-sm self-start" style={{ position: 'relative', zIndex: 2 }}>{roundIndex + 1} / {totalRounds}</p>
 
-      <div className="liquid-btn relative" style={{ width: '310px', height: `${cardH}px`, zIndex: 2 }}>
+      <div className="liquid-btn relative" style={{ width: '310px', height: `${cardHeight}px`, zIndex: 2 }}>
         <LiquidGlass
           style={{ position: 'absolute', top: '50%', left: '50%' }}
           displacementScale={55}
@@ -1250,26 +1165,23 @@ export function RevealView({ game, result, instant = false }: Readonly<{ game: H
           cornerRadius={20}
           padding="24px 24px"
         >
-          <GotItCardContent result={result} />
+          {cardContent}
         </LiquidGlass>
       </div>
 
       <div style={{ position: 'relative', zIndex: 2, background: 'rgba(255,255,255,0.05)', border: '1px solid rgba(255,255,255,0.08)', borderRadius: '16px', padding: '8px 12px', width: '25%' }} className="divide-y divide-white/[0.07]">
-        {players.slice().sort((a, b) => (b.score ?? 0) - (a.score ?? 0)).map((p, i) => {
-          const correct = isRace ? !!result.correctGuessers?.includes(p.name) : (p.name === result.guesserName);
-          return (
-            <RevealPlayerRow
-              key={p.name}
-              player={p}
-              entry={result.playerGuesses?.find(g => g.name === p.name)}
-              delta={roundDeltas[p.name] ?? 0}
-              delay={400 + i * 80}
-              correct={correct}
-              instant={instant}
-              removePlayer={removePlayer}
-            />
-          );
-        })}
+        {players.slice().sort((a, b) => (b.score ?? 0) - (a.score ?? 0)).map((p, i) => (
+          <RevealPlayerRow
+            key={p.name}
+            player={p}
+            entry={result.playerGuesses?.find(g => g.name === p.name)}
+            delta={roundDeltas[p.name] ?? 0}
+            delay={400 + i * 80}
+            correct={isCorrectFor(p)}
+            instant={instant}
+            removePlayer={removePlayer}
+          />
+        ))}
       </div>
 
       <button
@@ -1297,6 +1209,34 @@ export function RevealView({ game, result, instant = false }: Readonly<{ game: H
         </LiquidGlass>
       </button>
     </div>
+  );
+}
+
+export function RevealView({ game, result, instant = false }: Readonly<{ game: HostState; result: RoundResultEvent; instant?: boolean }>) {
+  const isRace = result.mode === 'race';
+
+  if (!result.correct) {
+    return (
+      <RevealShell
+        game={game}
+        result={result}
+        instant={instant}
+        cardHeight={result.coverUrl ? 480 : 240}
+        cardContent={<NoOneGotItCardContent result={result} />}
+        isCorrectFor={() => false}
+      />
+    );
+  }
+
+  return (
+    <RevealShell
+      game={game}
+      result={result}
+      instant={instant}
+      cardHeight={result.coverUrl ? 440 : 240}
+      cardContent={<GotItCardContent result={result} />}
+      isCorrectFor={(p) => isRace ? !!result.correctGuessers?.includes(p.name) : (p.name === result.guesserName)}
+    />
   );
 }
 
