@@ -90,18 +90,70 @@ io.on('connection', (socket) => {
     callback({ pin: game.pin });
   });
 
-  // Emit the right phase snapshot to this socket so a reconnecting or
-  // mid-game-joining player jumps straight to where the game is.
-  function syncState(game: NonNullable<ReturnType<typeof gm.getGame>>) {
-    // Always send the player their current score so the client doesn't show 0
-    // after a reconnect (the client only learns score from score_update events).
+  // Always send the player their current score so the client doesn't show 0
+  // after a reconnect (the client only learns score from score_update events).
+  function emitSelfScore(game: GameObj) {
     const selfPlayer = game.players.get(socket.id);
     if (selfPlayer) {
       socket.emit('score_update', {
         players: [{ name: selfPlayer.name, score: selfPlayer.score, streak: selfPlayer.streak }],
       });
     }
+  }
 
+  function emitRevealSnapshot(game: GameObj, round: RoundObj) {
+    const isRace = game.mode === 'race';
+    const correctGuessers = isRace
+      ? Array.from(round.correctGuessers).map(id => game.players.get(id)?.name ?? '').filter(Boolean)
+      : undefined;
+    socket.emit('round_result', {
+      correct: isRace ? round.correctGuessers.size > 0 : round.answered,
+      guesserName: round.correctGuesserName ?? null,
+      mode: isRace ? 'race' : undefined,
+      correctGuessers,
+      ...songFields(game, round),
+      points: 0,
+      playerGuesses: gm.getRoundGuesses(game),
+    });
+  }
+
+  function emitRaceTurnSnapshot(game: GameObj, round: RoundObj | null) {
+    if (game.phase === 'guessing' && round?.playStartAt && game.phaseEndsAt && !round.passed.has(socket.id)) {
+      socket.emit('your_turn', { timeLimit: game.raceTime, endsAt: game.phaseEndsAt });
+    }
+  }
+
+  function emitClassicPhaseSnapshot(game: GameObj, round: RoundObj | null) {
+    if (game.phase === 'betting' && round && game.phaseEndsAt) {
+      socket.emit('round_start', {
+        roundIndex: game.roundIndex,
+        total: game.totalRounds,
+        hints: round.hints,
+        bettingTime: game.bettingTime,
+        endsAt: game.phaseEndsAt,
+        mode: 'classic',
+      });
+      return;
+    }
+
+    if ((game.phase !== 'playing' && game.phase !== 'guessing') || !round) return;
+
+    const guesserNames = round.guesserSocketIds
+      .map(id => game.players.get(id)?.name ?? '')
+      .filter(Boolean);
+    socket.emit('betting_closed', { lowestBid: round.lowestBid, guesserNames, playerBids: [] });
+    if (game.phase !== 'guessing' || !game.phaseEndsAt) return;
+
+    socket.emit('guessing_start', { guesserNames, timeLimit: game.guessingTime, endsAt: game.phaseEndsAt });
+    if (round.guesserSocketIds.includes(socket.id) && !round.passed.has(socket.id)) {
+      socket.emit('your_turn', { timeLimit: game.guessingTime, endsAt: game.phaseEndsAt });
+    }
+  }
+
+  // Emit the right phase snapshot to this socket so a reconnecting or
+  // mid-game-joining player jumps straight to where the game is.
+  function syncState(game: GameObj) {
+    emitSelfScore(game);
     const round = game.currentRound;
 
     if (game.phase === 'finished') {
@@ -115,52 +167,16 @@ io.on('connection', (socket) => {
     }
 
     if (game.phase === 'reveal' && round) {
-      const isRace = game.mode === 'race';
-      const correctGuessers = isRace
-        ? Array.from(round.correctGuessers).map(id => game.players.get(id)?.name ?? '').filter(Boolean)
-        : undefined;
-      socket.emit('round_result', {
-        correct: isRace ? round.correctGuessers.size > 0 : round.answered,
-        guesserName: round.correctGuesserName ?? null,
-        mode: isRace ? 'race' : undefined,
-        correctGuessers,
-        ...songFields(game, round),
-        points: 0,
-        playerGuesses: gm.getRoundGuesses(game),
-      });
+      emitRevealSnapshot(game, round);
       return;
     }
 
     if (game.mode === 'race') {
-      if (game.phase === 'guessing' && round?.playStartAt && game.phaseEndsAt) {
-        if (!round.passed.has(socket.id)) {
-          socket.emit('your_turn', { timeLimit: game.raceTime, endsAt: game.phaseEndsAt });
-        }
-      }
+      emitRaceTurnSnapshot(game, round);
       return;
     }
 
-    if (game.phase === 'betting' && round && game.phaseEndsAt) {
-      socket.emit('round_start', {
-        roundIndex: game.roundIndex,
-        total: game.totalRounds,
-        hints: round.hints,
-        bettingTime: game.bettingTime,
-        endsAt: game.phaseEndsAt,
-        mode: 'classic',
-      });
-    } else if ((game.phase === 'playing' || game.phase === 'guessing') && round) {
-      const guesserNames = round.guesserSocketIds
-        .map(id => game.players.get(id)?.name ?? '')
-        .filter(Boolean);
-      socket.emit('betting_closed', { lowestBid: round.lowestBid, guesserNames, playerBids: [] });
-      if (game.phase === 'guessing' && game.phaseEndsAt) {
-        socket.emit('guessing_start', { guesserNames, timeLimit: game.guessingTime, endsAt: game.phaseEndsAt });
-        if (round.guesserSocketIds.includes(socket.id) && !round.passed.has(socket.id)) {
-          socket.emit('your_turn', { timeLimit: game.guessingTime, endsAt: game.phaseEndsAt });
-        }
-      }
-    }
+    emitClassicPhaseSnapshot(game, round);
   }
 
   // ── Host: start a new game without a page reload ─────────────────────────
@@ -266,7 +282,7 @@ io.on('connection', (socket) => {
   // ── Player: rename in lobby ────────────────────────────────────────────────
   socket.on('rename_player', ({ newName }: { newName: string }, callback: (r: { error?: string; success?: boolean }) => void) => {
     const game = gm.getGameBySocket(socket.id);
-    if (!game || game.phase !== 'lobby') return callback({ error: 'Cannot rename now' });
+    if (game?.phase !== 'lobby') return callback({ error: 'Cannot rename now' });
     const player = gm.renamePlayer(game, socket.id, newName);
     if (!player) return callback({ error: 'Name already taken' });
     callback({ success: true });
@@ -433,7 +449,7 @@ io.on('connection', (socket) => {
   // ── Host: force-skip current guessing turn ────────────────────────────────
   socket.on('host_skip_turn', () => {
     const game = gm.getGameBySocket(socket.id);
-    if (!game || game.hostSocketId !== socket.id) return;
+    if (game?.hostSocketId !== socket.id) return;
     if (game.phase === 'betting') {
       closeBettingAndPlay(game);
     } else if (game.phase === 'playing') {

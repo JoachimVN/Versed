@@ -13,7 +13,7 @@ function RouteTracker() {
 
   useEffect(() => {
     const isJoin = location.pathname.startsWith('/play');
-    const settleSpeed = isJoin ? 0.38 : 1.0;
+    const settleSpeed = isJoin ? 0.38 : 1;
 
     if (firstRender.current) {
       firstRender.current = false;

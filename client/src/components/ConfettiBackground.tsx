@@ -66,7 +66,7 @@ export function ConfettiBackground({ burst = false, persistAfterBurst = false, s
     canvas.width = W;
     canvas.height = H;
 
-    const reduced = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+    const reduced = globalThis.matchMedia('(prefers-reduced-motion: reduce)').matches;
     const rand = reduced ? seededRand(0x5eed42) : Math.random;
     const particles: Particle[] = Array.from({ length: COUNT }, () => makeParticle(W, H, true, rand));
 
@@ -104,47 +104,65 @@ export function ConfettiBackground({ burst = false, persistAfterBurst = false, s
       fpsWindowStart = performance.now();
     };
 
-    const tick = (now: number) => {
-      if (frozen && !(burst && persistAfterBurst)) return;
-
-      const dt = Math.min((now - last) / 16.667, 4);
-      last = now;
-
+    // Returns true when the frame should bail immediately (fps dropped below
+    // threshold and the animation isn't pinned open by a persisting burst).
+    const updateFrameRate = (now: number): boolean => {
       frameCount++;
       if (now - fpsWindowStart > 2500) {
         const fps = frameCount / ((now - fpsWindowStart) / 1000);
-        if (fps < 18) { frozen = true; if (!(burst && persistAfterBurst)) return; }
+        if (fps < 18) {
+          frozen = true;
+          if (!(burst && persistAfterBurst)) return true;
+        }
         frameCount = 0;
         fpsWindowStart = now;
       }
+      return false;
+    };
 
-      if (burst) {
-        const burstElapsed = now - burstStartTime;
-        const burstDuration = 1500;
-        if (burstElapsed > burstDuration) {
-          frozen = true;
-        }
-        const burstProgress = burstElapsed / burstDuration;
-        _currentSpeed = (persistAfterBurst ? 0.5 : 3 * (1 - burstProgress)) * speedMultiplier;
-        for (const p of particles) {
-          if (persistAfterBurst || burstProgress < 0.6) {
-            p.alpha = p.initialAlpha;
-          } else {
-            const fadeProgress = (burstProgress - 0.6) / 0.4;
-            p.alpha = p.initialAlpha * Math.max(0, 1 - fadeProgress);
-          }
-        }
-      } else {
-        // Smooth-lerp toward the current speed target.
-        _currentSpeed += (_speedTarget - _currentSpeed) * 0.055;
+    const updateBurst = (now: number) => {
+      const burstElapsed = now - burstStartTime;
+      const burstDuration = 1500;
+      if (burstElapsed > burstDuration) {
+        frozen = true;
       }
+      const burstProgress = burstElapsed / burstDuration;
+      _currentSpeed = (persistAfterBurst ? 0.5 : 3 * (1 - burstProgress)) * speedMultiplier;
+      for (const p of particles) {
+        if (persistAfterBurst || burstProgress < 0.6) {
+          p.alpha = p.initialAlpha;
+        } else {
+          const fadeProgress = (burstProgress - 0.6) / 0.4;
+          p.alpha = p.initialAlpha * Math.max(0, 1 - fadeProgress);
+        }
+      }
+    };
 
+    const advanceParticles = (dt: number) => {
       for (const p of particles) {
         p.x += p.vx * dt * _currentSpeed;
         p.y += p.vy * dt * _currentSpeed;
         p.rot += p.rotV * dt * _currentSpeed;
         if (p.y > H + 30 && !burst) Object.assign(p, makeParticle(W, H, false));
       }
+    };
+
+    const tick = (now: number) => {
+      if (frozen && !(burst && persistAfterBurst)) return;
+
+      const dt = Math.min((now - last) / 16.667, 4);
+      last = now;
+
+      if (updateFrameRate(now)) return;
+
+      if (burst) {
+        updateBurst(now);
+      } else {
+        // Smooth-lerp toward the current speed target.
+        _currentSpeed += (_speedTarget - _currentSpeed) * 0.055;
+      }
+
+      advanceParticles(dt);
 
       render();
       rafId = requestAnimationFrame(tick);
