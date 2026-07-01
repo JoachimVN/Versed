@@ -1,5 +1,5 @@
 <p align="center">
-  <img src="client/public/logo.svg" alt="Versed" width="360" />
+  <img src="client/public/logo.png" alt="Versed" width="360" />
 </p>
 
 <p align="center">
@@ -86,7 +86,7 @@ points = 500  +  up to 1000 (lower bid → more)  +  up to 500 (rarer song → m
 
 | Layer | Stack |
 |-------|-------|
-| Client | React 18, TypeScript, Vite, Tailwind CSS, React Router |
+| Client | React 19, TypeScript, Vite, Tailwind CSS, React Router |
 | Realtime | Socket.IO |
 | Server | Node, Express, TypeScript |
 | Audio | Spotify Web Playback SDK + Spotify Web API |

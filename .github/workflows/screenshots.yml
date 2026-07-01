@@ -1,8 +1,7 @@
 name: Update screenshots
 
 "on":
-  push:
-    branches: [dev]
+  pull_request:
     paths:
       - 'client/src/**'
       - 'client/index.html'
@@ -58,7 +57,7 @@ jobs:
             exit 0
           fi
           git commit -m "chore: update screenshots [skip ci]"
-          BRANCH=${{ github.ref_name }}
+          BRANCH=${{ github.head_ref || github.ref_name }}
           for i in 1 2 3 4 5; do
             git push origin HEAD:$BRANCH && exit 0
             echo "Push rejected, rebasing (attempt $i)..."

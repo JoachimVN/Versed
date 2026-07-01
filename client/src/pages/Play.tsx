@@ -1,9 +1,12 @@
 import { useState, useEffect, useRef } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
-import { Music, ChevronLeft, ChevronRight, ArrowLeft, Flame } from 'lucide-react';
+import { ChevronLeft, ChevronRight, Flame, Pencil } from 'lucide-react';
+import LiquidGlass from 'liquid-glass-react';
 import { socket } from '../socket';
 import { RankBadge } from '../components/RankBadge';
-import { RevealStatusHeader, RevealSongCard } from '../components/RevealShared';
+import { useAnimatedScore } from '../hooks/useAnimatedScore';
+import { NoOneGotItCardContent, GotItCardContent } from '../components/RevealShared';
+import { BackButton } from '../components/BackButton';
 import { APP_NAME, BID_OPTIONS } from '../config';
 import type { Hint, LeaderboardEntry, RoundResultEvent } from '../types';
 
@@ -29,16 +32,19 @@ export interface PlayState {
   guessText: string;
   result: RoundResultEvent | null;
   myScore: number;
+  myScoreDelta: number;
   myStreak: number;
   mode: 'classic' | 'race';
   artistOnly: boolean;
   myRacePoints: number;
   myRaceTimeMs: number | null;
   leaderboard: LeaderboardEntry[];
+  leaderboardDeltas: Record<string, number>;
+  songPlaying: boolean;
   reconnecting: boolean;
   hostReconnecting: boolean;
   savedSession: { pin: string; name: string } | null;
-  guessInputRef: React.RefObject<HTMLInputElement>;
+  guessInputRef: React.RefObject<HTMLInputElement | null>;
   setPin: (v: string) => void;
   setName: (v: string) => void;
   setBidIndex: (i: number | ((prev: number) => number)) => void;
@@ -50,6 +56,7 @@ export interface PlayState {
   skipGuess: () => void;
   newGamePin: string | null;
   rejoinNewGame: () => void;
+  renamePlayer: (newName: string) => void;
 }
 
 function usePlayGame(pinParam?: string): PlayState {
@@ -73,6 +80,8 @@ function usePlayGame(pinParam?: string): PlayState {
   const [guessText, setGuessText] = useState('');
   const [result, setResult] = useState<RoundResultEvent | null>(null);
   const [myScore, setMyScore] = useState(0);
+  const myScoreRef = useRef(0);
+  const [myScoreDelta, setMyScoreDelta] = useState(0);
   const [myStreak, setMyStreak] = useState(0);
   const [mode, setMode] = useState<'classic' | 'race'>('classic');
   const modeRef = useRef<'classic' | 'race'>('classic');
@@ -80,6 +89,9 @@ function usePlayGame(pinParam?: string): PlayState {
   const [myRacePoints, setMyRacePoints] = useState(0);
   const [myRaceTimeMs, setMyRaceTimeMs] = useState<number | null>(null);
   const [leaderboard, setLeaderboard] = useState<LeaderboardEntry[]>([]);
+  const leaderboardRef = useRef<LeaderboardEntry[]>([]);
+  const [leaderboardDeltas, setLeaderboardDeltas] = useState<Record<string, number>>({});
+  const [songPlaying, setSongPlaying] = useState(false);
   const [reconnecting, setReconnecting] = useState(false);
   const [hostReconnecting, setHostReconnecting] = useState(false);
   const [newGamePin, setNewGamePin] = useState<string | null>(null);
@@ -123,7 +135,7 @@ function usePlayGame(pinParam?: string): PlayState {
     setPhase('bid_submitted');
     socket.emit('submit_bid', { seconds }, (res?: { ok: boolean }) => {
       if (res && !res.ok) {
-        setError("That didn't go through — try again.");
+        setError("That didn't go through, try again.");
         setPhase('betting');
       }
     });
@@ -142,6 +154,7 @@ function usePlayGame(pinParam?: string): PlayState {
 
   function stopCountdown() {
     if (timerRef.current) { clearInterval(timerRef.current); timerRef.current = null; }
+    setTimeLeft(0);
   }
 
   useEffect(() => {
@@ -162,6 +175,18 @@ function usePlayGame(pinParam?: string): PlayState {
             setPhase('join');
           }
         });
+      } else {
+        try {
+          const saved = JSON.parse(localStorage.getItem('versed_session') ?? 'null');
+          if (saved?.pin) {
+            socket.emit('check_game', { pin: saved.pin }, ({ exists }: { exists: boolean }) => {
+              if (!exists) {
+                setSavedSession(null);
+                localStorage.removeItem('versed_session');
+              }
+            });
+          }
+        } catch { /* ignore */ }
       }
     });
 
@@ -180,6 +205,7 @@ function usePlayGame(pinParam?: string): PlayState {
       guessTextRef.current = '';
       setGuessText('');
       setResult(null);
+      setMyScoreDelta(0);
       setError('');
       setMyRacePoints(0);
       setMyRaceTimeMs(null);
@@ -206,10 +232,14 @@ function usePlayGame(pinParam?: string): PlayState {
 
     socket.on('betting_closed', (data: { lowestBid: number; guesserNames: string[] }) => {
       stopCountdown();
+      if (autoSubmitTimerRef.current) { clearTimeout(autoSubmitTimerRef.current); autoSubmitTimerRef.current = null; }
+      setSongPlaying(false);
       setLowestBid(data.lowestBid);
       setGuesserNames(data.guesserNames);
       setPhase('watching');
     });
+
+    socket.on('song_playing', () => setSongPlaying(true));
 
     socket.on('guessing_start', (data: { guesserNames: string[]; timeLimit: number; endsAt?: number }) => {
       setGuesserNames(data.guesserNames);
@@ -234,16 +264,32 @@ function usePlayGame(pinParam?: string): PlayState {
 
     socket.on('score_update', ({ players }: { players: { name: string; score: number; streak: number }[] }) => {
       const me = players.find(p => p.name === myNameRef.current);
-      if (me) { setMyScore(me.score); setMyStreak(me.streak); }
+      if (me) {
+        setMyScoreDelta(Math.max(0, me.score - myScoreRef.current));
+        myScoreRef.current = me.score;
+        setMyScore(me.score);
+        setMyStreak(me.streak);
+      }
     });
 
-    socket.on('leaderboard', ({ leaderboard: lb }: { leaderboard: LeaderboardEntry[] }) => {
+    const applyLeaderboard = (lb: LeaderboardEntry[]) => {
+      const deltas: Record<string, number> = {};
+      for (const entry of lb) {
+        const prev = leaderboardRef.current.find(e => e.name === entry.name);
+        deltas[entry.name] = prev ? Math.max(0, entry.score - prev.score) : entry.score;
+      }
+      setLeaderboardDeltas(deltas);
+      leaderboardRef.current = lb;
       setLeaderboard(lb);
+    };
+
+    socket.on('leaderboard', ({ leaderboard: lb }: { leaderboard: LeaderboardEntry[] }) => {
+      applyLeaderboard(lb);
       setPhase('leaderboard');
     });
 
     socket.on('game_over', ({ leaderboard: lb }: { leaderboard: LeaderboardEntry[] }) => {
-      setLeaderboard(lb);
+      applyLeaderboard(lb);
       setPhase('finished');
     });
 
@@ -279,7 +325,7 @@ function usePlayGame(pinParam?: string): PlayState {
       stopCountdown();
       if (autoSubmitTimerRef.current) clearTimeout(autoSubmitTimerRef.current);
       if (guessAutoSubmitTimerRef.current) clearTimeout(guessAutoSubmitTimerRef.current);
-      ['connect','disconnect','round_start','betting_closed','guessing_start','your_turn',
+      ['connect','disconnect','round_start','betting_closed','song_playing','guessing_start','your_turn',
        'round_result','score_update','leaderboard','game_over',
        'host_reconnecting','host_reconnected','host_disconnected','game_restarted','kicked']
         .forEach(e => socket.off(e));
@@ -331,7 +377,7 @@ function usePlayGame(pinParam?: string): PlayState {
       // "waiting for others"; drop them back so they can lock in again.
       if (res && !res.ok) {
         bidSubmittedRef.current = false;
-        setError("That didn't go through - try again.");
+        setError("That didn't go through, try again.");
         setPhase('betting');
       }
     });
@@ -375,8 +421,26 @@ function usePlayGame(pinParam?: string): PlayState {
         setSavedSession(session);
         localStorage.setItem('versed_session', JSON.stringify(session));
         setLeaderboard([]);
+        leaderboardRef.current = [];
+        setLeaderboardDeltas({});
         setResult(null);
         setPhase('waiting');
+      }
+    });
+  };
+
+  const renamePlayer = (newName: string) => {
+    const trimmed = newName.trim();
+    if (!trimmed) return;
+    socket.emit('rename_player', { newName: trimmed }, ({ success, error: e }: { success?: boolean; error?: string }) => {
+      if (e) { setError(e); return; }
+      if (success) {
+        myNameRef.current = trimmed;
+        setMyName(trimmed);
+        setError('');
+        const session = { pin: pinRef.current, name: trimmed };
+        setSavedSession(session);
+        localStorage.setItem('versed_session', JSON.stringify(session));
       }
     });
   };
@@ -384,8 +448,8 @@ function usePlayGame(pinParam?: string): PlayState {
   return {
     phase, pin, name, myName, error, roundIndex, totalRounds, hints,
     timeLeft, bettingTime, bidIndex, myBid, guesserNames, lowestBid,
-    guessText, result, myScore, myStreak, mode, artistOnly, myRacePoints, myRaceTimeMs,
-    leaderboard, reconnecting, hostReconnecting, savedSession, guessInputRef,
+    guessText, result, myScore, myScoreDelta, myStreak, mode, artistOnly, myRacePoints, myRaceTimeMs,
+    leaderboard, leaderboardDeltas, songPlaying, reconnecting, hostReconnecting, savedSession, guessInputRef,
     newGamePin, rejoinNewGame,
     setPin, setName,
   setBidIndex: (i: number | ((prev: number) => number)) => {
@@ -396,123 +460,467 @@ function usePlayGame(pinParam?: string): PlayState {
     });
   },
   setGuessText: (v: string) => { guessTextRef.current = v; setGuessText(v); },
-    join, rejoinSaved, submitBid, submitGuess, skipGuess,
+    join, rejoinSaved, submitBid, submitGuess, skipGuess, renamePlayer,
   };
+}
+
+function guessTextClass(guess: string | null, correct: boolean): string {
+  if (guess === null) return 'text-white/15 italic';
+  return correct ? 'text-green-400' : 'text-white/20 italic';
+}
+
+function timerColor(pct: number): string {
+  if (pct > 0.6) return 'rgba(52,211,153,0.85)';
+  if (pct > 0.35) return 'rgba(251,191,36,0.85)';
+  if (pct > 0.12) return 'rgba(249,115,22,0.85)';
+  return 'rgba(239,68,68,0.85)';
+}
+
+// Each bar gets a unique animation name, duration, and delay so they move independently.
+const AUDIO_BARS = [
+  { anim: 'audioBarC', dur: 1.1, delay: 0    },
+  { anim: 'audioBar',  dur: 1.5, delay: 0.14 },
+  { anim: 'audioBarD', dur: 0.85,delay: 0.28 },
+  { anim: 'audioBarB', dur: 1.7, delay: 0.07 },
+  { anim: 'audioBar',  dur: 1, delay: 0.42 },
+  { anim: 'audioBarC', dur: 1.3, delay: 0.21 },
+  { anim: 'audioBarD', dur: 0.9, delay: 0.35 },
+  { anim: 'audioBarB', dur: 1.6, delay: 0.08 },
+  { anim: 'audioBarC', dur: 1.2, delay: 0.26 },
+] as const;
+
+function bidArrowStyle(enabled: boolean, pressed: boolean, hovered: boolean): { bg: string; border: string } {
+  if (!enabled) return { bg: 'rgba(255,255,255,0.03)', border: '1px solid rgba(255,255,255,0.04)' };
+  if (pressed) return { bg: 'rgba(150,17,193,0.28)', border: '1px solid rgba(150,17,193,0.5)' };
+  if (hovered) return { bg: 'rgba(255,255,255,0.13)', border: '1px solid rgba(255,255,255,0.18)' };
+  return { bg: 'rgba(255,255,255,0.07)', border: '1px solid rgba(255,255,255,0.10)' };
+}
+
+function BidArrow({ direction, enabled, onClick }: Readonly<{ direction: 'left' | 'right'; enabled: boolean; onClick: () => void }>) {
+  const [hovered, setHovered] = useState(false);
+  const [pressed, setPressed] = useState(false);
+  const { bg, border } = bidArrowStyle(enabled, pressed, hovered);
+  return (
+    <button
+      onClick={() => enabled && onClick()}
+      onMouseEnter={() => setHovered(true)}
+      onMouseLeave={() => { setHovered(false); setPressed(false); }}
+      onMouseDown={() => enabled && setPressed(true)}
+      onMouseUp={() => setPressed(false)}
+      style={{
+        width: 52, height: 52, borderRadius: '50%', border,
+        cursor: enabled ? 'pointer' : 'default',
+        background: bg,
+        opacity: enabled ? 1 : 0.22,
+        display: 'flex', alignItems: 'center', justifyContent: 'center',
+        transition: 'background 0.15s ease, border-color 0.15s ease, transform 0.1s ease',
+        transform: pressed ? 'scale(0.9)' : 'scale(1)',
+      }}
+    >
+      {direction === 'left'
+        ? <ChevronLeft className="w-5 h-5 text-white" />
+        : <ChevronRight className="w-5 h-5 text-white" />}
+    </button>
+  );
 }
 
 // ─── Phase views ─────────────────────────────────────────────────────────────
 
 function JoinView({ game }: Readonly<{ game: PlayState }>) {
   const { pin, name, error, savedSession, setPin, setName, join, rejoinSaved } = game;
-  const navigate = useNavigate();
+  const [joinHovered, setJoinHovered] = useState(false);
+  const [pinFocused, setPinFocused] = useState(false);
+  const [nameFocused, setNameFocused] = useState(false);
+  const canJoin = pin.length === 3 && name.trim().length > 0;
+
   return (
-    <div className="min-h-screen flex flex-col items-center justify-center p-6 gap-5">
-      <button onClick={() => navigate('/')} className="absolute top-5 left-5 p-2 rounded-xl bg-white/10 text-white/60 hover:bg-white/20 hover:text-white transition-colors">
-        <ArrowLeft className="w-5 h-5" />
-      </button>
-      <img src={`${import.meta.env.BASE_URL}logo.svg`} alt={APP_NAME} className="h-16 w-auto" />
+    <div
+      className="page-enter relative min-h-screen flex flex-col items-center justify-center p-6 gap-10"
+      style={{ zIndex: 1 }}
+    >
+      <BackButton />
+
+      <img
+        src={`${import.meta.env.BASE_URL}logo.png`}
+        alt={APP_NAME}
+        className="h-32 w-auto drop-shadow-2xl"
+      />
 
       {savedSession && (
-        <div className="w-full max-w-xs">
-          <button onClick={rejoinSaved}
-            className="w-full py-4 rounded-2xl bg-purple-600 text-white font-bold text-xl hover:bg-purple-500 transition-colors">
-            Rejoin as {savedSession.name}
+        <div className="flex flex-col items-center gap-3">
+          <button
+            type="button"
+            onClick={rejoinSaved}
+            className="liquid-btn relative cursor-pointer border-0 bg-transparent p-0"
+            style={{ width: '310px', height: '70px', borderRadius: '100px', background: 'rgba(0,0,0,0.001)' }}
+          >
+            <div style={{
+              position: 'absolute', inset: 0, borderRadius: '100px',
+              background: 'rgba(110, 32, 155, 0.05)',
+              pointerEvents: 'none',
+            }} />
+            <LiquidGlass
+              style={{ position: 'absolute', top: '50%', left: '50%' }}
+              displacementScale={64}
+              blurAmount={0.05}
+              saturation={130}
+              aberrationIntensity={2}
+              elasticity={0.12}
+              cornerRadius={100}
+              padding="13px 48px"
+            >
+              <div style={{ textAlign: 'center', whiteSpace: 'nowrap', minWidth: '214px' }}>
+                <p style={{ color: 'rgba(255,255,255,0.38)', fontSize: '0.6rem', letterSpacing: '0.18em', textTransform: 'uppercase', lineHeight: 1, marginBottom: '5px' }}>
+                  Continue as · {savedSession.pin}
+                </p>
+                <p className="text-white font-black text-xl" style={{ lineHeight: 1.2 }}>{savedSession.name}</p>
+              </div>
+            </LiquidGlass>
           </button>
-          <p className="text-white/30 text-xs text-center mt-2">PIN {savedSession.pin}</p>
+          <p className="text-white/20 text-xs tracking-wider">— or join a different game —</p>
         </div>
       )}
 
-      <div className="w-full max-w-xs flex flex-col gap-3">
-        {savedSession && <p className="text-white/30 text-xs text-center">— or join a different game —</p>}
-        <input type="text" inputMode="numeric" pattern="[0-9]*" placeholder="Game PIN"
-          value={pin} onChange={e => setPin(e.target.value.replace(/\D/g, ''))} maxLength={3}
-          className="w-full px-4 py-4 rounded-xl bg-white/10 text-white text-center text-2xl font-bold placeholder-white/30 outline-none focus:ring-2 focus:ring-white/30 tracking-widest" />
-        <input type="text" placeholder="Your name"
-          value={name} onChange={e => setName(e.target.value)}
-          onKeyDown={e => e.key === 'Enter' && join()} maxLength={20}
-          className="w-full px-4 py-4 rounded-xl bg-white/10 text-white text-center text-xl placeholder-white/30 outline-none focus:ring-2 focus:ring-white/30" />
-        {error && <p className="text-red-400 text-sm text-center">{error}</p>}
-        <button onClick={join} disabled={!pin.trim() || !name.trim()}
-          className="w-full py-4 rounded-2xl bg-white/10 text-white font-bold text-xl disabled:opacity-30 hover:bg-white/20 transition-colors">
-          Join
-        </button>
+      {/* Input card — LiquidGlass */}
+      <div className="liquid-btn relative" style={{ width: '310px', height: '165px' }}>
+        <LiquidGlass
+          style={{ position: 'absolute', top: '50%', left: '50%' }}
+          displacementScale={55}
+          blurAmount={0.06}
+          saturation={130}
+          aberrationIntensity={1.5}
+          elasticity={0.08}
+          cornerRadius={20}
+          padding="20px 24px"
+        >
+          <div style={{ width: '262px', textAlign: 'center' }}>
+            {/* PIN */}
+            <div style={{ marginBottom: '14px' }}>
+              <span style={{
+                display: 'block',
+                color: pinFocused ? 'rgba(255,255,255,0.6)' : 'rgba(255,255,255,0.28)',
+                fontSize: '0.6rem', letterSpacing: '0.18em', textTransform: 'uppercase',
+                marginBottom: '6px', transition: 'color 0.2s ease',
+              }}>Game PIN</span>
+              <input
+                type="text"
+                inputMode="numeric"
+                pattern="[0-9]*"
+                placeholder="1 2 3"
+                value={pin}
+                onChange={e => setPin(e.target.value.replace(/\D/g, ''))}
+                maxLength={3}
+                onFocus={() => setPinFocused(true)}
+                onBlur={() => setPinFocused(false)}
+                className="text-white font-black outline-none bg-transparent w-full text-center placeholder-white/20"
+                style={{ fontSize: '2rem', letterSpacing: '0.4em', textIndent: '0.4em', lineHeight: '1', display: 'block' }}
+              />
+            </div>
+            <div style={{ height: '1px', background: 'rgba(255,255,255,0.10)', marginBottom: '14px' }} />
+            {/* Name */}
+            <div>
+              <span style={{
+                display: 'block',
+                color: nameFocused ? 'rgba(255,255,255,0.6)' : 'rgba(255,255,255,0.28)',
+                fontSize: '0.6rem', letterSpacing: '0.18em', textTransform: 'uppercase',
+                marginBottom: '6px', transition: 'color 0.2s ease',
+              }}>Your name</span>
+              <input
+                type="text"
+                placeholder="Enter your name"
+                value={name}
+                onChange={e => setName(e.target.value)}
+                onKeyDown={e => e.key === 'Enter' && join()}
+                onFocus={() => setNameFocused(true)}
+                onBlur={() => setNameFocused(false)}
+                maxLength={20}
+                className="text-white text-xl font-semibold placeholder-white/22 outline-none bg-transparent w-full text-center"
+                style={{ lineHeight: '1.4', display: 'block' }}
+              />
+            </div>
+          </div>
+        </LiquidGlass>
       </div>
+
+      <div style={{
+        display: 'grid',
+        gridTemplateRows: error ? '1fr' : '0fr',
+        transition: 'grid-template-rows 0.25s ease',
+      }}>
+        <div style={{ overflow: 'hidden' }}>
+          <p
+            className="text-sm text-center"
+            style={{
+              width: '310px',
+              paddingTop: '2px',
+              opacity: error ? 1 : 0,
+              transition: 'opacity 0.2s ease',
+              color: 'rgba(248, 113, 113, 0.9)',
+              letterSpacing: '0.01em',
+            }}
+          >{error}</p>
+        </div>
+      </div>
+
+      <button
+        type="button"
+        className="liquid-btn relative border-0 bg-transparent p-0"
+        style={{
+          width: '310px',
+          height: '64px',
+          borderRadius: '100px',
+          background: 'rgba(0,0,0,0.001)',
+          opacity: canJoin ? 1 : 0.3,
+          cursor: canJoin ? 'pointer' : 'not-allowed',
+          transition: 'opacity 0.25s ease',
+        }}
+        onMouseEnter={() => setJoinHovered(true)}
+        onMouseLeave={() => setJoinHovered(false)}
+        onClick={() => canJoin && join()}
+      >
+        <LiquidGlass
+          style={{
+            position: 'absolute', top: '50%', left: '50%',
+            filter: joinHovered ? 'drop-shadow(0 0 10px rgba(0, 128, 126, 0.65))' : 'drop-shadow(0 0 0px rgba(0, 128, 126, 0))',
+            transition: 'filter 0.25s ease',
+          }}
+          displacementScale={64}
+          blurAmount={0.05}
+          saturation={130}
+          aberrationIntensity={2}
+          elasticity={0.12}
+          cornerRadius={100}
+          padding="18px 96px"
+        >
+          <span className="text-white font-bold text-xl" style={{ whiteSpace: 'nowrap' }}>Join game</span>
+        </LiquidGlass>
+      </button>
     </div>
   );
 }
 
 function WaitingView({ game }: Readonly<{ game: PlayState }>) {
+  const [editing, setEditing] = useState(false);
+  const [draftName, setDraftName] = useState('');
+  const [visible, setVisible] = useState(false);
+
+  useEffect(() => { const t = setTimeout(() => setVisible(true), 40); return () => clearTimeout(t); }, []);
+
+  const startEdit = () => { setDraftName(game.myName); setEditing(true); };
+  const cancelEdit = () => setEditing(false);
+  const confirmEdit = () => {
+    if (!draftName.trim() || draftName.trim() === game.myName) { setEditing(false); return; }
+    game.renamePlayer(draftName);
+    setEditing(false);
+  };
+
   return (
-    <div className="min-h-screen flex flex-col items-center justify-center gap-4 p-6">
-      <div className="w-12 h-12 border-4 border-purple-500 border-t-transparent rounded-full animate-spin" />
-      <p className="text-white text-xl font-bold">{game.myName}</p>
-      <p className="text-white/50">You're in! Hang tight…</p>
+    <div className="relative min-h-screen overflow-hidden">
+      {/* Background */}
+      <img
+        src={`${import.meta.env.BASE_URL}background.svg`}
+        alt=""
+        aria-hidden="true"
+        style={{ position: 'fixed', inset: 0, width: '100%', height: '100%', objectFit: 'cover', zIndex: 0 }}
+      />
+      {/* Blur + dark scrim */}
+      <div style={{ position: 'fixed', inset: 0, zIndex: 1, background: 'rgba(5,5,14,0.80)', backdropFilter: 'blur(28px)' }} />
+
+      {/* Content */}
+      <div
+        className="relative flex flex-col items-center justify-center min-h-screen gap-10 p-6"
+        style={{ zIndex: 2, transition: 'opacity 0.5s ease, transform 0.5s ease', opacity: visible ? 1 : 0, transform: visible ? 'translateY(0)' : 'translateY(16px)' }}
+      >
+        <BackButton />
+        <img src={`${import.meta.env.BASE_URL}logo.png`} alt={APP_NAME} className="w-auto drop-shadow-2xl" style={{ height: '168px' }} />
+
+        <div className="liquid-btn relative" style={{ width: '310px', height: '330px' }}>
+          <LiquidGlass
+            style={{ position: 'absolute', top: '50%', left: '50%' }}
+            displacementScale={55}
+            blurAmount={0.06}
+            saturation={130}
+            aberrationIntensity={1.5}
+            elasticity={0.08}
+            cornerRadius={20}
+            padding="24px 28px"
+          >
+            <div style={{ width: '254px', minHeight: '220px', display: 'flex', flexDirection: 'column', alignItems: 'center' }}>
+              <span style={{
+                fontSize: '1.95rem', fontFamily: "'Montserrat', sans-serif", fontWeight: 900, letterSpacing: '0.08em', textTransform: 'uppercase',
+                background: 'linear-gradient(to bottom left, rgba(110,32,155,0.45) 0%, transparent 55%), linear-gradient(to top right, rgba(0,200,195,0.45) 0%, transparent 55%), #fff',
+                WebkitBackgroundClip: 'text', WebkitTextFillColor: 'transparent', backgroundClip: 'text',
+              }}>
+                You're in!
+              </span>
+              <div style={{ flex: 1, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', gap: '10px', width: '100%' }}>
+                <span style={{ color: 'rgba(255,255,255,0.28)', fontSize: '0.6rem', letterSpacing: '0.14em', textTransform: 'uppercase' }}>
+                  Playing as
+                </span>
+                {editing ? (
+                  <>
+                    <input
+                      autoFocus
+                      type="text"
+                      value={draftName}
+                      onChange={e => setDraftName(e.target.value)}
+                      onKeyDown={e => { if (e.key === 'Enter') confirmEdit(); else if (e.key === 'Escape') cancelEdit(); }}
+                      onBlur={confirmEdit}
+                      maxLength={20}
+                      style={{
+                        background: 'none', border: 'none', borderBottom: '1px solid rgba(255,255,255,0.25)',
+                        color: 'white', fontSize: '1.5rem', fontWeight: 800, textAlign: 'center',
+                        outline: 'none', width: '100%', letterSpacing: '-0.01em',
+                        padding: '2px 0 4px', fontFamily: 'inherit',
+                      }}
+                    />
+                    {game.error && <p style={{ color: '#f87171', fontSize: '0.7rem' }}>{game.error}</p>}
+                  </>
+                ) : (
+                  <button onClick={startEdit} style={{ display: 'flex', alignItems: 'center', gap: '7px', background: 'none', border: 'none', cursor: 'pointer', color: 'white', fontSize: '1.5rem', fontWeight: 800, letterSpacing: '-0.01em' }}>
+                    {game.myName}
+                    <Pencil style={{ width: '14px', height: '14px', color: 'rgba(255,255,255,0.28)', flexShrink: 0 }} />
+                  </button>
+                )}
+              </div>
+              <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '8px', width: '100%' }}>
+                <div style={{ width: '100%', height: '1px', background: 'rgba(255,255,255,0.07)', marginBottom: '4px' }} />
+                <div style={{ display: 'flex', gap: '6px' }}>
+                  {[0, 1, 2].map(i => (
+                    <div key={i} style={{ width: '6px', height: '6px', borderRadius: '50%', background: 'rgba(0,128,126,0.8)', animation: 'dotBounce 1.4s ease-in-out infinite', animationDelay: `${i * 0.18}s` }} />
+                  ))}
+                </div>
+                <span style={{ color: 'rgba(255,255,255,0.28)', fontSize: '0.72rem', letterSpacing: '0.03em' }}>
+                  Waiting for host to start…
+                </span>
+              </div>
+            </div>
+          </LiquidGlass>
+        </div>
+      </div>
     </div>
   );
 }
 
 export function BettingView({ game }: Readonly<{ game: PlayState }>) {
-  const { roundIndex, totalRounds, timeLeft, bettingTime, hints, bidIndex, myScore, error, submitBid, setBidIndex } = game;
-  const timerPct = (timeLeft / bettingTime) * 100;
+  const { roundIndex, totalRounds, timeLeft, bettingTime, bidIndex, error, submitBid, setBidIndex } = game;
+  const timerPct = bettingTime > 0 ? Math.max(0, (timeLeft / bettingTime)) * 100 : 0;
+  const currentBid = BID_OPTIONS[bidIndex];
+  const canGoLeft = bidIndex > 0;
+  const canGoRight = bidIndex < BID_OPTIONS.length - 1;
+  const estPoints = 500 + Math.round(1000 * Math.max(0, 1 - currentBid / 60));
+
   return (
-    <div className="min-h-screen flex flex-col p-5 gap-4">
-      <div className="flex justify-between items-center">
-        <span className="text-white/50 text-sm">{roundIndex + 1}/{totalRounds}</span>
-        <span className="text-white font-black text-xl">{timeLeft}s</span>
-        <span className="text-white/50 text-sm">{myScore.toLocaleString()} pts</span>
+    <div className="min-h-screen flex flex-col relative overflow-hidden" style={{ background: '#080812' }}>
+      <img
+        src={`${import.meta.env.BASE_URL}background2.svg`}
+        alt=""
+        aria-hidden="true"
+        style={{ position: 'fixed', inset: 0, width: '100%', height: '100%', objectFit: 'cover', zIndex: 0, transform: 'rotate(270deg)' }}
+      />
+      <div style={{ position: 'fixed', inset: 0, zIndex: 1, background: 'rgba(5,5,14,0.82)', backdropFilter: 'blur(28px)' }} />
+
+      {/* Top bar */}
+      <div className="flex items-center justify-between px-5 pt-5 pb-3" style={{ position: 'relative', zIndex: 2 }}>
+        <span style={{ color: 'rgba(255,255,255,0.35)', fontSize: '0.85rem', fontWeight: 600 }}>
+          Round {roundIndex + 1}<span style={{ color: 'rgba(255,255,255,0.18)' }}>/{totalRounds}</span>
+        </span>
+        <span
+          className="font-black text-2xl tabular-nums"
+          style={{ color: 'white', transition: 'color 0.3s ease' }}
+        >
+          {timeLeft}s
+        </span>
       </div>
-      <div className="w-full bg-white/10 rounded-full h-1.5">
-        <div className="bg-purple-500 h-1.5 rounded-full transition-all duration-1000"
-          style={{ width: `${timerPct}%` }} />
+
+      {/* Timer bar */}
+      <div className="mx-5 h-0.5 rounded-full" style={{ background: 'rgba(255,255,255,0.07)', position: 'relative', zIndex: 2 }}>
+        <div
+          className="h-0.5 rounded-full"
+          style={{
+            width: `${timerPct}%`,
+            background: timerColor(timerPct / 100),
+            transition: timerPct === 0 ? 'none' : 'width 1s linear, background 0.4s ease',
+          }}
+        />
       </div>
 
-      {hints.length > 0 && (
-        <div className="flex flex-col items-center gap-6">
-          {hints.find(h => h.imageUrl)?.imageUrl && (
-            <img
-              src={hints.find(h => h.imageUrl)!.imageUrl}
-              alt="Album art"
-              className="w-40 h-40 rounded-3xl object-cover shadow-2xl blur-sm"
-            />
-          )}
-          {hints.some(h => !h.imageUrl) && (
-            <div className="flex flex-wrap justify-center gap-8">
-              {hints.filter(h => !h.imageUrl).map(h => (
-                <div key={h.label} className="flex flex-col items-center gap-1">
-                  <span className="text-white/30 text-xs uppercase tracking-[0.2em]">{h.label}</span>
-                  <span className="text-white font-black text-3xl">{h.value}</span>
-                </div>
-              ))}
-            </div>
-          )}
-        </div>
-      )}
+      {/* Bid picker */}
+      <div className="flex-1 flex flex-col items-center justify-center gap-6 px-5" style={{ position: 'relative', zIndex: 2 }}>
+        <p style={{ color: 'rgba(255,255,255,0.32)', fontSize: '0.75rem', textTransform: 'uppercase', letterSpacing: '0.14em' }}>
+          How many seconds do you need?
+        </p>
 
-      <div className="flex-1 flex flex-col items-center justify-center gap-6">
-        <p className="text-white/60 text-center">How fast can you name this song?</p>
+        <div className="flex items-center gap-5">
+          <BidArrow direction="left" enabled={canGoLeft} onClick={() => setBidIndex(i => i - 1)} />
 
-        <div className="flex items-center gap-6">
-          <button
-            onClick={() => setBidIndex(i => Math.max(0, i - 1))}
-            className="w-14 h-14 rounded-full bg-white/10 text-white flex items-center justify-center hover:bg-white/20 active:scale-95 transition-all"
-          ><ChevronLeft className="w-6 h-6" /></button>
-          <div className="text-center w-28">
-            <p className="text-white font-black text-5xl">{BID_OPTIONS[bidIndex]}</p>
-            <p className="text-white/40 text-sm">seconds</p>
+          {/* Bid value — LiquidGlass */}
+          <div className="liquid-btn relative" style={{ width: 160, height: 110 }}>
+            <LiquidGlass
+              style={{ position: 'absolute', top: '50%', left: '50%' }}
+              displacementScale={55}
+              blurAmount={0.06}
+              saturation={130}
+              aberrationIntensity={1.5}
+              elasticity={0.08}
+              cornerRadius={22}
+              padding="20px 32px"
+            >
+              <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 4, width: '96px' }}>
+                <span style={{ display: 'inline-block', minWidth: '60px', textAlign: 'center', color: 'white', fontWeight: 900, fontSize: '2.8rem', lineHeight: 1 }}>
+                  {currentBid}
+                </span>
+                <span style={{ display: 'inline-block', color: 'rgba(255,255,255,0.35)', fontSize: '0.65rem', letterSpacing: '0.14em', textTransform: 'uppercase' }}>
+                  seconds
+                </span>
+              </div>
+            </LiquidGlass>
           </div>
-          <button
-            onClick={() => setBidIndex(i => Math.min(BID_OPTIONS.length - 1, i + 1))}
-            className="w-14 h-14 rounded-full bg-white/10 text-white flex items-center justify-center hover:bg-white/20 active:scale-95 transition-all"
-          ><ChevronRight className="w-6 h-6" /></button>
+
+          <BidArrow direction="right" enabled={canGoRight} onClick={() => setBidIndex(i => i + 1)} />
+        </div>
+
+        {/* Score potential */}
+        <div className="flex flex-col items-center gap-1">
+          <span
+            className="tabular-nums transition-all duration-200"
+            style={{ color: 'rgba(150,17,193,0.9)', fontWeight: 900, fontSize: '1.6rem', lineHeight: 1 }}
+          >
+            ~{estPoints.toLocaleString()}
+          </span>
+          <p style={{ color: 'rgba(255,255,255,0.22)', fontSize: '0.68rem' }}>pts + difficulty bonus</p>
         </div>
       </div>
 
-      {error && <p className="text-red-400 text-sm text-center">{error}</p>}
+      {error && <p className="text-red-400 text-sm text-center px-5 pb-2" style={{ position: 'relative', zIndex: 2 }}>{error}</p>}
 
-      <button onClick={submitBid}
-        className="w-full py-4 rounded-2xl bg-purple-600 text-white font-bold text-xl hover:bg-purple-500 active:scale-95 transition-all">
-        Lock In
-      </button>
+      {/* Lock In */}
+      <div className="px-5 pb-8 flex justify-center" style={{ position: 'relative', zIndex: 2 }}>
+        <button
+          type="button"
+          className="liquid-btn relative cursor-pointer border-0 bg-transparent p-0"
+          style={{ width: '310px', height: '64px', borderRadius: '100px', background: 'rgba(0,0,0,0.001)' }}
+          onClick={submitBid}
+        >
+          <LiquidGlass
+            style={{ position: 'absolute', top: '50%', left: '50%' }}
+            displacementScale={64}
+            blurAmount={0.05}
+            saturation={130}
+            aberrationIntensity={2}
+            elasticity={0.12}
+            cornerRadius={100}
+            padding="18px 36px"
+          >
+            <div style={{ position: 'relative' }}>
+              <div style={{ position: 'absolute', inset: '-18px -36px', borderRadius: '100px', pointerEvents: 'none', background: 'rgba(110,32,155,0.15)' }} />
+              <span className="text-white font-bold text-xl" style={{ whiteSpace: 'nowrap', position: 'relative', display: 'inline-block', minWidth: '238px', textAlign: 'center' }}>
+                Lock In · {currentBid}s
+              </span>
+            </div>
+          </LiquidGlass>
+        </button>
+      </div>
     </div>
   );
 }
@@ -527,59 +935,92 @@ function BidSubmittedView({ game }: Readonly<{ game: PlayState }>) {
   );
 }
 
-function GuessInputSection({ guessText, guessInputRef, setGuessText, submitGuess, artistOnly }: Readonly<{
-  guessText: string;
-  guessInputRef: React.RefObject<HTMLInputElement>;
-  setGuessText: (v: string) => void;
-  submitGuess: () => void;
-  artistOnly?: boolean;
-}>) {
-  return (
-    <>
-      <div className="flex-1 flex flex-col items-center justify-center gap-6">
-        <p className="text-white/60">{artistOnly ? 'Name the artist' : 'Name the song'}</p>
-        <input
-          ref={guessInputRef}
-          type="text"
-          placeholder={artistOnly ? 'Type artist name...' : 'Type song title...'}
-          value={guessText}
-          onChange={e => setGuessText(e.target.value)}
-          onKeyDown={e => e.key === 'Enter' && submitGuess()}
-          className="w-full px-4 py-4 rounded-xl bg-white/10 text-white text-center text-xl placeholder-white/30 outline-none focus:ring-2 focus:ring-purple-500"
-          autoComplete="off"
-          autoCorrect="off"
-          spellCheck={false}
-        />
-      </div>
-      <button onClick={submitGuess} disabled={!guessText.trim()}
-        className="w-full py-4 rounded-2xl bg-purple-600 text-white font-bold text-xl disabled:opacity-30 hover:bg-purple-500 active:scale-95 transition-all">
-        Submit
-      </button>
-    </>
-  );
-}
 
 function WatchingView({ game }: Readonly<{ game: PlayState }>) {
-  const { lowestBid, guesserNames, mode } = game;
-
-  if (mode === 'race') {
-    return (
-      <div className="min-h-screen flex flex-col items-center justify-center gap-4 p-6 text-center">
-        <Music className="w-14 h-14 text-white animate-pulse" />
-        <p className="text-white font-black text-2xl">Get ready…</p>
-        <p className="text-white/30 text-sm">Song starts soon — everyone guesses at once</p>
-      </div>
-    );
-  }
+  const { lowestBid, guesserNames, mode, songPlaying } = game;
+  const [visible, setVisible] = useState(false);
+  useEffect(() => { const t = setTimeout(() => setVisible(true), 30); return () => clearTimeout(t); }, []);
+  const isRace = mode === 'race';
 
   return (
-    <div className="min-h-screen flex flex-col items-center justify-center gap-4 p-6 text-center">
-      <Music className="w-14 h-14 text-white animate-pulse" />
-      <div>
-        <p className="text-white/40 text-sm mb-1">Guessing after {lowestBid}s</p>
-        <p className="text-white font-black text-2xl">{guesserNames.join(' & ')}</p>
+    <div className="relative min-h-screen overflow-hidden">
+      {/* Background */}
+      <img
+        src={`${import.meta.env.BASE_URL}background4.svg`}
+        alt=""
+        aria-hidden="true"
+        style={{ position: 'fixed', inset: 0, width: '100%', height: '100%', objectFit: 'cover', zIndex: 0, transform: 'rotate(180deg)' }}
+      />
+      <div style={{ position: 'fixed', inset: 0, zIndex: 1, background: 'rgba(5,5,14,0.82)', backdropFilter: 'blur(28px)' }} />
+
+      {/* Content */}
+      <div
+        className="relative flex flex-col items-center justify-center min-h-screen gap-8 p-6"
+        style={{
+          zIndex: 2,
+          transition: 'opacity 0.4s ease, transform 0.4s ease',
+          opacity: visible ? 1 : 0,
+          transform: visible ? 'translateY(0)' : 'translateY(14px)',
+        }}
+      >
+        <div className="liquid-btn relative" style={{ width: '310px', height: '240px' }}>
+          <LiquidGlass
+            style={{ position: 'absolute', top: '50%', left: '50%' }}
+            displacementScale={55}
+            blurAmount={0.06}
+            saturation={130}
+            aberrationIntensity={1.5}
+            elasticity={0.08}
+            cornerRadius={20}
+            padding="28px 28px"
+          >
+            <div style={{ width: '254px', display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '18px' }}>
+
+              {/* Animated waveform — static until song actually starts */}
+              <div style={{ display: 'flex', gap: '5px', alignItems: 'center', height: '36px', transition: 'opacity 0.3s ease', opacity: (isRace || songPlaying) ? 1 : 0.35 }}>
+                {AUDIO_BARS.map((bar) => (
+                  <div
+                    key={bar.delay}
+                    style={{
+                      width: '3px', height: '100%', borderRadius: '2px',
+                      background: isRace ? 'rgba(234,88,12,0.75)' : 'rgba(150,17,193,0.75)',
+                      animation: (isRace || songPlaying) ? `${bar.anim} ${bar.dur}s ease-in-out infinite` : 'none',
+                      animationDelay: `${bar.delay}s`,
+                      transformOrigin: 'center',
+                      transform: (isRace || songPlaying) ? undefined : 'scaleY(0.07)',
+                    }}
+                  />
+                ))}
+              </div>
+
+              <div style={{ width: '100%', height: '1px', background: 'rgba(255,255,255,0.07)' }} />
+
+              {isRace ? (
+                <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '8px' }}>
+                  <span style={{ color: 'rgba(255,255,255,0.32)', fontSize: '0.6rem', letterSpacing: '0.2em', textTransform: 'uppercase' }}>
+                    Get ready
+                  </span>
+                  <span style={{ display: 'inline-block', minWidth: '200px', color: 'white', fontWeight: 900, fontSize: '1.4rem', lineHeight: 1.3, textAlign: 'center' }}>
+                    Everyone guesses at once
+                  </span>
+                </div>
+              ) : (
+                <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '6px' }}>
+                  <span style={{ color: 'rgba(255,255,255,0.32)', fontSize: '0.6rem', letterSpacing: '0.2em', textTransform: 'uppercase' }}>
+                    {songPlaying ? 'Listen closely' : 'Get ready'}
+                  </span>
+                  <span style={{ display: 'inline-block', minWidth: '200px', color: 'white', fontWeight: 900, fontSize: '1.5rem', lineHeight: 1.25, textAlign: 'center' }}>
+                    {guesserNames.join(' & ')}
+                  </span>
+                  <span style={{ display: 'inline-block', minWidth: '160px', color: 'rgba(255,255,255,0.3)', fontSize: '0.82rem', textAlign: 'center' }}>
+                    guesses after {lowestBid}s
+                  </span>
+                </div>
+              )}
+            </div>
+          </LiquidGlass>
+        </div>
       </div>
-      <p className="text-white/30 text-sm">Listen closely...</p>
     </div>
   );
 }
@@ -588,157 +1029,512 @@ function WatchingView({ game }: Readonly<{ game: PlayState }>) {
 // guessing phase. Keeping a single component across both states means the input
 // element is never unmounted — focus and text survive the transition, which
 // prevents the mobile keyboard from dismissing mid-song.
-function GuessingView({ game }: Readonly<{ game: PlayState }>) {
-  const { phase, timeLeft, myScore, guessText, guessInputRef, setGuessText, submitGuess, skipGuess, artistOnly } = game;
-  const isListening = phase === 'watching';
+function ListeningHeader({ songPlaying }: Readonly<{ songPlaying: boolean }>) {
   return (
-    <div className="min-h-screen flex flex-col p-5 gap-4">
-      {isListening ? (
-        <div className="flex justify-center items-center gap-2">
-          <Music className="w-4 h-4 text-white/40 animate-pulse" />
-          <span className="text-white/40 text-sm">Listening...</span>
+    <div className="flex flex-col items-center gap-2.5 pt-10 pb-4">
+      <div style={{ display: 'flex', gap: '5px', alignItems: 'center', height: '28px', transition: 'opacity 0.3s ease', opacity: songPlaying ? 1 : 0.35 }}>
+        {AUDIO_BARS.map((bar) => (
+          <div key={bar.delay} style={{
+            width: '3px', height: '100%', borderRadius: '2px',
+            background: 'rgba(150,17,193,0.6)',
+            animation: songPlaying ? `${bar.anim} ${bar.dur}s ease-in-out infinite` : 'none',
+            animationDelay: `${bar.delay}s`, transformOrigin: 'center',
+            transform: songPlaying ? undefined : 'scaleY(0.07)',
+          }} />
+        ))}
+      </div>
+      <span style={{ color: 'rgba(255,255,255,0.28)', fontSize: '0.72rem', letterSpacing: '0.08em' }}>
+        {songPlaying ? 'Your song is playing…' : 'Get ready…'}
+      </span>
+    </div>
+  );
+}
+
+function ActiveHeader({ urgent, timeLeft, myScore }: Readonly<{ urgent: boolean; timeLeft: number; myScore: number }>) {
+  return (
+    <div className="flex items-center justify-between px-5 pt-5 pb-3">
+      <span style={{ color: 'rgba(255,255,255,0.32)', fontSize: '0.85rem', fontWeight: 600 }}>Your turn</span>
+      <span
+        className="font-black text-4xl tabular-nums"
+        style={{ color: urgent ? timerColor(0) : 'white', transition: 'color 0.3s ease' }}
+      >
+        {timeLeft}s
+      </span>
+      <span style={{ color: 'rgba(255,255,255,0.28)', fontSize: '0.8rem', fontWeight: 500 }}>
+        {myScore.toLocaleString()} pts
+      </span>
+    </div>
+  );
+}
+
+function guessInputBoxStyle(isListening: boolean): { border: string; background: string; boxShadow: string } {
+  if (isListening) {
+    return { border: '1px solid rgba(255,255,255,0.07)', background: 'rgba(255,255,255,0.03)', boxShadow: 'none' };
+  }
+  return { border: '1px solid rgba(150,17,193,0.4)', background: 'rgba(150,17,193,0.08)', boxShadow: '0 0 24px rgba(150,17,193,0.1)' };
+}
+
+function GuessingView({ game }: Readonly<{ game: PlayState }>) {
+  const { phase, timeLeft, myScore, guessText, guessInputRef, setGuessText, submitGuess, skipGuess, artistOnly, songPlaying } = game;
+  const isListening = phase === 'watching';
+  const canSubmit = guessText.trim().length > 0;
+  const urgent = !isListening && timeLeft <= 5;
+  const inputBoxStyle = guessInputBoxStyle(isListening);
+
+  return (
+    <div className="relative min-h-screen flex flex-col overflow-hidden" style={{ background: '#080812' }}>
+      <img src={`${import.meta.env.BASE_URL}background4.svg`} alt="" aria-hidden="true" style={{ position: 'fixed', inset: 0, width: '100%', height: '100%', objectFit: 'cover', zIndex: 0, transform: 'rotate(180deg)' }} />
+      <div style={{ position: 'fixed', inset: 0, zIndex: 1, background: 'rgba(5,5,14,0.82)', backdropFilter: 'blur(28px)' }} />
+
+      <div className="relative flex flex-col flex-1" style={{ zIndex: 2 }}>
+
+      {/* Header — waveform while listening, timer + score when active */}
+      {isListening
+        ? <ListeningHeader songPlaying={songPlaying} />
+        : <ActiveHeader urgent={urgent} timeLeft={timeLeft} myScore={myScore} />}
+
+      {/* Input area */}
+      <div className="flex-1 flex flex-col items-center justify-center gap-5 px-5">
+        <p style={{
+          color: isListening ? 'rgba(255,255,255,0.2)' : 'rgba(255,255,255,0.6)',
+          fontSize: '0.9rem', fontWeight: 600, letterSpacing: '0.03em',
+          transition: 'color 0.5s ease',
+        }}>
+          {artistOnly ? 'Name the artist' : 'Name the song'}
+        </p>
+
+        <div style={{
+          width: '100%', borderRadius: '16px', overflow: 'hidden',
+          border: inputBoxStyle.border,
+          background: inputBoxStyle.background,
+          boxShadow: inputBoxStyle.boxShadow,
+          transition: 'border-color 0.5s ease, background 0.5s ease, box-shadow 0.5s ease',
+        }}>
+          <input
+            ref={guessInputRef}
+            type="text"
+            placeholder={artistOnly ? 'Type artist name…' : 'Type song title…'}
+            value={guessText}
+            onChange={e => setGuessText(e.target.value)}
+            onKeyDown={e => e.key === 'Enter' && canSubmit && submitGuess()}
+            autoComplete="off" autoCorrect="off" spellCheck={false}
+            style={{
+              display: 'block', width: '100%', background: 'transparent', border: 'none',
+              color: 'white', fontSize: '1.3rem', fontWeight: 700, textAlign: 'center',
+              padding: '20px 16px', outline: 'none', fontFamily: 'inherit',
+            }}
+            className="placeholder-white/20"
+          />
         </div>
-      ) : (
-        <div className="flex justify-between items-center">
-          <span className="text-white/50 text-sm">Your turn!</span>
-          <span className="text-white font-black text-2xl">{timeLeft}s</span>
-          <span className="text-white/50 text-sm">{myScore.toLocaleString()} pts</span>
-        </div>
-      )}
-      <GuessInputSection guessText={guessText} guessInputRef={guessInputRef} setGuessText={setGuessText} submitGuess={submitGuess} artistOnly={artistOnly} />
-      <button onClick={skipGuess}
-        className="w-full py-3 rounded-2xl bg-white/5 text-white/50 font-semibold hover:bg-white/10 active:scale-95 transition-all">
-        Skip, I don't know
-      </button>
+      </div>
+
+      {/* Actions */}
+      <div className="px-5 pb-8 flex flex-col items-center gap-4">
+        <button
+          type="button"
+          className="liquid-btn relative cursor-pointer border-0 bg-transparent p-0"
+          style={{
+            width: '310px', height: '64px', borderRadius: '100px',
+            background: 'rgba(0,0,0,0.001)',
+            opacity: canSubmit ? 1 : 0.28,
+            cursor: canSubmit ? 'pointer' : 'not-allowed',
+            transition: 'opacity 0.25s ease',
+          }}
+          onClick={() => canSubmit && submitGuess()}
+        >
+          <LiquidGlass
+            style={{ position: 'absolute', top: '50%', left: '50%' }}
+            displacementScale={64} blurAmount={0.05} saturation={130}
+            aberrationIntensity={2} elasticity={0.12} cornerRadius={100}
+            padding="18px 36px"
+          >
+            <div style={{ position: 'relative' }}>
+              <div style={{ position: 'absolute', inset: '-18px -36px', borderRadius: '100px', pointerEvents: 'none', background: 'rgba(110,32,155,0.15)' }} />
+              <span className="text-white font-bold text-xl" style={{ whiteSpace: 'nowrap', position: 'relative', display: 'inline-block', minWidth: '238px', textAlign: 'center' }}>
+                Submit
+              </span>
+            </div>
+          </LiquidGlass>
+        </button>
+
+        <button
+          onClick={skipGuess}
+          style={{ background: 'none', border: 'none', color: 'rgba(255,255,255,0.2)', fontSize: '0.82rem', cursor: 'pointer', transition: 'color 0.2s ease' }}
+          onMouseEnter={e => { (e.currentTarget as HTMLElement).style.color = 'rgba(255,255,255,0.5)'; }}
+          onMouseLeave={e => { (e.currentTarget as HTMLElement).style.color = 'rgba(255,255,255,0.2)'; }}
+        >
+          Skip, I don't know
+        </button>
+      </div>
+
+      </div>{/* end zIndex wrapper */}
     </div>
   );
 }
 
 function PassedView({ game }: Readonly<{ game: PlayState }>) {
   const { mode, myRacePoints, myRaceTimeMs } = game;
-  if (mode === 'race') {
-    return (
-      <div className="min-h-screen flex flex-col items-center justify-center gap-4 p-6 text-center">
-        {myRacePoints > 0 ? (
-          <>
-            <p className="text-green-400 font-black text-2xl">Locked in!</p>
-            <p className="text-white/50">
-              {myRaceTimeMs !== null && `${(myRaceTimeMs / 1000).toFixed(1)}s`}
-              {myRacePoints > 0 && ` · +${myRacePoints} pts`}
-            </p>
-          </>
-        ) : (
-          <p className="text-white/50 text-xl">Waiting for others…</p>
-        )}
-      </div>
-    );
-  }
+  const [visible, setVisible] = useState(false);
+  useEffect(() => { const t = setTimeout(() => setVisible(true), 30); return () => clearTimeout(t); }, []);
+  const gotIt = mode === 'race' && myRacePoints > 0;
+
   return (
-    <div className="min-h-screen flex flex-col items-center justify-center gap-4 p-6 text-center">
-      <p className="text-white/50 text-xl">Waiting for others…</p>
+    <div className="relative min-h-screen overflow-hidden">
+      <img
+        src={`${import.meta.env.BASE_URL}background3.svg`}
+        alt=""
+        aria-hidden="true"
+        style={{ position: 'fixed', inset: 0, width: '100%', height: '100%', objectFit: 'cover', zIndex: 0 }}
+      />
+      <div style={{ position: 'fixed', inset: 0, zIndex: 1, background: 'rgba(5,5,14,0.82)', backdropFilter: 'blur(28px)' }} />
+
+      <div
+        className="relative flex flex-col items-center justify-center min-h-screen p-6"
+        style={{
+          zIndex: 2,
+          transition: 'opacity 0.4s ease, transform 0.4s ease',
+          opacity: visible ? 1 : 0,
+          transform: visible ? 'translateY(0)' : 'translateY(14px)',
+        }}
+      >
+        <div className="liquid-btn relative" style={{ width: '310px', height: gotIt ? '180px' : '150px' }}>
+          <LiquidGlass
+            style={{ position: 'absolute', top: '50%', left: '50%' }}
+            displacementScale={55}
+            blurAmount={0.06}
+            saturation={130}
+            aberrationIntensity={1.5}
+            elasticity={0.08}
+            cornerRadius={20}
+            padding="28px 28px"
+          >
+            <div style={{ width: '254px', display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '14px' }}>
+              {gotIt ? (
+                <>
+                  <span style={{ display: 'inline-block', minWidth: '120px', color: '#4ade80', fontWeight: 900, fontSize: '1.6rem', textAlign: 'center' }}>
+                    Got it!
+                  </span>
+                  <div style={{ width: '100%', height: '1px', background: 'rgba(255,255,255,0.07)' }} />
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+                    {myRaceTimeMs !== null && (
+                      <span style={{ display: 'inline-block', color: 'rgba(255,255,255,0.45)', fontSize: '0.9rem' }}>
+                        {(myRaceTimeMs / 1000).toFixed(1)}s
+                      </span>
+                    )}
+                    <span style={{ display: 'inline-block', color: '#38bdf8', fontWeight: 700, fontSize: '1rem' }}>
+                      +{myRacePoints} pts
+                    </span>
+                  </div>
+                </>
+              ) : (
+                <>
+                  <div style={{ display: 'flex', gap: '6px' }}>
+                    {[0, 1, 2].map(i => (
+                      <div key={i} style={{
+                        width: '6px', height: '6px', borderRadius: '50%',
+                        background: 'rgba(0,128,126,0.8)',
+                        animation: 'dotBounce 1.4s ease-in-out infinite',
+                        animationDelay: `${i * 0.18}s`,
+                      }} />
+                    ))}
+                  </div>
+                  <span style={{ display: 'inline-block', minWidth: '180px', color: 'rgba(255,255,255,0.38)', fontSize: '0.9rem', textAlign: 'center' }}>
+                    Waiting for others…
+                  </span>
+                </>
+              )}
+            </div>
+          </LiquidGlass>
+        </div>
+      </div>
     </div>
   );
 }
 
 export function RevealView({ game, result }: Readonly<{ game: PlayState; result: RoundResultEvent }>) {
-  const { myName, myScore, myStreak, myRacePoints, myRaceTimeMs } = game;
+  const { myName, myScore, myScoreDelta, myStreak, myRacePoints, myRaceTimeMs } = game;
   const isRace = result.mode === 'race';
   const iGotItInRace = isRace && !!result.correctGuessers?.includes(myName);
+
+  const bg3 = (
+    <>
+      <img
+        src={`${import.meta.env.BASE_URL}background3.svg`}
+        alt=""
+        aria-hidden="true"
+        style={{ position: 'fixed', inset: 0, width: '100%', height: '100%', objectFit: 'cover', zIndex: 0 }}
+      />
+      <div style={{ position: 'fixed', inset: 0, zIndex: 1, background: 'rgba(5,5,14,0.82)', backdropFilter: 'blur(28px)' }} />
+    </>
+  );
+
+  if (!result.correct) {
+    const cardH = result.coverUrl ? 480 : 240;
+    return (
+      <div className="page-enter relative min-h-screen flex flex-col items-center justify-center p-6 gap-5 overflow-hidden">
+        {bg3}
+        <div className="relative flex flex-col items-center gap-5 w-full" style={{ zIndex: 2 }}>
+          <div className="liquid-btn relative" style={{ width: '310px', height: `${cardH}px` }}>
+            <LiquidGlass
+              style={{ position: 'absolute', top: '50%', left: '50%' }}
+              displacementScale={55}
+              blurAmount={0.06}
+              saturation={130}
+              aberrationIntensity={1.5}
+              elasticity={0.08}
+              cornerRadius={20}
+              padding="24px 24px"
+            >
+              <NoOneGotItCardContent result={result} />
+            </LiquidGlass>
+          </div>
+
+          {result.playerGuesses && result.playerGuesses.length > 0 && (
+            <div style={{ background: 'rgba(255,255,255,0.05)', border: '1px solid rgba(255,255,255,0.08)', borderRadius: '16px', padding: '8px 12px', width: '25%' }} className="space-y-1">
+              {result.playerGuesses.map(g => (
+                <div key={g.name} className="flex justify-between items-center gap-2">
+                  <span className="text-white/40 text-xs min-w-0 truncate">{g.name}</span>
+                  <span className={`text-xs text-right min-w-0 truncate italic ${g.guess === null ? 'text-white/15' : 'text-white/20'}`}>
+                    {g.guess === null ? 'skipped' : `"${g.guess}"`}
+                  </span>
+                </div>
+              ))}
+            </div>
+          )}
+
+          <div style={{ background: 'rgba(255,255,255,0.05)', border: '1px solid rgba(255,255,255,0.08)', borderRadius: '16px', padding: '16px 32px', textAlign: 'center' }}>
+            {myScoreDelta > 0 && (
+              <p className="text-sky-400 text-sm font-bold tabular-nums">+{myScoreDelta.toLocaleString()} pts</p>
+            )}
+            <p className="text-3xl font-black text-white">{myScore.toLocaleString()}</p>
+            <p className="text-white/40 text-sm">your score</p>
+            {myStreak >= 2 && (
+              <p className="flex items-center justify-center gap-1 text-orange-400 text-xs font-bold mt-1">
+                <Flame className="w-3 h-3" />{myStreak} in a row
+              </p>
+            )}
+          </div>
+        </div>
+      </div>
+    );
+  }
+
+  const cardH = result.coverUrl ? 440 : 240;
   return (
-    <div className="min-h-screen flex flex-col items-center justify-center p-6 gap-6 text-center">
-      <RevealStatusHeader result={result} myName={myName} />
-      <RevealSongCard result={result} />
-      {result.playerGuesses && result.playerGuesses.length > 0 && (
-        <div className="bg-white/5 rounded-2xl p-4 w-full space-y-1.5">
-          {result.playerGuesses.map(g => (
-            <div key={g.name} className="flex justify-between items-center gap-4">
-              <span className="text-white/50 text-sm shrink-0">{g.name}</span>
-              {(() => {
-                const skipped = g.guess === null;
-                const correct = isRace
-                  ? !!result.correctGuessers?.includes(g.name)
-                  : (result.correct && g.name === result.guesserName);
-                let cls = 'text-white/40';
-                if (skipped) cls = 'text-white/25 italic';
-                else if (correct) cls = 'text-green-400';
-                return (
-                  <span className={`text-sm text-right truncate ${cls}`}>
-                    {skipped ? 'skipped' : `"${g.guess}"`}
+    <div className="page-enter relative min-h-screen flex flex-col items-center justify-center p-6 gap-5 overflow-hidden">
+      {bg3}
+      <div className="relative flex flex-col items-center gap-5 w-full" style={{ zIndex: 2 }}>
+        <div className="liquid-btn relative" style={{ width: '310px', height: `${cardH}px` }}>
+          <LiquidGlass
+            style={{ position: 'absolute', top: '50%', left: '50%' }}
+            displacementScale={55}
+            blurAmount={0.06}
+            saturation={130}
+            aberrationIntensity={1.5}
+            elasticity={0.08}
+            cornerRadius={20}
+            padding="24px 24px"
+          >
+            <GotItCardContent result={result} myName={myName} />
+          </LiquidGlass>
+        </div>
+
+        {result.playerGuesses && result.playerGuesses.length > 0 && (
+          <div style={{ background: 'rgba(255,255,255,0.05)', border: '1px solid rgba(255,255,255,0.08)', borderRadius: '16px', padding: '8px 12px', width: '25%' }} className="space-y-1">
+            {result.playerGuesses.map(g => {
+              const correct = isRace ? !!result.correctGuessers?.includes(g.name) : (g.name === result.guesserName);
+              const guessClass = guessTextClass(g.guess, correct);
+              return (
+                <div key={g.name} className="flex justify-between items-center gap-2">
+                  <span className={`text-xs min-w-0 truncate ${correct ? 'text-white font-semibold' : 'text-white/30'}`}>{g.name}</span>
+                  <span className={`text-xs text-right min-w-0 truncate ${guessClass}`}>
+                    {g.guess === null ? 'skipped' : `"${g.guess}"`}
                     {correct && g.timeMs != null && (
-                      <span className="ml-1.5 text-white/30 text-xs">{(g.timeMs / 1000).toFixed(1)}s</span>
+                      <span className="ml-1 text-white/25 text-xs">{(g.timeMs / 1000).toFixed(1)}s</span>
                     )}
                   </span>
-                );
-              })()}
-            </div>
-          ))}
+                </div>
+              );
+            })}
+          </div>
+        )}
+
+        <div style={{ background: 'rgba(255,255,255,0.05)', border: '1px solid rgba(255,255,255,0.08)', borderRadius: '16px', padding: '16px 32px', textAlign: 'center' }}>
+          {myScoreDelta > 0 && (
+            <p className="text-sky-400 text-sm font-bold tabular-nums">+{myScoreDelta.toLocaleString()} pts</p>
+          )}
+          <p className="text-3xl font-black text-white">{myScore.toLocaleString()}</p>
+          <p className="text-white/40 text-sm">your score</p>
+          {iGotItInRace && myRaceTimeMs != null && (
+            <p className="text-green-400 text-xs font-semibold mt-1">
+              You got it in {(myRaceTimeMs / 1000).toFixed(1)}s · +{myRacePoints}
+            </p>
+          )}
+          {myStreak >= 2 && (
+            <p className="flex items-center justify-center gap-1 text-orange-400 text-xs font-bold mt-1">
+              <Flame className="w-3 h-3" />{myStreak} in a row
+            </p>
+          )}
         </div>
-      )}
-      <div className="bg-white/5 rounded-2xl px-8 py-4">
-        <p className="text-3xl font-black text-white">{myScore.toLocaleString()}</p>
-        <p className="text-white/40 text-sm">your score</p>
-        {iGotItInRace && myRaceTimeMs != null && (
-          <p className="text-green-400 text-xs font-semibold mt-1">
-            You got it in {(myRaceTimeMs / 1000).toFixed(1)}s · +{myRacePoints}
-          </p>
-        )}
-        {myStreak >= 2 && (
-          <p className="flex items-center justify-center gap-1 text-orange-400 text-xs font-bold mt-1">
-            <Flame className="w-3 h-3" />{myStreak} in a row
-          </p>
-        )}
       </div>
     </div>
   );
 }
 
+function PlayerLeaderboardRow({ entry, delay, isMe }: Readonly<{ entry: LeaderboardEntry; delay: number; isMe: boolean }>) {
+  const { displayScore } = useAnimatedScore(entry.score, 0, delay);
+  return (
+    <div className={`flex items-center gap-4 px-4 py-3 rounded-xl ${isMe ? 'bg-white/10' : 'bg-white/5'}`}>
+      <span className="w-8 flex justify-center">
+        <RankBadge rank={entry.rank} />
+      </span>
+      <span className="text-white font-bold flex-1">{entry.name}</span>
+      <p className="text-white/60 font-semibold tabular-nums min-w-[56px] text-right">{displayScore.toLocaleString()}</p>
+    </div>
+  );
+}
+
+function MyScoreCard({ entry, delay }: Readonly<{ entry: LeaderboardEntry; delay: number }>) {
+  const { displayScore } = useAnimatedScore(entry.score, 0, delay);
+  return (
+    <div className="liquid-btn relative mx-auto" style={{ width: '240px', height: '92px' }}>
+      <LiquidGlass
+        style={{ position: 'absolute', top: '50%', left: '50%' }}
+        displacementScale={50}
+        blurAmount={0.06}
+        saturation={130}
+        aberrationIntensity={1.5}
+        elasticity={0.08}
+        cornerRadius={18}
+        padding="16px 24px"
+      >
+        <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 2, width: '192px' }}>
+          <span style={{ display: 'inline-block', color: 'rgba(255,255,255,0.6)', fontSize: '0.875rem' }}>You're #{entry.rank}</span>
+          <span className="tabular-nums" style={{ display: 'inline-block', color: 'white', fontWeight: 900, fontSize: '1.5rem' }}>
+            {displayScore.toLocaleString()} pts
+          </span>
+        </div>
+      </LiquidGlass>
+    </div>
+  );
+}
+
 function LeaderboardView({ game }: Readonly<{ game: PlayState }>) {
-  const { phase, myName, myScore, leaderboard, newGamePin, rejoinNewGame } = game;
+  const { phase, myName, leaderboard, newGamePin, rejoinNewGame } = game;
   const navigate = useNavigate();
   const myEntry = leaderboard.find(e => e.name === myName);
+  const isFinished = phase === 'finished';
+
   return (
-    <div className="min-h-screen flex flex-col p-6 gap-4">
-      <h2 className="text-3xl font-black text-white text-center">
-        {phase === 'finished' ? 'Final Scores' : 'Leaderboard'}
+    <div className="relative min-h-screen flex flex-col p-6 gap-4">
+      {isFinished && (
+        <>
+          <img
+            src={`${import.meta.env.BASE_URL}background5.svg`}
+            alt=""
+            aria-hidden="true"
+            style={{ position: 'fixed', inset: 0, width: '100%', height: '100%', objectFit: 'cover', zIndex: 0 }}
+          />
+          <div
+            className="fixed inset-0 pointer-events-none"
+            style={{
+              background: 'rgba(8,8,18,0.88)',
+              backdropFilter: 'blur(48px)',
+              zIndex: 1,
+            }}
+          />
+        </>
+      )}
+
+      <h2 className="text-3xl font-black text-white text-center relative z-10">
+        {isFinished ? 'Final Scores' : 'Leaderboard'}
       </h2>
+
       {myEntry && (
-        <div className="bg-purple-600/30 border border-purple-500/40 rounded-2xl px-6 py-3 text-center">
-          <p className="text-white/60 text-sm">You're #{myEntry.rank}</p>
-          <p className="text-white font-black text-2xl">{myScore.toLocaleString()} pts</p>
+        <div className="relative z-10">
+          <MyScoreCard
+            entry={myEntry}
+            delay={0}
+          />
         </div>
       )}
-      <div className="flex-1 space-y-3">
-        {leaderboard.slice(0, 10).map(e => (
-          <div key={e.name} className={`flex items-center gap-4 px-4 py-3 rounded-xl ${e.name === myName ? 'bg-purple-600/20 border border-purple-500/40' : 'bg-white/5'}`}>
-            <span className="w-8 flex justify-center">
-              <RankBadge rank={e.rank} />
-            </span>
-            <span className="text-white font-bold flex-1">{e.name}</span>
-            <span className="text-white/60 font-semibold">{e.score.toLocaleString()}</span>
-          </div>
+
+      <div className="flex-1 space-y-3 relative z-10">
+        {leaderboard.slice(0, 10).map((e, i) => (
+          <PlayerLeaderboardRow
+            key={e.name}
+            entry={e}
+            delay={100 + i * 80}
+            isMe={e.name === myName}
+          />
         ))}
       </div>
-      {phase === 'leaderboard' && <p className="text-center text-white/30 text-sm">Waiting for the host to start the next round…</p>}
-      {phase === 'finished' && newGamePin && (
-        <div className="space-y-3">
-          <div className="bg-emerald-900/40 border border-emerald-500/40 rounded-2xl px-4 py-3 text-center">
-            <p className="text-emerald-300 text-sm font-semibold">Host started a new game!</p>
-          </div>
-          <button onClick={rejoinNewGame}
-            className="w-full py-4 rounded-2xl bg-emerald-600 text-white font-bold text-xl hover:bg-emerald-500 transition-colors">
-            Play Again
-          </button>
-          <button onClick={() => { navigate('/'); }}
-            className="w-full py-3 rounded-2xl bg-white/10 text-white/60 font-semibold text-base hover:bg-white/20 transition-colors">
-            Leave
+
+      {phase === 'leaderboard' && <p className="text-center text-white/30 text-sm relative z-10">Waiting for the host to start the next round…</p>}
+
+      {isFinished && (
+        <div className="relative z-10 flex flex-col items-center gap-3">
+          {newGamePin && (
+            <>
+              <div
+                className="flex items-center justify-center gap-2 rounded-2xl px-4 py-3 text-center"
+                style={{
+                  background: 'linear-gradient(90deg, rgba(0,128,126,0.16) 0%, rgba(150,17,193,0.16) 100%)',
+                  border: '1px solid rgba(0,197,182,0.35)',
+                  boxShadow: '0 0 24px rgba(0,128,126,0.12)',
+                }}
+              >
+                <p className="text-sm font-semibold" style={{ color: '#5eead4' }}>Host started a new game!</p>
+              </div>
+              <button
+                type="button"
+                className="liquid-btn relative cursor-pointer border-0 bg-transparent p-0"
+                style={{ width: '310px', height: '64px', borderRadius: '100px', background: 'rgba(0,0,0,0.001)' }}
+                onClick={rejoinNewGame}
+              >
+                <LiquidGlass
+                  style={{ position: 'absolute', top: '50%', left: '50%' }}
+                  displacementScale={64}
+                  blurAmount={0.05}
+                  saturation={130}
+                  aberrationIntensity={2}
+                  elasticity={0.12}
+                  cornerRadius={100}
+                  padding="18px 36px"
+                >
+                  <div style={{ position: 'relative' }}>
+                    <div style={{ position: 'absolute', inset: '-18px -36px', borderRadius: '100px', pointerEvents: 'none', background: 'rgba(0,128,126,0.18)' }} />
+                    <span className="text-white font-bold text-xl" style={{ whiteSpace: 'nowrap', position: 'relative', display: 'inline-block', minWidth: '210px', textAlign: 'center' }}>
+                      Play Again
+                    </span>
+                  </div>
+                </LiquidGlass>
+              </button>
+            </>
+          )}
+
+          <button
+            type="button"
+            className="liquid-btn relative cursor-pointer border-0 bg-transparent p-0"
+            style={{ width: '310px', height: '64px', borderRadius: '100px', background: 'rgba(0,0,0,0.001)' }}
+            onClick={() => navigate('/')}
+          >
+            <LiquidGlass
+              style={{ position: 'absolute', top: '50%', left: '50%' }}
+              displacementScale={64}
+              blurAmount={0.05}
+              saturation={130}
+              aberrationIntensity={2}
+              elasticity={0.12}
+              cornerRadius={100}
+              padding="18px 36px"
+            >
+              <span className="text-white font-bold text-xl" style={{ whiteSpace: 'nowrap', position: 'relative', display: 'inline-block', minWidth: '210px', textAlign: 'center' }}>
+                Leave
+              </span>
+            </LiquidGlass>
           </button>
         </div>
-      )}
-      {phase === 'finished' && !newGamePin && (
-        <button onClick={() => { navigate('/'); }}
-          className="w-full py-4 rounded-2xl bg-white/10 text-white font-bold text-xl hover:bg-white/20 transition-colors">
-          Leave
-        </button>
       )}
     </div>
   );
@@ -751,9 +1547,29 @@ export default function Play() {
   const game = usePlayGame(pinParam);
   const { phase, result, reconnecting, hostReconnecting, guesserNames, myName } = game;
   const imGuessing = guesserNames.includes(myName);
+  const isJoin = phase === 'join';
+
+  // Fade the glow in after mount, out when leaving join phase.
+  const [glowMounted, setGlowMounted] = useState(false);
+  useEffect(() => {
+    const id = requestAnimationFrame(() => setGlowMounted(true));
+    return () => cancelAnimationFrame(id);
+  }, []);
 
   return (
-    <div className="relative">
+    <div
+      className="relative"
+      style={isJoin ? undefined : { background: '#080812', minHeight: '100vh' }}
+    >
+      <div
+        className="fixed inset-0 pointer-events-none"
+        style={{
+          background: 'radial-gradient(ellipse 80% 55% at 50% 115%, rgba(86,20,140,0.26) 0%, rgba(52,39,88,0.10) 45%, transparent 65%)',
+          opacity: glowMounted && isJoin ? 1 : 0,
+          transition: 'opacity 0.45s ease',
+          zIndex: 0,
+        }}
+      />
       {phase === 'join' && <JoinView game={game} />}
       {phase === 'waiting' && <WaitingView game={game} />}
       {phase === 'betting' && <BettingView game={game} />}

@@ -41,6 +41,7 @@ const allowedOrigins = new Set(
 const corsOptions = {
   origin: (origin: string | undefined, callback: (err: Error | null, allow?: boolean) => void) => {
     if (!origin) return callback(null, true);
+    if (process.env.NODE_ENV !== 'production') return callback(null, true);
     if (allowedOrigins.has(origin)) return callback(null, true);
     return callback(new Error('CORS origin not allowed'));
   },
@@ -89,30 +90,40 @@ io.on('connection', (socket) => {
     callback({ pin: game.pin });
   });
 
-  // Emit the right phase snapshot to this socket so a reconnecting or
-  // mid-game-joining player jumps straight to where the game is.
-  function syncState(game: NonNullable<ReturnType<typeof gm.getGame>>) {
-    // Always send the player their current score so the client doesn't show 0
-    // after a reconnect (the client only learns score from score_update events).
+  // Always send the player their current score so the client doesn't show 0
+  // after a reconnect (the client only learns score from score_update events).
+  function emitSelfScore(game: GameObj) {
     const selfPlayer = game.players.get(socket.id);
     if (selfPlayer) {
       socket.emit('score_update', {
         players: [{ name: selfPlayer.name, score: selfPlayer.score, streak: selfPlayer.streak }],
       });
     }
+  }
 
-    const round = game.currentRound;
-    if (game.mode === 'race') {
-      if (game.phase === 'guessing' && round?.playStartAt && game.phaseEndsAt) {
-        if (!round.passed.has(socket.id)) {
-          socket.emit('your_turn', { timeLimit: game.raceTime, endsAt: game.phaseEndsAt });
-        }
-      } else if (game.phase === 'finished') {
-        socket.emit('game_over', { leaderboard: gm.getLeaderboard(game) });
-      }
-      return;
+  function emitRevealSnapshot(game: GameObj, round: RoundObj) {
+    const isRace = game.mode === 'race';
+    const correctGuessers = isRace
+      ? Array.from(round.correctGuessers).map(id => game.players.get(id)?.name ?? '').filter(Boolean)
+      : undefined;
+    socket.emit('round_result', {
+      correct: isRace ? round.correctGuessers.size > 0 : round.answered,
+      guesserName: round.correctGuesserName ?? null,
+      mode: isRace ? 'race' : undefined,
+      correctGuessers,
+      ...songFields(game, round),
+      points: 0,
+      playerGuesses: gm.getRoundGuesses(game),
+    });
+  }
+
+  function emitRaceTurnSnapshot(game: GameObj, round: RoundObj | null) {
+    if (game.phase === 'guessing' && round?.playStartAt && game.phaseEndsAt && !round.passed.has(socket.id)) {
+      socket.emit('your_turn', { timeLimit: game.raceTime, endsAt: game.phaseEndsAt });
     }
+  }
 
+  function emitClassicPhaseSnapshot(game: GameObj, round: RoundObj | null) {
     if (game.phase === 'betting' && round && game.phaseEndsAt) {
       socket.emit('round_start', {
         roundIndex: game.roundIndex,
@@ -122,20 +133,50 @@ io.on('connection', (socket) => {
         endsAt: game.phaseEndsAt,
         mode: 'classic',
       });
-    } else if ((game.phase === 'playing' || game.phase === 'guessing') && round) {
-      const guesserNames = round.guesserSocketIds
-        .map(id => game.players.get(id)?.name ?? '')
-        .filter(Boolean);
-      socket.emit('betting_closed', { lowestBid: round.lowestBid, guesserNames, playerBids: [] });
-      if (game.phase === 'guessing' && game.phaseEndsAt) {
-        socket.emit('guessing_start', { guesserNames, timeLimit: game.guessingTime, endsAt: game.phaseEndsAt });
-        if (round.guesserSocketIds.includes(socket.id) && !round.passed.has(socket.id)) {
-          socket.emit('your_turn', { timeLimit: game.guessingTime, endsAt: game.phaseEndsAt });
-        }
-      }
-    } else if (game.phase === 'finished') {
-      socket.emit('game_over', { leaderboard: gm.getLeaderboard(game) });
+      return;
     }
+
+    if ((game.phase !== 'playing' && game.phase !== 'guessing') || !round) return;
+
+    const guesserNames = round.guesserSocketIds
+      .map(id => game.players.get(id)?.name ?? '')
+      .filter(Boolean);
+    socket.emit('betting_closed', { lowestBid: round.lowestBid, guesserNames, playerBids: [] });
+    if (game.phase !== 'guessing' || !game.phaseEndsAt) return;
+
+    socket.emit('guessing_start', { guesserNames, timeLimit: game.guessingTime, endsAt: game.phaseEndsAt });
+    if (round.guesserSocketIds.includes(socket.id) && !round.passed.has(socket.id)) {
+      socket.emit('your_turn', { timeLimit: game.guessingTime, endsAt: game.phaseEndsAt });
+    }
+  }
+
+  // Emit the right phase snapshot to this socket so a reconnecting or
+  // mid-game-joining player jumps straight to where the game is.
+  function syncState(game: GameObj) {
+    emitSelfScore(game);
+    const round = game.currentRound;
+
+    if (game.phase === 'finished') {
+      socket.emit('game_over', { leaderboard: gm.getLeaderboard(game) });
+      return;
+    }
+
+    if (game.phase === 'leaderboard') {
+      socket.emit('leaderboard', { leaderboard: gm.getLeaderboard(game) });
+      return;
+    }
+
+    if (game.phase === 'reveal' && round) {
+      emitRevealSnapshot(game, round);
+      return;
+    }
+
+    if (game.mode === 'race') {
+      emitRaceTurnSnapshot(game, round);
+      return;
+    }
+
+    emitClassicPhaseSnapshot(game, round);
   }
 
   // ── Host: start a new game without a page reload ─────────────────────────
@@ -167,7 +208,7 @@ io.on('connection', (socket) => {
   });
 
   // ── Host: rejoin after reconnect ──────────────────────────────────────────
-  socket.on('rejoin_host', ({ pin }: { pin: string }, callback: (r: { players: { name: string }[] } | { error: string }) => void) => {
+  socket.on('rejoin_host', ({ pin }: { pin: string }, callback: (r: { players: { name: string; score: number; streak: number }[] } | { error: string }) => void) => {
     const game = gm.getGame(pin);
     if (!game) return callback({ error: 'Game not found' });
 
@@ -183,7 +224,12 @@ io.on('connection', (socket) => {
     socket.join(`host:${pin}`);
     gm.updateSocketPin(socket.id, pin);
     io.to(game.pin).emit('host_reconnected');
-    callback({ players: Array.from(game.players.values()).map(p => ({ name: p.name })) });
+    callback({ players: Array.from(game.players.values()).map(p => ({ name: p.name, score: p.score, streak: p.streak })) });
+  });
+
+  // ── Player: check if a game PIN is still active ───────────────────────────
+  socket.on('check_game', ({ pin }: { pin: string }, callback: (r: { exists: boolean }) => void) => {
+    callback({ exists: !!gm.getGame(pin) });
   });
 
   // ── Player: join game (lobby or mid-game) ─────────────────────────────────
@@ -193,26 +239,29 @@ io.on('connection', (socket) => {
       const game = gm.getGame(pin);
       if (!game) return callback({ error: 'Game not found' });
 
-      // Mid-game: if this name is already in the game, it's a full-disconnect
-      // rejoin — cancel any pending removal timer, migrate the socket ID, and
-      // snap to the current phase.
-      if (game.phase !== 'lobby') {
-        const oldEntry = Array.from(game.players.entries())
-          .find(([, p]) => p.name.toLowerCase() === name.trim().toLowerCase());
-        if (oldEntry) {
-          const [oldId] = oldEntry;
-          const t = playerDisconnectTimers.get(oldId);
-          if (t) { clearTimeout(t); playerDisconnectTimers.delete(oldId); }
-        }
-        const rejoined = gm.rejoinPlayer(game, socket.id, name);
-        if (rejoined) {
-          socket.join(pin);
-          socket.join(`player:${pin}`);
-          callback({ success: true });
+      // If this name is already in the game (lobby or mid-game), it's a
+      // reconnect — cancel any pending removal timer, migrate the socket ID,
+      // and snap to the current phase.
+      const oldEntry = Array.from(game.players.entries())
+        .find(([, p]) => p.name.toLowerCase() === name.trim().toLowerCase());
+      if (oldEntry) {
+        const [oldId] = oldEntry;
+        const t = playerDisconnectTimers.get(oldId);
+        if (t) { clearTimeout(t); playerDisconnectTimers.delete(oldId); }
+      }
+      const rejoined = gm.rejoinPlayer(game, socket.id, name);
+      if (rejoined) {
+        socket.join(pin);
+        socket.join(`player:${pin}`);
+        callback({ success: true });
+        if (game.phase === 'lobby') {
+          const players = Array.from(game.players.values()).map(p => ({ name: p.name, score: p.score, streak: p.streak }));
+          io.to(`host:${pin}`).emit('player_joined', { players });
+        } else {
           syncState(game);
           io.to(`host:${pin}`).emit('player_reconnected', { name: rejoined.name, score: rejoined.score, streak: rejoined.streak });
-          return;
         }
+        return;
       }
 
       const player = gm.addPlayer(game, socket.id, name);
@@ -222,13 +271,24 @@ io.on('connection', (socket) => {
       socket.join(`player:${pin}`);
       callback({ success: true });
 
-      const players = Array.from(game.players.values()).map(p => ({ name: p.name }));
+      const players = Array.from(game.players.values()).map(p => ({ name: p.name, score: p.score, streak: p.streak }));
       io.to(`host:${pin}`).emit('player_joined', { players });
 
       // New player joining an in-progress game — sync them to the current phase.
       if (game.phase !== 'lobby') syncState(game);
     }
   );
+
+  // ── Player: rename in lobby ────────────────────────────────────────────────
+  socket.on('rename_player', ({ newName }: { newName: string }, callback: (r: { error?: string; success?: boolean }) => void) => {
+    const game = gm.getGameBySocket(socket.id);
+    if (game?.phase !== 'lobby') return callback({ error: 'Cannot rename now' });
+    const player = gm.renamePlayer(game, socket.id, newName);
+    if (!player) return callback({ error: 'Name already taken' });
+    callback({ success: true });
+    const players = Array.from(game.players.values()).map(p => ({ name: p.name, score: p.score, streak: p.streak }));
+    io.to(`host:${game.pin}`).emit('player_joined', { players });
+  });
 
   // ── Player: rejoin after reconnect ─────────────────────────────────────────
   socket.on('rejoin_player', ({ pin, name }: { pin: string; name: string }, callback?: (r: { ok: boolean }) => void) => {
@@ -253,10 +313,11 @@ io.on('connection', (socket) => {
     io.to(`host:${pin}`).emit('player_reconnected', { name: player.name, score: player.score, streak: player.streak });
   });
 
-  // ── Host: kick player from lobby ──────────────────────────────────────────
+  // ── Host: kick player from lobby or leaderboard ───────────────────────────
   socket.on('kick_player', ({ name }: { name: string }) => {
     const game = gm.getGameBySocket(socket.id);
-    if (game?.hostSocketId !== socket.id || game.phase !== 'lobby') return;
+    const allowedPhases = ['lobby', 'reveal'] as const;
+    if (game?.hostSocketId !== socket.id || !allowedPhases.includes(game.phase as typeof allowedPhases[number])) return;
     const entry = Array.from(game.players.entries()).find(([, p]) => p.name === name);
     if (!entry) return;
     const [kickedId] = entry;
@@ -317,6 +378,7 @@ io.on('connection', (socket) => {
       io.to(`player:${game.pin}`).emit('your_turn', { timeLimit: game.raceTime, endsAt });
       game.phaseTimer = setTimeout(() => endRaceRound(game), game.raceTime * 1000);
     } else {
+      io.to(`player:${game.pin}`).emit('song_playing');
       game.phaseTimer = setTimeout(() => startGuessingPhase(game), gm.playMsFor(game.currentRound!.lowestBid));
     }
   });
@@ -387,7 +449,7 @@ io.on('connection', (socket) => {
   // ── Host: force-skip current guessing turn ────────────────────────────────
   socket.on('host_skip_turn', () => {
     const game = gm.getGameBySocket(socket.id);
-    if (!game || game.hostSocketId !== socket.id) return;
+    if (game?.hostSocketId !== socket.id) return;
     if (game.phase === 'betting') {
       closeBettingAndPlay(game);
     } else if (game.phase === 'playing') {
@@ -442,7 +504,7 @@ io.on('connection', (socket) => {
         const removed = gm.removeSocket(sid);
         if (!removed) return; // already handled by rejoin
         io.to(`host:${removed.game.pin}`).emit('player_left', {
-          players: Array.from(removed.game.players.values()).map(p => ({ name: p.name })),
+          players: Array.from(removed.game.players.values()).map(p => ({ name: p.name, score: p.score, streak: p.streak })),
         });
       }, PLAYER_GRACE_MS);
       playerDisconnectTimers.set(sid, timer);

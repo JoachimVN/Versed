@@ -245,6 +245,19 @@ function migrateRoundSocketId(round: Round, oldId: string, newId: string): void 
   if (guessTime !== undefined) { round.guessTimes.set(newId, guessTime); round.guessTimes.delete(oldId); }
 }
 
+export function renamePlayer(game: Game, socketId: string, newName: string): Player | null {
+  const player = game.players.get(socketId);
+  if (!player) return null;
+  const trimmed = newName.trim();
+  if (!trimmed) return null;
+  const taken = Array.from(game.players.values()).some(
+    p => p.socketId !== socketId && p.name.toLowerCase() === trimmed.toLowerCase()
+  );
+  if (taken) return null;
+  player.name = trimmed;
+  return player;
+}
+
 export function rejoinPlayer(game: Game, newSocketId: string, name: string): Player | null {
   const entry = Array.from(game.players.entries()).find(
     ([, p]) => p.name.toLowerCase() === name.trim().toLowerCase()
@@ -370,6 +383,7 @@ export function recordGuess(
 
   if (correct) {
     round.answered = true;
+    round.correctGuesserName = guesserName;
     const player = game.players.get(socketId)!;
     const points = calcPoints(round.lowestBid, round.song.rank);
     player.score += points;
