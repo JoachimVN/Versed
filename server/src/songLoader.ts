@@ -74,6 +74,7 @@ export function loadSongs(): Song[] {
       decade: num(f[5]),
       bbPeak: num(f[7]),
       bbChartWeeks: num(f[8]),
+      durationMs: num(f[6]),
       spotifyStreams: num(f[10]),
       youtubeViews: num(f[12]),
       spotifyTrackId: trackId,

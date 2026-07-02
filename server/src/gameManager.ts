@@ -93,6 +93,13 @@ function formatStreams(n: number): string {
   return `${(n / 1_000_000).toFixed(0)}M`;
 }
 
+function formatDuration(ms: number): string {
+  const totalSeconds = Math.round(ms / 1000);
+  const minutes = Math.floor(totalSeconds / 60);
+  const seconds = totalSeconds % 60;
+  return `${minutes}:${String(seconds).padStart(2, '0')}`;
+}
+
 function generateHints(song: Song, artistOnly = false): Hint[] {
   const pool: Hint[] = [];
 
@@ -111,6 +118,9 @@ function generateHints(song: Song, artistOnly = false): Hint[] {
 
   if (song.spotifyStreams)
     pool.push({ label: 'Streams', value: formatStreams(song.spotifyStreams) });
+
+  if (song.durationMs)
+    pool.push({ label: 'Duration', value: formatDuration(song.durationMs) });
 
   // Artist hints are suppressed in artist-only mode since the artist IS the answer.
   if (!artistOnly) {
