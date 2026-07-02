@@ -18,6 +18,7 @@ function normalize(s: string): string {
   return s
     .toLowerCase()
     .replace(/&/g, ' and ')
+    .replace(/['’!.$*]/g, '')
     .replace(/[^a-z0-9 ]/g, ' ')
     .replace(/\b(the|a|an)\b/g, ' ')
     .split(/\s+/)
