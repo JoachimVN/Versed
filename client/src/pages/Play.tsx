@@ -274,6 +274,13 @@ function usePlayGame(pinParam?: string): PlayState {
       }
     });
 
+    // Reconnect/rejoin state sync — not a round result, so don't touch the delta.
+    socket.on('score_sync', ({ score, streak }: { score: number; streak: number }) => {
+      myScoreRef.current = score;
+      setMyScore(score);
+      setMyStreak(streak);
+    });
+
     const applyLeaderboard = (lb: LeaderboardEntry[]) => {
       const deltas: Record<string, number> = {};
       for (const entry of lb) {
@@ -328,7 +335,7 @@ function usePlayGame(pinParam?: string): PlayState {
       if (autoSubmitTimerRef.current) clearTimeout(autoSubmitTimerRef.current);
       if (guessAutoSubmitTimerRef.current) clearTimeout(guessAutoSubmitTimerRef.current);
       ['connect','disconnect','round_start','betting_closed','song_playing','guessing_start','your_turn',
-       'round_result','score_update','leaderboard','game_over',
+       'round_result','score_update','score_sync','leaderboard','game_over',
        'host_reconnecting','host_reconnected','host_disconnected','game_restarted','kicked']
         .forEach(e => socket.off(e));
       socket.disconnect();

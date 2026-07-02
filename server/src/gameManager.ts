@@ -176,6 +176,7 @@ function buildRound(usedSongIds: Set<string>, artistOnly = false): Round {
     passed: new Set(),
     earlyGuessers: new Set(),
     guesses: new Map(),
+    scoredSocketIds: new Set(),
     playStartAt: null,
     firstCorrectAt: null,
     correctGuessers: new Set(),
@@ -367,6 +368,15 @@ export function advanceTier(game: Game): TierTurn | null {
   return applyTier(game, round);
 }
 
+// A streak only continues for players who actually score points this round —
+// anyone who wasn't reached (a later tier that never got a turn, a disconnect
+// mid-round) or scored nothing has theirs cleared once the round is decided.
+export function settleStreaks(game: Game, round: Round): void {
+  for (const [id, player] of game.players) {
+    if (!round.scoredSocketIds.has(id)) player.streak = 0;
+  }
+}
+
 // One guess per guesser: a correct guess wins, a wrong guess ends that
 // guesser's turn. `allDone` is true once every guesser in the tier has had
 // their shot (guessed or passed), so the round can move on.
@@ -398,12 +408,12 @@ export function recordGuess(
     const points = calcPoints(round.lowestBid, round.song.rank);
     player.score += points;
     player.streak += 1;
+    round.scoredSocketIds.add(socketId);
     game.phase = 'reveal';
+    settleStreaks(game, round);
     return { correct: true, points, guesserName, allDone: false };
   }
 
-  const player = game.players.get(socketId);
-  if (player) player.streak = 0;
   round.passed.add(socketId);
   const allDone = round.guesserSocketIds.every(id => round.passed.has(id));
   return { correct: false, points: 0, guesserName, allDone };
@@ -419,8 +429,6 @@ export function skipGuess(game: Game, socketId: string): { allDone: boolean } | 
   if (round.answered || round.passed.has(socketId)) return null;
 
   round.guesses.set(socketId, null);
-  const skipper = game.players.get(socketId);
-  if (skipper) skipper.streak = 0;
   round.passed.add(socketId);
   if (game.phase === 'playing') round.earlyGuessers.add(socketId);
   const allDone = round.guesserSocketIds.every(id => round.passed.has(id));
@@ -445,7 +453,10 @@ function applyRaceCorrectGuess(game: Game, round: Round, socketId: string, elaps
     : calcRacePoints(isFirst, elapsedMs, round.firstCorrectAt! - round.playStartAt!, round.song.rank);
   const player = game.players.get(socketId)!;
   player.score += points;
-  player.streak += 1;
+  if (points > 0) {
+    player.streak += 1;
+    round.scoredSocketIds.add(socketId);
+  }
   return points;
 }
 
@@ -468,13 +479,7 @@ export function recordRaceGuess(
     ? isCorrectArtistGuess(text, round.song.artist)
     : isCorrectGuess(text, round.song.title);
 
-  let points = 0;
-  if (correct) {
-    points = applyRaceCorrectGuess(game, round, socketId, elapsedMs);
-  } else {
-    const player = game.players.get(socketId);
-    if (player) player.streak = 0;
-  }
+  const points = correct ? applyRaceCorrectGuess(game, round, socketId, elapsedMs) : 0;
 
   const allDone = (game.raceWinnerOnly && correct)
     || Array.from(game.players.keys()).every(id => round.passed.has(id));
@@ -492,8 +497,6 @@ export function skipRaceGuess(
   if (round.passed.has(socketId)) return null;
 
   round.guesses.set(socketId, null);
-  const player = game.players.get(socketId);
-  if (player) player.streak = 0;
   round.passed.add(socketId);
   const allDone = Array.from(game.players.keys()).every(id => round.passed.has(id));
   return { allDone };

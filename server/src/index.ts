@@ -91,12 +91,15 @@ io.on('connection', (socket) => {
   });
 
   // Always send the player their current score so the client doesn't show 0
-  // after a reconnect (the client only learns score from score_update events).
+  // after a reconnect. This is a distinct event from `score_update` — that one
+  // means "you just scored," and the client renders it as a round delta. This
+  // is just a state sync, so it must not be mistaken for points just earned.
   function emitSelfScore(game: GameObj) {
     const selfPlayer = game.players.get(socket.id);
     if (selfPlayer) {
-      socket.emit('score_update', {
-        players: [{ name: selfPlayer.name, score: selfPlayer.score, streak: selfPlayer.streak }],
+      socket.emit('score_sync', {
+        score: selfPlayer.score,
+        streak: selfPlayer.streak,
       });
     }
   }
@@ -635,6 +638,7 @@ io.on('connection', (socket) => {
       points: 0,
       playerGuesses: gm.getRoundGuesses(game),
     });
+    gm.settleStreaks(game, round);
     emitScoreUpdate(game);
   }
 
@@ -651,6 +655,8 @@ io.on('connection', (socket) => {
         points: 0,
         playerGuesses: [],
       });
+      gm.settleStreaks(game, round);
+      emitScoreUpdate(game);
       return;
     }
     playTier(game, result);
@@ -697,6 +703,7 @@ io.on('connection', (socket) => {
       points: 0,
       playerGuesses: gm.getRoundGuesses(game),
     });
+    gm.settleStreaks(game, round);
     emitScoreUpdate(game);
   }
 
