@@ -108,6 +108,7 @@ function usePlayGame(pinParam?: string): PlayState {
   const guessTextRef = useRef('');
 
   function autoSubmitGuess() {
+    guessInputRef.current?.blur();
     guessAutoSubmitTimerRef.current = null;
     const text = guessTextRef.current.trim();
     stopCountdown();
@@ -256,6 +257,7 @@ function usePlayGame(pinParam?: string): PlayState {
     });
 
     socket.on('round_result', (data: RoundResultEvent) => {
+      guessInputRef.current?.blur();
       stopCountdown();
       if (guessAutoSubmitTimerRef.current) { clearTimeout(guessAutoSubmitTimerRef.current); guessAutoSubmitTimerRef.current = null; }
       setResult(data);
@@ -270,6 +272,13 @@ function usePlayGame(pinParam?: string): PlayState {
         setMyScore(me.score);
         setMyStreak(me.streak);
       }
+    });
+
+    // Reconnect/rejoin state sync — not a round result, so don't touch the delta.
+    socket.on('score_sync', ({ score, streak }: { score: number; streak: number }) => {
+      myScoreRef.current = score;
+      setMyScore(score);
+      setMyStreak(streak);
     });
 
     const applyLeaderboard = (lb: LeaderboardEntry[]) => {
@@ -326,7 +335,7 @@ function usePlayGame(pinParam?: string): PlayState {
       if (autoSubmitTimerRef.current) clearTimeout(autoSubmitTimerRef.current);
       if (guessAutoSubmitTimerRef.current) clearTimeout(guessAutoSubmitTimerRef.current);
       ['connect','disconnect','round_start','betting_closed','song_playing','guessing_start','your_turn',
-       'round_result','score_update','leaderboard','game_over',
+       'round_result','score_update','score_sync','leaderboard','game_over',
        'host_reconnecting','host_reconnected','host_disconnected','game_restarted','kicked']
         .forEach(e => socket.off(e));
       socket.disconnect();
@@ -385,6 +394,7 @@ function usePlayGame(pinParam?: string): PlayState {
 
   const submitGuess = () => {
     if (!guessText.trim()) return;
+    guessInputRef.current?.blur();
     if (guessAutoSubmitTimerRef.current) { clearTimeout(guessAutoSubmitTimerRef.current); guessAutoSubmitTimerRef.current = null; }
     stopCountdown();
     socket.emit('submit_guess', { text: guessText }, (r: { correct: boolean; points?: number; timeMs?: number }) => {
@@ -399,6 +409,7 @@ function usePlayGame(pinParam?: string): PlayState {
   };
 
   const skipGuess = () => {
+    guessInputRef.current?.blur();
     if (guessAutoSubmitTimerRef.current) { clearTimeout(guessAutoSubmitTimerRef.current); guessAutoSubmitTimerRef.current = null; }
     stopCountdown();
     socket.emit('skip_guess');
@@ -535,7 +546,7 @@ function JoinView({ game }: Readonly<{ game: PlayState }>) {
 
   return (
     <div
-      className="page-enter relative min-h-screen flex flex-col items-center justify-center p-6 gap-10"
+      className="page-enter relative min-h-screen keyboard-resize flex flex-col items-center justify-center p-6 gap-10"
       style={{ zIndex: 1 }}
     >
       <BackButton />
@@ -1082,7 +1093,7 @@ function GuessingView({ game }: Readonly<{ game: PlayState }>) {
   const inputBoxStyle = guessInputBoxStyle(isListening);
 
   return (
-    <div className="relative min-h-screen flex flex-col overflow-hidden" style={{ background: '#080812' }}>
+    <div className="relative min-h-screen keyboard-resize flex flex-col overflow-hidden" style={{ background: '#080812' }}>
       <img src={`${import.meta.env.BASE_URL}background4.svg`} alt="" aria-hidden="true" style={{ position: 'fixed', inset: 0, width: '100%', height: '100%', objectFit: 'cover', zIndex: 0, transform: 'rotate(180deg)' }} />
       <div style={{ position: 'fixed', inset: 0, zIndex: 1, background: 'rgba(5,5,14,0.82)', backdropFilter: 'blur(28px)' }} />
 
@@ -1290,7 +1301,7 @@ export function RevealView({ game, result }: Readonly<{ game: PlayState; result:
           </div>
 
           {result.playerGuesses && result.playerGuesses.length > 0 && (
-            <div style={{ background: 'rgba(255,255,255,0.05)', border: '1px solid rgba(255,255,255,0.08)', borderRadius: '16px', padding: '8px 12px', width: '25%' }} className="space-y-1">
+            <div style={{ background: 'rgba(255,255,255,0.05)', border: '1px solid rgba(255,255,255,0.08)', borderRadius: '16px', padding: '8px 12px', width: '310px', maxWidth: '92vw' }} className="space-y-1">
               {result.playerGuesses.map(g => (
                 <div key={g.name} className="flex justify-between items-center gap-2">
                   <span className="text-white/40 text-xs min-w-0 truncate">{g.name}</span>
@@ -1340,7 +1351,7 @@ export function RevealView({ game, result }: Readonly<{ game: PlayState; result:
         </div>
 
         {result.playerGuesses && result.playerGuesses.length > 0 && (
-          <div style={{ background: 'rgba(255,255,255,0.05)', border: '1px solid rgba(255,255,255,0.08)', borderRadius: '16px', padding: '8px 12px', width: '25%' }} className="space-y-1">
+          <div style={{ background: 'rgba(255,255,255,0.05)', border: '1px solid rgba(255,255,255,0.08)', borderRadius: '16px', padding: '8px 12px', width: '310px', maxWidth: '92vw' }} className="space-y-1">
             {result.playerGuesses.map(g => {
               const correct = isRace ? !!result.correctGuessers?.includes(g.name) : (g.name === result.guesserName);
               const guessClass = guessTextClass(g.guess, correct);
@@ -1548,6 +1559,7 @@ export default function Play() {
   const { phase, result, reconnecting, hostReconnecting, guesserNames, myName } = game;
   const imGuessing = guesserNames.includes(myName);
   const isJoin = phase === 'join';
+  const showsGuessInput = phase === 'guessing' || (phase === 'watching' && imGuessing);
 
   // Fade the glow in after mount, out when leaving join phase.
   const [glowMounted, setGlowMounted] = useState(false);
@@ -1559,7 +1571,12 @@ export default function Play() {
   return (
     <div
       className="relative"
-      style={isJoin ? undefined : { background: '#080812', minHeight: '100vh' }}
+      style={isJoin ? undefined : {
+        background: '#080812',
+        height: 'var(--app-height, 100vh)',
+        minHeight: 'var(--app-height, 100vh)',
+        ...(showsGuessInput ? { transition: 'height 0.25s ease, min-height 0.25s ease' } : {}),
+      }}
     >
       <div
         className="fixed inset-0 pointer-events-none"

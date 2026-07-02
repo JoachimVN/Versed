@@ -7,6 +7,7 @@ export interface Song {
   decade: number | null;
   bbPeak: number | null;
   bbChartWeeks: number | null;
+  durationMs: number | null;
   spotifyStreams: number | null;
   youtubeViews: number | null;
   spotifyTrackId: string;
@@ -41,6 +42,7 @@ export interface Round {
   earlyGuessers: Set<string>; // guessers who opted in before their listening time expired
   guesses: Map<string, string | null>; // socketId → text submitted (null = skipped)
   correctGuesserName?: string;      // classic mode: name of the player who got it right
+  scoredSocketIds: Set<string>;     // players who earned points this round — everyone else's streak resets when the round ends
   // Race-mode fields
   playStartAt: number | null;      // epoch ms when audio started
   firstCorrectAt: number | null;   // epoch ms of first correct guess (decay origin)

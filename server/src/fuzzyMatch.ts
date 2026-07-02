@@ -18,6 +18,7 @@ function normalize(s: string): string {
   return s
     .toLowerCase()
     .replace(/&/g, ' and ')
+    .replace(/['’!.$*]/g, '')
     .replace(/[^a-z0-9 ]/g, ' ')
     .replace(/\b(the|a|an)\b/g, ' ')
     .split(/\s+/)
@@ -57,11 +58,16 @@ function fuzzyMatch(g: string, candidate: string): boolean {
   return levenshtein(g, candidate) <= fuzzyThreshold(candidate.length);
 }
 
-export function isCorrectArtistGuess(guess: string, artist: string): boolean {
+export function isCorrectArtistGuess(guess: string, artist: string, featuredArtists?: string): boolean {
   const g = normalize(guess);
-  const a = normalize(artist);
   if (!g) return false;
-  return fuzzyMatch(g, a);
+  if (fuzzyMatch(g, normalize(artist))) return true;
+  if (featuredArtists) {
+    for (const name of featuredArtists.split(',')) {
+      if (fuzzyMatch(g, normalize(name))) return true;
+    }
+  }
+  return false;
 }
 
 export function isCorrectGuess(guess: string, title: string): boolean {
