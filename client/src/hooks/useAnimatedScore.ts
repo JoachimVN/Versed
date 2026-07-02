@@ -40,7 +40,9 @@ export function useAnimatedScore(finalScore: number, delta: number, startDelay: 
       clearTimeout(timeoutId);
       cancelAnimationFrame(rafId);
     };
-  }, []); // eslint-disable-line react-hooks/exhaustive-deps
+    // round_result mounts this before score_update delivers the real delta/score,
+    // so the animation must restart once those props catch up to their real values.
+  }, [finalScore, delta, startDelay, instant]);
 
   return { displayScore, displayDelta, deltaFading };
 }
