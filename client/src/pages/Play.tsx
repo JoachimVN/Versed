@@ -1290,7 +1290,7 @@ export function RevealView({ game, result }: Readonly<{ game: PlayState; result:
           </div>
 
           {result.playerGuesses && result.playerGuesses.length > 0 && (
-            <div style={{ background: 'rgba(255,255,255,0.05)', border: '1px solid rgba(255,255,255,0.08)', borderRadius: '16px', padding: '8px 12px', width: '25%' }} className="space-y-1">
+            <div style={{ background: 'rgba(255,255,255,0.05)', border: '1px solid rgba(255,255,255,0.08)', borderRadius: '16px', padding: '8px 12px', width: '310px', maxWidth: '92vw' }} className="space-y-1">
               {result.playerGuesses.map(g => (
                 <div key={g.name} className="flex justify-between items-center gap-2">
                   <span className="text-white/40 text-xs min-w-0 truncate">{g.name}</span>
@@ -1340,7 +1340,7 @@ export function RevealView({ game, result }: Readonly<{ game: PlayState; result:
         </div>
 
         {result.playerGuesses && result.playerGuesses.length > 0 && (
-          <div style={{ background: 'rgba(255,255,255,0.05)', border: '1px solid rgba(255,255,255,0.08)', borderRadius: '16px', padding: '8px 12px', width: '25%' }} className="space-y-1">
+          <div style={{ background: 'rgba(255,255,255,0.05)', border: '1px solid rgba(255,255,255,0.08)', borderRadius: '16px', padding: '8px 12px', width: '310px', maxWidth: '92vw' }} className="space-y-1">
             {result.playerGuesses.map(g => {
               const correct = isRace ? !!result.correctGuessers?.includes(g.name) : (g.name === result.guesserName);
               const guessClass = guessTextClass(g.guess, correct);
