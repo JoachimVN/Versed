@@ -27,11 +27,18 @@ export function useSpotify() {
   // Incremented by prepareTrack and pauseTrack; startPrepared bails if it
   // changes mid-flight, preventing orphaned stop timers and stale resumes.
   const playGenRef = useRef(0);
+  // True when the access token was restored from sessionStorage: it may be
+  // arbitrarily old (tokens live 1h), so refresh it right away instead of
+  // waiting out the first 50-minute interval.
+  const staleTokenRef = useRef(false);
 
   useEffect(() => {
-    const params = new URLSearchParams(globalThis.location.search);
-    const at = sanitizeToken(params.get('access_token'));
-    const rt = sanitizeToken(params.get('refresh_token'));
+    // Tokens arrive in the URL fragment (never sent to servers); the query
+    // string is still checked as a fallback for older deployed servers.
+    const hashParams = new URLSearchParams(globalThis.location.hash.slice(1));
+    const searchParams = new URLSearchParams(globalThis.location.search);
+    const at = sanitizeToken(hashParams.get('access_token') ?? searchParams.get('access_token'));
+    const rt = sanitizeToken(hashParams.get('refresh_token') ?? searchParams.get('refresh_token'));
     if (at) {
       accessTokenRef.current = at;
       setAccessToken(at);
@@ -42,14 +49,18 @@ export function useSpotify() {
     } else {
       const stored = sanitizeToken(sessionStorage.getItem('spotify_at'));
       const storedRt = sanitizeToken(sessionStorage.getItem('spotify_rt'));
-      if (stored) { accessTokenRef.current = stored; setAccessToken(stored); }
+      if (stored) {
+        accessTokenRef.current = stored;
+        setAccessToken(stored);
+        staleTokenRef.current = true;
+      }
       if (storedRt) setRefreshToken(storedRt);
     }
   }, []);
 
   useEffect(() => {
     if (!refreshToken) return;
-    const id = setInterval(async () => {
+    const refresh = async () => {
       try {
         const res = await fetch(`${BACKEND_URL}/api/auth/refresh`, {
           method: 'POST',
@@ -64,7 +75,12 @@ export function useSpotify() {
           sessionStorage.setItem('spotify_at', newAt);
         }
       } catch { /* silently retry next interval */ }
-    }, 50 * 60 * 1000);
+    };
+    if (staleTokenRef.current) {
+      staleTokenRef.current = false;
+      refresh();
+    }
+    const id = setInterval(refresh, 50 * 60 * 1000);
     return () => clearInterval(id);
   }, [refreshToken]);
 
