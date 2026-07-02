@@ -3,6 +3,14 @@ import { BACKEND_URL } from '../config';
 
 let sdkLoaded = false;
 
+// Spotify OAuth tokens are base64url-ish strings. Reject anything that doesn't
+// match before it touches sessionStorage, since both URL params and the
+// refresh-token API response are attacker-influenceable (tainted) input.
+const TOKEN_PATTERN = /^[A-Za-z0-9_-]{10,512}$/;
+function sanitizeToken(value: string | null | undefined): string | null {
+  return value && TOKEN_PATTERN.test(value) ? value : null;
+}
+
 export function useSpotify() {
   const [accessToken, setAccessToken] = useState<string | null>(null);
   const [refreshToken, setRefreshToken] = useState<string | null>(null);
@@ -22,8 +30,8 @@ export function useSpotify() {
 
   useEffect(() => {
     const params = new URLSearchParams(globalThis.location.search);
-    const at = params.get('access_token');
-    const rt = params.get('refresh_token');
+    const at = sanitizeToken(params.get('access_token'));
+    const rt = sanitizeToken(params.get('refresh_token'));
     if (at) {
       accessTokenRef.current = at;
       setAccessToken(at);
@@ -32,8 +40,8 @@ export function useSpotify() {
       if (rt) sessionStorage.setItem('spotify_rt', rt);
       globalThis.history.replaceState({}, '', globalThis.location.pathname);
     } else {
-      const stored = sessionStorage.getItem('spotify_at');
-      const storedRt = sessionStorage.getItem('spotify_rt');
+      const stored = sanitizeToken(sessionStorage.getItem('spotify_at'));
+      const storedRt = sanitizeToken(sessionStorage.getItem('spotify_rt'));
       if (stored) { accessTokenRef.current = stored; setAccessToken(stored); }
       if (storedRt) setRefreshToken(storedRt);
     }
@@ -49,10 +57,11 @@ export function useSpotify() {
           body: JSON.stringify({ refresh_token: refreshToken }),
         });
         const data = await res.json() as { access_token?: string };
-        if (data.access_token) {
-          accessTokenRef.current = data.access_token;
-          setAccessToken(data.access_token);
-          sessionStorage.setItem('spotify_at', data.access_token);
+        const newAt = sanitizeToken(data.access_token);
+        if (newAt) {
+          accessTokenRef.current = newAt;
+          setAccessToken(newAt);
+          sessionStorage.setItem('spotify_at', newAt);
         }
       } catch { /* silently retry next interval */ }
     }, 50 * 60 * 1000);
