@@ -184,10 +184,11 @@ export function useSpotify() {
   // Returns true if playback actually started; false if aborted (caller should
   // not emit song_started or start client-side timers in the false case).
   async function startPrepared(durationMs: number): Promise<boolean> {
-    // If pauseTrack() was called during the prepare/countdown phase (e.g. a
-    // round_result arrived while the countdown was still ticking), bail out so
-    // we don't restart audio that should be stopped.
-    if (playStateRef.current === 'stopping') return false;
+    // Only start from a successful prepare. 'stopping' means pauseTrack() ran
+    // during the countdown (round already over); 'idle' means prepareTrack
+    // failed — resuming then would replay whatever track is still loaded from
+    // the previous round.
+    if (playStateRef.current !== 'preparing') return false;
     clearStopTimer();
     const gen = playGenRef.current;
     playStateRef.current = 'playing';

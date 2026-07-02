@@ -235,8 +235,12 @@ function useHostGame(): HostState {
       }
       if (playGenRef.current !== myGen) return;
       setCountdown(null);
-      await prepared;
+      const prepareOk = await prepared;
       if (playGenRef.current !== myGen) return;
+      // Prepare failed (device gone, API error): don't call startPrepared —
+      // it would resume the previous round's track. The server's fallback
+      // timer moves the round along instead.
+      if (!prepareOk) return;
       // Resolves at the real audible start; sync the timer and server to it.
       // Returns false if a round_result/guessing_start arrived and cancelled
       // playback mid-countdown — in that case skip song_started so the server
