@@ -73,8 +73,13 @@ export interface HostState {
 function useHostGame(): HostState {
   const spotify = useSpotify();
   const [phase, setPhase] = useState<Phase>('connect');
-  const [pin, setPin] = useState('');
-  const pinRef = useRef('');
+  // The PIN survives page reloads via sessionStorage so an accidental reload
+  // doesn't orphan a running game. freshLoadRef marks that this pin came from
+  // storage (not a live session): the rejoin then needs a full state snapshot,
+  // and a failed rejoin just means the stored pin is stale — start clean.
+  const [pin, setPin] = useState(() => sessionStorage.getItem('versed_host_pin') ?? '');
+  const pinRef = useRef(sessionStorage.getItem('versed_host_pin') ?? '');
+  const freshLoadRef = useRef(!!pinRef.current);
   const [players, setPlayers] = useState<PlayerInfo[]>([]);
   const playersRef = useRef<PlayerInfo[]>([]);
   const [roundIndex, setRoundIndex] = useState(0);
@@ -150,10 +155,34 @@ function useHostGame(): HostState {
 
     socket.on('connect', () => {
       if (pinRef.current) {
-        socket.emit('rejoin_host', { pin: pinRef.current }, (res: { players: PlayerInfo[] } | { error: string }) => {
+        const fresh = freshLoadRef.current;
+        freshLoadRef.current = false;
+        socket.emit('rejoin_host', { pin: pinRef.current, fresh }, (res: {
+          players: PlayerInfo[]; phase: string; roundIndex: number; totalRounds: number; leaderboard: LeaderboardEntry[];
+        } | { error: string }) => {
           if ('error' in res) {
-            setGameExpired(true);
-          } else if (res.players) setPlayers(res.players);
+            if (fresh) {
+              // Stale pin from an earlier session — drop it and let the lobby
+              // create a brand-new game instead of showing "expired".
+              sessionStorage.removeItem('versed_host_pin');
+              pinRef.current = '';
+              setPin('');
+            } else {
+              setGameExpired(true);
+            }
+          } else {
+            setPlayers(res.players);
+            if (fresh) {
+              // Reload recovery: the server parked any in-flight round on the
+              // leaderboard; jump straight there so the game can continue.
+              setRoundIndex(res.roundIndex);
+              setTotalRounds(res.totalRounds);
+              if (res.phase === 'leaderboard' || res.phase === 'finished') {
+                setLeaderboard(res.leaderboard);
+                setPhase(res.phase);
+              }
+            }
+          }
           setReconnecting(false);
           setReconnectingNames(new Set());
         });
@@ -315,6 +344,8 @@ function useHostGame(): HostState {
       if (e || !p) return;
       pinRef.current = p;
       setPin(p);
+      sessionStorage.setItem('versed_host_pin', p);
+      freshLoadRef.current = false;
     });
   };
 
@@ -342,6 +373,7 @@ function useHostGame(): HostState {
       if (e || !p) return;
       pinRef.current = p;
       setPin(p);
+      sessionStorage.setItem('versed_host_pin', p);
       setPlayers([]);
       setLeaderboard([]);
       setResult(null);
@@ -1258,7 +1290,7 @@ function LeaderboardRow({ entry, delay, highlight }: Readonly<{ entry: Leaderboa
 }
 
 function LeaderboardView({ game }: Readonly<{ game: HostState }>) {
-  const { phase, leaderboard } = game;
+  const { phase, leaderboard, roundIndex, totalRounds } = game;
   const isFinished = phase === 'finished';
 
   return (
@@ -1304,6 +1336,37 @@ function LeaderboardView({ game }: Readonly<{ game: HostState }>) {
           />
         ))}
       </div>
+
+      {/* Mid-game leaderboard is the resume point after a host page reload,
+          so it needs its own way to continue the game. */}
+      {!isFinished && (
+        <div className="relative z-10 flex justify-center pb-2">
+          <button
+            type="button"
+            className="liquid-btn relative cursor-pointer border-0 bg-transparent p-0"
+            style={{ width: '310px', height: '64px', borderRadius: '100px', background: 'rgba(0,0,0,0.001)' }}
+            onClick={() => socket.emit('next_round')}
+          >
+            <LiquidGlass
+              style={{ position: 'absolute', top: '50%', left: '50%' }}
+              displacementScale={64}
+              blurAmount={0.05}
+              saturation={130}
+              aberrationIntensity={2}
+              elasticity={0.12}
+              cornerRadius={100}
+              padding="18px 36px"
+            >
+              <div style={{ position: 'relative' }}>
+                <div style={{ position: 'absolute', inset: '-18px -36px', borderRadius: '100px', pointerEvents: 'none', background: 'rgba(110,32,155,0.12)' }} />
+                <span className="text-white font-bold text-xl" style={{ whiteSpace: 'nowrap', position: 'relative', display: 'inline-block', minWidth: '210px', textAlign: 'center' }}>
+                  {roundIndex + 1 >= totalRounds ? 'Final Results' : 'Next Round'}
+                </span>
+              </div>
+            </LiquidGlass>
+          </button>
+        </div>
+      )}
 
       {isFinished && (
         <div className="relative z-10 flex flex-col items-center gap-3">

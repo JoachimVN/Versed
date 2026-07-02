@@ -135,9 +135,12 @@ function usePlayGame(pinParam?: string): PlayState {
     setMyBid(seconds);
     setPhase('bid_submitted');
     socket.emit('submit_bid', { seconds }, (res?: { ok: boolean }) => {
+      // Only fall back to the betting screen if we're still in the bid flow —
+      // the round may have moved on (e.g. host reload parked the game on the
+      // leaderboard) by the time this rejection arrives.
       if (res && !res.ok) {
         setError("That didn't go through, try again.");
-        setPhase('betting');
+        setPhase(p => (p === 'bid_submitted' ? 'betting' : p));
       }
     });
   }
@@ -298,12 +301,24 @@ function usePlayGame(pinParam?: string): PlayState {
       setLeaderboard(lb);
     };
 
+    // The game can be parked on the leaderboard mid-round (host reload
+    // recovery), so clear any pending bid/guess auto-submit timers here — a
+    // late auto-submit would bounce off the server and yank the player back
+    // to a dead betting screen.
+    const clearRoundTimers = () => {
+      stopCountdown();
+      if (autoSubmitTimerRef.current) { clearTimeout(autoSubmitTimerRef.current); autoSubmitTimerRef.current = null; }
+      if (guessAutoSubmitTimerRef.current) { clearTimeout(guessAutoSubmitTimerRef.current); guessAutoSubmitTimerRef.current = null; }
+    };
+
     socket.on('leaderboard', ({ leaderboard: lb }: { leaderboard: LeaderboardEntry[] }) => {
+      clearRoundTimers();
       applyLeaderboard(lb);
       setPhase('leaderboard');
     });
 
     socket.on('game_over', ({ leaderboard: lb }: { leaderboard: LeaderboardEntry[] }) => {
+      clearRoundTimers();
       applyLeaderboard(lb);
       setPhase('finished');
     });
@@ -389,11 +404,12 @@ function usePlayGame(pinParam?: string): PlayState {
     setPhase('bid_submitted');
     socket.emit('submit_bid', { seconds }, (res?: { ok: boolean }) => {
       // Bid didn't register (e.g. mid-reconnect) — don't strand the player on
-      // "waiting for others"; drop them back so they can lock in again.
+      // "waiting for others"; drop them back so they can lock in again. But
+      // only if the game hasn't already moved past the bid flow.
       if (res && !res.ok) {
         bidSubmittedRef.current = false;
         setError("That didn't go through, try again.");
-        setPhase('betting');
+        setPhase(p => (p === 'bid_submitted' ? 'betting' : p));
       }
     });
   };

@@ -221,8 +221,15 @@ io.on('connection', (socket) => {
     callback({ pin: newGame.pin });
   });
 
-  // ── Host: rejoin after reconnect ──────────────────────────────────────────
-  socket.on('rejoin_host', ({ pin }: { pin: string }, callback: (r: { players: { name: string; score: number; streak: number }[] } | { error: string }) => void) => {
+  // ── Host: rejoin after reconnect or page reload ───────────────────────────
+  // `fresh` marks a full page reload: the host client lost all round UI state,
+  // so any round in flight can't be resumed. A plain socket reconnect (host
+  // tab still alive) keeps the round running as before.
+  socket.on('rejoin_host', ({ pin, fresh }: { pin: string; fresh?: boolean }, callback: (r: {
+    players: { name: string; score: number; streak: number }[];
+    phase: string; roundIndex: number; totalRounds: number;
+    leaderboard: { rank: number; name: string; score: number }[];
+  } | { error: string }) => void) => {
     const game = gm.getGame(pin);
     if (!game) return callback({ error: 'Game not found' });
 
@@ -238,7 +245,23 @@ io.on('connection', (socket) => {
     socket.join(`host:${pin}`);
     gm.updateSocketPin(socket.id, pin);
     io.to(game.pin).emit('host_reconnected');
-    callback({ players: Array.from(game.players.values()).map(p => ({ name: p.name, score: p.score, streak: p.streak })) });
+
+    // After a reload mid-round, the safest resume point is the between-rounds
+    // leaderboard: abandon the round in flight and park everyone there.
+    if (fresh && game.phase !== 'lobby' && game.phase !== 'finished') {
+      if (game.phaseTimer) clearTimeout(game.phaseTimer);
+      game.phaseEndsAt = null;
+      game.phase = 'leaderboard';
+      io.to(`player:${pin}`).emit('leaderboard', { leaderboard: gm.getLeaderboard(game) });
+    }
+
+    callback({
+      players: Array.from(game.players.values()).map(p => ({ name: p.name, score: p.score, streak: p.streak })),
+      phase: game.phase,
+      roundIndex: game.roundIndex,
+      totalRounds: game.totalRounds,
+      leaderboard: gm.getLeaderboard(game),
+    });
   });
 
   // ── Player: check if a game PIN is still active ───────────────────────────
