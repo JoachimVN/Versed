@@ -42,7 +42,7 @@ export default function App() {
 
   return (
     <BrowserRouter basename={import.meta.env.BASE_URL.replace(/\/$/, '') || '/'}>
-      <div style={{ height: 'var(--app-height, 100vh)', minHeight: 'var(--app-height, 100vh)', background: '#080812' }}>
+      <div style={{ position: 'fixed', top: 0, left: 0, right: 0, height: 'var(--app-height, 100vh)', background: '#080812' }}>
         <ConfettiBackground />
         <div
           className="fixed inset-0 pointer-events-none"
