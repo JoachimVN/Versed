@@ -26,6 +26,8 @@ export interface PlayState {
   timeLeft: number;
   bettingTime: number;
   bidIndex: number;
+  bidOptions: number[];
+  bidScores: number[] | null;
   myBid: number;
   guesserNames: string[];
   lowestBid: number;
@@ -74,6 +76,12 @@ function usePlayGame(pinParam?: string): PlayState {
   const [bettingTime, setBettingTime] = useState(15);
   const [bidIndex, setBidIndex] = useState(4); // default: 2s (index 4)
   const bidIndexRef = useRef(4);
+  // The server is the source of truth for the bid ladder and its point values
+  // (sent with each classic round_start); the local constant is only a
+  // fallback until the first round arrives.
+  const [bidOptions, setBidOptions] = useState<number[]>(BID_OPTIONS);
+  const bidOptionsRef = useRef<number[]>(BID_OPTIONS);
+  const [bidScores, setBidScores] = useState<number[] | null>(null);
   const [myBid, setMyBid] = useState(0);
   const [guesserNames, setGuesserNames] = useState<string[]>([]);
   const [lowestBid, setLowestBid] = useState(0);
@@ -131,7 +139,7 @@ function usePlayGame(pinParam?: string): PlayState {
   function autoSubmitBid() {
     if (bidSubmittedRef.current) return;
     bidSubmittedRef.current = true;
-    const seconds = BID_OPTIONS[bidIndexRef.current];
+    const seconds = bidOptionsRef.current[bidIndexRef.current];
     setMyBid(seconds);
     setPhase('bid_submitted');
     socket.emit('submit_bid', { seconds }, (res?: { ok: boolean }) => {
@@ -202,6 +210,7 @@ function usePlayGame(pinParam?: string): PlayState {
       roundIndex: number; total: number;
       hints: Hint[]; bettingTime?: number; endsAt?: number;
       mode?: 'classic' | 'race'; raceTime?: number; artistOnly?: boolean;
+      bidOptions?: number[]; bidScores?: number[];
     }) => {
       setRoundIndex(data.roundIndex);
       setTotalRounds(data.total);
@@ -226,6 +235,13 @@ function usePlayGame(pinParam?: string): PlayState {
         setGuesserNames([]);
         setPhase('watching');
       } else {
+        if (data.bidOptions?.length) {
+          setBidOptions(data.bidOptions);
+          bidOptionsRef.current = data.bidOptions;
+          bidIndexRef.current = Math.min(bidIndexRef.current, data.bidOptions.length - 1);
+          setBidIndex(i => Math.min(i, data.bidOptions!.length - 1));
+        }
+        if (data.bidScores?.length) setBidScores(data.bidScores);
         setBettingTime(data.bettingTime ?? 15);
         const endsAt = data.endsAt ?? (Date.now() + (data.bettingTime ?? 15) * 1000);
         autoSubmitTimerRef.current = setTimeout(autoSubmitBid, endsAt - Date.now());
@@ -398,7 +414,7 @@ function usePlayGame(pinParam?: string): PlayState {
     if (bidSubmittedRef.current) return;
     bidSubmittedRef.current = true;
     if (autoSubmitTimerRef.current) { clearTimeout(autoSubmitTimerRef.current); autoSubmitTimerRef.current = null; }
-    const seconds = BID_OPTIONS[bidIndex];
+    const seconds = bidOptions[bidIndex];
     setError('');
     setMyBid(seconds);
     setPhase('bid_submitted');
@@ -480,7 +496,7 @@ function usePlayGame(pinParam?: string): PlayState {
 
   return {
     phase, pin, name, myName, error, roundIndex, totalRounds, hints,
-    timeLeft, bettingTime, bidIndex, myBid, guesserNames, lowestBid,
+    timeLeft, bettingTime, bidIndex, bidOptions, bidScores, myBid, guesserNames, lowestBid,
     guessText, result, myScore, myScoreDelta, myStreak, mode, artistOnly, myRacePoints, myRaceTimeMs,
     leaderboard, leaderboardDeltas, songPlaying, reconnecting, hostReconnecting, savedSession, guessInputRef,
     newGamePin, rejoinNewGame,
@@ -847,12 +863,14 @@ function WaitingView({ game }: Readonly<{ game: PlayState }>) {
 }
 
 export function BettingView({ game }: Readonly<{ game: PlayState }>) {
-  const { roundIndex, totalRounds, timeLeft, bettingTime, bidIndex, error, submitBid, setBidIndex } = game;
+  const { roundIndex, totalRounds, timeLeft, bettingTime, bidIndex, bidOptions, bidScores, error, submitBid, setBidIndex } = game;
   const timerPct = bettingTime > 0 ? Math.max(0, (timeLeft / bettingTime)) * 100 : 0;
-  const currentBid = BID_OPTIONS[bidIndex];
+  const currentBid = bidOptions[bidIndex];
   const canGoLeft = bidIndex > 0;
-  const canGoRight = bidIndex < BID_OPTIONS.length - 1;
-  const estPoints = 500 + Math.round(1000 * Math.max(0, 1 - currentBid / 60));
+  const canGoRight = bidIndex < bidOptions.length - 1;
+  // Server-sent per-option scores; the formula fallback only covers a server
+  // that predates the bidScores payload.
+  const estPoints = bidScores?.[bidIndex] ?? (500 + Math.round(1000 * Math.max(0, 1 - currentBid / 60)));
 
   return (
     <div className="min-h-screen flex flex-col relative overflow-hidden" style={{ background: '#080812' }}>

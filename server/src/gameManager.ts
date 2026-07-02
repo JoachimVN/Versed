@@ -154,9 +154,24 @@ function difficultyBonus(rank: number): number {
   return Math.round(500 * Math.max(0, 1 - (rank - 1) / Math.max(songs.length - 1, 1)));
 }
 
+// The bid reward steps down the BID_OPTIONS ladder rather than scaling with
+// raw seconds: a linear-in-seconds curve pays 0.1s only ~1.5% more than 1s,
+// even though 0.1s is a far harder feat. One ladder position = one equal
+// notch of reward, so the daring end of the ladder is actually worth taking.
+export function bidScore(bid: number): number {
+  const idx = BID_OPTIONS.indexOf(bid);
+  if (idx === -1) return Math.round(1000 * Math.max(0, 1 - bid / 60));
+  return Math.round(1000 * (1 - idx / (BID_OPTIONS.length - 1)));
+}
+
+// Potential points per bid option, sent to clients with round_start so the
+// bid picker's score preview always matches the server's actual scoring.
+export function bidScoreTable(): number[] {
+  return BID_OPTIONS.map(b => 500 + bidScore(b));
+}
+
 export function calcPoints(bid: number, rank: number): number {
-  const bidScore = Math.round(1000 * Math.max(0, 1 - bid / 60));
-  return 500 + bidScore + difficultyBonus(rank);
+  return 500 + bidScore(bid) + difficultyBonus(rank);
 }
 
 export function calcRacePoints(

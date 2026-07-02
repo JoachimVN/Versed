@@ -146,6 +146,8 @@ io.on('connection', (socket) => {
         bettingTime: game.bettingTime,
         endsAt: game.phaseEndsAt,
         mode: 'classic',
+        bidOptions: gm.BID_OPTIONS,
+        bidScores: gm.bidScoreTable(),
       });
       return;
     }
@@ -628,6 +630,10 @@ io.on('connection', (socket) => {
       endsAt: bettingEndsAt,
       mode: 'classic',
       artistOnly: game.artistOnly,
+      // Source of truth for the client's bid picker and its score preview —
+      // keeps the UI from drifting out of sync with server-side scoring.
+      bidOptions: gm.BID_OPTIONS,
+      bidScores: gm.bidScoreTable(),
     });
     io.to(`host:${game.pin}`).emit('host_round_start', {
       roundIndex: game.roundIndex,
