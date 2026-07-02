@@ -88,9 +88,13 @@ function maskTitle(title: string): string {
     .join('   ');
 }
 
+// 100M and 500M are floor/placeholder values in the source data (thousands of
+// songs share exactly one of these two figures), not precise counts — mark
+// them so the hint doesn't imply false precision.
 function formatStreams(n: number): string {
   if (n >= 1_000_000_000) return `${(n / 1_000_000_000).toFixed(1)}B`;
-  return `${(n / 1_000_000).toFixed(0)}M`;
+  const plus = n === 100_000_000 || n === 500_000_000 ? '+' : '';
+  return `${(n / 1_000_000).toFixed(0)}M${plus}`;
 }
 
 function formatDuration(ms: number): string {
