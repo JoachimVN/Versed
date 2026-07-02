@@ -49,8 +49,16 @@ function extractTrackId(url: string): string | null {
 // 15  itunes_score
 // 16  apple_total
 // 17  apple_score
-// 18  final_score
-// 19  spotify_url
+// 18  sales_peak
+// 19  sales_chart_weeks
+// 20  sales_score
+// 21  riaa_units
+// 22  riaa_score
+// 23  radio_peak
+// 24  radio_chart_weeks
+// 25  radio_score
+// 26  final_score
+// 27  spotify_url
 export function loadSongs(): Song[] {
   const csvPath = path.join(__dirname, 'data', 'music_index_full.csv');
   const lines = fs.readFileSync(csvPath, 'utf-8').split('\n').filter(l => l.trim());
@@ -58,9 +66,9 @@ export function loadSongs(): Song[] {
   const songs: Song[] = [];
   for (let i = 1; i < lines.length; i++) {
     const f = parseCSVLine(lines[i]);
-    if (f.length < 20) continue;
+    if (f.length < 28) continue;
 
-    const trackId = extractTrackId(f[19] ?? '');
+    const trackId = extractTrackId(f[27] ?? '');
     if (!trackId) continue;
 
     songs.push({
@@ -78,7 +86,7 @@ export function loadSongs(): Song[] {
       spotifyStreams: num(f[10]),
       youtubeViews: num(f[12]),
       spotifyTrackId: trackId,
-      finalScore: num(f[18]) ?? 0,
+      finalScore: num(f[26]) ?? 0,
     });
   }
 
