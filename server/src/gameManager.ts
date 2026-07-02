@@ -135,7 +135,15 @@ function generateHints(song: Song, artistOnly = false): Hint[] {
   }
 
   const count = randomInt(1, 4); // 1–3, always at least one hint
-  return shuffle(pool).slice(0, count);
+  const shuffled = shuffle(pool);
+  let selected = shuffled.slice(0, count);
+
+  // Duration rarely helps identify a song, so it must never be the sole hint.
+  if (selected.length === 1 && selected[0].label === 'Duration' && shuffled.length > 1) {
+    selected = shuffled.slice(0, 2);
+  }
+
+  return selected;
 }
 
 function difficultyBonus(rank: number): number {
