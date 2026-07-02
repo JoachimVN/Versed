@@ -511,6 +511,22 @@ export function skipRaceGuess(
   return { allDone };
 }
 
+// A race round can end (timeout, or someone winning in winner-only mode)
+// while other players are still mid-guess. Their own client tries to
+// auto-submit at the same deadline the server uses to end the round, but
+// that's a race against the network — the server's own end-of-round broadcast
+// almost always arrives first and discards whatever they'd typed. Score their
+// last-known draft here instead, server-side, so a timely answer still counts.
+export function finalizeRaceDrafts(game: Game): void {
+  const round = game.currentRound;
+  if (!round || game.phase !== 'guessing') return;
+  for (const id of game.players.keys()) {
+    if (round.passed.has(id)) continue;
+    const draft = round.liveDrafts.get(id)?.trim();
+    if (draft) recordRaceGuess(game, id, draft);
+  }
+}
+
 // Called on every keystroke so an opponent's in-progress guess survives even
 // if the round ends (someone else wins) before they get a chance to submit.
 export function updateLiveDraft(game: Game, socketId: string, text: string): void {

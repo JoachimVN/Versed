@@ -631,6 +631,7 @@ io.on('connection', (socket) => {
   function endRaceRound(game: GameObj) {
     if (game.phase === 'reveal') return; // guard against timer + allDone race
     if (game.phaseTimer) clearTimeout(game.phaseTimer);
+    gm.finalizeRaceDrafts(game);
     const round = game.currentRound!;
     game.phase = 'reveal';
     const correctNames = Array.from(round.correctGuessers)

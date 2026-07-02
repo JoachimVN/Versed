@@ -556,10 +556,16 @@ function JoinView({ game }: Readonly<{ game: PlayState }>) {
 
   return (
     <div
-      className="page-enter relative min-h-screen keyboard-resize flex flex-col items-center justify-center p-6 gap-10"
-      style={{ zIndex: 1, overflowY: 'auto', justifyContent: 'safe center' }}
+      className="page-enter relative min-h-screen keyboard-resize"
+      style={{ zIndex: 1, overflowY: 'auto' }}
     >
       <BackButton />
+
+      {/* minHeight (not height) lets this grow past the viewport instead of
+          fighting it for space — centered when it fits, top-to-bottom
+          scrollable overflow (no Safari "unreachable centered overflow"
+          quirk) when the keyboard shrinks the viewport past what fits. */}
+      <div className="flex flex-col items-center p-6 gap-10" style={{ minHeight: '100%', justifyContent: 'center' }}>
 
       <img
         src={`${import.meta.env.BASE_URL}logo.png`}
@@ -716,6 +722,7 @@ function JoinView({ game }: Readonly<{ game: PlayState }>) {
           <span className="text-white font-bold text-xl" style={{ whiteSpace: 'nowrap' }}>Join game</span>
         </LiquidGlass>
       </button>
+      </div>
     </div>
   );
 }
