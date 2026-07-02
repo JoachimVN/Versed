@@ -243,11 +243,16 @@ function usePlayGame(pinParam?: string): PlayState {
     socket.on('song_playing', () => setSongPlaying(true));
 
     socket.on('guessing_start', (data: { guesserNames: string[]; timeLimit: number; endsAt?: number }) => {
+      setSongPlaying(false);
       setGuesserNames(data.guesserNames);
       startCountdown(data.endsAt ?? (Date.now() + data.timeLimit * 1000));
     });
 
     socket.on('your_turn', (data: { timeLimit: number; endsAt?: number }) => {
+      // Race mode: playback starts the instant everyone's turn begins, so the
+      // song is actually playing here. Classic mode: this is a specific tier's
+      // guessing turn, which only starts after the host has paused the song.
+      setSongPlaying(modeRef.current === 'race');
       const endsAt = data.endsAt ?? (Date.now() + data.timeLimit * 1000);
       startCountdown(endsAt);
       setPhase('guessing');
@@ -257,6 +262,7 @@ function usePlayGame(pinParam?: string): PlayState {
     });
 
     socket.on('round_result', (data: RoundResultEvent) => {
+      setSongPlaying(false);
       guessInputRef.current?.blur();
       stopCountdown();
       if (guessAutoSubmitTimerRef.current) { clearTimeout(guessAutoSubmitTimerRef.current); guessAutoSubmitTimerRef.current = null; }
@@ -470,7 +476,11 @@ function usePlayGame(pinParam?: string): PlayState {
       return next;
     });
   },
-  setGuessText: (v: string) => { guessTextRef.current = v; setGuessText(v); },
+  setGuessText: (v: string) => {
+    guessTextRef.current = v;
+    setGuessText(v);
+    socket.emit('update_guess_draft', { text: v });
+  },
     join, rejoinSaved, submitBid, submitGuess, skipGuess, renamePlayer,
   };
 }
@@ -547,7 +557,7 @@ function JoinView({ game }: Readonly<{ game: PlayState }>) {
   return (
     <div
       className="page-enter relative min-h-screen keyboard-resize flex flex-col items-center justify-center p-6 gap-10"
-      style={{ zIndex: 1 }}
+      style={{ zIndex: 1, overflowY: 'auto', justifyContent: 'safe center' }}
     >
       <BackButton />
 
@@ -988,17 +998,17 @@ function WatchingView({ game }: Readonly<{ game: PlayState }>) {
             <div style={{ width: '254px', display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '18px' }}>
 
               {/* Animated waveform — static until song actually starts */}
-              <div style={{ display: 'flex', gap: '5px', alignItems: 'center', height: '36px', transition: 'opacity 0.3s ease', opacity: (isRace || songPlaying) ? 1 : 0.35 }}>
+              <div style={{ display: 'flex', gap: '5px', alignItems: 'center', height: '36px', transition: 'opacity 0.3s ease', opacity: songPlaying ? 1 : 0.35 }}>
                 {AUDIO_BARS.map((bar) => (
                   <div
                     key={bar.delay}
                     style={{
                       width: '3px', height: '100%', borderRadius: '2px',
                       background: isRace ? 'rgba(234,88,12,0.75)' : 'rgba(150,17,193,0.75)',
-                      animation: (isRace || songPlaying) ? `${bar.anim} ${bar.dur}s ease-in-out infinite` : 'none',
+                      animation: songPlaying ? `${bar.anim} ${bar.dur}s ease-in-out infinite` : 'none',
                       animationDelay: `${bar.delay}s`,
                       transformOrigin: 'center',
-                      transform: (isRace || songPlaying) ? undefined : 'scaleY(0.07)',
+                      transform: songPlaying ? undefined : 'scaleY(0.07)',
                     }}
                   />
                 ))}
@@ -1061,19 +1071,37 @@ function ListeningHeader({ songPlaying }: Readonly<{ songPlaying: boolean }>) {
   );
 }
 
-function ActiveHeader({ urgent, timeLeft, myScore }: Readonly<{ urgent: boolean; timeLeft: number; myScore: number }>) {
+// Race mode plays the song throughout the guessing window, so it keeps the
+// waveform going here too; classic has already stopped the song by the time
+// a tier's turn starts, so it stays timer-only.
+function ActiveHeader({ urgent, timeLeft, myScore, isRace, songPlaying }: Readonly<{ urgent: boolean; timeLeft: number; myScore: number; isRace: boolean; songPlaying: boolean }>) {
   return (
-    <div className="flex items-center justify-between px-5 pt-5 pb-3">
-      <span style={{ color: 'rgba(255,255,255,0.32)', fontSize: '0.85rem', fontWeight: 600 }}>Your turn</span>
-      <span
-        className="font-black text-4xl tabular-nums"
-        style={{ color: urgent ? timerColor(0) : 'white', transition: 'color 0.3s ease' }}
-      >
-        {timeLeft}s
-      </span>
-      <span style={{ color: 'rgba(255,255,255,0.28)', fontSize: '0.8rem', fontWeight: 500 }}>
-        {myScore.toLocaleString()} pts
-      </span>
+    <div className="flex flex-col gap-2 pt-5 pb-3">
+      <div className="flex items-center justify-between px-5">
+        <span style={{ color: 'rgba(255,255,255,0.32)', fontSize: '0.85rem', fontWeight: 600 }}>Your turn</span>
+        <span
+          className="font-black text-4xl tabular-nums"
+          style={{ color: urgent ? timerColor(0) : 'white', transition: 'color 0.3s ease' }}
+        >
+          {timeLeft}s
+        </span>
+        <span style={{ color: 'rgba(255,255,255,0.28)', fontSize: '0.8rem', fontWeight: 500 }}>
+          {myScore.toLocaleString()} pts
+        </span>
+      </div>
+      {isRace && (
+        <div style={{ display: 'flex', gap: '5px', alignItems: 'center', justifyContent: 'center', height: '20px', transition: 'opacity 0.3s ease', opacity: songPlaying ? 1 : 0.35 }}>
+          {AUDIO_BARS.map((bar) => (
+            <div key={bar.delay} style={{
+              width: '3px', height: '100%', borderRadius: '2px',
+              background: 'rgba(234,88,12,0.6)',
+              animation: songPlaying ? `${bar.anim} ${bar.dur}s ease-in-out infinite` : 'none',
+              animationDelay: `${bar.delay}s`, transformOrigin: 'center',
+              transform: songPlaying ? undefined : 'scaleY(0.07)',
+            }} />
+          ))}
+        </div>
+      )}
     </div>
   );
 }
@@ -1086,7 +1114,7 @@ function guessInputBoxStyle(isListening: boolean): { border: string; background:
 }
 
 function GuessingView({ game }: Readonly<{ game: PlayState }>) {
-  const { phase, timeLeft, myScore, guessText, guessInputRef, setGuessText, submitGuess, skipGuess, artistOnly, songPlaying } = game;
+  const { phase, timeLeft, myScore, guessText, guessInputRef, setGuessText, submitGuess, skipGuess, artistOnly, songPlaying, mode } = game;
   const isListening = phase === 'watching';
   const canSubmit = guessText.trim().length > 0;
   const urgent = !isListening && timeLeft <= 5;
@@ -1102,7 +1130,7 @@ function GuessingView({ game }: Readonly<{ game: PlayState }>) {
       {/* Header — waveform while listening, timer + score when active */}
       {isListening
         ? <ListeningHeader songPlaying={songPlaying} />
-        : <ActiveHeader urgent={urgent} timeLeft={timeLeft} myScore={myScore} />}
+        : <ActiveHeader urgent={urgent} timeLeft={timeLeft} myScore={myScore} isRace={mode === 'race'} songPlaying={songPlaying} />}
 
       {/* Input area */}
       <div className="flex-1 flex flex-col items-center justify-center gap-5 px-5">
@@ -1306,7 +1334,7 @@ export function RevealView({ game, result }: Readonly<{ game: PlayState; result:
                 <div key={g.name} className="flex justify-between items-center gap-2">
                   <span className="text-white/40 text-xs min-w-0 truncate">{g.name}</span>
                   <span className={`text-xs text-right min-w-0 truncate italic ${g.guess === null ? 'text-white/15' : 'text-white/20'}`}>
-                    {g.guess === null ? 'skipped' : `"${g.guess}"`}
+                    {g.guess === null ? 'skipped' : (() => {const ellipsis = g.live ? '…' : ''; return `"${g.guess}${ellipsis}"`;})()}
                   </span>
                 </div>
               ))}
@@ -1355,11 +1383,12 @@ export function RevealView({ game, result }: Readonly<{ game: PlayState; result:
             {result.playerGuesses.map(g => {
               const correct = isRace ? !!result.correctGuessers?.includes(g.name) : (g.name === result.guesserName);
               const guessClass = guessTextClass(g.guess, correct);
+              const ellipsis = g.live ? '…' : '';
               return (
                 <div key={g.name} className="flex justify-between items-center gap-2">
                   <span className={`text-xs min-w-0 truncate ${correct ? 'text-white font-semibold' : 'text-white/30'}`}>{g.name}</span>
                   <span className={`text-xs text-right min-w-0 truncate ${guessClass}`}>
-                    {g.guess === null ? 'skipped' : `"${g.guess}"`}
+                    {g.guess === null ? 'skipped' : `"${g.guess}${ellipsis}"`}
                     {correct && g.timeMs != null && (
                       <span className="ml-1 text-white/25 text-xs">{(g.timeMs / 1000).toFixed(1)}s</span>
                     )}

@@ -23,13 +23,21 @@ export function useViewportHeight() {
     // animation finishes — without this guard that trailing event causes a
     // second, redundant rescale right after the blur-triggered reset below.
     const handleVisualViewportResize = () => {
-      if (inputFocused) applyVisualViewport();
+      if (inputFocused) {
+        applyVisualViewport();
+        window.scrollTo(0, 0);
+      }
     };
 
     const handleFocusIn = (e: FocusEvent) => {
       if (e.target instanceof HTMLInputElement || e.target instanceof HTMLTextAreaElement) {
         inputFocused = true;
         applyVisualViewport();
+        // Our fixed-position layout already reflows to fit above the keyboard,
+        // so cancel the browser's own scroll-into-view — otherwise it shifts
+        // the page up and anchors the visible content to the bottom instead
+        // of leaving it pinned to the top.
+        window.scrollTo(0, 0);
       }
     };
 
