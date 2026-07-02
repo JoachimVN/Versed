@@ -63,31 +63,6 @@ function getInitials(artist: string): string {
   return main.split(/\s+/).map(w => (w[0] ?? '').toUpperCase()).join('.') + '.';
 }
 
-// "Blinding Lights" → "B _ i _ _ i _ _   L _ _ _ t _"
-// Always reveals first letter of each word plus 2 randomly selected inner letters.
-function maskTitle(title: string): string {
-  const words = title.trim().split(/\s+/);
-  const innerLetters: string[] = [];
-  for (const w of words) {
-    for (let i = 1; i < w.length; i++) {
-      const c = w[i].toLowerCase();
-      if (/[a-z]/.test(c)) innerLetters.push(c);
-    }
-  }
-  const unique = [...new Set(innerLetters)];
-  const extraRevealed = new Set(shuffle(unique).slice(0, Math.min(2, unique.length)));
-
-  return words
-    .map(w =>
-      w.split('').map((c, i) => {
-        if (!/[a-zA-Z]/.test(c)) return c;
-        if (i === 0 || extraRevealed.has(c.toLowerCase())) return c;
-        return '_';
-      }).join(' ')
-    )
-    .join('   ');
-}
-
 // 100M and 500M are floor/placeholder values in the source data (thousands of
 // songs share exactly one of these two figures), not precise counts — mark
 // them so the hint doesn't imply false precision.

@@ -43,7 +43,7 @@ Versed is a real-time multiplayer music guessing game. One player is the **host*
 
 All game state lives in-memory on the server (`gameManager.ts`). No database.
 
-1. **Host** authenticates with Spotify OAuth (`/api/auth/spotify` → callback → redirects to `/host?access_token=...`). Tokens go into `sessionStorage`, auto-refreshed every 50 min.
+1. **Host** authenticates with Spotify OAuth (`/api/auth/spotify` → callback → redirects to `/host#access_token=...`, tokens in the URL fragment). Tokens go into `sessionStorage`, auto-refreshed every 50 min (and immediately when restored from storage).
 2. Host calls `create_game` → server generates a 3-digit PIN and stores the `Game` object.
 3. **Players** join via `/play` (or deep link `/play/:pin`) by emitting `join_game`.
 4. Each round:
@@ -51,7 +51,7 @@ All game state lives in-memory on the server (`gameManager.ts`). No database.
    - Players bid how many seconds of audio they need (from `BID_OPTIONS`). Lowest bid = least audio = higher score ceiling.
    - Server closes betting, groups players into **tiers** by bid value (`BidTier[]`). Lowest bidders guess first.
    - Host's Spotify Web Playback SDK plays the clip. The server emits `play_song`; the host prepares and starts the track, then emits `song_started` to sync everyone's timer.
-   - Guessers type the song title. Matching uses fuzzy Levenshtein + homophone normalization (`fuzzyMatch.ts`). A partial title (all words except the last) also counts.
+   - Guessers type the song title. Matching uses fuzzy Levenshtein + homophone normalization (`fuzzyMatch.ts`). The title before a parenthetical also counts, as does a true subtitle (parenthetical content that isn't metadata like "feat."/"remastered").
    - If a tier's guessers all pass/fail, the next tier gets a turn with their longer bid duration.
 5. `round_result` → `leaderboard`/`game_over`.
 
@@ -80,8 +80,10 @@ All game state lives in-memory on the server (`gameManager.ts`). No database.
 
 `calcPoints(bid, rank)` in `gameManager.ts`:
 - Base: 500 pts
-- Bid bonus: up to 1000 pts (inversely proportional to seconds bid, capped at 60s)
+- Bid bonus: up to 1000 pts, stepped down the `BID_OPTIONS` ladder — one equal notch (~77 pts) per ladder position, so a 0.1s bid pays meaningfully more than a 1s bid
 - Difficulty bonus: up to 500 pts (based on song rank in the dataset)
+
+The server sends `bidOptions` and per-option `bidScores` with each classic `round_start`; the client's bid picker uses those, so the preview can't drift from server scoring.
 
 ### Environment variables
 
