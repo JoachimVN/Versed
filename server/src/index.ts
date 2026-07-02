@@ -207,13 +207,19 @@ io.on('connection', (socket) => {
       if (t) { clearTimeout(t); playerDisconnectTimers.delete(sid); }
     }
 
-    // Tear down old game state, then create the new one so we have its PIN.
+    // Tear down old game state, then create the new one. Reusing the old PIN
+    // keeps QR codes, deep links and players' saved sessions valid.
     gm.cleanupGame(oldPin);
-    const newGame = gm.createGame(socket.id);
+    const newGame = gm.createGame(socket.id, oldPin);
 
     // Notify players still subscribed to the old room (Socket.IO rooms persist
     // independently of game state, so the emit reaches them before they leave).
     io.to(`player:${oldPin}`).emit('game_restarted', { newPin: newGame.pin });
+
+    // Then evict them from the rooms: the new game reuses the PIN, so anyone
+    // lingering would otherwise receive events for a game they haven't joined.
+    // Pressing "Play Again" re-joins the rooms via the normal join_game path.
+    io.in(`player:${oldPin}`).socketsLeave([oldPin, `player:${oldPin}`]);
 
     socket.leave(oldPin);
     socket.leave(`host:${oldPin}`);

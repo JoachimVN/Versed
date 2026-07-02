@@ -218,8 +218,11 @@ export function activeGameCount(): number {
   return games.size;
 }
 
-export function createGame(hostSocketId: string): Game {
-  const pin = generatePin();
+// `preferredPin` lets "New Game" reuse the previous game's PIN (once that game
+// is cleaned up), so QR codes, deep links and players' saved sessions stay
+// valid across a restart. Falls back to a fresh PIN if it's somehow taken.
+export function createGame(hostSocketId: string, preferredPin?: string): Game {
+  const pin = preferredPin && !games.has(preferredPin) ? preferredPin : generatePin();
   const game: Game = {
     pin,
     hostSocketId,
