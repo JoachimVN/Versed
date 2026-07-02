@@ -243,11 +243,13 @@ function usePlayGame(pinParam?: string): PlayState {
     socket.on('song_playing', () => setSongPlaying(true));
 
     socket.on('guessing_start', (data: { guesserNames: string[]; timeLimit: number; endsAt?: number }) => {
+      setSongPlaying(false);
       setGuesserNames(data.guesserNames);
       startCountdown(data.endsAt ?? (Date.now() + data.timeLimit * 1000));
     });
 
     socket.on('your_turn', (data: { timeLimit: number; endsAt?: number }) => {
+      setSongPlaying(false);
       const endsAt = data.endsAt ?? (Date.now() + data.timeLimit * 1000);
       startCountdown(endsAt);
       setPhase('guessing');
@@ -257,6 +259,7 @@ function usePlayGame(pinParam?: string): PlayState {
     });
 
     socket.on('round_result', (data: RoundResultEvent) => {
+      setSongPlaying(false);
       guessInputRef.current?.blur();
       stopCountdown();
       if (guessAutoSubmitTimerRef.current) { clearTimeout(guessAutoSubmitTimerRef.current); guessAutoSubmitTimerRef.current = null; }
@@ -551,7 +554,7 @@ function JoinView({ game }: Readonly<{ game: PlayState }>) {
   return (
     <div
       className="page-enter relative min-h-screen keyboard-resize flex flex-col items-center justify-center p-6 gap-10"
-      style={{ zIndex: 1 }}
+      style={{ zIndex: 1, overflowY: 'auto', justifyContent: 'safe center' }}
     >
       <BackButton />
 
@@ -992,17 +995,17 @@ function WatchingView({ game }: Readonly<{ game: PlayState }>) {
             <div style={{ width: '254px', display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '18px' }}>
 
               {/* Animated waveform — static until song actually starts */}
-              <div style={{ display: 'flex', gap: '5px', alignItems: 'center', height: '36px', transition: 'opacity 0.3s ease', opacity: (isRace || songPlaying) ? 1 : 0.35 }}>
+              <div style={{ display: 'flex', gap: '5px', alignItems: 'center', height: '36px', transition: 'opacity 0.3s ease', opacity: songPlaying ? 1 : 0.35 }}>
                 {AUDIO_BARS.map((bar) => (
                   <div
                     key={bar.delay}
                     style={{
                       width: '3px', height: '100%', borderRadius: '2px',
                       background: isRace ? 'rgba(234,88,12,0.75)' : 'rgba(150,17,193,0.75)',
-                      animation: (isRace || songPlaying) ? `${bar.anim} ${bar.dur}s ease-in-out infinite` : 'none',
+                      animation: songPlaying ? `${bar.anim} ${bar.dur}s ease-in-out infinite` : 'none',
                       animationDelay: `${bar.delay}s`,
                       transformOrigin: 'center',
-                      transform: (isRace || songPlaying) ? undefined : 'scaleY(0.07)',
+                      transform: songPlaying ? undefined : 'scaleY(0.07)',
                     }}
                   />
                 ))}
@@ -1310,7 +1313,7 @@ export function RevealView({ game, result }: Readonly<{ game: PlayState; result:
                 <div key={g.name} className="flex justify-between items-center gap-2">
                   <span className="text-white/40 text-xs min-w-0 truncate">{g.name}</span>
                   <span className={`text-xs text-right min-w-0 truncate italic ${g.guess === null ? 'text-white/15' : 'text-white/20'}`}>
-                    {g.guess === null ? 'skipped' : `"${g.guess}${g.live ? '…' : ''}"`}
+                    {g.guess === null ? 'skipped' : (() => {const ellipsis = g.live ? '…' : ''; return `"${g.guess}${ellipsis}"`;})()}
                   </span>
                 </div>
               ))}
@@ -1359,11 +1362,12 @@ export function RevealView({ game, result }: Readonly<{ game: PlayState; result:
             {result.playerGuesses.map(g => {
               const correct = isRace ? !!result.correctGuessers?.includes(g.name) : (g.name === result.guesserName);
               const guessClass = guessTextClass(g.guess, correct);
+              const ellipsis = g.live ? '…' : '';
               return (
                 <div key={g.name} className="flex justify-between items-center gap-2">
                   <span className={`text-xs min-w-0 truncate ${correct ? 'text-white font-semibold' : 'text-white/30'}`}>{g.name}</span>
                   <span className={`text-xs text-right min-w-0 truncate ${guessClass}`}>
-                    {g.guess === null ? 'skipped' : `"${g.guess}${g.live ? '…' : ''}"`}
+                    {g.guess === null ? 'skipped' : `"${g.guess}${ellipsis}"`}
                     {correct && g.timeMs != null && (
                       <span className="ml-1 text-white/25 text-xs">{(g.timeMs / 1000).toFixed(1)}s</span>
                     )}
