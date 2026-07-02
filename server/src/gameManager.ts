@@ -59,7 +59,7 @@ function shuffle<T>(arr: T[]): T[] {
 }
 
 function getInitials(artist: string): string {
-  const main = artist.split(/\s+(?:featuring|feat\.|ft\.|x\s)/i)[0].trim();
+  const main = artist.split(/\s(?:featuring|feat\.|ft\.|x\s)/i)[0].trim();
   return main.split(/\s+/).map(w => (w[0] ?? '').toUpperCase()).join('.') + '.';
 }
 
