@@ -28,7 +28,7 @@ export interface RoundResultEvent {
   mode?: 'classic' | 'race';
   artistOnly?: boolean;
   correctGuessers?: string[];
-  playerGuesses?: { name: string; guess: string | null; timeMs?: number | null }[];
+  playerGuesses?: { name: string; guess: string | null; timeMs?: number | null; live?: boolean }[];
 }
 
 declare global {

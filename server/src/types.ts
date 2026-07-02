@@ -41,6 +41,7 @@ export interface Round {
   passed: Set<string>; // guessers whose turn is over this tier (wrong guess or skip)
   earlyGuessers: Set<string>; // guessers who opted in before their listening time expired
   guesses: Map<string, string | null>; // socketId → text submitted (null = skipped)
+  liveDrafts: Map<string, string>; // socketId → text currently typed, not yet submitted
   correctGuesserName?: string;      // classic mode: name of the player who got it right
   scoredSocketIds: Set<string>;     // players who earned points this round — everyone else's streak resets when the round ends
   // Race-mode fields

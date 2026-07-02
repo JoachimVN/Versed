@@ -184,6 +184,7 @@ function buildRound(usedSongIds: Set<string>, artistOnly = false): Round {
     passed: new Set(),
     earlyGuessers: new Set(),
     guesses: new Map(),
+    liveDrafts: new Map(),
     scoredSocketIds: new Set(),
     playStartAt: null,
     firstCorrectAt: null,
@@ -510,16 +511,31 @@ export function skipRaceGuess(
   return { allDone };
 }
 
-export function getRoundGuesses(game: Game): { name: string; guess: string | null; timeMs: number | null }[] {
+// Called on every keystroke so an opponent's in-progress guess survives even
+// if the round ends (someone else wins) before they get a chance to submit.
+export function updateLiveDraft(game: Game, socketId: string, text: string): void {
+  const round = game.currentRound;
+  if (!round) return;
+  if (game.mode === 'classic' && !round.guesserSocketIds.includes(socketId)) return;
+  if (game.phase !== 'guessing' && game.phase !== 'playing') return;
+  if (round.passed.has(socketId)) return;
+  round.liveDrafts.set(socketId, text);
+}
+
+export function getRoundGuesses(game: Game): { name: string; guess: string | null; timeMs: number | null; live?: boolean }[] {
   const round = game.currentRound;
   if (!round) return [];
-  return Array.from(round.guesses.entries())
-    .map(([id, guess]) => ({
-      name: game.players.get(id)?.name ?? '',
-      guess,
-      timeMs: round.guessTimes.get(id) ?? null,
-    }))
-    .filter(g => g.name);
+  const results: { name: string; guess: string | null; timeMs: number | null; live?: boolean }[] = [];
+  for (const [id, player] of game.players) {
+    if (!player.name) continue;
+    if (round.guesses.has(id)) {
+      results.push({ name: player.name, guess: round.guesses.get(id) ?? null, timeMs: round.guessTimes.get(id) ?? null });
+      continue;
+    }
+    const draft = round.liveDrafts.get(id)?.trim();
+    if (draft) results.push({ name: player.name, guess: draft, timeMs: null, live: true });
+  }
+  return results;
 }
 
 export function getLeaderboard(game: Game) {

@@ -1063,7 +1063,7 @@ function RevealPlayerRow({
   player, entry, delta, delay, correct, instant, removePlayer,
 }: Readonly<{
   player: PlayerInfo;
-  entry?: { guess: string | null; timeMs?: number | null };
+  entry?: { guess: string | null; timeMs?: number | null; live?: boolean };
   delta: number;
   delay: number;
   correct: boolean;
@@ -1075,7 +1075,7 @@ function RevealPlayerRow({
   const skipped = entry?.guess === null;
   let guessText: string | null = null;
   if (entry) {
-    guessText = skipped ? 'skipped' : `"${entry.guess}"`;
+    guessText = skipped ? 'skipped' : `"${entry.guess}${entry.live ? '…' : ''}"`;
   }
   const guessCls = (!skipped && correct) ? 'text-green-400 text-xs truncate min-w-0' : 'text-white/20 italic text-xs truncate min-w-0';
   if (!entry) {

@@ -425,6 +425,13 @@ io.on('connection', (socket) => {
     }
   });
 
+  // ── Player: live guess draft (not yet submitted) ──────────────────────────
+  socket.on('update_guess_draft', ({ text }: { text: string }) => {
+    const game = gm.getGameBySocket(socket.id);
+    if (!game) return;
+    gm.updateLiveDraft(game, socket.id, text);
+  });
+
   // ── Player: skip guess ─────────────────────────────────────────────────────
   socket.on('skip_guess', () => {
     const game = gm.getGameBySocket(socket.id);

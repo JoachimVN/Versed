@@ -470,7 +470,11 @@ function usePlayGame(pinParam?: string): PlayState {
       return next;
     });
   },
-  setGuessText: (v: string) => { guessTextRef.current = v; setGuessText(v); },
+  setGuessText: (v: string) => {
+    guessTextRef.current = v;
+    setGuessText(v);
+    socket.emit('update_guess_draft', { text: v });
+  },
     join, rejoinSaved, submitBid, submitGuess, skipGuess, renamePlayer,
   };
 }
@@ -1306,7 +1310,7 @@ export function RevealView({ game, result }: Readonly<{ game: PlayState; result:
                 <div key={g.name} className="flex justify-between items-center gap-2">
                   <span className="text-white/40 text-xs min-w-0 truncate">{g.name}</span>
                   <span className={`text-xs text-right min-w-0 truncate italic ${g.guess === null ? 'text-white/15' : 'text-white/20'}`}>
-                    {g.guess === null ? 'skipped' : `"${g.guess}"`}
+                    {g.guess === null ? 'skipped' : `"${g.guess}${g.live ? '…' : ''}"`}
                   </span>
                 </div>
               ))}
@@ -1359,7 +1363,7 @@ export function RevealView({ game, result }: Readonly<{ game: PlayState; result:
                 <div key={g.name} className="flex justify-between items-center gap-2">
                   <span className={`text-xs min-w-0 truncate ${correct ? 'text-white font-semibold' : 'text-white/30'}`}>{g.name}</span>
                   <span className={`text-xs text-right min-w-0 truncate ${guessClass}`}>
-                    {g.guess === null ? 'skipped' : `"${g.guess}"`}
+                    {g.guess === null ? 'skipped' : `"${g.guess}${g.live ? '…' : ''}"`}
                     {correct && g.timeMs != null && (
                       <span className="ml-1 text-white/25 text-xs">{(g.timeMs / 1000).toFixed(1)}s</span>
                     )}
