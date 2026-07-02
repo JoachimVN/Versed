@@ -29,6 +29,17 @@ const createGameAttempts = new Map<string, number[]>();
 const CREATE_GAME_LIMIT = 5;
 const CREATE_GAME_WINDOW_MS = 60 * 60 * 1000; // 1 hour
 
+// Sweep out IPs whose attempts have all aged past the window, so the map
+// doesn't grow for the lifetime of the process.
+setInterval(() => {
+  const now = Date.now();
+  for (const [ip, times] of createGameAttempts) {
+    const recent = times.filter(t => now - t < CREATE_GAME_WINDOW_MS);
+    if (recent.length > 0) createGameAttempts.set(ip, recent);
+    else createGameAttempts.delete(ip);
+  }
+}, CREATE_GAME_WINDOW_MS).unref();
+
 const allowedOrigins = new Set(
   (process.env.CORS_ORIGINS || process.env.FRONTEND_URL || '')
     .split(',')
@@ -316,7 +327,7 @@ io.on('connection', (socket) => {
     io.to(`host:${pin}`).emit('player_reconnected', { name: player.name, score: player.score, streak: player.streak });
   });
 
-  // ── Host: kick player from lobby or leaderboard ───────────────────────────
+  // ── Host: kick player from lobby or reveal ────────────────────────────────
   socket.on('kick_player', ({ name }: { name: string }) => {
     const game = gm.getGameBySocket(socket.id);
     const allowedPhases = ['lobby', 'reveal'] as const;
@@ -478,6 +489,9 @@ io.on('connection', (socket) => {
     const game = gm.getGameBySocket(socket.id);
     if (!game) return;
     if (game.hostSocketId !== socket.id) return;
+    // Only between rounds — a double-click on "Next Round" must not skip a
+    // round or start two overlapping beginRound() calls.
+    if (game.phase !== 'reveal' && game.phase !== 'leaderboard') return;
 
     game.roundIndex += 1;
     if (game.roundIndex >= game.totalRounds) {
@@ -655,7 +669,10 @@ io.on('connection', (socket) => {
     const round = game.currentRound!;
     const result = gm.closeBetting(game);
     if (!result) {
-      // nobody bid — skip round
+      // Nobody bid — skip the round. Move the phase along too, or the game
+      // stays in 'betting' and a stale bid could re-trigger this round.
+      game.phase = 'reveal';
+      game.phaseEndsAt = null;
       io.to(game.pin).emit('round_result', {
         correct: false,
         guesserName: null,
