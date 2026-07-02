@@ -10,15 +10,15 @@ const noop = () => {};
 const MOCK_RESULT: RoundResultEvent = {
   correct: true,
   guesserName: 'Anna',
-  songTitle: 'Blinding Lights',
-  artist: 'The Weeknd',
-  year: 2019,
-  coverUrl: 'https://i.scdn.co/image/ab67616d0000b2738863bc11d2aa12b54f5aeb36',
+  songTitle: 'Billie Jean',
+  artist: 'Michael Jackson',
+  year: 1983,
+  coverUrl: 'https://i.scdn.co/image/ab67616d0000b27332a7d87248d1b75463483df5',
   points: 1250,
   playerGuesses: [
-    { name: 'Anna', guess: 'blinding lights' },
+    { name: 'Anna', guess: 'billie jean' },
     { name: 'John', guess: null },
-    { name: 'Olivia', guess: 'Blinded by the lights' },
+    { name: 'Olivia', guess: 'Beat It' },
   ],
 };
 
