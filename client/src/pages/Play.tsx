@@ -249,7 +249,10 @@ function usePlayGame(pinParam?: string): PlayState {
     });
 
     socket.on('your_turn', (data: { timeLimit: number; endsAt?: number }) => {
-      setSongPlaying(false);
+      // Race mode: playback starts the instant everyone's turn begins, so the
+      // song is actually playing here. Classic mode: this is a specific tier's
+      // guessing turn, which only starts after the host has paused the song.
+      setSongPlaying(modeRef.current === 'race');
       const endsAt = data.endsAt ?? (Date.now() + data.timeLimit * 1000);
       startCountdown(endsAt);
       setPhase('guessing');
@@ -1068,19 +1071,37 @@ function ListeningHeader({ songPlaying }: Readonly<{ songPlaying: boolean }>) {
   );
 }
 
-function ActiveHeader({ urgent, timeLeft, myScore }: Readonly<{ urgent: boolean; timeLeft: number; myScore: number }>) {
+// Race mode plays the song throughout the guessing window, so it keeps the
+// waveform going here too; classic has already stopped the song by the time
+// a tier's turn starts, so it stays timer-only.
+function ActiveHeader({ urgent, timeLeft, myScore, isRace, songPlaying }: Readonly<{ urgent: boolean; timeLeft: number; myScore: number; isRace: boolean; songPlaying: boolean }>) {
   return (
-    <div className="flex items-center justify-between px-5 pt-5 pb-3">
-      <span style={{ color: 'rgba(255,255,255,0.32)', fontSize: '0.85rem', fontWeight: 600 }}>Your turn</span>
-      <span
-        className="font-black text-4xl tabular-nums"
-        style={{ color: urgent ? timerColor(0) : 'white', transition: 'color 0.3s ease' }}
-      >
-        {timeLeft}s
-      </span>
-      <span style={{ color: 'rgba(255,255,255,0.28)', fontSize: '0.8rem', fontWeight: 500 }}>
-        {myScore.toLocaleString()} pts
-      </span>
+    <div className="flex flex-col gap-2 pt-5 pb-3">
+      <div className="flex items-center justify-between px-5">
+        <span style={{ color: 'rgba(255,255,255,0.32)', fontSize: '0.85rem', fontWeight: 600 }}>Your turn</span>
+        <span
+          className="font-black text-4xl tabular-nums"
+          style={{ color: urgent ? timerColor(0) : 'white', transition: 'color 0.3s ease' }}
+        >
+          {timeLeft}s
+        </span>
+        <span style={{ color: 'rgba(255,255,255,0.28)', fontSize: '0.8rem', fontWeight: 500 }}>
+          {myScore.toLocaleString()} pts
+        </span>
+      </div>
+      {isRace && (
+        <div style={{ display: 'flex', gap: '5px', alignItems: 'center', justifyContent: 'center', height: '20px', transition: 'opacity 0.3s ease', opacity: songPlaying ? 1 : 0.35 }}>
+          {AUDIO_BARS.map((bar) => (
+            <div key={bar.delay} style={{
+              width: '3px', height: '100%', borderRadius: '2px',
+              background: 'rgba(234,88,12,0.6)',
+              animation: songPlaying ? `${bar.anim} ${bar.dur}s ease-in-out infinite` : 'none',
+              animationDelay: `${bar.delay}s`, transformOrigin: 'center',
+              transform: songPlaying ? undefined : 'scaleY(0.07)',
+            }} />
+          ))}
+        </div>
+      )}
     </div>
   );
 }
@@ -1093,7 +1114,7 @@ function guessInputBoxStyle(isListening: boolean): { border: string; background:
 }
 
 function GuessingView({ game }: Readonly<{ game: PlayState }>) {
-  const { phase, timeLeft, myScore, guessText, guessInputRef, setGuessText, submitGuess, skipGuess, artistOnly, songPlaying } = game;
+  const { phase, timeLeft, myScore, guessText, guessInputRef, setGuessText, submitGuess, skipGuess, artistOnly, songPlaying, mode } = game;
   const isListening = phase === 'watching';
   const canSubmit = guessText.trim().length > 0;
   const urgent = !isListening && timeLeft <= 5;
@@ -1109,7 +1130,7 @@ function GuessingView({ game }: Readonly<{ game: PlayState }>) {
       {/* Header — waveform while listening, timer + score when active */}
       {isListening
         ? <ListeningHeader songPlaying={songPlaying} />
-        : <ActiveHeader urgent={urgent} timeLeft={timeLeft} myScore={myScore} />}
+        : <ActiveHeader urgent={urgent} timeLeft={timeLeft} myScore={myScore} isRace={mode === 'race'} songPlaying={songPlaying} />}
 
       {/* Input area */}
       <div className="flex-1 flex flex-col items-center justify-center gap-5 px-5">
