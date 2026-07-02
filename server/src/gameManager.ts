@@ -397,7 +397,7 @@ export function recordGuess(
 
   round.guesses.set(socketId, text);
   const correct = game.artistOnly
-    ? isCorrectArtistGuess(text, round.song.artist)
+    ? isCorrectArtistGuess(text, round.song.artist, round.song.featuredArtists)
     : isCorrectGuess(text, round.song.title);
   const guesserName = game.players.get(socketId)?.name ?? '';
 
@@ -476,7 +476,7 @@ export function recordRaceGuess(
   round.guesses.set(socketId, text);
   round.passed.add(socketId);
   const correct = game.artistOnly
-    ? isCorrectArtistGuess(text, round.song.artist)
+    ? isCorrectArtistGuess(text, round.song.artist, round.song.featuredArtists)
     : isCorrectGuess(text, round.song.title);
 
   const points = correct ? applyRaceCorrectGuess(game, round, socketId, elapsedMs) : 0;
