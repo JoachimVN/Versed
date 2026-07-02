@@ -1,6 +1,7 @@
 import { useEffect, useRef } from 'react';
 import { BrowserRouter, Routes, Route, useLocation } from 'react-router-dom';
 import { ConfettiBackground, setConfettiSpeedTarget } from './components/ConfettiBackground';
+import { useViewportHeight } from './hooks/useViewportHeight';
 import Home from './pages/Home';
 import Host from './pages/Host';
 import Play from './pages/Play';
@@ -37,9 +38,11 @@ function RouteTracker() {
 }
 
 export default function App() {
+  useViewportHeight();
+
   return (
     <BrowserRouter basename={import.meta.env.BASE_URL.replace(/\/$/, '') || '/'}>
-      <div style={{ minHeight: '100vh', background: '#080812' }}>
+      <div style={{ height: 'var(--app-height, 100vh)', minHeight: 'var(--app-height, 100vh)', background: '#080812' }}>
         <ConfettiBackground />
         <div
           className="fixed inset-0 pointer-events-none"

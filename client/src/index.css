@@ -2,6 +2,12 @@
 @tailwind components;
 @tailwind utilities;
 
+html, body {
+  height: 100%;
+  overflow: hidden;
+  overscroll-behavior: none;
+}
+
 body {
   background-color: #0d0d1a;
   color: white;
@@ -22,6 +28,26 @@ body {
   box-sizing: border-box;
   margin: 0;
   padding: 0;
+}
+
+/* Pins full-screen layouts to the visible area above an open mobile keyboard
+   instead of letting the keyboard cover them; --app-height is kept in sync
+   by useViewportHeight() via window.visualViewport. An exact height (not
+   just min-height) is required so bottom-anchored flex children (e.g. the
+   guess screen's Submit/Skip buttons) actually land flush with the visible
+   bottom edge instead of the full unshrunk document height.
+   No transition here on purpose: screens without a text input (reveal,
+   leaderboard, etc.) should snap to the current --app-height instantly, not
+   animate — otherwise a keyboard closing on the screen you just navigated
+   away from visibly "rescales" the new screen you land on. Only screens
+   with a focused input opt into the animated version via .keyboard-resize. */
+.min-h-screen {
+  height: var(--app-height, 100vh);
+  min-height: var(--app-height, 100vh);
+}
+
+.keyboard-resize {
+  transition: height 0.25s ease, min-height 0.25s ease;
 }
 
 /* Hide LiquidGlass hover glow divs that cause white circle artifact in Chrome */

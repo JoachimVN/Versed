@@ -108,6 +108,7 @@ function usePlayGame(pinParam?: string): PlayState {
   const guessTextRef = useRef('');
 
   function autoSubmitGuess() {
+    guessInputRef.current?.blur();
     guessAutoSubmitTimerRef.current = null;
     const text = guessTextRef.current.trim();
     stopCountdown();
@@ -256,6 +257,7 @@ function usePlayGame(pinParam?: string): PlayState {
     });
 
     socket.on('round_result', (data: RoundResultEvent) => {
+      guessInputRef.current?.blur();
       stopCountdown();
       if (guessAutoSubmitTimerRef.current) { clearTimeout(guessAutoSubmitTimerRef.current); guessAutoSubmitTimerRef.current = null; }
       setResult(data);
@@ -385,6 +387,7 @@ function usePlayGame(pinParam?: string): PlayState {
 
   const submitGuess = () => {
     if (!guessText.trim()) return;
+    guessInputRef.current?.blur();
     if (guessAutoSubmitTimerRef.current) { clearTimeout(guessAutoSubmitTimerRef.current); guessAutoSubmitTimerRef.current = null; }
     stopCountdown();
     socket.emit('submit_guess', { text: guessText }, (r: { correct: boolean; points?: number; timeMs?: number }) => {
@@ -399,6 +402,7 @@ function usePlayGame(pinParam?: string): PlayState {
   };
 
   const skipGuess = () => {
+    guessInputRef.current?.blur();
     if (guessAutoSubmitTimerRef.current) { clearTimeout(guessAutoSubmitTimerRef.current); guessAutoSubmitTimerRef.current = null; }
     stopCountdown();
     socket.emit('skip_guess');
@@ -535,7 +539,7 @@ function JoinView({ game }: Readonly<{ game: PlayState }>) {
 
   return (
     <div
-      className="page-enter relative min-h-screen flex flex-col items-center justify-center p-6 gap-10"
+      className="page-enter relative min-h-screen keyboard-resize flex flex-col items-center justify-center p-6 gap-10"
       style={{ zIndex: 1 }}
     >
       <BackButton />
@@ -1082,7 +1086,7 @@ function GuessingView({ game }: Readonly<{ game: PlayState }>) {
   const inputBoxStyle = guessInputBoxStyle(isListening);
 
   return (
-    <div className="relative min-h-screen flex flex-col overflow-hidden" style={{ background: '#080812' }}>
+    <div className="relative min-h-screen keyboard-resize flex flex-col overflow-hidden" style={{ background: '#080812' }}>
       <img src={`${import.meta.env.BASE_URL}background4.svg`} alt="" aria-hidden="true" style={{ position: 'fixed', inset: 0, width: '100%', height: '100%', objectFit: 'cover', zIndex: 0, transform: 'rotate(180deg)' }} />
       <div style={{ position: 'fixed', inset: 0, zIndex: 1, background: 'rgba(5,5,14,0.82)', backdropFilter: 'blur(28px)' }} />
 
@@ -1548,6 +1552,7 @@ export default function Play() {
   const { phase, result, reconnecting, hostReconnecting, guesserNames, myName } = game;
   const imGuessing = guesserNames.includes(myName);
   const isJoin = phase === 'join';
+  const showsGuessInput = phase === 'guessing' || (phase === 'watching' && imGuessing);
 
   // Fade the glow in after mount, out when leaving join phase.
   const [glowMounted, setGlowMounted] = useState(false);
@@ -1559,7 +1564,12 @@ export default function Play() {
   return (
     <div
       className="relative"
-      style={isJoin ? undefined : { background: '#080812', minHeight: '100vh' }}
+      style={isJoin ? undefined : {
+        background: '#080812',
+        height: 'var(--app-height, 100vh)',
+        minHeight: 'var(--app-height, 100vh)',
+        ...(showsGuessInput ? { transition: 'height 0.25s ease, min-height 0.25s ease' } : {}),
+      }}
     >
       <div
         className="fixed inset-0 pointer-events-none"
