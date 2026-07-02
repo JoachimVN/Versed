@@ -515,6 +515,19 @@ io.on('connection', (socket) => {
     }
   });
 
+  // ── Host: end the game early ───────────────────────────────────────────────
+  // Jumps everyone to final scores. From there the host's "New Game" button
+  // handles a restart, so this covers both "end now" and "restart now".
+  socket.on('end_game', () => {
+    const game = gm.getGameBySocket(socket.id);
+    if (game?.hostSocketId !== socket.id) return;
+    if (game.phase === 'lobby' || game.phase === 'finished') return;
+    if (game.phaseTimer) clearTimeout(game.phaseTimer);
+    game.phaseEndsAt = null;
+    game.phase = 'finished';
+    io.to(game.pin).emit('game_over', { leaderboard: gm.getLeaderboard(game) });
+  });
+
   // ── Host: advance to next round ────────────────────────────────────────────
   socket.on('next_round', () => {
     const game = gm.getGameBySocket(socket.id);

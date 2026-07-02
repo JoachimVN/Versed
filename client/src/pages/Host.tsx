@@ -65,6 +65,7 @@ export interface HostState {
   createGame: () => void;
   startGame: () => void;
   skipTurn: () => void;
+  endGame: () => void;
   copyInvite: () => void;
   newGame: () => void;
   removePlayer: (name: string) => void;
@@ -317,6 +318,12 @@ function useHostGame(): HostState {
     });
 
     socket.on('game_over', ({ leaderboard: lb }: { leaderboard: LeaderboardEntry[] }) => {
+      // The game can end mid-song now (host's "End game"), so stop playback
+      // and timers the same way round_result does.
+      ++playGenRef.current;
+      stopCountdown();
+      stopPlaybackBar();
+      spotify.pauseTrack();
       setLeaderboard(lb);
       setPhase('finished');
     });
@@ -402,6 +409,7 @@ function useHostGame(): HostState {
     setMode, setRaceTimeSetting, setRaceWinnerOnly, setArtistOnly,
     createGame, startGame, copyInvite, newGame,
     skipTurn: () => socket.emit('host_skip_turn'),
+    endGame: () => socket.emit('end_game'),
     removePlayer: (name: string) => socket.emit('kick_player', { name }),
   };
 }
@@ -702,6 +710,31 @@ function ToggleRow({ label, value, onToggle }: Readonly<{ label: string; value: 
   );
 }
 
+// Discreet "End game" control with a two-tap confirm so a stray click can't
+// nuke a running game. Jumps everyone to final scores.
+function EndGameButton({ endGame }: Readonly<{ endGame: () => void }>) {
+  const [confirming, setConfirming] = useState(false);
+  useEffect(() => {
+    if (!confirming) return;
+    const t = setTimeout(() => setConfirming(false), 3000);
+    return () => clearTimeout(t);
+  }, [confirming]);
+  return (
+    <button
+      onClick={() => { if (confirming) endGame(); else setConfirming(true); }}
+      className="text-xs transition-colors"
+      style={{
+        background: 'none', border: 'none', cursor: 'pointer',
+        color: confirming ? 'rgba(248,113,113,0.9)' : 'rgba(255,255,255,0.15)',
+      }}
+      onMouseEnter={e => { if (!confirming) (e.currentTarget as HTMLElement).style.color = 'rgba(255,255,255,0.4)'; }}
+      onMouseLeave={e => { if (!confirming) (e.currentTarget as HTMLElement).style.color = 'rgba(255,255,255,0.15)'; }}
+    >
+      {confirming ? 'Tap again to end the game' : 'End game'}
+    </button>
+  );
+}
+
 // ─── Phase views ─────────────────────────────────────────────────────────────
 
 function ConnectView({ game }: Readonly<{ game: HostState }>) {
@@ -909,7 +942,7 @@ function LobbyView({ game }: Readonly<{ game: HostState }>) {
 }
 
 function BettingView({ game }: Readonly<{ game: HostState }>) {
-  const { roundIndex, totalRounds, timeLeft, bettingTime, hints, bidCount, players, pin, skipTurn } = game;
+  const { roundIndex, totalRounds, timeLeft, bettingTime, hints, bidCount, players, pin, skipTurn, endGame } = game;
   const imageHint = hints.find(h => h.imageUrl);
   const textHints = hints.filter(h => !h.imageUrl);
 
@@ -1004,8 +1037,8 @@ function BettingView({ game }: Readonly<{ game: HostState }>) {
         </div>
       </div>
 
-      {/* Skip */}
-      <div className="relative flex justify-center pb-7" style={{ zIndex: 2 }}>
+      {/* Skip / end */}
+      <div className="relative flex justify-center items-center gap-6 pb-7" style={{ zIndex: 2 }}>
         <button
           onClick={skipTurn}
           style={{ background: 'none', border: 'none', color: 'rgba(255,255,255,0.12)', fontSize: '0.75rem', cursor: 'pointer', transition: 'color 0.2s ease' }}
@@ -1014,13 +1047,14 @@ function BettingView({ game }: Readonly<{ game: HostState }>) {
         >
           Skip round
         </button>
+        <EndGameButton endGame={endGame} />
       </div>
     </div>
   );
 }
 
 export function PlayingView({ game }: Readonly<{ game: HostState }>) {
-  const { roundIndex, totalRounds, countdown, guesserNames, lowestBid, playerBids, playProgress, timeLeft, mode, answeredCount, players, skipTurn } = game;
+  const { roundIndex, totalRounds, countdown, guesserNames, lowestBid, playerBids, playProgress, timeLeft, mode, answeredCount, players, skipTurn, endGame } = game;
   const isRace = mode === 'race';
   return (
     <div className="relative min-h-screen flex flex-col items-center justify-center p-6 gap-6 text-center overflow-hidden">
@@ -1062,16 +1096,19 @@ export function PlayingView({ game }: Readonly<{ game: HostState }>) {
             )}
           </>
         )}
-        <button onClick={skipTurn} className="text-white/20 text-xs hover:text-white/50 transition-colors mt-2">
-          Skip round
-        </button>
+        <div className="flex items-center gap-6 mt-2">
+          <button onClick={skipTurn} className="text-white/20 text-xs hover:text-white/50 transition-colors">
+            Skip round
+          </button>
+          <EndGameButton endGame={endGame} />
+        </div>
       </div>
     </div>
   );
 }
 
 function GuessingView({ game }: Readonly<{ game: HostState }>) {
-  const { roundIndex, totalRounds, guesserNames, lowestBid, playerBids, timeLeft, skipTurn } = game;
+  const { roundIndex, totalRounds, guesserNames, lowestBid, playerBids, timeLeft, skipTurn, endGame } = game;
   return (
     <div className="relative min-h-screen flex flex-col items-center justify-center p-6 gap-6 text-center overflow-hidden">
       <img src={`${import.meta.env.BASE_URL}background4.svg`} alt="" aria-hidden="true" style={{ position: 'fixed', inset: 0, width: '100%', height: '100%', objectFit: 'cover', zIndex: 0 }} />
@@ -1087,9 +1124,12 @@ function GuessingView({ game }: Readonly<{ game: HostState }>) {
           <BidTimeline bids={playerBids} lowestBid={lowestBid} />
         </div>
         <p className="text-white/30 text-sm">Other players are waiting...</p>
-        <button onClick={skipTurn} className="text-white/20 text-xs hover:text-white/50 transition-colors mt-2">
-          Skip turn
-        </button>
+        <div className="flex items-center gap-6 mt-2">
+          <button onClick={skipTurn} className="text-white/20 text-xs hover:text-white/50 transition-colors">
+            Skip turn
+          </button>
+          <EndGameButton endGame={endGame} />
+        </div>
       </div>
     </div>
   );
@@ -1178,7 +1218,7 @@ function RevealShell({
   cardContent: React.ReactNode;
   isCorrectFor: (player: PlayerInfo) => boolean;
 }>) {
-  const { roundIndex, totalRounds, players, roundDeltas, removePlayer } = game;
+  const { roundIndex, totalRounds, players, roundDeltas, removePlayer, endGame } = game;
   return (
     <div className="page-enter relative min-h-screen flex flex-col items-center p-6 gap-5 overflow-hidden">
       <img
@@ -1244,6 +1284,12 @@ function RevealShell({
           </div>
         </LiquidGlass>
       </button>
+
+      {roundIndex + 1 < totalRounds && (
+        <div style={{ position: 'relative', zIndex: 2 }}>
+          <EndGameButton endGame={endGame} />
+        </div>
+      )}
     </div>
   );
 }
@@ -1365,6 +1411,9 @@ function LeaderboardView({ game }: Readonly<{ game: HostState }>) {
               </div>
             </LiquidGlass>
           </button>
+          <div className="flex justify-center pt-1">
+            <EndGameButton endGame={game.endGame} />
+          </div>
         </div>
       )}
 

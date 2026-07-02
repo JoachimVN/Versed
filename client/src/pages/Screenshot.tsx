@@ -74,6 +74,7 @@ const MOCK_HOST: HostState = {
   createGame: noop,
   startGame: noop,
   skipTurn: noop,
+  endGame: noop,
   copyInvite: noop,
   newGame: noop,
   removePlayer: noop,
