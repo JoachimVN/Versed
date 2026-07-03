@@ -484,6 +484,15 @@ io.on('connection', (socket) => {
     emitScoreUpdate(game);
   });
 
+  // ── Player: steal-round winner declines to steal ───────────────────────────
+  socket.on('skip_steal', () => {
+    const game = gm.getGameBySocket(socket.id);
+    if (!game) return;
+    const result = gm.skipSteal(game, socket.id);
+    if (!result) return;
+    io.to(game.pin).emit('steal_result', { thief: result.thief, victim: '', amount: 0, skipped: true });
+  });
+
   // ── Player: live guess draft (not yet submitted) ──────────────────────────
   socket.on('update_guess_draft', ({ text }: { text: string }) => {
     const game = gm.getGameBySocket(socket.id);

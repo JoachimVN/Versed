@@ -53,7 +53,7 @@ export interface HostState {
   raceWinnerOnly: boolean;
   artistOnly: boolean;
   party: PartyInfo | null;
-  stealResult: { thief: string; victim: string; amount: number } | null;
+  stealResult: { thief: string; victim: string; amount: number; skipped?: boolean } | null;
   answeredCount: number;
   reconnecting: boolean;
   reconnectingCount: number;
@@ -111,7 +111,7 @@ function useHostGame(): HostState {
   const [raceWinnerOnly, setRaceWinnerOnly] = useState(false);
   const [artistOnly, setArtistOnly] = useState(false);
   const [party, setParty] = useState<PartyInfo | null>(null);
-  const [stealResult, setStealResult] = useState<{ thief: string; victim: string; amount: number } | null>(null);
+  const [stealResult, setStealResult] = useState<{ thief: string; victim: string; amount: number; skipped?: boolean } | null>(null);
   const [answeredCount, setAnsweredCount] = useState(0);
   const [reconnecting, setReconnecting] = useState(false);
   const [reconnectingNames, setReconnectingNames] = useState<Set<string>>(new Set());
@@ -337,7 +337,7 @@ function useHostGame(): HostState {
       setPhase('finished');
     });
 
-    socket.on('steal_result', (r: { thief: string; victim: string; amount: number }) => {
+    socket.on('steal_result', (r: { thief: string; victim: string; amount: number; skipped?: boolean }) => {
       setStealResult(r);
     });
 

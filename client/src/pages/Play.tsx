@@ -43,7 +43,7 @@ export interface PlayState {
   party: PartyInfo | null;
   artistGuessText: string;
   stealVictims: { name: string; score: number }[] | null;
-  stealResult: { thief: string; victim: string; amount: number } | null;
+  stealResult: { thief: string; victim: string; amount: number; skipped?: boolean } | null;
   myRacePoints: number;
   myRaceTimeMs: number | null;
   leaderboard: LeaderboardEntry[];
@@ -59,6 +59,7 @@ export interface PlayState {
   setGuessText: (v: string) => void;
   setArtistGuessText: (v: string) => void;
   submitStealVictim: (name: string) => void;
+  skipSteal: () => void;
   join: () => void;
   rejoinSaved: () => void;
   submitBid: () => void;
@@ -107,7 +108,7 @@ function usePlayGame(pinParam?: string): PlayState {
   const [artistGuessText, setArtistGuessText] = useState('');
   const artistGuessTextRef = useRef('');
   const [stealVictims, setStealVictims] = useState<{ name: string; score: number }[] | null>(null);
-  const [stealResult, setStealResult] = useState<{ thief: string; victim: string; amount: number } | null>(null);
+  const [stealResult, setStealResult] = useState<{ thief: string; victim: string; amount: number; skipped?: boolean } | null>(null);
   const [myRacePoints, setMyRacePoints] = useState(0);
   const [myRaceTimeMs, setMyRaceTimeMs] = useState<number | null>(null);
   const [leaderboard, setLeaderboard] = useState<LeaderboardEntry[]>([]);
@@ -405,7 +406,7 @@ function usePlayGame(pinParam?: string): PlayState {
       setStealVictims(victims);
     });
 
-    socket.on('steal_result', (r: { thief: string; victim: string; amount: number }) => {
+    socket.on('steal_result', (r: { thief: string; victim: string; amount: number; skipped?: boolean }) => {
       setStealVictims(null);
       setStealResult(r);
     });
@@ -553,6 +554,10 @@ function usePlayGame(pinParam?: string): PlayState {
     },
     submitStealVictim: (victimName: string) => {
       socket.emit('steal_victim', { name: victimName });
+      setStealVictims(null);
+    },
+    skipSteal: () => {
+      socket.emit('skip_steal');
       setStealVictims(null);
     },
   setBidIndex: (i: number | ((prev: number) => number)) => {
@@ -1937,7 +1942,7 @@ export default function Play() {
       {(phase === 'leaderboard' || phase === 'finished') && <LeaderboardView game={game} />}
 
       <RoundIntro party={game.party} roundKey={game.roundIndex} />
-      {game.stealVictims && <StealPicker victims={game.stealVictims} onPick={game.submitStealVictim} onSkip={game.skipGuess} />}
+      {game.stealVictims && <StealPicker victims={game.stealVictims} onPick={game.submitStealVictim} onSkip={game.skipSteal} />}
 
       {reconnecting && (
         <div className="fixed inset-0 bg-black/70 backdrop-blur-sm flex flex-col items-center justify-center z-50 gap-3">

@@ -825,6 +825,18 @@ export function executeSteal(
   return { thief: thief.name, victim: victim.name, amount };
 }
 
+// Thief declines to steal from anyone. Marks the steal resolved (so
+// stealPendingName stops reporting them as still deciding) without moving points.
+export function skipSteal(game: Game, thiefId: string): { thief: string } | null {
+  const round = game.currentRound;
+  if (!round || game.phase !== 'reveal') return null;
+  if (round.stealBy !== thiefId || round.stealDone) return null;
+  const thief = game.players.get(thiefId);
+  if (!thief) return null;
+  round.stealDone = true;
+  return { thief: thief.name };
+}
+
 // A race round can end (timeout, or someone winning in winner-only mode)
 // while other players are still mid-guess. Their own client tries to
 // auto-submit at the same deadline the server uses to end the round, but

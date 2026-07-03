@@ -36,7 +36,6 @@ export function RoundIntro({ party, roundKey }: Readonly<{ party: PartyInfo | nu
       }}
     >
       <div
-        onClick={e => e.stopPropagation()}
         style={{
           textAlign: 'center', padding: '0 28px',
           transform: visible ? 'scale(1) translateY(0)' : 'scale(0.94) translateY(8px)',
@@ -61,6 +60,9 @@ export function RoundIntro({ party, roundKey }: Readonly<{ party: PartyInfo | nu
         <p style={{ color: 'rgba(255,255,255,0.5)', fontSize: '0.95rem', lineHeight: 1.5, maxWidth: '340px', margin: '0 auto' }}>
           {party.intro.tagline}
         </p>
+        <p style={{ color: 'rgba(255,255,255,0.22)', fontSize: '0.68rem', letterSpacing: '0.1em', textTransform: 'uppercase', marginTop: '22px' }}>
+          Tap to skip
+        </p>
       </div>
     </div>
   );
@@ -70,7 +72,7 @@ export function RoundIntro({ party, roundKey }: Readonly<{ party: PartyInfo | nu
 // (or "picking a victim…" while the thief decides). Shared by host and player.
 export function PartyRevealExtras({ result, stealResult }: Readonly<{
   result: RoundResultEvent;
-  stealResult: { thief: string; victim: string; amount: number } | null;
+  stealResult: { thief: string; victim: string; amount: number; skipped?: boolean } | null;
 }>) {
   const party = result.party;
   const chips: string[] = [];
@@ -88,7 +90,16 @@ export function PartyRevealExtras({ result, stealResult }: Readonly<{
           letterSpacing: '0.1em', textTransform: 'uppercase',
         }}>{c}</span>
       ))}
-      {stealResult && (
+      {stealResult?.skipped && (
+        <span style={{
+          padding: '6px 16px', borderRadius: '100px',
+          background: 'rgba(255,255,255,0.06)', border: '1px solid rgba(255,255,255,0.12)',
+          color: 'rgba(255,255,255,0.5)', fontSize: '0.78rem', fontWeight: 600,
+        }}>
+          {stealResult.thief} skipped the steal
+        </span>
+      )}
+      {stealResult && !stealResult.skipped && (
         <span style={{
           padding: '6px 16px', borderRadius: '100px',
           background: 'rgba(248,113,113,0.1)', border: '1px solid rgba(248,113,113,0.35)',
