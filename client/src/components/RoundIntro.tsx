@@ -165,6 +165,7 @@ const EVENT_BITS: Partial<Record<NonNullable<PartyInfo['event']>, string>> = {
   snippet: 'SNIPPET',
   fullhints: 'OPEN BOOK',
   blind: 'BLIND BET · NO HINTS',
+  outro: 'DOWN TO THE WIRE',
 };
 
 // Small chip summarising the active round's recipe, shown on in-round screens.

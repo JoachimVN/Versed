@@ -179,6 +179,7 @@ function introFor(format: PartyFormat, target: GuessTarget, event: PartyEvent | 
     snippet: { title: 'Snippet Roulette', tag: 'The clip starts somewhere mid-song' },
     fullhints: { title: 'Open Book', tag: 'Every hint on the table' },
     blind: { title: 'Blind Bet', tag: 'No hints at all — bid on ears alone' },
+    outro: { title: 'Down to the Wire', tag: "The clip plays the song's final stretch" },
   };
   if (event) {
     const e = eventIntros[event];
@@ -200,6 +201,7 @@ function pickPartyEvent(game: Game, format: PartyFormat, prevEvent: PartyEvent |
   if (format === 'year' || randomInt(0, 100) >= 60) return null;
   const pool: [PartyEvent, number][] = [['double', 30], ['mystery', 25], ['snippet', 25]];
   if (format === 'classic') pool.push(['fullhints', 20], ['blind', 20]);
+  if (format === 'race') pool.push(['outro', 25]);
   // Steal needs someone else to steal from — pointless (and confusing to
   // announce) in a 1-player game.
   if (game.roundIndex >= 2 && game.players.size >= 2) pool.push(['steal', 20]);
@@ -348,7 +350,34 @@ export function calcRaceWinnerPoints(elapsedMs: number, raceTime: number, rank: 
   return speed + difficultyBonus(rank);
 }
 
-function buildRound(usedSongIds: Set<string>, artistOnly = false, party?: PartyConfig): Round {
+// Snippet roulette and 'outro' both need a known, long-enough duration to
+// aim inside the song; silently downgrade to a plain round when the data's
+// missing (or, for 'outro', too short to leave a real "before" to skip).
+// Mutates party.event/intro on downgrade — returns the clip's start offset.
+function computeSnippetPosition(song: Song, party: PartyConfig, raceTimeSec: number): number | undefined {
+  if (party.event === 'snippet') {
+    if (!song.durationMs || song.durationMs <= 60_000) {
+      party.event = null;
+      party.intro = introFor(party.format, party.target, null);
+      return undefined;
+    }
+    const min = Math.round(song.durationMs * 0.15);
+    const max = Math.round(song.durationMs * 0.65);
+    return min + randomInt(0, Math.max(1, max - min));
+  }
+  if (party.event === 'outro') {
+    const raceMs = raceTimeSec * 1000;
+    if (!song.durationMs || song.durationMs <= raceMs + 20_000) {
+      party.event = null;
+      party.intro = introFor(party.format, party.target, null);
+      return undefined;
+    }
+    return song.durationMs - raceMs;
+  }
+  return undefined;
+}
+
+function buildRound(usedSongIds: Set<string>, artistOnly = false, party?: PartyConfig, raceTimeSec = 15): Round {
   let pool = songs.filter(s => !usedSongIds.has(s.spotifyTrackId));
   if (pool.length === 0) pool = songs;
   // A year round is unplayable without a known year.
@@ -358,19 +387,7 @@ function buildRound(usedSongIds: Set<string>, artistOnly = false, party?: PartyC
   }
   const song = pickRandom(pool);
 
-  // Snippet roulette needs a known, long-enough duration to aim inside the
-  // song; silently downgrade to a plain round when the data's missing.
-  let snippetMs: number | undefined;
-  if (party?.event === 'snippet') {
-    if (song.durationMs && song.durationMs > 60_000) {
-      const min = Math.round(song.durationMs * 0.15);
-      const max = Math.round(song.durationMs * 0.65);
-      snippetMs = min + randomInt(0, Math.max(1, max - min));
-    } else {
-      party.event = null;
-      party.intro = introFor(party.format, party.target, null);
-    }
-  }
+  const snippetMs = party ? computeSnippetPosition(song, party, raceTimeSec) : undefined;
 
   // Any target other than plain 'title' means the artist is (part of) the
   // answer, so artist hints would give it away.
@@ -533,7 +550,7 @@ export function startRound(game: Game): Round {
   // Build the party recipe before replacing currentRound — it reads the
   // previous round's format/event to avoid repeats.
   const party = game.mode === 'party' ? buildPartyConfig(game) : undefined;
-  const round = buildRound(game.usedSongIds, game.artistOnly, party);
+  const round = buildRound(game.usedSongIds, game.artistOnly, party, game.raceTime);
   game.usedSongIds.add(round.song.spotifyTrackId);
   game.currentRound = round;
   game.phase = 'betting';
