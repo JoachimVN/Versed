@@ -26,6 +26,8 @@ export const DUEL_WIN_POINTS = 1500;   // finale: first correct duelist takes th
 export const YEAR_MAX_POINTS = 1000;   // year round: exact answer
 export const YEAR_POINTS_SLOPE = 120;  // …minus this per year off
 export const YEAR_WINNER_BONUS = 500;  // closest answer bonus (split on ties)
+export const PITY_GAP_THRESHOLD = 3000; // leader's lead must exceed this…
+export const PITY_BONUS = 500;          // …for a scorer to get this catch-up bonus
 
 // The tiniest bids ask for so little audio that a clip can land entirely inside
 // a song's near-silent lead-in and reveal nothing — pure bad luck the bidder
@@ -328,6 +330,25 @@ function raceParticipants(game: Game, round: Round): string[] {
 
 function difficultyBonus(rank: number): number {
   return Math.round(500 * Math.max(0, 1 - (rank - 1) / Math.max(songs.length - 1, 1)));
+}
+
+function currentScores(game: Game): Map<string, number> {
+  return new Map(Array.from(game.players.entries()).map(([id, p]) => [id, p.score]));
+}
+
+// A player who actually scores this round, but was already trailing the
+// leader by more than PITY_GAP_THRESHOLD before that score landed, gets a
+// flat catch-up bonus on top — never a substitute for scoring, only a nudge
+// for players who already got something right. `scores` must reflect every
+// player's pre-round total (mutating game.players before calling this would
+// let a player's own updated score, or an already-processed player in a
+// batch, leak into the leader comparison).
+function pityBonus(scores: Map<string, number>, scorerId: string): number {
+  const leaderScore = Math.max(
+    0,
+    ...Array.from(scores.entries()).filter(([id]) => id !== scorerId).map(([, s]) => s),
+  );
+  return leaderScore - (scores.get(scorerId) ?? 0) > PITY_GAP_THRESHOLD ? PITY_BONUS : 0;
 }
 
 // The bid reward steps down the BID_OPTIONS ladder rather than scaling with
@@ -689,7 +710,8 @@ export function recordGuess(
     round.correctGuesserName = guesserName;
     const player = game.players.get(socketId)!;
     const points = (calcPoints(round.lowestBid, round.song.rank)
-      + (artistBonus ? BOTH_ARTIST_BONUS : 0)) * roundMultiplier(round);
+      + (artistBonus ? BOTH_ARTIST_BONUS : 0)) * roundMultiplier(round)
+      + pityBonus(currentScores(game), socketId);
     player.score += points;
     player.streak += 1;
     round.scoredSocketIds.add(socketId);
@@ -747,7 +769,8 @@ function applyRaceCorrectGuess(
   } else {
     base = calcRacePoints(isFirst, elapsedMs, round.firstCorrectAt! - round.playStartAt!, round.song.rank);
   }
-  const points = (base + (artistBonus ? BOTH_ARTIST_BONUS : 0)) * roundMultiplier(round);
+  let points = (base + (artistBonus ? BOTH_ARTIST_BONUS : 0)) * roundMultiplier(round);
+  if (points > 0) points += pityBonus(currentScores(game), socketId);
   if (isFirst && round.party?.event === 'steal') {
     round.stealBy = socketId;
     round.stealDone = false;
@@ -820,6 +843,7 @@ export function finalizeYearRound(game: Game): YearResult[] {
   const round = game.currentRound!;
   const actual = Math.floor(round.song.year ?? 0);
   const mult = roundMultiplier(round);
+  const preRoundScores = currentScores(game);
 
   const entries = Array.from(game.players.entries()).map(([id, player]) => {
     const raw = round.guesses.get(id);
@@ -844,6 +868,7 @@ export function finalizeYearRound(game: Game): YearResult[] {
       points *= mult;
     }
     if (points > 0) {
+      points += pityBonus(preRoundScores, e.id);
       e.player.score += points;
       e.player.streak += 1;
       round.scoredSocketIds.add(e.id);
