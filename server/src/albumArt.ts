@@ -49,8 +49,14 @@ export async function getAlbumArtUrl(trackId: string): Promise<string | null> {
     const url = (images[1] ?? images[0])?.url ?? null;
     artCache.set(trackId, url);
     return url;
-  } catch {
-    artCache.set(trackId, null);
+  } catch (err) {
+    const status = axios.isAxiosError(err) ? err.response?.status : undefined;
+    console.error(`[albumArt] fetch failed for ${trackId} (status ${status ?? 'network'})`);
+    // Only a definitive "no such track" is worth remembering. A 429 (rate
+    // limit) or 5xx/network blip is transient — caching null here would
+    // permanently kill that track's art for the rest of the process's life,
+    // since the cache never expires.
+    if (status === 404) artCache.set(trackId, null);
     return null;
   }
 }
