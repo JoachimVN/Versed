@@ -56,6 +56,7 @@ export interface HostState {
   raceTimeSetting: number;
   raceWinnerOnly: boolean;
   artistOnly: boolean;
+  yearOnly: boolean;
   party: PartyInfo | null;
   stealResult: { thief: string; victim: string; amount: number; skipped?: boolean } | null;
   answeredCount: number;
@@ -72,6 +73,7 @@ export interface HostState {
   setRaceTimeSetting: (v: number) => void;
   setRaceWinnerOnly: (v: boolean) => void;
   setArtistOnly: (v: boolean) => void;
+  setYearOnly: (v: boolean) => void;
   createGame: () => void;
   startGame: () => void;
   skipTurn: () => void;
@@ -117,6 +119,7 @@ function useHostGame(): HostState {
   const [raceTimeSetting, setRaceTimeSetting] = useState(RACE_TIME);
   const [raceWinnerOnly, setRaceWinnerOnly] = useState(false);
   const [artistOnly, setArtistOnly] = useState(false);
+  const [yearOnly, setYearOnly] = useState(false);
   const [party, setParty] = useState<PartyInfo | null>(null);
   const [stealResult, setStealResult] = useState<{ thief: string; victim: string; amount: number; skipped?: boolean } | null>(null);
   const [answeredCount, setAnsweredCount] = useState(0);
@@ -390,7 +393,7 @@ function useHostGame(): HostState {
     socket.emit('start_game', {
       settings: {
         bettingTime: bettingTimeSetting, guessingTime: guessingTimeSetting,
-        totalRounds: roundsSetting, mode, raceTime: raceTimeSetting, raceWinnerOnly, artistOnly,
+        totalRounds: roundsSetting, mode, raceTime: raceTimeSetting, raceWinnerOnly, artistOnly, yearOnly,
       },
     });
   };
@@ -437,11 +440,11 @@ function useHostGame(): HostState {
     bettingTime, timeLeft, timerTotal, bidCount, countdown, guesserNames, lowestBid, playerBids,
     result, roundDeltas, leaderboard, copied, playProgress, inviteUrl,
     settingsOpen, bettingTimeSetting, guessingTimeSetting, roundsSetting,
-    mode, raceTimeSetting, raceWinnerOnly, artistOnly, party, stealResult, answeredCount,
+    mode, raceTimeSetting, raceWinnerOnly, artistOnly, yearOnly, party, stealResult, answeredCount,
     reconnecting, reconnectingCount: reconnectingNames.size, gameExpired, songPlaying, songTempo,
     toggleSettings: () => setSettingsOpen(o => !o),
     setBettingTimeSetting, setGuessingTimeSetting, setRoundsSetting,
-    setMode, setRaceTimeSetting, setRaceWinnerOnly, setArtistOnly,
+    setMode, setRaceTimeSetting, setRaceWinnerOnly, setArtistOnly, setYearOnly,
     createGame, startGame, copyInvite, newGame,
     skipTurn: () => socket.emit('host_skip_turn'),
     endGame: () => socket.emit('end_game'),
@@ -522,9 +525,21 @@ function BidTimeline({ bids, lowestBid }: Readonly<{ bids: { name: string; bid: 
 
 function SettingsPanel({ game, open }: Readonly<{ game: HostState; open: boolean }>) {
   const {
-    mode, bettingTimeSetting, guessingTimeSetting, roundsSetting, raceTimeSetting, raceWinnerOnly, artistOnly,
-    setBettingTimeSetting, setGuessingTimeSetting, setRoundsSetting, setRaceTimeSetting, setRaceWinnerOnly, setArtistOnly,
+    mode, bettingTimeSetting, guessingTimeSetting, roundsSetting, raceTimeSetting, raceWinnerOnly, artistOnly, yearOnly,
+    setBettingTimeSetting, setGuessingTimeSetting, setRoundsSetting, setRaceTimeSetting, setRaceWinnerOnly, setArtistOnly, setYearOnly,
   } = game;
+  // "Guess the year" has no single title/artist answer and no mid-round
+  // winner, so it can't run alongside either toggle — picking it clears them.
+  const toggleYearOnly = () => {
+    const next = !yearOnly;
+    setYearOnly(next);
+    if (next) { setArtistOnly(false); setRaceWinnerOnly(false); }
+  };
+  const toggleArtistOnly = () => {
+    const next = !artistOnly;
+    setArtistOnly(next);
+    if (next) setYearOnly(false);
+  };
   return (
     <div
       className="absolute right-5 z-20"
@@ -553,8 +568,10 @@ function SettingsPanel({ game, open }: Readonly<{ game: HostState; open: boolean
         </div>
 
         <div className="px-5 py-4 space-y-4">
-          {/* Party mixes classic and race rounds, so it needs all three timers. */}
-          {mode !== 'race' && (
+          {/* Party mixes classic and race rounds, so it needs all three timers.
+              "Guess the year" rides the race flow even in Classic mode, so it
+              needs the race/round timer instead of bet+guess. */}
+          {mode !== 'race' && !yearOnly && (
             <>
               <SettingRow label="Bet time" value={bettingTimeSetting} unit="s"
                 onDec={() => setBettingTimeSetting(Math.max(5, bettingTimeSetting - 5))}
@@ -564,7 +581,7 @@ function SettingsPanel({ game, open }: Readonly<{ game: HostState; open: boolean
                 onInc={() => setGuessingTimeSetting(Math.min(60, guessingTimeSetting + 5))} />
             </>
           )}
-          {mode !== 'classic' && (
+          {(mode !== 'classic' || yearOnly) && (
             <SettingRow label={mode === 'party' ? 'Race time' : 'Round time'} value={raceTimeSetting} unit="s"
               onDec={() => setRaceTimeSetting(Math.max(10, raceTimeSetting - 5))}
               onInc={() => setRaceTimeSetting(Math.min(60, raceTimeSetting + 5))} />
@@ -578,10 +595,13 @@ function SettingsPanel({ game, open }: Readonly<{ game: HostState; open: boolean
             apply to classic and race. */}
         {mode !== 'party' && (
           <div className="px-5 pb-4 space-y-4" style={{ borderTop: '1px solid rgba(255,255,255,0.07)', paddingTop: '16px' }}>
-            {mode === 'race' && (
+            {/* No single mid-round winner once every guess is compared at once
+                against the actual year, so "Winner only" doesn't apply. */}
+            {mode === 'race' && !yearOnly && (
               <ToggleRow label="Winner only" value={raceWinnerOnly} onToggle={() => setRaceWinnerOnly(!raceWinnerOnly)} />
             )}
-            <ToggleRow label="Artist only" value={artistOnly} onToggle={() => setArtistOnly(!artistOnly)} />
+            <ToggleRow label="Artist only" value={artistOnly} onToggle={toggleArtistOnly} />
+            <ToggleRow label="Guess the year" value={yearOnly} onToggle={toggleYearOnly} />
           </div>
         )}
       </div>
@@ -1058,20 +1078,58 @@ function BettingView({ game }: Readonly<{ game: HostState }>) {
 
 // Which brand accent a round reads as: year rounds get teal (matching Play.tsx),
 // race/non-classic party rounds get orange, classic stays purple.
-function roundAccent(isRace: boolean, party: PartyInfo | null): 'classic' | 'race' | 'year' {
-  if (party?.format === 'year') return 'year';
+function roundAccent(isRace: boolean, isYear: boolean): 'classic' | 'race' | 'year' {
+  if (isYear) return 'year';
   return isRace ? 'race' : 'classic';
 }
 
+// Race-flow rounds are normally hint-free (the clip itself is the puzzle),
+// but artist-only and year-only rounds ask for something the audio can't
+// give away, so those are the only race rounds that ever carry hints here.
+function RaceHintBar({ hints }: Readonly<{ hints: Hint[] }>) {
+  const textHints = hints.filter(h => !h.imageUrl);
+  if (textHints.length === 0) return null;
+  return (
+    <div
+      className="flex items-center justify-center gap-6 rounded-2xl"
+      style={{
+        padding: '12px 26px',
+        background: 'rgba(255,255,255,0.04)',
+        border: '1px solid rgba(255,255,255,0.08)',
+        backdropFilter: 'blur(16px)',
+      }}
+    >
+      {textHints.map((h, i) => (
+        <React.Fragment key={h.label}>
+          {i > 0 && (
+            <div style={{ width: 1, alignSelf: 'stretch', background: 'rgba(255,255,255,0.08)' }} />
+          )}
+          <div className="flex flex-col items-center gap-1">
+            <span style={{ color: 'rgba(255,255,255,0.32)', fontSize: '0.6rem', textTransform: 'uppercase', letterSpacing: '0.18em' }}>
+              {h.label}
+            </span>
+            <span style={{ color: 'white', fontWeight: 800, fontSize: '1.2rem', lineHeight: 1 }}>
+              {h.value}
+            </span>
+          </div>
+        </React.Fragment>
+      ))}
+    </div>
+  );
+}
+
 export function PlayingView({ game }: Readonly<{ game: HostState }>) {
-  const { roundIndex, totalRounds, countdown, guesserNames, lowestBid, playerBids, timeLeft, timerTotal, mode, answeredCount, players, skipTurn, endGame, party, songPlaying, songTempo } = game;
+  const { roundIndex, totalRounds, countdown, guesserNames, lowestBid, playerBids, timeLeft, timerTotal, mode, yearOnly, hints, answeredCount, players, skipTurn, endGame, party, songPlaying, songTempo } = game;
   // Party rounds that aren't classic-format arrive with an empty bid state and
-  // behave exactly like race rounds on this screen.
-  const isRace = mode === 'race' || (party !== null && party.format !== 'classic');
+  // behave exactly like race rounds on this screen. "Guess the year" rides
+  // the race flow even in Classic mode — but only outside Party, which picks
+  // its own per-round target and ignores this game-wide toggle.
+  const isRace = mode === 'race' || (party === null && yearOnly) || (party !== null && party.format !== 'classic');
+  const isYear = party ? party.format === 'year' : yearOnly;
   const raceStatus = party?.finale
     ? `${party.duelists.join(' vs ')} - first correct wins`
     : `${answeredCount} / ${players.length} answered`;
-  const accent = roundAccent(isRace, party);
+  const accent = roundAccent(isRace, isYear);
   return (
     <div className="relative min-h-screen flex flex-col items-center justify-center p-6 gap-5 text-center overflow-hidden">
       <img src={`${import.meta.env.BASE_URL}background4.svg`} alt="" aria-hidden="true" style={{ position: 'fixed', inset: 0, width: '100%', height: '100%', objectFit: 'cover', zIndex: 0 }} />
@@ -1079,6 +1137,7 @@ export function PlayingView({ game }: Readonly<{ game: HostState }>) {
       <div className="flex flex-col items-center gap-5 text-center w-full" style={{ position: 'relative', zIndex: 2 }}>
         <p className="text-white/40 text-sm">Round {roundIndex + 1}/{totalRounds}</p>
         <PartyBadge party={party} />
+        <RaceHintBar hints={hints} />
 
         <div className="liquid-btn relative" style={{ width: 'min(77vw, 527px)', height: countdown === null ? '340px' : '306px' }}>
           <LiquidGlass
@@ -1140,9 +1199,10 @@ export function PlayingView({ game }: Readonly<{ game: HostState }>) {
 }
 
 function GuessingView({ game }: Readonly<{ game: HostState }>) {
-  const { roundIndex, totalRounds, guesserNames, lowestBid, playerBids, timeLeft, timerTotal, mode, party, skipTurn, endGame } = game;
-  const isRace = mode === 'race' || (party !== null && party.format !== 'classic');
-  const accent = roundAccent(isRace, party);
+  const { roundIndex, totalRounds, guesserNames, lowestBid, playerBids, timeLeft, timerTotal, mode, yearOnly, hints, party, skipTurn, endGame } = game;
+  const isRace = mode === 'race' || (party === null && yearOnly) || (party !== null && party.format !== 'classic');
+  const isYear = party ? party.format === 'year' : yearOnly;
+  const accent = roundAccent(isRace, isYear);
   // Bidders who placed a bid this round but aren't in the current tier —
   // if everyone bid the same (or there's only one player), there's no one
   // else left waiting on a later turn.
@@ -1154,6 +1214,7 @@ function GuessingView({ game }: Readonly<{ game: HostState }>) {
       <div className="flex flex-col items-center gap-5 text-center w-full" style={{ position: 'relative', zIndex: 2 }}>
         <p className="text-white/40 text-sm">Round {roundIndex + 1}/{totalRounds}</p>
         <PartyBadge party={party} />
+        <RaceHintBar hints={hints} />
 
         <div className="liquid-btn relative" style={{ width: '310px', height: '420px' }}>
           <LiquidGlass
@@ -1335,8 +1396,9 @@ function RevealShell({
 export function RevealView({ game, result, instant = false }: Readonly<{ game: HostState; result: RoundResultEvent; instant?: boolean }>) {
   const isRace = result.mode === 'race';
 
-  // Party "guess the year" rounds have a numeric answer — dedicated card.
-  if (result.party?.format === 'year') {
+  // "Guess the year" rounds (party or the game-wide toggle) have a numeric
+  // answer — dedicated card.
+  if (result.party?.format === 'year' || result.yearOnly) {
     return (
       <RevealShell
         game={game}

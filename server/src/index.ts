@@ -378,7 +378,7 @@ io.on('connection', (socket) => {
   });
 
   // ── Host: start game → first round ────────────────────────────────────────
-  socket.on('start_game', (payload?: { settings?: { bettingTime?: number; guessingTime?: number; totalRounds?: number; mode?: string; raceTime?: number; raceWinnerOnly?: boolean; artistOnly?: boolean } }) => {
+  socket.on('start_game', (payload?: { settings?: { bettingTime?: number; guessingTime?: number; totalRounds?: number; mode?: string; raceTime?: number; raceWinnerOnly?: boolean; artistOnly?: boolean; yearOnly?: boolean } }) => {
     const game = gm.getGameBySocket(socket.id);
     if (game?.hostSocketId !== socket.id || game.phase !== 'lobby') return;
     const s = payload?.settings;
@@ -389,8 +389,16 @@ io.on('connection', (socket) => {
     else if (s?.mode === 'party') game.mode = 'party';
     else game.mode = 'classic';
     if (s?.raceTime) game.raceTime = Math.max(10, Math.min(60, Math.round(s.raceTime)));
-    game.raceWinnerOnly = s?.raceWinnerOnly === true;
-    game.artistOnly = s?.artistOnly === true;
+    // Party picks its own guess target per round, so these game-wide toggles
+    // are Classic/Race only — leaving them set under Party would otherwise
+    // leak a stale 'year' accent/target into party rounds client-side.
+    const isParty = game.mode === 'party';
+    game.yearOnly = !isParty && s?.yearOnly === true;
+    // Year-guessing has no single "winner" mid-round (every guess is
+    // compared once the round ends) and isn't a title/artist target, so it
+    // can't coexist with either toggle.
+    game.raceWinnerOnly = !game.yearOnly && s?.raceWinnerOnly === true;
+    game.artistOnly = !isParty && !game.yearOnly && s?.artistOnly === true;
     game.roundIndex = 0;
     beginRound(game);
   });
@@ -639,7 +647,12 @@ io.on('connection', (socket) => {
     if (!game) return;
     const round = gm.startRound(game);
     const party = gm.partyView(round);
-    const isRaceFlow = game.mode === 'race' || (round.party && round.party.format !== 'classic');
+    const isRaceFlow = gm.isRaceFlowRound(game, round);
+    // Race flow is normally hint-free (the audio itself is the puzzle), but
+    // artist-only and year-only rounds can't be inferred from audio alone —
+    // this is the only way those toggles have any teeth outside Classic mode.
+    // Party rounds keep the existing (hint-free) race behaviour.
+    const keepHints = !round.party && (game.artistOnly || game.yearOnly);
 
     // Prefer the precomputed art from the CSV (Music Popularity Index resolves
     // it offline via Spotify's oEmbed endpoint) so a normal round never calls
@@ -659,27 +672,29 @@ io.on('connection', (socket) => {
     }
 
     if (isRaceFlow) {
-      round.hints = [];
+      if (!keepHints) round.hints = [];
       game.phase = 'playing';
       game.phaseEndsAt = null;
 
       io.to(`player:${game.pin}`).emit('round_start', {
         roundIndex: game.roundIndex,
         total: game.totalRounds,
-        hints: [],
+        hints: round.hints,
         mode: 'race',
         raceTime: game.raceTime,
         artistOnly: game.artistOnly,
+        yearOnly: game.yearOnly,
         party,
         tempo: round.song.tempo,
       });
       io.to(`host:${game.pin}`).emit('host_round_start', {
         roundIndex: game.roundIndex,
         total: game.totalRounds,
-        hints: [],
+        hints: round.hints,
         mode: 'race',
         raceTime: game.raceTime,
         artistOnly: game.artistOnly,
+        yearOnly: game.yearOnly,
         party,
         song: {
           title: round.song.title,
@@ -758,6 +773,7 @@ io.on('connection', (socket) => {
       // whichever one actually decided the guess, or a correct artist-only
       // guess reads as a title mismatch (and vice versa).
       artistOnly: gm.effectiveTarget(game, round) === 'artist',
+      yearOnly: gm.effectiveTarget(game, round) === 'year',
       // Reveal payloads always carry the full party config (mystery revealed).
       party: gm.partyView(round, true),
     };
@@ -775,7 +791,7 @@ io.on('connection', (socket) => {
     gm.finalizeRaceDrafts(game);
     const round = game.currentRound!;
     // Year rounds score in one pass now that every distance is known.
-    if (round.party?.format === 'year') gm.finalizeYearRound(game);
+    if (gm.effectiveTarget(game, round) === 'year') gm.finalizeYearRound(game);
     game.phase = 'reveal';
     const correctNames = Array.from(round.correctGuessers)
       .map(id => game.players.get(id)?.name ?? '')

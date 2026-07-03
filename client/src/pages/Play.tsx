@@ -44,6 +44,7 @@ export interface PlayState {
   myStreak: number;
   mode: 'classic' | 'race';
   artistOnly: boolean;
+  yearOnly: boolean;
   party: PartyInfo | null;
   artistGuessText: string;
   stealVictims: { name: string; score: number }[] | null;
@@ -109,6 +110,7 @@ function usePlayGame(pinParam?: string): PlayState {
   const [mode, setMode] = useState<'classic' | 'race'>('classic');
   const modeRef = useRef<'classic' | 'race'>('classic');
   const [artistOnly, setArtistOnly] = useState(false);
+  const [yearOnly, setYearOnly] = useState(false);
   const [party, setParty] = useState<PartyInfo | null>(null);
   const partyRef = useRef<PartyInfo | null>(null);
   const [artistGuessText, setArtistGuessText] = useState('');
@@ -235,7 +237,7 @@ function usePlayGame(pinParam?: string): PlayState {
     socket.on('round_start', (data: {
       roundIndex: number; total: number;
       hints: Hint[]; bettingTime?: number; endsAt?: number;
-      mode?: 'classic' | 'race'; raceTime?: number; artistOnly?: boolean;
+      mode?: 'classic' | 'race'; raceTime?: number; artistOnly?: boolean; yearOnly?: boolean;
       party?: PartyInfo;
       bidOptions?: number[]; bidScores?: number[];
       tempo?: number | null;
@@ -265,6 +267,7 @@ function usePlayGame(pinParam?: string): PlayState {
       setMode(roundMode);
       modeRef.current = roundMode;
       setArtistOnly(data.artistOnly === true);
+      setYearOnly(data.yearOnly === true);
 
       if (roundMode === 'race') {
         setGuesserNames([]);
@@ -560,7 +563,7 @@ function usePlayGame(pinParam?: string): PlayState {
   return {
     phase, pin, name, myName, error, roundIndex, totalRounds, hints,
     timeLeft, timerTotal, bettingTime, bidIndex, bidOptions, bidScores, myBid, guesserNames, lowestBid,
-    guessText, result, myScore, myScoreDelta, myStreak, mode, artistOnly, myRacePoints, myRaceTimeMs,
+    guessText, result, myScore, myScoreDelta, myStreak, mode, artistOnly, yearOnly, myRacePoints, myRaceTimeMs,
     party, artistGuessText, stealVictims, stealResult,
     leaderboard, leaderboardDeltas, songPlaying, songTempo, reconnecting, hostReconnecting, savedSession, guessInputRef,
     newGamePin, rejoinNewGame,
@@ -1039,13 +1042,14 @@ function BidSubmittedView({ game }: Readonly<{ game: PlayState }>) {
 
 
 export function WatchingView({ game }: Readonly<{ game: PlayState }>) {
-  const { lowestBid, guesserNames, mode, songPlaying, songTempo, party, roundIndex, totalRounds, myScore, myStreak } = game;
+  const { lowestBid, guesserNames, mode, yearOnly, songPlaying, songTempo, party, roundIndex, totalRounds, myScore, myStreak } = game;
   const [visible, setVisible] = useState(false);
   useEffect(() => { const t = setTimeout(() => setVisible(true), 30); return () => clearTimeout(t); }, []);
   const isRace = mode === 'race';
   const isDuel = !!party?.finale;
+  const isYear = party ? party.format === 'year' : yearOnly;
   const nonYearAccent = isRace ? 'race' : 'classic';
-  const watchAccent = party?.format === 'year' ? 'year' : nonYearAccent;
+  const watchAccent = isYear ? 'year' : nonYearAccent;
 
   return (
     <div className="relative min-h-screen overflow-hidden">
@@ -1177,8 +1181,8 @@ function GetReadyBody({ isDuel, isRace, party, lowestBid, guesserNames, songPlay
 // guessing phase. Keeping a single component across both states means the input
 // element is never unmounted — focus and text survive the transition, which
 // prevents the mobile keyboard from dismissing mid-song.
-function ListeningHeader({ songPlaying, songTempo, party }: Readonly<{ songPlaying: boolean; songTempo: number | null; party: PartyInfo | null }>) {
-  const accent = party?.format === 'year' ? 'year' : 'classic';
+function ListeningHeader({ songPlaying, songTempo, isYear }: Readonly<{ songPlaying: boolean; songTempo: number | null; isYear: boolean }>) {
+  const accent = isYear ? 'year' : 'classic';
   return (
     <div className="flex flex-col items-center gap-2.5 pt-10 pb-4">
       <AudioBars playing={songPlaying} accent={accent} height={28} bpm={songTempo} />
@@ -1192,8 +1196,7 @@ function ListeningHeader({ songPlaying, songTempo, party }: Readonly<{ songPlayi
 // Race mode plays the song throughout the guessing window, so it keeps the
 // waveform going here too; classic has already stopped the song by the time
 // a tier's turn starts, so it stays timer-only.
-function ActiveHeader({ timeLeft, timerTotal, myScore, isRace, party, songPlaying, songTempo }: Readonly<{ timeLeft: number; timerTotal: number; myScore: number; isRace: boolean; party: PartyInfo | null; songPlaying: boolean; songTempo: number | null }>) {
-  const isYear = party?.format === 'year';
+function ActiveHeader({ timeLeft, timerTotal, myScore, isRace, isYear, songPlaying, songTempo }: Readonly<{ timeLeft: number; timerTotal: number; myScore: number; isRace: boolean; isYear: boolean; songPlaying: boolean; songTempo: number | null }>) {
   const accent = isYear ? 'year' : 'race';
   return (
     <div className="flex flex-col items-center gap-2 pt-4 pb-3">
@@ -1258,13 +1261,15 @@ function YearDigitBoxes({ value, focused }: Readonly<{ value: string; focused: b
 }
 
 export function GuessingView({ game }: Readonly<{ game: PlayState }>) {
-  const { phase, timeLeft, timerTotal, myScore, guessText, guessInputRef, setGuessText, submitGuess, skipGuess, artistOnly, songPlaying, songTempo, mode, party, artistGuessText, setArtistGuessText } = game;
+  const { phase, timeLeft, timerTotal, myScore, guessText, guessInputRef, setGuessText, submitGuess, skipGuess, artistOnly, yearOnly, songPlaying, songTempo, mode, party, artistGuessText, setArtistGuessText } = game;
   const isListening = phase === 'watching';
   // What this round wants answered: party rounds carry it per-round,
-  // classic/race games use the game-wide artist toggle.
+  // classic/race games use the game-wide artist/year toggles.
   let target: 'title' | 'artist' | 'both' | 'year';
   if (party) {
     target = party.format === 'year' ? 'year' : party.target;
+  } else if (yearOnly) {
+    target = 'year';
   } else {
     target = artistOnly ? 'artist' : 'title';
   }
@@ -1294,8 +1299,8 @@ export function GuessingView({ game }: Readonly<{ game: PlayState }>) {
 
       {/* Header: waveform while listening, timer + score when active */}
       {isListening
-        ? <ListeningHeader songPlaying={songPlaying} songTempo={songTempo} party={party} />
-        : <ActiveHeader timeLeft={timeLeft} timerTotal={timerTotal} myScore={myScore} isRace={mode === 'race'} party={party} songPlaying={songPlaying} songTempo={songTempo} />}
+        ? <ListeningHeader songPlaying={songPlaying} songTempo={songTempo} isYear={isYear} />
+        : <ActiveHeader timeLeft={timeLeft} timerTotal={timerTotal} myScore={myScore} isRace={mode === 'race'} isYear={isYear} songPlaying={songPlaying} songTempo={songTempo} />}
 
       {/* Input area */}
       <div className="flex-1 flex flex-col items-center justify-center gap-5 px-5">
@@ -1893,7 +1898,7 @@ export default function Play() {
       {(phase === 'guessing' || (phase === 'watching' && imGuessing)) && <GuessingView game={game} />}
       {phase === 'passed' && <PassedView game={game} />}
       {phase === 'reveal' && result && (
-        result.party?.format === 'year'
+        result.party?.format === 'year' || result.yearOnly
           ? <YearRevealView game={game} result={result} />
           : <RevealView game={game} result={result} />
       )}

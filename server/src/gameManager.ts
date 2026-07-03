@@ -101,20 +101,23 @@ function formatDuration(ms: number): string {
   return `${minutes}:${String(seconds).padStart(2, '0')}`;
 }
 
-function generateHints(song: Song, artistOnly = false): Hint[] {
+function generateHints(song: Song, suppressArtist = false, suppressYear = false): Hint[] {
   const pool: Hint[] = [];
 
   // Only ever one time hint — year and decade must not appear together.
-  if (song.year && song.decade) {
-    pool.push(
-      randomInt(0, 2) === 0
-        ? { label: 'Era', value: `${song.decade}s` }
-        : { label: 'Release year', value: String(Math.floor(song.year)) }
-    );
-  } else if (song.decade) {
-    pool.push({ label: 'Era', value: `${song.decade}s` });
-  } else if (song.year) {
-    pool.push({ label: 'Release year', value: String(Math.floor(song.year)) });
+  // Suppressed entirely when the year itself is the answer.
+  if (!suppressYear) {
+    if (song.year && song.decade) {
+      pool.push(
+        randomInt(0, 2) === 0
+          ? { label: 'Era', value: `${song.decade}s` }
+          : { label: 'Release year', value: String(Math.floor(song.year)) }
+      );
+    } else if (song.decade) {
+      pool.push({ label: 'Era', value: `${song.decade}s` });
+    } else if (song.year) {
+      pool.push({ label: 'Release year', value: String(Math.floor(song.year)) });
+    }
   }
 
   if (song.spotifyStreams)
@@ -124,7 +127,7 @@ function generateHints(song: Song, artistOnly = false): Hint[] {
     pool.push({ label: 'Duration', value: formatDuration(song.durationMs) });
 
   // Artist hints are suppressed in artist-only mode since the artist IS the answer.
-  if (!artistOnly) {
+  if (!suppressArtist) {
     const fullArtist = song.featuredArtists
       ? `${song.artist} feat. ${song.featuredArtists}`
       : song.artist;
@@ -149,10 +152,12 @@ function generateHints(song: Song, artistOnly = false): Hint[] {
 
 // 'fullhints' rounds: every hint we have, deduplicated — one time hint (year
 // beats decade), and the full artist line instead of initials.
-function generateAllHints(song: Song, suppressArtist: boolean): Hint[] {
+function generateAllHints(song: Song, suppressArtist: boolean, suppressYear: boolean): Hint[] {
   const hints: Hint[] = [];
-  if (song.year) hints.push({ label: 'Release year', value: String(Math.floor(song.year)) });
-  else if (song.decade) hints.push({ label: 'Era', value: `${song.decade}s` });
+  if (!suppressYear) {
+    if (song.year) hints.push({ label: 'Release year', value: String(Math.floor(song.year)) });
+    else if (song.decade) hints.push({ label: 'Era', value: `${song.decade}s` });
+  }
   if (song.spotifyStreams) hints.push({ label: 'Streams', value: formatStreams(song.spotifyStreams) });
   if (song.durationMs) hints.push({ label: 'Duration', value: formatDuration(song.durationMs) });
   if (!suppressArtist) {
@@ -283,6 +288,7 @@ function roundMultiplier(round: Round): number {
 type EffectiveTarget = GuessTarget | 'year';
 export function effectiveTarget(game: Game, round: Round): EffectiveTarget {
   if (round.party) return round.party.format === 'year' ? 'year' : round.party.target;
+  if (game.yearOnly) return 'year';
   return game.artistOnly ? 'artist' : 'title';
 }
 
@@ -302,7 +308,12 @@ function checkGuess(
 // non-classic format.
 export function isRaceFlowRound(game: Game, round: Round): boolean {
   if (game.mode === 'race') return true;
-  return !!round.party && round.party.format !== 'classic';
+  if (round.party) return round.party.format !== 'classic';
+  // "Guess the year" has no correct/incorrect single answer to turn-take
+  // over — every guess is scored against every other once the round ends —
+  // so, unlike artist-only, it can't ride the classic bid/tier flow even in
+  // a Classic-mode game.
+  return game.yearOnly;
 }
 
 // Who actually plays a race-flow round — the duelists in a finale, everyone
@@ -377,11 +388,12 @@ function computeSnippetPosition(song: Song, party: PartyConfig, raceTimeSec: num
   return undefined;
 }
 
-function buildRound(usedSongIds: Set<string>, artistOnly = false, party?: PartyConfig, raceTimeSec = 15): Round {
+function buildRound(usedSongIds: Set<string>, artistOnly = false, yearOnly = false, party?: PartyConfig, raceTimeSec = 15): Round {
   let pool = songs.filter(s => !usedSongIds.has(s.spotifyTrackId));
   if (pool.length === 0) pool = songs;
+  const isYearRound = party ? party.format === 'year' : yearOnly;
   // A year round is unplayable without a known year.
-  if (party?.format === 'year') {
+  if (isYearRound) {
     const withYear = pool.filter(s => s.year !== null);
     if (withYear.length > 0) pool = withYear;
   }
@@ -389,16 +401,28 @@ function buildRound(usedSongIds: Set<string>, artistOnly = false, party?: PartyC
 
   const snippetMs = party ? computeSnippetPosition(song, party, raceTimeSec) : undefined;
 
+  // What's actually being guessed this round — decides which hints would
+  // give the answer away outright, and which "other" fact is safe (and
+  // useful) to surface instead.
+  const guessKind: GuessTarget | 'year' = party
+    ? (party.format === 'year' ? 'year' : party.target)
+    : (isYearRound ? 'year' : (artistOnly ? 'artist' : 'title'));
   // Any target other than plain 'title' means the artist is (part of) the
   // answer, so artist hints would give it away.
-  const suppressArtist = party ? party.target !== 'title' : artistOnly;
+  const suppressArtist = guessKind === 'artist' || guessKind === 'both';
+  const suppressYear = guessKind === 'year';
+  // Guessing the artist or the year means the title isn't the answer either
+  // way — surfacing it as a guaranteed hint doesn't give anything away.
+  const revealTitle = guessKind === 'artist' || guessKind === 'year';
+
   let hints: Hint[];
   if (party?.format === 'classic' && party.event === 'blind') {
     hints = [];
-  } else if (party?.format === 'classic' && party.event === 'fullhints') {
-    hints = generateAllHints(song, suppressArtist);
   } else {
-    hints = generateHints(song, suppressArtist);
+    hints = party?.format === 'classic' && party.event === 'fullhints'
+      ? generateAllHints(song, suppressArtist, suppressYear)
+      : generateHints(song, suppressArtist, suppressYear);
+    if (revealTitle) hints.push({ label: 'Song title', value: song.title });
   }
 
   return {
@@ -449,6 +473,7 @@ export function createGame(hostSocketId: string, preferredPin?: string): Game {
     raceTime: RACE_TIME,
     raceWinnerOnly: false,
     artistOnly: false,
+    yearOnly: false,
     currentRound: null,
     usedSongIds: new Set(),
     phaseTimer: null,
@@ -550,7 +575,7 @@ export function startRound(game: Game): Round {
   // Build the party recipe before replacing currentRound — it reads the
   // previous round's format/event to avoid repeats.
   const party = game.mode === 'party' ? buildPartyConfig(game) : undefined;
-  const round = buildRound(game.usedSongIds, game.artistOnly, party, game.raceTime);
+  const round = buildRound(game.usedSongIds, game.artistOnly, game.yearOnly, party, game.raceTime);
   game.usedSongIds.add(round.song.spotifyTrackId);
   game.currentRound = round;
   game.phase = 'betting';
