@@ -595,12 +595,16 @@ function SettingsPanel({ game, open }: Readonly<{ game: HostState; open: boolean
             apply to classic and race. */}
         {mode !== 'party' && (
           <div className="px-5 pb-4 space-y-4" style={{ borderTop: '1px solid rgba(255,255,255,0.07)', paddingTop: '16px' }}>
-            {/* No single mid-round winner once every guess is compared at once
-                against the actual year, so "Winner only" doesn't apply. */}
-            {mode === 'race' && !yearOnly && (
-              <ToggleRow label="Winner only" value={raceWinnerOnly} onToggle={() => setRaceWinnerOnly(!raceWinnerOnly)} />
+            {/* "Guess the year" is mutually exclusive with these — rather than
+                hiding/clearing them, keep them visible but disabled so the
+                setting isn't a surprise once year mode is turned back off. */}
+            {mode === 'race' && (
+              <ToggleRow
+                label="Winner only" value={raceWinnerOnly} disabled={yearOnly}
+                onToggle={() => setRaceWinnerOnly(!raceWinnerOnly)}
+              />
             )}
-            <ToggleRow label="Artist only" value={artistOnly} onToggle={toggleArtistOnly} />
+            <ToggleRow label="Artist only" value={artistOnly} disabled={yearOnly} onToggle={toggleArtistOnly} />
             <ToggleRow label="Guess the year" value={yearOnly} onToggle={toggleYearOnly} />
           </div>
         )}
@@ -681,19 +685,25 @@ function SettingRow({ label, value, unit, onDec, onInc }: Readonly<{
   );
 }
 
-function ToggleRow({ label, value, onToggle }: Readonly<{ label: string; value: boolean; onToggle: () => void }>) {
+function ToggleRow({ label, value, onToggle, disabled }: Readonly<{
+  label: string; value: boolean; onToggle: () => void; disabled?: boolean;
+}>) {
   return (
     <div className="flex items-center justify-between">
-      <span style={{ color: 'rgba(255,255,255,0.5)', fontSize: '0.875rem' }}>{label}</span>
+      <span style={{ color: disabled ? 'rgba(255,255,255,0.25)' : 'rgba(255,255,255,0.5)', fontSize: '0.875rem' }}>
+        {label}
+      </span>
       <button
-        onClick={onToggle}
+        onClick={disabled ? undefined : onToggle}
+        disabled={disabled}
         className="relative shrink-0"
         style={{
           width: '40px', height: '22px', borderRadius: '100px',
           background: value ? 'rgba(130, 30, 175, 0.7)' : 'rgba(255,255,255,0.10)',
           border: value ? '1px solid rgba(150, 50, 200, 0.6)' : '1px solid rgba(255,255,255,0.08)',
-          transition: 'background 0.2s ease, border-color 0.2s ease',
-          cursor: 'pointer',
+          transition: 'background 0.2s ease, border-color 0.2s ease, opacity 0.2s ease',
+          cursor: disabled ? 'not-allowed' : 'pointer',
+          opacity: disabled ? 0.4 : 1,
         }}
       >
         <span
