@@ -39,6 +39,12 @@ Versed is a real-time multiplayer music guessing game. One player is the **host*
 - **Server** — Express + Socket.IO on Railway (port 3001). In production, also serves the client's built `dist/` as static files when `NODE_ENV=production` — so Railway is self-contained and the Vercel deployment is a separate optional route.
 - **Socket connection** — `client/src/socket.ts` connects to `VITE_SERVER_URL` if set, otherwise falls back to `window.location.origin`. In dev the Vite proxy handles `/socket.io` → `:3001`.
 
+### Game modes
+
+- **Classic** — bid/tier flow (described under Game flow below).
+- **Race** — everyone guesses at once; speed-based scoring, optional winner-only and artist-only toggles.
+- **Party** — every round gets a random announced recipe (`buildPartyConfig` in `gameManager.ts`): a format (classic round, race round, or guess-the-year closest-wins), a guess target (title / artist / both, where "both" pays an artist bonus), and an optional event — double points, mystery multiplier (×1–3, hidden until the reveal), steal (round winner picks a victim via `choose_steal`/`steal_victim`, takes 15% min 300), snippet roulette (clip starts mid-song via `positionMs` on `play_song`), or full hints. Round 1 is a plain warm-up, events never repeat back-to-back, and the last round is a top-2 duel (first correct wins 1500). Non-classic party rounds ride the race flow; clients receive a sanitized `party` object on `round_start` and the revealed config on `round_result`.
+
 ### Game flow
 
 All game state lives in-memory on the server (`gameManager.ts`). No database.
