@@ -20,8 +20,8 @@ export const RACE_BASE = 1000;
 
 // ─── Party mode tuning ────────────────────────────────────────────────────────
 export const BOTH_ARTIST_BONUS = 300;  // 'both' target: extra for also naming the artist
-export const STEAL_PCT = 0.15;         // steal takes 15% of the victim's score…
-export const STEAL_MIN = 300;          // …but never less than this (capped at their total)
+export const STEAL_PCT = 0.25;         // steal takes 15% of the victim's score…
+export const STEAL_MIN = 400;          // …but never less than this (capped at their total)
 export const DUEL_WIN_POINTS = 1500;   // finale: first correct duelist takes this
 export const YEAR_MAX_POINTS = 1000;   // year round: exact answer
 export const YEAR_POINTS_SLOPE = 120;  // …minus this per year off
