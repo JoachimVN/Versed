@@ -42,17 +42,24 @@ export default function App() {
 
   return (
     <BrowserRouter basename={import.meta.env.BASE_URL.replace(/\/$/, '') || '/'}>
-      <div style={{ position: 'fixed', top: 0, left: 0, right: 0, height: 'var(--app-height, 100vh)', background: '#080812' }}>
+      {/* Background layer: absolutely positioned against #root (sized from
+          real document height, see index.css) rather than fixed against the
+          viewport — position: fixed elements get visually clipped to the
+          shrunk visual viewport by iOS Safari when the keyboard opens on a
+          non-scrolling page like ours, which cut this off at the keyboard's
+          edge instead of extending behind it. Absolute positioning isn't
+          subject to that quirk. */}
+      <div className="absolute inset-0" style={{ background: '#080812' }}>
         <ConfettiBackground />
         <div
-          className="fixed inset-0 pointer-events-none"
+          className="absolute inset-0 pointer-events-none"
           style={{
             background: 'radial-gradient(ellipse 48% 105% at 50% -5%, rgba(150,50,220,0.3) 0%, rgba(110,32,155,0.05) 55%, transparent 80%)',
             zIndex: 0,
           }}
         />
         <div
-          className="fixed inset-0 pointer-events-none"
+          className="absolute inset-0 pointer-events-none"
           style={{
             background: 'rgba(8,8,18,0.7)',
             backdropFilter: 'blur(2px)',
@@ -60,6 +67,10 @@ export default function App() {
             zIndex: 0,
           }}
         />
+      </div>
+      {/* Content layer: shrinks to --app-height so it stays anchored to the
+          top and reflows above the keyboard instead of being covered by it. */}
+      <div style={{ position: 'fixed', top: 0, left: 0, right: 0, height: 'var(--app-height, 100vh)' }}>
         <RouteTracker />
         <Routes>
           <Route path="/" element={<Home />} />

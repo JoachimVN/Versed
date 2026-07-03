@@ -5,6 +5,7 @@ import LiquidGlass from 'liquid-glass-react';
 import { socket } from '../socket';
 import { RankBadge } from '../components/RankBadge';
 import { useAnimatedScore } from '../hooks/useAnimatedScore';
+import { useKeyboardOpen } from '../hooks/useViewportHeight';
 import { NoOneGotItCardContent, GotItCardContent, YearCardContent } from '../components/RevealShared';
 import { RoundIntro, PartyBadge, PartyRevealExtras } from '../components/RoundIntro';
 import { BackButton } from '../components/BackButton';
@@ -638,6 +639,7 @@ function JoinView({ game }: Readonly<{ game: PlayState }>) {
   const [pinFocused, setPinFocused] = useState(false);
   const [nameFocused, setNameFocused] = useState(false);
   const canJoin = pin.length === 3 && name.trim().length > 0;
+  const keyboardOpen = useKeyboardOpen();
 
   return (
     <div
@@ -649,8 +651,12 @@ function JoinView({ game }: Readonly<{ game: PlayState }>) {
       {/* minHeight (not height) lets this grow past the viewport instead of
           fighting it for space — centered when it fits, top-to-bottom
           scrollable overflow (no Safari "unreachable centered overflow"
-          quirk) when the keyboard shrinks the viewport past what fits. */}
-      <div className="flex flex-col items-center p-6 gap-10" style={{ minHeight: '100%', justifyContent: 'center' }}>
+          quirk) when the keyboard shrinks the viewport past what fits.
+          Centering splits that overflow between top and bottom though, which
+          traps the Join button under the keyboard with no way to scroll to
+          it — so once a field is focused, align to the top instead, where
+          plain top-to-bottom scrolling reaches everything. */}
+      <div className="flex flex-col items-center p-6 gap-10" style={{ minHeight: '100%', justifyContent: keyboardOpen ? 'flex-start' : 'center' }}>
 
       <img
         src={`${import.meta.env.BASE_URL}logo.png`}
