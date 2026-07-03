@@ -1,4 +1,4 @@
-import { useEffect } from 'react';
+import { useEffect, useState } from 'react';
 
 /**
  * Tracks the visible viewport height (shrinking when a mobile keyboard opens)
@@ -60,4 +60,26 @@ export function useViewportHeight() {
       document.removeEventListener('focusout', handleFocusOut);
     };
   }, []);
+}
+
+/**
+ * True only while a real on-screen keyboard is covering part of the
+ * viewport (visualViewport meaningfully shorter than the window), as
+ * opposed to just "an input is focused" — desktop focuses inputs too, but
+ * never shrinks the viewport, so this stays false there.
+ */
+export function useKeyboardOpen(threshold = 120) {
+  const [open, setOpen] = useState(false);
+
+  useEffect(() => {
+    const vv = window.visualViewport;
+    if (!vv) return;
+
+    const check = () => setOpen(window.innerHeight - vv.height > threshold);
+    check();
+    vv.addEventListener('resize', check);
+    return () => vv.removeEventListener('resize', check);
+  }, [threshold]);
+
+  return open;
 }

@@ -8,6 +8,16 @@ html, body {
   overscroll-behavior: none;
 }
 
+/* Containing block for the absolutely-positioned background layer (see
+   App.tsx) — sized from real document height, not the visual viewport, so
+   it stays full-bleed instead of getting clipped by iOS Safari's "fixed
+   position + open keyboard" quirk (WebKit shrinks position:fixed elements
+   to the visible viewport when the page itself can't scroll, like ours). */
+#root {
+  position: relative;
+  height: 100%;
+}
+
 body {
   background-color: #0d0d1a;
   color: white;
@@ -42,8 +52,8 @@ body {
    away from visibly "rescales" the new screen you land on. Only screens
    with a focused input opt into the animated version via .keyboard-resize. */
 .min-h-screen {
-  height: var(--app-height, 100vh);
-  min-height: var(--app-height, 100vh);
+  height: calc(var(--app-height, 100vh) - env(safe-area-inset-top, 0px) - env(safe-area-inset-bottom, 0px));
+  min-height: calc(var(--app-height, 100vh) - env(safe-area-inset-top, 0px) - env(safe-area-inset-bottom, 0px));
 }
 
 .keyboard-resize {

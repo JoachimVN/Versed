@@ -29,6 +29,17 @@ const createGameAttempts = new Map<string, number[]>();
 const CREATE_GAME_LIMIT = 5;
 const CREATE_GAME_WINDOW_MS = 60 * 60 * 1000; // 1 hour
 
+// Sweep out IPs whose attempts have all aged past the window, so the map
+// doesn't grow for the lifetime of the process.
+setInterval(() => {
+  const now = Date.now();
+  for (const [ip, times] of createGameAttempts) {
+    const recent = times.filter(t => now - t < CREATE_GAME_WINDOW_MS);
+    if (recent.length > 0) createGameAttempts.set(ip, recent);
+    else createGameAttempts.delete(ip);
+  }
+}, CREATE_GAME_WINDOW_MS).unref();
+
 const allowedOrigins = new Set(
   (process.env.CORS_ORIGINS || process.env.FRONTEND_URL || '')
     .split(',')
@@ -105,7 +116,7 @@ io.on('connection', (socket) => {
   }
 
   function emitRevealSnapshot(game: GameObj, round: RoundObj) {
-    const isRace = game.mode === 'race';
+    const isRace = gm.isRaceFlowRound(game, round);
     const correctGuessers = isRace
       ? Array.from(round.correctGuessers).map(id => game.players.get(id)?.name ?? '').filter(Boolean)
       : undefined;
@@ -117,6 +128,8 @@ io.on('connection', (socket) => {
       ...songFields(game, round),
       points: 0,
       playerGuesses: gm.getRoundGuesses(game),
+      yearResults: round.yearResults,
+      stealPending: stealPendingName(game, round),
     });
   }
 
@@ -135,6 +148,9 @@ io.on('connection', (socket) => {
         bettingTime: game.bettingTime,
         endsAt: game.phaseEndsAt,
         mode: 'classic',
+        party: gm.partyView(round),
+        bidOptions: gm.BID_OPTIONS,
+        bidScores: gm.bidScoreTable(),
       });
       return;
     }
@@ -174,7 +190,7 @@ io.on('connection', (socket) => {
       return;
     }
 
-    if (game.mode === 'race') {
+    if (raceFlow(game)) {
       emitRaceTurnSnapshot(game, round);
       return;
     }
@@ -194,13 +210,19 @@ io.on('connection', (socket) => {
       if (t) { clearTimeout(t); playerDisconnectTimers.delete(sid); }
     }
 
-    // Tear down old game state, then create the new one so we have its PIN.
+    // Tear down old game state, then create the new one. Reusing the old PIN
+    // keeps QR codes, deep links and players' saved sessions valid.
     gm.cleanupGame(oldPin);
-    const newGame = gm.createGame(socket.id);
+    const newGame = gm.createGame(socket.id, oldPin);
 
     // Notify players still subscribed to the old room (Socket.IO rooms persist
     // independently of game state, so the emit reaches them before they leave).
     io.to(`player:${oldPin}`).emit('game_restarted', { newPin: newGame.pin });
+
+    // Then evict them from the rooms: the new game reuses the PIN, so anyone
+    // lingering would otherwise receive events for a game they haven't joined.
+    // Pressing "Play Again" re-joins the rooms via the normal join_game path.
+    io.in(`player:${oldPin}`).socketsLeave([oldPin, `player:${oldPin}`]);
 
     socket.leave(oldPin);
     socket.leave(`host:${oldPin}`);
@@ -210,8 +232,15 @@ io.on('connection', (socket) => {
     callback({ pin: newGame.pin });
   });
 
-  // ── Host: rejoin after reconnect ──────────────────────────────────────────
-  socket.on('rejoin_host', ({ pin }: { pin: string }, callback: (r: { players: { name: string; score: number; streak: number }[] } | { error: string }) => void) => {
+  // ── Host: rejoin after reconnect or page reload ───────────────────────────
+  // `fresh` marks a full page reload: the host client lost all round UI state,
+  // so any round in flight can't be resumed. A plain socket reconnect (host
+  // tab still alive) keeps the round running as before.
+  socket.on('rejoin_host', ({ pin, fresh }: { pin: string; fresh?: boolean }, callback: (r: {
+    players: { name: string; score: number; streak: number }[];
+    phase: string; roundIndex: number; totalRounds: number;
+    leaderboard: { rank: number; name: string; score: number }[];
+  } | { error: string }) => void) => {
     const game = gm.getGame(pin);
     if (!game) return callback({ error: 'Game not found' });
 
@@ -227,7 +256,23 @@ io.on('connection', (socket) => {
     socket.join(`host:${pin}`);
     gm.updateSocketPin(socket.id, pin);
     io.to(game.pin).emit('host_reconnected');
-    callback({ players: Array.from(game.players.values()).map(p => ({ name: p.name, score: p.score, streak: p.streak })) });
+
+    // After a reload mid-round, the safest resume point is the between-rounds
+    // leaderboard: abandon the round in flight and park everyone there.
+    if (fresh && game.phase !== 'lobby' && game.phase !== 'finished') {
+      if (game.phaseTimer) clearTimeout(game.phaseTimer);
+      game.phaseEndsAt = null;
+      game.phase = 'leaderboard';
+      io.to(`player:${pin}`).emit('leaderboard', { leaderboard: gm.getLeaderboard(game) });
+    }
+
+    callback({
+      players: Array.from(game.players.values()).map(p => ({ name: p.name, score: p.score, streak: p.streak })),
+      phase: game.phase,
+      roundIndex: game.roundIndex,
+      totalRounds: game.totalRounds,
+      leaderboard: gm.getLeaderboard(game),
+    });
   });
 
   // ── Player: check if a game PIN is still active ───────────────────────────
@@ -316,7 +361,7 @@ io.on('connection', (socket) => {
     io.to(`host:${pin}`).emit('player_reconnected', { name: player.name, score: player.score, streak: player.streak });
   });
 
-  // ── Host: kick player from lobby or leaderboard ───────────────────────────
+  // ── Host: kick player from lobby or reveal ────────────────────────────────
   socket.on('kick_player', ({ name }: { name: string }) => {
     const game = gm.getGameBySocket(socket.id);
     const allowedPhases = ['lobby', 'reveal'] as const;
@@ -339,7 +384,9 @@ io.on('connection', (socket) => {
     if (s?.bettingTime) game.bettingTime = Math.max(5, Math.min(60, Math.round(s.bettingTime)));
     if (s?.guessingTime) game.guessingTime = Math.max(5, Math.min(60, Math.round(s.guessingTime)));
     if (s?.totalRounds) game.totalRounds = Math.max(1, Math.min(30, Math.round(s.totalRounds)));
-    game.mode = s?.mode === 'race' ? 'race' : 'classic';
+    if (s?.mode === 'race') game.mode = 'race';
+    else if (s?.mode === 'party') game.mode = 'party';
+    else game.mode = 'classic';
     if (s?.raceTime) game.raceTime = Math.max(10, Math.min(60, Math.round(s.raceTime)));
     game.raceWinnerOnly = s?.raceWinnerOnly === true;
     game.artistOnly = s?.artistOnly === true;
@@ -374,7 +421,7 @@ io.on('connection', (socket) => {
     if (game?.hostSocketId !== socket.id || game.phase !== 'playing') return;
     if (game.phaseTimer) clearTimeout(game.phaseTimer);
 
-    if (game.mode === 'race') {
+    if (raceFlow(game)) {
       gm.markRaceStarted(game);
       const endsAt = game.currentRound!.playStartAt! + game.raceTime * 1000;
       game.phaseEndsAt = endsAt;
@@ -387,12 +434,12 @@ io.on('connection', (socket) => {
   });
 
   // ── Player: submit guess ───────────────────────────────────────────────────
-  socket.on('submit_guess', ({ text }: { text: string }, callback?: (r: { correct: boolean; points?: number; timeMs?: number }) => void) => {
+  socket.on('submit_guess', ({ text, artistText }: { text: string; artistText?: string }, callback?: (r: { correct: boolean; points?: number; timeMs?: number }) => void) => {
     const game = gm.getGameBySocket(socket.id);
     if (!game) return callback?.({ correct: false });
 
-    if (game.mode === 'race') {
-      const r = gm.recordRaceGuess(game, socket.id, text);
+    if (raceFlow(game)) {
+      const r = gm.recordRaceGuess(game, socket.id, text, artistText);
       if (!r) return callback?.({ correct: false });
       callback?.({ correct: r.correct, points: r.points, timeMs: r.elapsedMs });
       io.to(`host:${game.pin}`).emit('answer_received', {
@@ -403,10 +450,10 @@ io.on('connection', (socket) => {
       return;
     }
 
-    const result = gm.recordGuess(game, socket.id, text);
+    const result = gm.recordGuess(game, socket.id, text, artistText);
     if (!result) return callback?.({ correct: false });
 
-    callback?.({ correct: result.correct });
+    callback?.({ correct: result.correct, points: result.correct ? result.points : undefined });
 
     const round = game.currentRound!;
     if (result.correct) {
@@ -418,11 +465,23 @@ io.on('connection', (socket) => {
         ...songFields(game, round),
         points: result.points,
         playerGuesses: gm.getRoundGuesses(game),
+        stealPending: stealPendingName(game, round),
       });
       emitScoreUpdate(game);
+      maybeOfferSteal(game);
     } else if (result.allDone) {
       advanceTierOrReveal(game);
     }
+  });
+
+  // ── Player: steal-round winner picks their victim ──────────────────────────
+  socket.on('steal_victim', ({ name }: { name: string }) => {
+    const game = gm.getGameBySocket(socket.id);
+    if (!game) return;
+    const result = gm.executeSteal(game, socket.id, name);
+    if (!result) return;
+    io.to(game.pin).emit('steal_result', result);
+    emitScoreUpdate(game);
   });
 
   // ── Player: live guess draft (not yet submitted) ──────────────────────────
@@ -437,7 +496,7 @@ io.on('connection', (socket) => {
     const game = gm.getGameBySocket(socket.id);
     if (!game) return;
 
-    if (game.mode === 'race') {
+    if (raceFlow(game)) {
       const r = gm.skipRaceGuess(game, socket.id);
       if (!r) return;
       io.to(`host:${game.pin}`).emit('answer_received', {
@@ -464,13 +523,26 @@ io.on('connection', (socket) => {
       closeBettingAndPlay(game);
     } else if (game.phase === 'playing') {
       // Song is still playing — skip directly to reveal without going through guessing
-      if (game.mode === 'race') endRaceRound(game);
+      if (raceFlow(game)) endRaceRound(game);
       else revealRound(game);
     } else if (game.phase === 'guessing') {
       if (game.phaseTimer) clearTimeout(game.phaseTimer);
-      if (game.mode === 'race') endRaceRound(game);
+      if (raceFlow(game)) endRaceRound(game);
       else advanceTierOrReveal(game);
     }
+  });
+
+  // ── Host: end the game early ───────────────────────────────────────────────
+  // Jumps everyone to final scores. From there the host's "New Game" button
+  // handles a restart, so this covers both "end now" and "restart now".
+  socket.on('end_game', () => {
+    const game = gm.getGameBySocket(socket.id);
+    if (game?.hostSocketId !== socket.id) return;
+    if (game.phase === 'lobby' || game.phase === 'finished') return;
+    if (game.phaseTimer) clearTimeout(game.phaseTimer);
+    game.phaseEndsAt = null;
+    game.phase = 'finished';
+    io.to(game.pin).emit('game_over', { leaderboard: gm.getLeaderboard(game) });
   });
 
   // ── Host: advance to next round ────────────────────────────────────────────
@@ -478,6 +550,9 @@ io.on('connection', (socket) => {
     const game = gm.getGameBySocket(socket.id);
     if (!game) return;
     if (game.hostSocketId !== socket.id) return;
+    // Only between rounds — a double-click on "Next Round" must not skip a
+    // round or start two overlapping beginRound() calls.
+    if (game.phase !== 'reveal' && game.phase !== 'leaderboard') return;
 
     game.roundIndex += 1;
     if (game.roundIndex >= game.totalRounds) {
@@ -525,19 +600,54 @@ io.on('connection', (socket) => {
   type GameObj = ReturnType<typeof gm.getGame> & object;
   type RoundObj = NonNullable<GameObj['currentRound']>;
 
+  // Does the current round run the everyone-at-once race flow? True for race
+  // games and for every non-classic party round (race, year, finale).
+  function raceFlow(game: GameObj): boolean {
+    if (game.mode === 'race') return true;
+    const round = game.currentRound;
+    return !!round && gm.isRaceFlowRound(game, round);
+  }
+
+  // Offer the steal-round winner their pick of victims. Sent at the reveal so
+  // the theft plays out while everyone's watching the result. With only one
+  // player there's no one to steal from — close it out silently instead of
+  // showing an empty picker (and leaving stealPendingName stuck forever).
+  function maybeOfferSteal(game: GameObj) {
+    const round = game.currentRound;
+    if (!round?.stealBy || round.stealDone) return;
+    const victims = gm.stealCandidates(game, round.stealBy);
+    if (victims.length === 0) { round.stealDone = true; return; }
+    io.to(round.stealBy).emit('choose_steal', { victims });
+  }
+
+  function stealPendingName(game: GameObj, round: RoundObj): string | undefined {
+    if (!round.stealBy || round.stealDone) return undefined;
+    return game.players.get(round.stealBy)?.name;
+  }
+
   async function beginRound(game: GameObj) {
     if (!game) return;
     const round = gm.startRound(game);
+    const party = gm.partyView(round);
+    const isRaceFlow = game.mode === 'race' || (round.party && round.party.format !== 'classic');
 
-    const coverUrl = await getAlbumArtUrl(round.song.spotifyTrackId);
+    // Prefer the precomputed art from the CSV (Music Popularity Index resolves
+    // it offline via Spotify's oEmbed endpoint) so a normal round never calls
+    // the Spotify Web API at all; only fall back to the live, quota-limited
+    // call for songs the pipeline hasn't covered yet.
+    const coverUrl = round.song.albumArtUrl ?? await getAlbumArtUrl(round.song.spotifyTrackId);
     if (coverUrl) {
       round.coverUrl = coverUrl;
-      if (game.mode === 'classic' && randomInt(4) === 0) {
+      // Classic-flow rounds have a 1-in-4 chance of a blurred-art hint;
+      // 'fullhints' rounds always get it.
+      const wantArt = !isRaceFlow && (game.mode === 'classic' || game.mode === 'party')
+        && (round.party?.event === 'fullhints' || randomInt(4) === 0);
+      if (wantArt) {
         round.hints.push({ label: 'Album art', value: '', imageUrl: coverUrl });
       }
     }
 
-    if (game.mode === 'race') {
+    if (isRaceFlow) {
       round.hints = [];
       game.phase = 'playing';
       game.phaseEndsAt = null;
@@ -549,6 +659,7 @@ io.on('connection', (socket) => {
         mode: 'race',
         raceTime: game.raceTime,
         artistOnly: game.artistOnly,
+        party,
       });
       io.to(`host:${game.pin}`).emit('host_round_start', {
         roundIndex: game.roundIndex,
@@ -557,6 +668,7 @@ io.on('connection', (socket) => {
         mode: 'race',
         raceTime: game.raceTime,
         artistOnly: game.artistOnly,
+        party,
         song: {
           title: round.song.title,
           artist: round.song.artist,
@@ -568,6 +680,7 @@ io.on('connection', (socket) => {
         trackId: round.song.spotifyTrackId,
         durationMs: game.raceTime * 1000,
         countdownMs: PLAYBACK_COUNTDOWN_MS,
+        positionMs: round.snippetMs,
       });
 
       // Fallback: if host never confirms song_started, end the round after the window.
@@ -591,6 +704,11 @@ io.on('connection', (socket) => {
       endsAt: bettingEndsAt,
       mode: 'classic',
       artistOnly: game.artistOnly,
+      party,
+      // Source of truth for the client's bid picker and its score preview —
+      // keeps the UI from drifting out of sync with server-side scoring.
+      bidOptions: gm.BID_OPTIONS,
+      bidScores: gm.bidScoreTable(),
     });
     io.to(`host:${game.pin}`).emit('host_round_start', {
       roundIndex: game.roundIndex,
@@ -600,6 +718,7 @@ io.on('connection', (socket) => {
       endsAt: bettingEndsAt,
       mode: 'classic',
       artistOnly: game.artistOnly,
+      party,
       song: {
         title: round.song.title,
         artist: round.song.artist,
@@ -619,6 +738,8 @@ io.on('connection', (socket) => {
       year: round.song.year,
       coverUrl: round.coverUrl,
       artistOnly: game.artistOnly,
+      // Reveal payloads always carry the full party config (mystery revealed).
+      party: gm.partyView(round, true),
     };
   }
 
@@ -633,6 +754,8 @@ io.on('connection', (socket) => {
     if (game.phaseTimer) clearTimeout(game.phaseTimer);
     gm.finalizeRaceDrafts(game);
     const round = game.currentRound!;
+    // Year rounds score in one pass now that every distance is known.
+    if (round.party?.format === 'year') gm.finalizeYearRound(game);
     game.phase = 'reveal';
     const correctNames = Array.from(round.correctGuessers)
       .map(id => game.players.get(id)?.name ?? '')
@@ -645,9 +768,12 @@ io.on('connection', (socket) => {
       ...songFields(game, round),
       points: 0,
       playerGuesses: gm.getRoundGuesses(game),
+      yearResults: round.yearResults,
+      stealPending: stealPendingName(game, round),
     });
     gm.settleStreaks(game, round);
     emitScoreUpdate(game);
+    maybeOfferSteal(game);
   }
 
   function closeBettingAndPlay(game: GameObj) {
@@ -655,7 +781,10 @@ io.on('connection', (socket) => {
     const round = game.currentRound!;
     const result = gm.closeBetting(game);
     if (!result) {
-      // nobody bid — skip round
+      // Nobody bid — skip the round. Move the phase along too, or the game
+      // stays in 'betting' and a stale bid could re-trigger this round.
+      game.phase = 'reveal';
+      game.phaseEndsAt = null;
       io.to(game.pin).emit('round_result', {
         correct: false,
         guesserName: null,
@@ -688,6 +817,7 @@ io.on('connection', (socket) => {
       trackId: round.song.spotifyTrackId,
       durationMs,
       countdownMs: PLAYBACK_COUNTDOWN_MS,
+      positionMs: round.snippetMs,
     });
 
     // Fallback: start guessing if host never confirms song_started. The host

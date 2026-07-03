@@ -48,8 +48,11 @@ router.get('/callback', async (req, res) => {
     );
 
     const frontendBase = process.env.FRONTEND_URL ?? '';
+    // Tokens go in the URL fragment, not the query string: fragments never
+    // leave the browser, so they can't end up in server/proxy logs, and the
+    // client strips them from history immediately after reading them.
     res.redirect(
-      `${frontendBase}/host?access_token=${data.access_token}&refresh_token=${data.refresh_token}`
+      `${frontendBase}/host#access_token=${data.access_token}&refresh_token=${data.refresh_token}`
     );
   } catch {
     res.redirect('/?error=auth_failed');

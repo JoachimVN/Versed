@@ -28,8 +28,17 @@ function normalize(s: string): string {
     .trim();
 }
 
+// A flat minimum tolerance of 2 lets unrelated words collide once a title is
+// short (e.g. "love" vs "rose" is only 2 edits apart) — titles land there
+// often once "the"/"a"/"an" are stripped in normalize(). Scale the tolerance
+// down for short strings instead of flooring it, while keeping the original
+// generous cap for long, multi-word titles.
 function fuzzyThreshold(len: number): number {
-  return Math.min(4, Math.max(2, Math.floor(len * 0.2)));
+  if (len <= 3) return 0;
+  if (len <= 6) return 1;
+  if (len <= 9) return 2;
+  if (len <= 14) return 3;
+  return 4;
 }
 
 function levenshtein(a: string, b: string): number {
