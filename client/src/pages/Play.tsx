@@ -6,7 +6,7 @@ import { socket } from '../socket';
 import { RankBadge } from '../components/RankBadge';
 import { useAnimatedScore } from '../hooks/useAnimatedScore';
 import { useKeyboardOpen } from '../hooks/useViewportHeight';
-import { NoOneGotItCardContent, GotItCardContent, YearCardContent } from '../components/RevealShared';
+import { NoOneGotItCardContent, GotItCardContent, YearTimelineContent } from '../components/RevealShared';
 import { RoundIntro, PartyBadge, PartyRevealExtras } from '../components/RoundIntro';
 import { BackButton } from '../components/BackButton';
 import { CircularTimer, timerColor } from '../components/CircularTimer';
@@ -28,6 +28,7 @@ export interface PlayState {
   totalRounds: number;
   hints: Hint[];
   timeLeft: number;
+  timerTotal: number;
   bettingTime: number;
   bidIndex: number;
   bidOptions: number[];
@@ -84,6 +85,7 @@ function usePlayGame(pinParam?: string): PlayState {
   const [totalRounds, setTotalRounds] = useState(10);
   const [hints, setHints] = useState<Hint[]>([]);
   const [timeLeft, setTimeLeft] = useState(0);
+  const [timerTotal, setTimerTotal] = useState(0);
   const [bettingTime, setBettingTime] = useState(15);
   const [bidIndex, setBidIndex] = useState(4); // default: 2s (index 4)
   const bidIndexRef = useRef(4);
@@ -175,6 +177,7 @@ function usePlayGame(pinParam?: string): PlayState {
 
   function startCountdown(endsAt: number) {
     stopCountdown();
+    setTimerTotal(Math.max(1, Math.ceil((endsAt - Date.now()) / 1000)));
     const tick = () => {
       const remaining = Math.ceil(Math.max(0, endsAt - Date.now()) / 1000);
       setTimeLeft(remaining);
@@ -544,7 +547,7 @@ function usePlayGame(pinParam?: string): PlayState {
 
   return {
     phase, pin, name, myName, error, roundIndex, totalRounds, hints,
-    timeLeft, bettingTime, bidIndex, bidOptions, bidScores, myBid, guesserNames, lowestBid,
+    timeLeft, timerTotal, bettingTime, bidIndex, bidOptions, bidScores, myBid, guesserNames, lowestBid,
     guessText, result, myScore, myScoreDelta, myStreak, mode, artistOnly, myRacePoints, myRaceTimeMs,
     party, artistGuessText, stealVictims, stealResult,
     leaderboard, leaderboardDeltas, songPlaying, reconnecting, hostReconnecting, savedSession, guessInputRef,
@@ -583,18 +586,6 @@ function guessTextClass(guess: string | null, correct: boolean): string {
   return correct ? 'text-green-400' : 'text-white/20 italic';
 }
 
-// Each bar gets a unique animation name, duration, and delay so they move independently.
-const AUDIO_BARS = [
-  { anim: 'audioBarC', dur: 1.1, delay: 0    },
-  { anim: 'audioBar',  dur: 1.5, delay: 0.14 },
-  { anim: 'audioBarD', dur: 0.85,delay: 0.28 },
-  { anim: 'audioBarB', dur: 1.7, delay: 0.07 },
-  { anim: 'audioBar',  dur: 1, delay: 0.42 },
-  { anim: 'audioBarC', dur: 1.3, delay: 0.21 },
-  { anim: 'audioBarD', dur: 0.9, delay: 0.35 },
-  { anim: 'audioBarB', dur: 1.6, delay: 0.08 },
-  { anim: 'audioBarC', dur: 1.2, delay: 0.26 },
-] as const;
 
 function bidArrowStyle(enabled: boolean, pressed: boolean, hovered: boolean): { bg: string; border: string } {
   if (!enabled) return { bg: 'rgba(255,255,255,0.03)', border: '1px solid rgba(255,255,255,0.04)' };
@@ -1062,12 +1053,14 @@ function BidSubmittedView({ game }: Readonly<{ game: PlayState }>) {
 }
 
 
-function WatchingView({ game }: Readonly<{ game: PlayState }>) {
+export function WatchingView({ game }: Readonly<{ game: PlayState }>) {
   const { lowestBid, guesserNames, mode, songPlaying, party } = game;
   const [visible, setVisible] = useState(false);
   useEffect(() => { const t = setTimeout(() => setVisible(true), 30); return () => clearTimeout(t); }, []);
   const isRace = mode === 'race';
   const isDuel = !!party?.finale;
+  const nonYearAccent = isRace ? 'race' : 'classic';
+  const watchAccent = party?.format === 'year' ? 'year' : nonYearAccent;
 
   return (
     <div className="relative min-h-screen overflow-hidden">
@@ -1103,26 +1096,7 @@ function WatchingView({ game }: Readonly<{ game: PlayState }>) {
           >
             <div style={{ width: '254px', display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '18px' }}>
 
-              {/* Animated waveform: static until song actually starts */}
-              <div style={{ display: 'flex', gap: '5px', alignItems: 'center', height: '36px', transition: 'opacity 0.3s ease', opacity: songPlaying ? 1 : 0.35 }}>
-                {AUDIO_BARS.map((bar) => {
-                  const nonYearColor = isRace ? 'rgba(234,88,12,0.75)' : 'rgba(150,17,193,0.75)';
-                  const barColor = party?.format === 'year' ? 'rgba(0,200,195,0.75)' : nonYearColor;
-                  return (
-                  <div
-                    key={bar.delay}
-                    style={{
-                      width: '3px', height: '100%', borderRadius: '2px',
-                      background: barColor,
-                      animation: songPlaying ? `${bar.anim} ${bar.dur}s ease-in-out infinite` : 'none',
-                      animationDelay: `${bar.delay}s`,
-                      transformOrigin: 'center',
-                      transform: songPlaying ? undefined : 'scaleY(0.07)',
-                    }}
-                  />
-                );
-                })}
-              </div>
+              <NowPlayingBadge playing={songPlaying} accent={watchAccent} size={44} />
 
               <div style={{ width: '100%', height: '1px', background: 'rgba(255,255,255,0.07)' }} />
 
@@ -1166,16 +1140,31 @@ function GetReadyBody({ isDuel, isRace, party, lowestBid, guesserNames, songPlay
     );
   }
   return (
-    <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '6px' }}>
+    <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '8px' }}>
       <span style={{ color: 'rgba(255,255,255,0.32)', fontSize: '0.6rem', letterSpacing: '0.2em', textTransform: 'uppercase' }}>
         {songPlaying ? 'Listen closely' : 'Get ready'}
       </span>
-      <span style={{ display: 'inline-block', minWidth: '200px', color: 'white', fontWeight: 900, fontSize: '1.5rem', lineHeight: 1.25, textAlign: 'center' }}>
+      <span style={{
+        display: 'inline-block', minWidth: '200px', textAlign: 'center',
+        fontWeight: 900, fontSize: '1.5rem', lineHeight: 1.25,
+        background: 'linear-gradient(to bottom left, rgba(0,200,195,0.4) 0%, transparent 55%), linear-gradient(to top right, rgba(150,17,193,0.5) 0%, transparent 55%), #fff',
+        WebkitBackgroundClip: 'text', WebkitTextFillColor: 'transparent', backgroundClip: 'text',
+      }}>
         {guesserNames.join(' & ')}
       </span>
-      <span style={{ display: 'inline-block', minWidth: '160px', color: 'rgba(255,255,255,0.3)', fontSize: '0.82rem', textAlign: 'center' }}>
-        guesses after {lowestBid}s
-      </span>
+      <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+        <div style={{ display: 'flex', gap: '3px' }}>
+          {[0, 1, 2].map(i => (
+            <div key={i} style={{
+              width: '4px', height: '4px', borderRadius: '50%', background: 'rgba(150,17,193,0.8)',
+              animation: 'dotBounce 1.4s ease-in-out infinite', animationDelay: `${i * 0.18}s`,
+            }} />
+          ))}
+        </div>
+        <span style={{ display: 'inline-block', color: 'rgba(255,255,255,0.3)', fontSize: '0.82rem', textAlign: 'center' }}>
+          guesses after {lowestBid}s
+        </span>
+      </div>
     </div>
   );
 }
@@ -1185,19 +1174,10 @@ function GetReadyBody({ isDuel, isRace, party, lowestBid, guesserNames, songPlay
 // element is never unmounted — focus and text survive the transition, which
 // prevents the mobile keyboard from dismissing mid-song.
 function ListeningHeader({ songPlaying, party }: Readonly<{ songPlaying: boolean; party: PartyInfo | null }>) {
+  const accent = party?.format === 'year' ? 'year' : 'classic';
   return (
-    <div className="flex flex-col items-center gap-2.5 pt-10 pb-4">
-      <div style={{ display: 'flex', gap: '5px', alignItems: 'center', height: '28px', transition: 'opacity 0.3s ease', opacity: songPlaying ? 1 : 0.35 }}>
-        {AUDIO_BARS.map((bar) => (
-          <div key={bar.delay} style={{
-            width: '3px', height: '100%', borderRadius: '2px',
-            background: party?.format === 'year' ? 'rgba(0,200,195,0.6)' : 'rgba(150,17,193,0.6)',
-            animation: songPlaying ? `${bar.anim} ${bar.dur}s ease-in-out infinite` : 'none',
-            animationDelay: `${bar.delay}s`, transformOrigin: 'center',
-            transform: songPlaying ? undefined : 'scaleY(0.07)',
-          }} />
-        ))}
-      </div>
+    <div className="flex flex-col items-center gap-2 pt-8 pb-3">
+      <NowPlayingBadge playing={songPlaying} accent={accent} size={32} />
       <span style={{ color: 'rgba(255,255,255,0.28)', fontSize: '0.72rem', letterSpacing: '0.08em' }}>
         {songPlaying ? 'Your song is playing…' : 'Get ready…'}
       </span>
@@ -1206,49 +1186,70 @@ function ListeningHeader({ songPlaying, party }: Readonly<{ songPlaying: boolean
 }
 
 // Race mode plays the song throughout the guessing window, so it keeps the
-// waveform going here too; classic has already stopped the song by the time
-// a tier's turn starts, so it stays timer-only.
-function ActiveHeader({ urgent, timeLeft, myScore, isRace, party, songPlaying }: Readonly<{ urgent: boolean; timeLeft: number; myScore: number; isRace: boolean; party: PartyInfo | null; songPlaying: boolean }>) {
+// now-playing badge going here too; classic has already stopped the song by
+// the time a tier's turn starts, so it stays timer-only.
+function ActiveHeader({ timeLeft, timerTotal, myScore, isRace, party, songPlaying }: Readonly<{ timeLeft: number; timerTotal: number; myScore: number; isRace: boolean; party: PartyInfo | null; songPlaying: boolean }>) {
+  const isYear = party?.format === 'year';
+  const accent = isYear ? 'year' : 'race';
   return (
-    <div className="flex flex-col gap-2 pt-5 pb-3">
-      <div className="flex items-center justify-between px-5">
+    <div className="flex flex-col items-center gap-2 pt-4 pb-3">
+      <div className="flex items-center justify-between w-full px-5">
         <span style={{ color: 'rgba(255,255,255,0.32)', fontSize: '0.85rem', fontWeight: 600 }}>Your turn</span>
-        <span
-          className="font-black text-4xl tabular-nums"
-          style={{ color: urgent ? timerColor(0) : 'white', transition: 'color 0.3s ease' }}
-        >
-          {timeLeft}s
-        </span>
         <span style={{ color: 'rgba(255,255,255,0.28)', fontSize: '0.8rem', fontWeight: 500 }}>
           {myScore.toLocaleString()} pts
         </span>
       </div>
-      {(isRace || party?.format === 'year') && (
-        <div style={{ display: 'flex', gap: '5px', alignItems: 'center', justifyContent: 'center', height: '20px', transition: 'opacity 0.3s ease', opacity: songPlaying ? 1 : 0.35 }}>
-          {AUDIO_BARS.map((bar) => (
-            <div key={bar.delay} style={{
-              width: '3px', height: '100%', borderRadius: '2px',
-              background: party?.format === 'year' ? 'rgba(0,200,195,0.6)' : 'rgba(234,88,12,0.6)',
-              animation: songPlaying ? `${bar.anim} ${bar.dur}s ease-in-out infinite` : 'none',
-              animationDelay: `${bar.delay}s`, transformOrigin: 'center',
-              transform: songPlaying ? undefined : 'scaleY(0.07)',
-            }} />
-          ))}
-        </div>
+      <CircularTimer timeLeft={timeLeft} total={timerTotal} size={80} />
+      {(isRace || isYear) && (
+        <NowPlayingBadge playing={songPlaying} accent={accent} size={24} />
       )}
     </div>
   );
 }
 
-function guessInputBoxStyle(isListening: boolean): { border: string; background: string; boxShadow: string } {
+function guessInputBoxStyle(isListening: boolean, focused: boolean): { border: string; background: string; boxShadow: string } {
   if (isListening) {
     return { border: '1px solid rgba(255,255,255,0.07)', background: 'rgba(255,255,255,0.03)', boxShadow: 'none' };
+  }
+  if (focused) {
+    return { border: '1px solid rgba(150,17,193,0.7)', background: 'rgba(150,17,193,0.1)', boxShadow: '0 0 28px rgba(0,200,195,0.18), 0 0 20px rgba(150,17,193,0.22)' };
   }
   return { border: '1px solid rgba(150,17,193,0.4)', background: 'rgba(150,17,193,0.08)', boxShadow: '0 0 24px rgba(150,17,193,0.1)' };
 }
 
-function GuessingView({ game }: Readonly<{ game: PlayState }>) {
-  const { phase, timeLeft, myScore, guessText, guessInputRef, setGuessText, submitGuess, skipGuess, artistOnly, songPlaying, mode, party, artistGuessText, setArtistGuessText } = game;
+// 4-box OTP-style display for year guesses. A single transparent input
+// underneath keeps the real focus/keyboard target (so the mobile keyboard
+// never dismisses), while these boxes render its current characters.
+function YearDigitBoxes({ value, focused }: Readonly<{ value: string; focused: boolean }>) {
+  const digits = Array.from({ length: 4 }, (_, i) => value[i] ?? '');
+  const activeIndex = Math.min(value.length, 3);
+  return (
+    <div style={{ display: 'flex', gap: '10px', justifyContent: 'center', pointerEvents: 'none' }}>
+      {digits.map((d, i) => {
+        const isActive = focused && i === activeIndex;
+        return (
+          <div
+            key={i}
+            style={{
+              width: '48px', height: '58px', borderRadius: '12px',
+              display: 'flex', alignItems: 'center', justifyContent: 'center',
+              fontSize: '1.5rem', fontWeight: 800, color: 'white',
+              border: isActive ? '1px solid rgba(150,17,193,0.8)' : '1px solid rgba(255,255,255,0.12)',
+              background: isActive ? 'rgba(150,17,193,0.12)' : 'rgba(255,255,255,0.04)',
+              boxShadow: isActive ? '0 0 16px rgba(150,17,193,0.35)' : 'none',
+              transition: 'border-color 0.15s ease, background 0.15s ease, box-shadow 0.15s ease',
+            }}
+          >
+            {d}
+          </div>
+        );
+      })}
+    </div>
+  );
+}
+
+export function GuessingView({ game }: Readonly<{ game: PlayState }>) {
+  const { phase, timeLeft, timerTotal, myScore, guessText, guessInputRef, setGuessText, submitGuess, skipGuess, artistOnly, songPlaying, mode, party, artistGuessText, setArtistGuessText } = game;
   const isListening = phase === 'watching';
   // What this round wants answered: party rounds carry it per-round,
   // classic/race games use the game-wide artist toggle.
@@ -1260,8 +1261,8 @@ function GuessingView({ game }: Readonly<{ game: PlayState }>) {
   }
   const isYear = target === 'year';
   const canSubmit = isYear ? guessText.trim().length === 4 : guessText.trim().length > 0;
-  const urgent = !isListening && timeLeft <= 5;
-  const inputBoxStyle = guessInputBoxStyle(isListening);
+  const [inputFocused, setInputFocused] = useState(false);
+  const inputBoxStyle = guessInputBoxStyle(isListening, inputFocused);
   const label = {
     title: 'Name the song',
     artist: 'Name the artist',
@@ -1285,7 +1286,7 @@ function GuessingView({ game }: Readonly<{ game: PlayState }>) {
       {/* Header: waveform while listening, timer + score when active */}
       {isListening
         ? <ListeningHeader songPlaying={songPlaying} party={party} />
-        : <ActiveHeader urgent={urgent} timeLeft={timeLeft} myScore={myScore} isRace={mode === 'race'} party={party} songPlaying={songPlaying} />}
+        : <ActiveHeader timeLeft={timeLeft} timerTotal={timerTotal} myScore={myScore} isRace={mode === 'race'} party={party} songPlaying={songPlaying} />}
 
       {/* Input area */}
       <div className="flex-1 flex flex-col items-center justify-center gap-5 px-5">
@@ -1297,31 +1298,53 @@ function GuessingView({ game }: Readonly<{ game: PlayState }>) {
           {label}
         </p>
 
-        <div style={{
-          width: '100%', borderRadius: '16px', overflow: 'hidden',
-          border: inputBoxStyle.border,
-          background: inputBoxStyle.background,
-          boxShadow: inputBoxStyle.boxShadow,
-          transition: 'border-color 0.5s ease, background 0.5s ease, box-shadow 0.5s ease',
-        }}>
-          <input
-            ref={guessInputRef}
-            type="text"
-            inputMode={isYear ? 'numeric' : 'text'}
-            placeholder={placeholder}
-            value={guessText}
-            onChange={e => setGuessText(isYear ? e.target.value.replace(/\D/g, '').slice(0, 4) : e.target.value)}
-            onKeyDown={e => e.key === 'Enter' && canSubmit && submitGuess()}
-            autoComplete="off" autoCorrect="off" spellCheck={false}
-            style={{
-              display: 'block', width: '100%', background: 'transparent', border: 'none',
-              color: 'white', fontSize: '1.3rem', fontWeight: 700, textAlign: 'center',
-              padding: '20px 16px', outline: 'none', fontFamily: 'inherit',
-              ...(isYear ? { letterSpacing: '0.2em' } : {}),
-            }}
-            className="placeholder-white/20"
-          />
-        </div>
+        {isYear ? (
+          <div style={{ position: 'relative' }}>
+            <YearDigitBoxes value={guessText} focused={inputFocused} />
+            <input
+              ref={guessInputRef}
+              type="text"
+              inputMode="numeric"
+              value={guessText}
+              onChange={e => setGuessText(e.target.value.replace(/\D/g, '').slice(0, 4))}
+              onKeyDown={e => e.key === 'Enter' && canSubmit && submitGuess()}
+              onFocus={() => setInputFocused(true)}
+              onBlur={() => setInputFocused(false)}
+              autoComplete="off" autoCorrect="off" spellCheck={false}
+              style={{
+                position: 'absolute', inset: 0, width: '100%', height: '100%',
+                background: 'transparent', border: 'none', outline: 'none',
+                color: 'transparent', caretColor: 'transparent', fontSize: '1.5rem',
+              }}
+            />
+          </div>
+        ) : (
+          <div style={{
+            width: '100%', borderRadius: '16px', overflow: 'hidden',
+            border: inputBoxStyle.border,
+            background: inputBoxStyle.background,
+            boxShadow: inputBoxStyle.boxShadow,
+            transition: 'border-color 0.5s ease, background 0.5s ease, box-shadow 0.5s ease',
+          }}>
+            <input
+              ref={guessInputRef}
+              type="text"
+              placeholder={placeholder}
+              value={guessText}
+              onChange={e => setGuessText(e.target.value)}
+              onKeyDown={e => e.key === 'Enter' && canSubmit && submitGuess()}
+              onFocus={() => setInputFocused(true)}
+              onBlur={() => setInputFocused(false)}
+              autoComplete="off" autoCorrect="off" spellCheck={false}
+              style={{
+                display: 'block', width: '100%', background: 'transparent', border: 'none',
+                color: 'white', fontSize: '1.3rem', fontWeight: 700, textAlign: 'center',
+                padding: '20px 16px', outline: 'none', fontFamily: 'inherit',
+              }}
+              className="placeholder-white/20"
+            />
+          </div>
+        )}
 
         {target === 'both' && (
           <div style={{
@@ -1526,7 +1549,10 @@ function StealPicker({ victims, onPick, onSkip }: Readonly<{
 // Reveal for "guess the year" rounds: the year card plus everyone's distances.
 function YearRevealView({ game, result }: Readonly<{ game: PlayState; result: RoundResultEvent }>) {
   const { myName, myScore, myScoreDelta, myStreak, stealResult } = game;
-  const cardH = result.coverUrl ? 500 : 330;
+  const cardH = result.coverUrl ? 500 : 380;
+  // The timeline card already shows every player's guess and distance —
+  // this strip only adds what it doesn't: points earned this round.
+  const scorers = (result.yearResults ?? []).filter(r => r.points > 0).sort((a, b) => b.points - a.points);
   return (
     <div className="page-enter relative min-h-screen flex flex-col items-center justify-center p-6 gap-5 overflow-hidden">
       <img
@@ -1548,30 +1574,20 @@ function YearRevealView({ game, result }: Readonly<{ game: PlayState; result: Ro
             cornerRadius={20}
             padding="24px 24px"
           >
-            <YearCardContent result={result} />
+            <YearTimelineContent result={result} />
           </LiquidGlass>
         </div>
 
         <PartyRevealExtras result={result} stealResult={stealResult} />
 
-        {result.yearResults && result.yearResults.length > 0 && (
+        {scorers.length > 0 && (
           <div style={{ background: 'rgba(255,255,255,0.05)', border: '1px solid rgba(255,255,255,0.08)', borderRadius: '16px', padding: '8px 12px', width: '310px', maxWidth: '92vw' }} className="space-y-1">
-            {result.yearResults.map(r => {
-              let diffLabel = '';
-              if (r.diff === 0) diffLabel = ' · exact';
-              else if (r.diff !== null && r.diff > 0) diffLabel = ` (${r.diff} off)`;
-              return (
+            {scorers.map(r => (
               <div key={r.name} className="flex justify-between items-center gap-2">
                 <span className={`text-xs min-w-0 truncate ${r.name === myName ? 'text-white font-semibold' : 'text-white/40'}`}>{r.name}</span>
-                <span className="text-xs text-right shrink-0">
-                  <span className={r.diff === 0 ? 'text-green-400' : 'text-white/40'}>
-                    {r.guess ?? '–'}{diffLabel}
-                  </span>
-                  {r.points > 0 && <span className="ml-1.5 text-sky-400 font-semibold tabular-nums">+{r.points.toLocaleString()}</span>}
-                </span>
+                <span className="ml-1.5 text-xs text-sky-400 font-semibold tabular-nums shrink-0">+{r.points.toLocaleString()}</span>
               </div>
-              );
-            })}
+            ))}
           </div>
         )}
 

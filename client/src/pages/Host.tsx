@@ -1075,7 +1075,7 @@ export function PlayingView({ game }: Readonly<{ game: HostState }>) {
         <p className="text-white/40 text-sm">Round {roundIndex + 1}/{totalRounds}</p>
         <PartyBadge party={party} />
 
-        <div className="liquid-btn relative" style={{ width: '310px', height: countdown === null ? '320px' : '300px' }}>
+        <div className="liquid-btn relative" style={{ width: '310px', height: countdown === null ? '400px' : '360px' }}>
           <LiquidGlass
             style={{ position: 'absolute', top: '50%', left: '50%' }}
             displacementScale={55}
@@ -1089,12 +1089,12 @@ export function PlayingView({ game }: Readonly<{ game: HostState }>) {
             <div style={{ width: '254px', display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '16px' }}>
               {countdown === null ? (
                 <>
-                  <NowPlayingBadge playing accent={accent} size={56} />
+                  <NowPlayingBadge playing accent={accent} size={40} />
                   <span style={{ color: 'rgba(255,255,255,0.5)', fontSize: '0.9rem', display: 'inline-block', minWidth: '210px', textAlign: 'center' }}>
                     {isRace ? raceStatus : `${guesserNames.join(' & ')} will guess`}
                   </span>
                   <div style={{ width: '100%', height: '1px', background: 'rgba(255,255,255,0.07)' }} />
-                  <CircularTimer timeLeft={timeLeft} total={timerTotal} size={110} />
+                  <CircularTimer timeLeft={timeLeft} total={timerTotal} size={90} />
                   {!isRace && (
                     <div className="w-full">
                       <BidTimeline bids={playerBids} lowestBid={lowestBid} />
@@ -1151,7 +1151,7 @@ function GuessingView({ game }: Readonly<{ game: HostState }>) {
         <p className="text-white/40 text-sm">Round {roundIndex + 1}/{totalRounds}</p>
         <PartyBadge party={party} />
 
-        <div className="liquid-btn relative" style={{ width: '310px', height: '320px' }}>
+        <div className="liquid-btn relative" style={{ width: '310px', height: '420px' }}>
           <LiquidGlass
             style={{ position: 'absolute', top: '50%', left: '50%' }}
             displacementScale={55}
@@ -1163,7 +1163,7 @@ function GuessingView({ game }: Readonly<{ game: HostState }>) {
             padding="28px 28px"
           >
             <div style={{ width: '254px', display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '16px' }}>
-              <NowPlayingBadge playing accent={accent} size={48} />
+              <NowPlayingBadge playing accent={accent} size={36} />
               <span style={{ color: 'rgba(255,255,255,0.32)', fontSize: '0.6rem', letterSpacing: '0.2em', textTransform: 'uppercase' }}>
                 Guessing
               </span>
@@ -1171,7 +1171,7 @@ function GuessingView({ game }: Readonly<{ game: HostState }>) {
                 {guesserNames.join(' & ')}
               </span>
               <div style={{ width: '100%', height: '1px', background: 'rgba(255,255,255,0.07)' }} />
-              <CircularTimer timeLeft={timeLeft} total={timerTotal} size={110} />
+              <CircularTimer timeLeft={timeLeft} total={timerTotal} size={90} />
               <div className="w-full">
                 <BidTimeline bids={playerBids} lowestBid={lowestBid} />
               </div>

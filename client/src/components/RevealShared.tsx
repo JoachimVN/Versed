@@ -180,7 +180,9 @@ export function YearTimelineContent({ result, showGuessValues = true }: Readonly
 
         {groups.map((group, i) => {
           const isBest = bestDiff !== null && group.entries[0].diff === bestDiff;
-          const above = i % 2 === 0;
+          // An exact guess shares the actual-year tick's x position — its label
+          // must go above the line, since "actual" always sits below it.
+          const above = group.guess === year ? true : i % 2 === 0;
           const names = group.entries.map(e => e.name).join(', ');
           const label = showGuessValues ? `${names} · ${group.guess}` : names;
           return (

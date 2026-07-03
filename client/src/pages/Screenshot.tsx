@@ -1,6 +1,8 @@
 import { useSearchParams } from 'react-router-dom';
 import { PlayingView, RevealView } from './Host';
 import type { HostState } from './Host';
+import { WatchingView, GuessingView } from './Play';
+import type { PlayState } from './Play';
 import type { RoundResultEvent, LeaderboardEntry } from '../types';
 
 // ─── Fixture data ─────────────────────────────────────────────────────────────
@@ -90,6 +92,40 @@ const MOCK_HOST_REVEAL: HostState = {
   roundDeltas: { Anna: 1250 },
 };
 
+const MOCK_RESULT_YEAR: RoundResultEvent = {
+  correct: true,
+  guesserName: null,
+  songTitle: 'Billie Jean',
+  artist: 'Michael Jackson',
+  year: 1983,
+  coverUrl: 'https://i.scdn.co/image/ab67616d0000b27332a7d87248d1b75463483df5',
+  points: 0,
+  party: {
+    format: 'year', target: 'title', event: null, multiplier: 1,
+    intro: { title: 'Guess the Year', tagline: 'Closest answer wins the round' },
+    finale: false, duelists: [],
+  },
+  playerGuesses: [
+    { name: 'Anna', guess: '1984' },
+    { name: 'John', guess: '1979' },
+    { name: 'Olivia', guess: '1983' },
+    { name: 'Marcus', guess: null },
+  ],
+  yearResults: [
+    { name: 'Olivia', guess: 1983, diff: 0, points: 650 },
+    { name: 'Anna', guess: 1984, diff: 1, points: 480 },
+    { name: 'John', guess: 1979, diff: 4, points: 210 },
+    { name: 'Marcus', guess: null, diff: null, points: 0 },
+  ],
+};
+
+const MOCK_HOST_YEAR_REVEAL: HostState = {
+  ...MOCK_HOST,
+  phase: 'reveal',
+  result: MOCK_RESULT_YEAR,
+  roundDeltas: { Olivia: 650, Anna: 480, John: 210 },
+};
+
 const MOCK_LEADERBOARD: LeaderboardEntry[] = [
   { rank: 1, name: 'Anna', score: 5350 },
   { rank: 2, name: 'John', score: 4100 },
@@ -105,6 +141,69 @@ const MOCK_HOST_FINISHED: HostState = {
   roundDeltas: { Anna: 2250, John: 1450, Olivia: 1350, Marcus: 1000, Sofia: 250 },
 };
 
+const MOCK_PLAY: PlayState = {
+  phase: 'watching',
+  pin: '247',
+  name: 'Anna',
+  myName: 'Anna',
+  error: '',
+  roundIndex: 2,
+  totalRounds: 10,
+  hints: [],
+  timeLeft: 8,
+  timerTotal: 15,
+  bettingTime: 15,
+  bidIndex: 4,
+  bidOptions: [0.1, 0.5, 1, 2, 3, 4, 5, 7, 10, 15, 20, 30, 45, 60],
+  bidScores: null,
+  myBid: 2,
+  guesserNames: ['John'],
+  lowestBid: 2,
+  guessText: '',
+  result: null,
+  myScore: 2650,
+  myScoreDelta: 0,
+  myStreak: 0,
+  mode: 'classic',
+  artistOnly: false,
+  party: null,
+  artistGuessText: '',
+  stealVictims: null,
+  stealResult: null,
+  myRacePoints: 0,
+  myRaceTimeMs: null,
+  leaderboard: [],
+  leaderboardDeltas: {},
+  songPlaying: true,
+  reconnecting: false,
+  hostReconnecting: false,
+  savedSession: null,
+  guessInputRef: { current: null },
+  setPin: noop, setName: noop, setBidIndex: noop, setGuessText: noop, setArtistGuessText: noop,
+  submitStealVictim: noop, skipSteal: noop, join: noop, rejoinSaved: noop, submitBid: noop,
+  submitGuess: noop, skipGuess: noop, newGamePin: null, rejoinNewGame: noop, renamePlayer: noop,
+};
+
+const MOCK_PLAY_GUESSING: PlayState = {
+  ...MOCK_PLAY,
+  phase: 'guessing',
+  guesserNames: ['Anna'],
+  guessText: 'Bil',
+};
+
+const MOCK_PLAY_YEAR_GUESSING: PlayState = {
+  ...MOCK_PLAY,
+  phase: 'guessing',
+  guesserNames: ['Anna'],
+  guessText: '198',
+  mode: 'race',
+  party: {
+    format: 'year', target: 'title', event: null, multiplier: 1,
+    intro: { title: 'Guess the Year', tagline: 'Closest answer wins the round' },
+    finale: false, duelists: [],
+  },
+};
+
 // ─── Entry ────────────────────────────────────────────────────────────────────
 
 export default function Screenshot() {
@@ -112,5 +211,9 @@ export default function Screenshot() {
   const v = params.get('v');
   if (v === 'playing') return <PlayingView game={MOCK_HOST} />;
   if (v === 'reveal')  return <RevealView game={MOCK_HOST_REVEAL} result={MOCK_RESULT} instant />;
-  return <p className="text-white p-6 font-mono">?v=playing|reveal</p>;
+  if (v === 'year')    return <RevealView game={MOCK_HOST_YEAR_REVEAL} result={MOCK_RESULT_YEAR} instant />;
+  if (v === 'watching') return <WatchingView game={MOCK_PLAY} />;
+  if (v === 'guessing') return <GuessingView game={MOCK_PLAY_GUESSING} />;
+  if (v === 'year-guessing') return <GuessingView game={MOCK_PLAY_YEAR_GUESSING} />;
+  return <p className="text-white p-6 font-mono">?v=playing|reveal|year|watching|guessing|year-guessing</p>;
 }
