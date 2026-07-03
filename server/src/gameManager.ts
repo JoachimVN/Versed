@@ -234,7 +234,9 @@ function buildPartyConfig(game: Game): PartyConfig {
   if (format !== 'year' && randomInt(0, 100) < 60) {
     const pool: [PartyEvent, number][] = [['double', 30], ['mystery', 25], ['snippet', 25]];
     if (format === 'classic') pool.push(['fullhints', 20]);
-    if (game.roundIndex >= 2) pool.push(['steal', 20]);
+    // Steal needs someone else to steal from — pointless (and confusing to
+    // announce) in a 1-player game.
+    if (game.roundIndex >= 2 && game.players.size >= 2) pool.push(['steal', 20]);
     event = pickWeighted(pool.filter(([e]) => e !== prev?.event));
   }
   const multiplier = event === 'double' ? 2 : event === 'mystery' ? 1 + randomInt(0, 3) : 1;

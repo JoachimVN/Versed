@@ -607,11 +607,15 @@ io.on('connection', (socket) => {
   }
 
   // Offer the steal-round winner their pick of victims. Sent at the reveal so
-  // the theft plays out while everyone's watching the result.
+  // the theft plays out while everyone's watching the result. With only one
+  // player there's no one to steal from — close it out silently instead of
+  // showing an empty picker (and leaving stealPendingName stuck forever).
   function maybeOfferSteal(game: GameObj) {
     const round = game.currentRound;
     if (!round?.stealBy || round.stealDone) return;
-    io.to(round.stealBy).emit('choose_steal', { victims: gm.stealCandidates(game, round.stealBy) });
+    const victims = gm.stealCandidates(game, round.stealBy);
+    if (victims.length === 0) { round.stealDone = true; return; }
+    io.to(round.stealBy).emit('choose_steal', { victims });
   }
 
   function stealPendingName(game: GameObj, round: RoundObj): string | undefined {
