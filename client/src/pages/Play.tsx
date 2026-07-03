@@ -1470,9 +1470,10 @@ function PassedView({ game }: Readonly<{ game: PlayState }>) {
 }
 
 // Full-screen victim picker for the steal-round winner.
-function StealPicker({ victims, onPick }: Readonly<{
+function StealPicker({ victims, onPick, onSkip }: Readonly<{
   victims: { name: string; score: number }[];
   onPick: (name: string) => void;
+  onSkip: () => void;
 }>) {
   return (
     <div
@@ -1509,6 +1510,14 @@ function StealPicker({ victims, onPick }: Readonly<{
           </button>
         ))}
       </div>
+      <button
+        onClick={onSkip}
+        style={{ background: 'none', border: 'none', color: 'rgba(255,255,255,0.2)', fontSize: '0.82rem', cursor: 'pointer', transition: 'color 0.2s ease' }}
+        onMouseEnter={e => { (e.currentTarget as HTMLElement).style.color = 'rgba(255,255,255,0.5)'; }}
+        onMouseLeave={e => { (e.currentTarget as HTMLElement).style.color = 'rgba(255,255,255,0.2)'; }}
+      >
+        Skip, don't steal
+      </button>
     </div>
   );
 }
@@ -1927,7 +1936,7 @@ export default function Play() {
       {(phase === 'leaderboard' || phase === 'finished') && <LeaderboardView game={game} />}
 
       <RoundIntro party={game.party} roundKey={game.roundIndex} />
-      {game.stealVictims && <StealPicker victims={game.stealVictims} onPick={game.submitStealVictim} />}
+      {game.stealVictims && <StealPicker victims={game.stealVictims} onPick={game.submitStealVictim} onSkip={game.skipGuess} />}
 
       {reconnecting && (
         <div className="fixed inset-0 bg-black/70 backdrop-blur-sm flex flex-col items-center justify-center z-50 gap-3">

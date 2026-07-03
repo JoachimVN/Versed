@@ -6,7 +6,8 @@ import type { PartyInfo, RoundResultEvent } from '../types';
 export const INTRO_MS = 2800;
 
 // Full-screen round announcement for party mode ("DOUBLE POINTS", "THE
-// FINALE", …). Purely client-side: mounts on round_start and fades itself out.
+// FINALE", …). Purely client-side: mounts on round_start and fades itself out,
+// or can be dismissed by clicking/tapping.
 export function RoundIntro({ party, roundKey }: Readonly<{ party: PartyInfo | null; roundKey: number }>) {
   const [visible, setVisible] = useState(false);
 
@@ -19,18 +20,23 @@ export function RoundIntro({ party, roundKey }: Readonly<{ party: PartyInfo | nu
 
   if (!party) return null;
 
+  const dismiss = () => setVisible(false);
+
   return (
     <div
+      onClick={dismiss}
       style={{
         position: 'fixed', inset: 0, zIndex: 60,
         display: 'flex', alignItems: 'center', justifyContent: 'center',
         background: 'rgba(5,5,14,0.9)', backdropFilter: 'blur(24px)',
         opacity: visible ? 1 : 0,
-        pointerEvents: 'none',
+        pointerEvents: visible ? 'auto' : 'none',
         transition: 'opacity 0.4s ease',
+        cursor: 'pointer',
       }}
     >
       <div
+        onClick={e => e.stopPropagation()}
         style={{
           textAlign: 'center', padding: '0 28px',
           transform: visible ? 'scale(1) translateY(0)' : 'scale(0.94) translateY(8px)',
