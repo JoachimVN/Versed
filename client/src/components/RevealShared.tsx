@@ -129,7 +129,7 @@ export function YearTimelineContent({ result, showGuessValues = true }: Readonly
   const min = Math.min(year, minGuess);
   const max = Math.max(year, maxGuess);
   const range = max === min ? 1 : max - min;
-  const pos = (y: number) => 6 + ((y - min) / range) * 88;
+  const pos = (y: number) => 11 + ((y - min) / range) * 78;
 
   // Server presorts yearResults by diff ascending, so the first non-null diff is the best.
   const bestDiff = result.yearResults.find(r => r.diff !== null)?.diff ?? null;
@@ -143,10 +143,44 @@ export function YearTimelineContent({ result, showGuessValues = true }: Readonly
   }
   groups.sort((a, b) => a.guess - b.guess);
 
+  // Two guesses close but not identical (e.g. 1983 vs 1984) can still crowd
+  // each other's labels even though their dots are distinct. Pack each row
+  // (names above, years below) into the fewest vertical lanes needed so no
+  // two labels in the same row overlap horizontally — a classic greedy
+  // interval-scheduling sweep over items already sorted by x position.
+  const TIMELINE_PX = 300; // approximate rendered width, just for spacing math
+  const estimateWidth = (text: string, fontPx: number) => text.length * fontPx * 0.58 + 4;
+  function packLanes(items: { xPct: number; label: string; fontPx: number }[]): number[] {
+    const laneEnds: number[] = [];
+    return items.map(({ xPct, label, fontPx }) => {
+      const xPx = (xPct / 100) * TIMELINE_PX;
+      const halfWidth = estimateWidth(label, fontPx) / 2;
+      const left = xPx - halfWidth;
+      const right = xPx + halfWidth;
+      let lane = 0;
+      while (lane < laneEnds.length && left < laneEnds[lane] + 6) lane++;
+      laneEnds[lane] = right;
+      return lane;
+    });
+  }
+  const nameLanes = packLanes(groups.map(g => ({ xPct: pos(g.guess), label: g.entries.map(e => e.name).join(', '), fontPx: 9.9 })));
+  const nonExactGroups = groups.filter(g => g.guess !== year);
+  const yearLaneByGuess = new Map<number, number>();
+  packLanes(nonExactGroups.map(g => ({ xPct: pos(g.guess), label: String(g.guess), fontPx: 9.6 }))).forEach((lane, i) => {
+    yearLaneByGuess.set(nonExactGroups[i].guess, lane);
+  });
+  const maxNameLane = Math.max(0, ...nameLanes);
+  const maxYearLane = Math.max(0, ...yearLaneByGuess.values());
+  const timelineHeight = 96 + maxNameLane * 13 + maxYearLane * 12;
+
+  // Someone nailed the year exactly — the actual-year tick and its label
+  // pick up the same gold as the winning dot, instead of staying teal.
+  const exactMatch = bestDiff === 0;
+
   const passCount = result.yearResults.length - guesses.length;
 
   return (
-    <div style={{ width: '280px', display: 'flex', flexDirection: 'column', alignItems: 'center', textAlign: 'center' }}>
+    <div style={{ width: 'min(84vw, 330px)', display: 'flex', flexDirection: 'column', alignItems: 'center', textAlign: 'center' }}>
       <span style={{
         color: 'rgba(255,255,255,0.28)', fontSize: '0.6rem', letterSpacing: '0.18em', textTransform: 'uppercase',
         marginBottom: '4px', display: 'inline-block',
@@ -163,28 +197,31 @@ export function YearTimelineContent({ result, showGuessValues = true }: Readonly
       </span>
 
       {/* Timeline */}
-      <div style={{ position: 'relative', width: '100%', height: '86px', marginBottom: '8px' }}>
+      <div style={{ position: 'relative', width: '100%', height: `${timelineHeight}px`, marginBottom: '8px' }}>
         <div style={{ position: 'absolute', left: 0, right: 0, top: '43px', height: '3px', background: 'rgba(255,255,255,0.08)', borderRadius: '2px' }} />
 
         {/* Actual-year tick */}
         <div style={{
           position: 'absolute', left: `${pos(year)}%`, top: '28px', transform: 'translateX(-50%)',
-          width: '2px', height: '30px', background: 'rgba(0,200,195,0.5)', borderRadius: '1px',
+          width: '2px', height: '30px', borderRadius: '1px',
+          background: exactMatch ? 'rgba(251,191,36,0.7)' : 'rgba(0,200,195,0.5)',
         }} />
         <div style={{
-          position: 'absolute', left: `${pos(year)}%`, top: '60px', transform: 'translateX(-50%)',
-          fontSize: '0.6rem', color: 'rgba(94,234,212,0.9)', fontWeight: 700, whiteSpace: 'nowrap',
+          position: 'absolute', left: `${pos(year)}%`, top: `${66 + maxYearLane * 12}px`, transform: 'translateX(-50%)',
+          fontSize: '0.6rem', fontWeight: 700, whiteSpace: 'nowrap',
+          color: exactMatch ? '#fbbf24' : 'rgba(94,234,212,0.9)',
         }}>
-          actual
+          {year}
         </div>
 
         {groups.map((group, i) => {
           const isBest = bestDiff !== null && group.entries[0].diff === bestDiff;
-          // An exact guess shares the actual-year tick's x position — its label
-          // must go above the line, since "actual" always sits below it.
-          const above = group.guess === year ? true : i % 2 === 0;
+          // An exact guess shares the actual-year tick's x position — skip its
+          // own "below" year label since the actual-year label already sits there.
+          const isExact = group.guess === year;
           const names = group.entries.map(e => e.name).join(', ');
-          const label = showGuessValues ? `${names} · ${group.guess}` : names;
+          const nameOffset = 13 + nameLanes[i] * 13;
+          const yearOffset = 13 + (yearLaneByGuess.get(group.guess) ?? 0) * 12;
           return (
             <div
               key={group.guess}
@@ -197,12 +234,12 @@ export function YearTimelineContent({ result, showGuessValues = true }: Readonly
             >
               <span style={{
                 position: 'absolute', left: '50%', transform: 'translateX(-50%)',
-                [above ? 'bottom' : 'top']: '13px',
+                bottom: `${nameOffset}px`,
                 fontSize: '0.62rem', whiteSpace: 'nowrap',
                 color: isBest ? '#fbbf24' : 'rgba(255,255,255,0.55)',
                 fontWeight: isBest ? 800 : 600,
               }}>
-                {label}
+                {names}
               </span>
               <div style={{
                 width: isBest ? '10px' : '6px', height: isBest ? '10px' : '6px', borderRadius: '50%',
@@ -210,6 +247,17 @@ export function YearTimelineContent({ result, showGuessValues = true }: Readonly
                 border: isBest ? '2px solid rgba(255,255,255,0.5)' : 'none',
                 animation: isBest ? 'markerGlowPulse 1.8s ease-in-out infinite' : 'none',
               }} />
+              {showGuessValues && !isExact && (
+                <span style={{
+                  position: 'absolute', left: '50%', transform: 'translateX(-50%)',
+                  top: `${yearOffset}px`,
+                  fontSize: '0.6rem', whiteSpace: 'nowrap',
+                  color: isBest ? 'rgba(251,191,36,0.85)' : 'rgba(255,255,255,0.35)',
+                  fontWeight: isBest ? 700 : 500,
+                }}>
+                  {group.guess}
+                </span>
+              )}
             </div>
           );
         })}

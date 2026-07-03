@@ -10,7 +10,7 @@ import { NoOneGotItCardContent, GotItCardContent, YearTimelineContent } from '..
 import { RoundIntro, PartyBadge, PartyRevealExtras } from '../components/RoundIntro';
 import { BackButton } from '../components/BackButton';
 import { CircularTimer, timerColor } from '../components/CircularTimer';
-import { NowPlayingBadge } from '../components/NowPlayingBadge';
+import { AudioBars } from '../components/AudioBars';
 import { APP_NAME, BID_OPTIONS } from '../config';
 import type { Hint, LeaderboardEntry, PartyInfo, RoundResultEvent } from '../types';
 
@@ -586,7 +586,6 @@ function guessTextClass(guess: string | null, correct: boolean): string {
   return correct ? 'text-green-400' : 'text-white/20 italic';
 }
 
-
 function bidArrowStyle(enabled: boolean, pressed: boolean, hovered: boolean): { bg: string; border: string } {
   if (!enabled) return { bg: 'rgba(255,255,255,0.03)', border: '1px solid rgba(255,255,255,0.04)' };
   if (pressed) return { bg: 'rgba(150,17,193,0.28)', border: '1px solid rgba(150,17,193,0.5)' };
@@ -1054,7 +1053,7 @@ function BidSubmittedView({ game }: Readonly<{ game: PlayState }>) {
 
 
 export function WatchingView({ game }: Readonly<{ game: PlayState }>) {
-  const { lowestBid, guesserNames, mode, songPlaying, party } = game;
+  const { lowestBid, guesserNames, mode, songPlaying, party, roundIndex, totalRounds, myScore, myStreak } = game;
   const [visible, setVisible] = useState(false);
   useEffect(() => { const t = setTimeout(() => setVisible(true), 30); return () => clearTimeout(t); }, []);
   const isRace = mode === 'race';
@@ -1075,7 +1074,7 @@ export function WatchingView({ game }: Readonly<{ game: PlayState }>) {
 
       {/* Content */}
       <div
-        className="relative flex flex-col items-center justify-center min-h-screen gap-8 p-6"
+        className="relative flex flex-col items-center min-h-screen gap-6 px-5 py-8"
         style={{
           zIndex: 2,
           transition: 'opacity 0.4s ease, transform 0.4s ease',
@@ -1083,26 +1082,45 @@ export function WatchingView({ game }: Readonly<{ game: PlayState }>) {
           transform: visible ? 'translateY(0)' : 'translateY(14px)',
         }}
       >
-        <div className="liquid-btn relative" style={{ width: '310px', height: '240px' }}>
-          <LiquidGlass
-            style={{ position: 'absolute', top: '50%', left: '50%' }}
-            displacementScale={55}
-            blurAmount={0.06}
-            saturation={130}
-            aberrationIntensity={1.5}
-            elasticity={0.08}
-            cornerRadius={20}
-            padding="28px 28px"
-          >
-            <div style={{ width: '254px', display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '18px' }}>
+        <div className="flex flex-col items-center gap-2">
+          <p style={{ color: 'rgba(255,255,255,0.4)', fontSize: '0.85rem' }}>
+            Round {roundIndex + 1}<span style={{ color: 'rgba(255,255,255,0.2)' }}>/{totalRounds}</span>
+          </p>
+          <PartyBadge party={party} />
+        </div>
 
-              <NowPlayingBadge playing={songPlaying} accent={watchAccent} size={44} />
+        <div className="flex-1 flex items-center justify-center w-full">
+          <div className="liquid-btn relative" style={{ width: 'min(90vw, 360px)', height: 'min(75vh, 620px)' }}>
+            <LiquidGlass
+              style={{ position: 'absolute', top: '50%', left: '50%' }}
+              displacementScale={58}
+              blurAmount={0.06}
+              saturation={130}
+              aberrationIntensity={1.5}
+              elasticity={0.08}
+              cornerRadius={28}
+              padding="80px 24px"
+            >
+              <div style={{ width: '298px', display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '44px' }}>
 
-              <div style={{ width: '100%', height: '1px', background: 'rgba(255,255,255,0.07)' }} />
+                <AudioBars playing={songPlaying} accent={watchAccent} height={56} />
 
-              <GetReadyBody isDuel={isDuel} isRace={isRace} party={party} lowestBid={lowestBid} guesserNames={guesserNames} songPlaying={songPlaying} />
-            </div>
-          </LiquidGlass>
+                <div style={{ width: '100%', height: '1px', background: 'rgba(255,255,255,0.07)' }} />
+
+                <GetReadyBody isDuel={isDuel} isRace={isRace} party={party} lowestBid={lowestBid} guesserNames={guesserNames} songPlaying={songPlaying} />
+              </div>
+            </LiquidGlass>
+          </div>
+        </div>
+
+        <div style={{ background: 'rgba(255,255,255,0.05)', border: '1px solid rgba(255,255,255,0.08)', borderRadius: '16px', padding: '10px 30px', textAlign: 'center' }}>
+          <p className="text-white font-black text-2xl tabular-nums">{myScore.toLocaleString()}</p>
+          <p className="text-white/35 text-xs">your score</p>
+          {myStreak >= 2 && (
+            <p className="flex items-center justify-center gap-1 text-orange-400 text-xs font-bold mt-1">
+              <Flame className="w-3 h-3" />{myStreak} in a row
+            </p>
+          )}
         </div>
       </div>
     </div>
@@ -1114,14 +1132,14 @@ function GetReadyBody({ isDuel, isRace, party, lowestBid, guesserNames, songPlay
 }>) {
   if (isDuel) {
     return (
-      <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '8px' }}>
-        <span style={{ color: 'rgba(255,255,255,0.32)', fontSize: '0.6rem', letterSpacing: '0.2em', textTransform: 'uppercase' }}>
+      <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '10px' }}>
+        <span style={{ color: 'rgba(255,255,255,0.32)', fontSize: '0.65rem', letterSpacing: '0.2em', textTransform: 'uppercase' }}>
           The finale
         </span>
-        <span style={{ display: 'inline-block', minWidth: '200px', color: 'white', fontWeight: 900, fontSize: '1.4rem', lineHeight: 1.3, textAlign: 'center' }}>
+        <span style={{ display: 'inline-block', minWidth: '220px', color: 'white', fontWeight: 900, fontSize: '1.65rem', lineHeight: 1.3, textAlign: 'center' }}>
           {party!.duelists.join(' vs ')}
         </span>
-        <span style={{ display: 'inline-block', minWidth: '160px', color: 'rgba(255,255,255,0.3)', fontSize: '0.82rem', textAlign: 'center' }}>
+        <span style={{ display: 'inline-block', minWidth: '170px', color: 'rgba(255,255,255,0.3)', fontSize: '0.88rem', textAlign: 'center' }}>
           First correct wins
         </span>
       </div>
@@ -1129,30 +1147,30 @@ function GetReadyBody({ isDuel, isRace, party, lowestBid, guesserNames, songPlay
   }
   if (isRace) {
     return (
-      <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '8px' }}>
-        <span style={{ color: 'rgba(255,255,255,0.32)', fontSize: '0.6rem', letterSpacing: '0.2em', textTransform: 'uppercase' }}>
+      <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '10px' }}>
+        <span style={{ color: 'rgba(255,255,255,0.32)', fontSize: '0.65rem', letterSpacing: '0.2em', textTransform: 'uppercase' }}>
           Get ready
         </span>
-        <span style={{ display: 'inline-block', minWidth: '200px', color: 'white', fontWeight: 900, fontSize: '1.4rem', lineHeight: 1.3, textAlign: 'center' }}>
+        <span style={{ display: 'inline-block', minWidth: '220px', color: 'white', fontWeight: 900, fontSize: '1.65rem', lineHeight: 1.3, textAlign: 'center' }}>
           Everyone guesses at once
         </span>
       </div>
     );
   }
   return (
-    <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '8px' }}>
-      <span style={{ color: 'rgba(255,255,255,0.32)', fontSize: '0.6rem', letterSpacing: '0.2em', textTransform: 'uppercase' }}>
+    <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '10px' }}>
+      <span style={{ color: 'rgba(255,255,255,0.32)', fontSize: '0.65rem', letterSpacing: '0.2em', textTransform: 'uppercase' }}>
         {songPlaying ? 'Listen closely' : 'Get ready'}
       </span>
       <span style={{
-        display: 'inline-block', minWidth: '200px', textAlign: 'center',
-        fontWeight: 900, fontSize: '1.5rem', lineHeight: 1.25,
+        display: 'inline-block', minWidth: '220px', textAlign: 'center',
+        fontWeight: 900, fontSize: '1.75rem', lineHeight: 1.25,
         background: 'linear-gradient(to bottom left, rgba(0,200,195,0.4) 0%, transparent 55%), linear-gradient(to top right, rgba(150,17,193,0.5) 0%, transparent 55%), #fff',
         WebkitBackgroundClip: 'text', WebkitTextFillColor: 'transparent', backgroundClip: 'text',
       }}>
         {guesserNames.join(' & ')}
       </span>
-      <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+      <div style={{ display: 'flex', alignItems: 'center', gap: '7px' }}>
         <div style={{ display: 'flex', gap: '3px' }}>
           {[0, 1, 2].map(i => (
             <div key={i} style={{
@@ -1161,7 +1179,7 @@ function GetReadyBody({ isDuel, isRace, party, lowestBid, guesserNames, songPlay
             }} />
           ))}
         </div>
-        <span style={{ display: 'inline-block', color: 'rgba(255,255,255,0.3)', fontSize: '0.82rem', textAlign: 'center' }}>
+        <span style={{ display: 'inline-block', color: 'rgba(255,255,255,0.3)', fontSize: '0.88rem', textAlign: 'center' }}>
           guesses after {lowestBid}s
         </span>
       </div>
@@ -1176,8 +1194,8 @@ function GetReadyBody({ isDuel, isRace, party, lowestBid, guesserNames, songPlay
 function ListeningHeader({ songPlaying, party }: Readonly<{ songPlaying: boolean; party: PartyInfo | null }>) {
   const accent = party?.format === 'year' ? 'year' : 'classic';
   return (
-    <div className="flex flex-col items-center gap-2 pt-8 pb-3">
-      <NowPlayingBadge playing={songPlaying} accent={accent} size={32} />
+    <div className="flex flex-col items-center gap-2.5 pt-10 pb-4">
+      <AudioBars playing={songPlaying} accent={accent} height={28} />
       <span style={{ color: 'rgba(255,255,255,0.28)', fontSize: '0.72rem', letterSpacing: '0.08em' }}>
         {songPlaying ? 'Your song is playing…' : 'Get ready…'}
       </span>
@@ -1186,8 +1204,8 @@ function ListeningHeader({ songPlaying, party }: Readonly<{ songPlaying: boolean
 }
 
 // Race mode plays the song throughout the guessing window, so it keeps the
-// now-playing badge going here too; classic has already stopped the song by
-// the time a tier's turn starts, so it stays timer-only.
+// waveform going here too; classic has already stopped the song by the time
+// a tier's turn starts, so it stays timer-only.
 function ActiveHeader({ timeLeft, timerTotal, myScore, isRace, party, songPlaying }: Readonly<{ timeLeft: number; timerTotal: number; myScore: number; isRace: boolean; party: PartyInfo | null; songPlaying: boolean }>) {
   const isYear = party?.format === 'year';
   const accent = isYear ? 'year' : 'race';
@@ -1201,7 +1219,7 @@ function ActiveHeader({ timeLeft, timerTotal, myScore, isRace, party, songPlayin
       </div>
       <CircularTimer timeLeft={timeLeft} total={timerTotal} size={80} />
       {(isRace || isYear) && (
-        <NowPlayingBadge playing={songPlaying} accent={accent} size={24} />
+        <AudioBars playing={songPlaying} accent={accent} height={20} />
       )}
     </div>
   );
@@ -1554,7 +1572,7 @@ function YearRevealView({ game, result }: Readonly<{ game: PlayState; result: Ro
   // this strip only adds what it doesn't: points earned this round.
   const scorers = (result.yearResults ?? []).filter(r => r.points > 0).sort((a, b) => b.points - a.points);
   return (
-    <div className="page-enter relative min-h-screen flex flex-col items-center justify-center p-6 gap-5 overflow-hidden">
+    <div className="page-enter relative min-h-screen flex flex-col items-center justify-center px-2 py-6 gap-5 overflow-hidden">
       <img
         src={`${import.meta.env.BASE_URL}background3.svg`}
         alt=""
@@ -1563,7 +1581,7 @@ function YearRevealView({ game, result }: Readonly<{ game: PlayState; result: Ro
       />
       <div style={{ position: 'fixed', inset: 0, zIndex: 1, background: 'rgba(5,5,14,0.82)', backdropFilter: 'blur(28px)' }} />
       <div className="relative flex flex-col items-center gap-5 w-full" style={{ zIndex: 2 }}>
-        <div className="liquid-btn relative" style={{ width: '310px', height: `${cardH}px` }}>
+        <div className="liquid-btn relative" style={{ width: 'min(88vw, 366px)', height: `${cardH}px` }}>
           <LiquidGlass
             style={{ position: 'absolute', top: '50%', left: '50%' }}
             displacementScale={55}
@@ -1572,7 +1590,7 @@ function YearRevealView({ game, result }: Readonly<{ game: PlayState; result: Ro
             aberrationIntensity={1.5}
             elasticity={0.08}
             cornerRadius={20}
-            padding="24px 24px"
+            padding="18px 18px"
           >
             <YearTimelineContent result={result} />
           </LiquidGlass>
@@ -1952,7 +1970,7 @@ export default function Play() {
       )}
       {(phase === 'leaderboard' || phase === 'finished') && <LeaderboardView game={game} />}
 
-      <RoundIntro party={game.party} roundKey={game.roundIndex} />
+      <RoundIntro party={game.party} roundKey={game.roundIndex} dismissible={false} />
       {game.stealVictims && <StealPicker victims={game.stealVictims} onPick={game.submitStealVictim} onSkip={game.skipSteal} />}
 
       {reconnecting && (

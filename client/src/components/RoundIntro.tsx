@@ -6,9 +6,11 @@ import type { PartyInfo, RoundResultEvent } from '../types';
 export const INTRO_MS = 2800;
 
 // Full-screen round announcement for party mode ("DOUBLE POINTS", "THE
-// FINALE", …). Purely client-side: mounts on round_start and fades itself out,
-// or can be dismissed by clicking/tapping.
-export function RoundIntro({ party, roundKey }: Readonly<{ party: PartyInfo | null; roundKey: number }>) {
+// FINALE", …). Purely client-side: mounts on round_start and fades itself
+// out. Only the host can dismiss it early by clicking/tapping — players see
+// the same announcement everyone else does and can't skip past it, so it
+// stays a shared "everyone reads this" beat rather than a per-player one.
+export function RoundIntro({ party, roundKey, dismissible = true }: Readonly<{ party: PartyInfo | null; roundKey: number; dismissible?: boolean }>) {
   const [visible, setVisible] = useState(false);
 
   useEffect(() => {
@@ -24,7 +26,7 @@ export function RoundIntro({ party, roundKey }: Readonly<{ party: PartyInfo | nu
 
   return (
     <div
-      onClick={dismiss}
+      onClick={dismissible ? dismiss : undefined}
       style={{
         position: 'fixed', inset: 0, zIndex: 60,
         display: 'flex', alignItems: 'center', justifyContent: 'center',
@@ -32,7 +34,7 @@ export function RoundIntro({ party, roundKey }: Readonly<{ party: PartyInfo | nu
         opacity: visible ? 1 : 0,
         pointerEvents: visible ? 'auto' : 'none',
         transition: 'opacity 0.4s ease',
-        cursor: 'pointer',
+        cursor: dismissible ? 'pointer' : 'default',
       }}
     >
       <div
@@ -60,9 +62,11 @@ export function RoundIntro({ party, roundKey }: Readonly<{ party: PartyInfo | nu
         <p style={{ color: 'rgba(255,255,255,0.5)', fontSize: '0.95rem', lineHeight: 1.5, maxWidth: '340px', margin: '0 auto' }}>
           {party.intro.tagline}
         </p>
-        <p style={{ color: 'rgba(255,255,255,0.22)', fontSize: '0.68rem', letterSpacing: '0.1em', textTransform: 'uppercase', marginTop: '22px' }}>
-          Tap to skip
-        </p>
+        {dismissible && (
+          <p style={{ color: 'rgba(255,255,255,0.22)', fontSize: '0.68rem', letterSpacing: '0.1em', textTransform: 'uppercase', marginTop: '22px' }}>
+            Tap to skip
+          </p>
+        )}
       </div>
     </div>
   );

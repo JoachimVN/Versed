@@ -68,6 +68,7 @@ const MOCK_HOST: HostState = {
   reconnecting: false,
   reconnectingCount: 0,
   gameExpired: false,
+  songPlaying: true,
   toggleSettings: noop,
   setBettingTimeSetting: noop,
   setGuessingTimeSetting: noop,

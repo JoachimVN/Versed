@@ -13,7 +13,7 @@ import { NoOneGotItCardContent, GotItCardContent, YearCardContent, YearTimelineC
 import { RoundIntro, PartyBadge, PartyRevealExtras } from '../components/RoundIntro';
 import { BackButton } from '../components/BackButton';
 import { CircularTimer } from '../components/CircularTimer';
-import { NowPlayingBadge } from '../components/NowPlayingBadge';
+import { AudioBars } from '../components/AudioBars';
 import { APP_NAME, BACKEND_URL, RACE_TIME } from '../config';
 import type { Hint, LeaderboardEntry, PartyInfo, PlayerInfo, RoundResultEvent } from '../types';
 
@@ -61,6 +61,7 @@ export interface HostState {
   reconnecting: boolean;
   reconnectingCount: number;
   gameExpired: boolean;
+  songPlaying: boolean;
   toggleSettings: () => void;
   setBettingTimeSetting: (v: number) => void;
   setGuessingTimeSetting: (v: number) => void;
@@ -120,6 +121,7 @@ function useHostGame(): HostState {
   const [reconnecting, setReconnecting] = useState(false);
   const [reconnectingNames, setReconnectingNames] = useState<Set<string>>(new Set());
   const [gameExpired, setGameExpired] = useState(false);
+  const [songPlaying, setSongPlaying] = useState(false);
   const timerRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const playRafRef = useRef<number | null>(null);
   const playGenRef = useRef(0);
@@ -262,6 +264,7 @@ function useHostGame(): HostState {
       setGuesserNames(data.guesserNames);
       setPlayerBids(data.playerBids ?? []);
       stopCountdown();
+      setSongPlaying(false);
       // Brief pause so the last dot's fill animation is visible before transitioning.
       setTimeout(() => setPhase('playing'), 600);
     });
@@ -291,6 +294,7 @@ function useHostGame(): HostState {
       // doesn't start a guessing timer for a round that's already over.
       const started = await spotify.startPrepared(data.durationMs);
       if (!started) return;
+      setSongPlaying(true);
       socket.emit('song_started');
       startCountdown(data.durationMs / 1000);
       startPlaybackBar(data.durationMs);
@@ -299,6 +303,7 @@ function useHostGame(): HostState {
     socket.on('guessing_start', (data: { guesserNames: string[]; timeLimit: number }) => {
       ++playGenRef.current;
       spotify.pauseTrack();
+      setSongPlaying(false);
       stopCountdown();
       stopPlaybackBar();
       setGuesserNames(data.guesserNames);
@@ -311,6 +316,7 @@ function useHostGame(): HostState {
       stopCountdown();
       stopPlaybackBar();
       spotify.pauseTrack();
+      setSongPlaying(false);
       setResult(data);
       setPhase('reveal');
     });
@@ -338,6 +344,7 @@ function useHostGame(): HostState {
       stopCountdown();
       stopPlaybackBar();
       spotify.pauseTrack();
+      setSongPlaying(false);
       setLeaderboard(lb);
       setPhase('finished');
     });
@@ -427,7 +434,7 @@ function useHostGame(): HostState {
     result, roundDeltas, leaderboard, copied, playProgress, inviteUrl,
     settingsOpen, bettingTimeSetting, guessingTimeSetting, roundsSetting,
     mode, raceTimeSetting, raceWinnerOnly, artistOnly, party, stealResult, answeredCount,
-    reconnecting, reconnectingCount: reconnectingNames.size, gameExpired,
+    reconnecting, reconnectingCount: reconnectingNames.size, gameExpired, songPlaying,
     toggleSettings: () => setSettingsOpen(o => !o),
     setBettingTimeSetting, setGuessingTimeSetting, setRoundsSetting,
     setMode, setRaceTimeSetting, setRaceWinnerOnly, setArtistOnly,
@@ -1059,7 +1066,7 @@ function roundAccent(isRace: boolean, party: PartyInfo | null): 'classic' | 'rac
 }
 
 export function PlayingView({ game }: Readonly<{ game: HostState }>) {
-  const { roundIndex, totalRounds, countdown, guesserNames, lowestBid, playerBids, timeLeft, timerTotal, mode, answeredCount, players, skipTurn, endGame, party } = game;
+  const { roundIndex, totalRounds, countdown, guesserNames, lowestBid, playerBids, timeLeft, timerTotal, mode, answeredCount, players, skipTurn, endGame, party, songPlaying } = game;
   // Party rounds that aren't classic-format arrive with an empty bid state and
   // behave exactly like race rounds on this screen.
   const isRace = mode === 'race' || (party !== null && party.format !== 'classic');
@@ -1089,7 +1096,7 @@ export function PlayingView({ game }: Readonly<{ game: HostState }>) {
             <div style={{ width: '254px', display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '16px' }}>
               {countdown === null ? (
                 <>
-                  <NowPlayingBadge playing accent={accent} size={40} />
+                  <AudioBars playing={songPlaying} accent={accent} height={36} />
                   <span style={{ color: 'rgba(255,255,255,0.5)', fontSize: '0.9rem', display: 'inline-block', minWidth: '210px', textAlign: 'center' }}>
                     {isRace ? raceStatus : `${guesserNames.join(' & ')} will guess`}
                   </span>
@@ -1143,6 +1150,10 @@ function GuessingView({ game }: Readonly<{ game: HostState }>) {
   const { roundIndex, totalRounds, guesserNames, lowestBid, playerBids, timeLeft, timerTotal, mode, party, skipTurn, endGame } = game;
   const isRace = mode === 'race' || (party !== null && party.format !== 'classic');
   const accent = roundAccent(isRace, party);
+  // Bidders who placed a bid this round but aren't in the current tier —
+  // if everyone bid the same (or there's only one player), there's no one
+  // else left waiting on a later turn.
+  const othersWaiting = playerBids.length > guesserNames.length;
   return (
     <div className="relative min-h-screen flex flex-col items-center justify-center p-6 gap-5 text-center overflow-hidden">
       <img src={`${import.meta.env.BASE_URL}background4.svg`} alt="" aria-hidden="true" style={{ position: 'fixed', inset: 0, width: '100%', height: '100%', objectFit: 'cover', zIndex: 0 }} />
@@ -1163,7 +1174,8 @@ function GuessingView({ game }: Readonly<{ game: HostState }>) {
             padding="28px 28px"
           >
             <div style={{ width: '254px', display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '16px' }}>
-              <NowPlayingBadge playing accent={accent} size={36} />
+              {/* Audio is always paused by the time this view mounts (guessing_start pauses it). */}
+              <AudioBars playing={false} accent={accent} height={32} />
               <span style={{ color: 'rgba(255,255,255,0.32)', fontSize: '0.6rem', letterSpacing: '0.2em', textTransform: 'uppercase' }}>
                 Guessing
               </span>
@@ -1179,7 +1191,7 @@ function GuessingView({ game }: Readonly<{ game: HostState }>) {
           </LiquidGlass>
         </div>
 
-        <p className="text-white/25 text-sm">Other players are waiting...</p>
+        {othersWaiting && <p className="text-white/25 text-sm">Other players are waiting...</p>}
         <div className="flex items-center gap-6 mt-2">
           <button onClick={skipTurn} className="text-white/20 text-xs hover:text-white/50 transition-colors">
             Skip turn
@@ -1265,7 +1277,7 @@ function RevealPlayerRow({
 }
 
 function RevealShell({
-  game, result, instant, cardHeight, cardContent, isCorrectFor,
+  game, result, instant, cardHeight, cardContent, isCorrectFor, wide = false,
 }: Readonly<{
   game: HostState;
   result: RoundResultEvent;
@@ -1273,10 +1285,11 @@ function RevealShell({
   cardHeight: number;
   cardContent: React.ReactNode;
   isCorrectFor: (player: PlayerInfo) => boolean;
+  wide?: boolean;
 }>) {
   const { roundIndex, totalRounds, players, roundDeltas, removePlayer, endGame, stealResult } = game;
   return (
-    <div className="page-enter relative min-h-screen flex flex-col items-center p-6 gap-5 overflow-hidden">
+    <div className={`page-enter relative min-h-screen flex flex-col items-center gap-5 overflow-hidden ${wide ? 'px-2 py-6' : 'p-6'}`}>
       <img
         src={`${import.meta.env.BASE_URL}background3.svg`}
         alt=""
@@ -1286,7 +1299,7 @@ function RevealShell({
       <div style={{ position: 'fixed', inset: 0, zIndex: 1, background: 'rgba(5,5,14,0.82)', backdropFilter: 'blur(28px)' }} />
       <p className="text-white/40 text-sm self-start" style={{ position: 'relative', zIndex: 2 }}>{roundIndex + 1} / {totalRounds}</p>
 
-      <div className="liquid-btn relative" style={{ width: '310px', height: `${cardHeight}px`, zIndex: 2 }}>
+      <div className="liquid-btn relative" style={{ width: wide ? 'min(88vw, 366px)' : '310px', height: `${cardHeight}px`, zIndex: 2 }}>
         <LiquidGlass
           style={{ position: 'absolute', top: '50%', left: '50%' }}
           displacementScale={55}
@@ -1295,7 +1308,7 @@ function RevealShell({
           aberrationIntensity={1.5}
           elasticity={0.08}
           cornerRadius={20}
-          padding="24px 24px"
+          padding={wide ? '18px 18px' : '24px 24px'}
         >
           {cardContent}
         </LiquidGlass>
@@ -1365,7 +1378,8 @@ export function RevealView({ game, result, instant = false }: Readonly<{ game: H
         result={result}
         instant={instant}
         cardHeight={result.coverUrl ? 500 : 380}
-        cardContent={<YearTimelineContent result={result} showGuessValues={false} />}
+        cardContent={<YearTimelineContent result={result} />}
+        wide
         isCorrectFor={(p) => !!result.yearResults?.some(r => r.name === p.name && r.diff === 0)}
       />
     );
