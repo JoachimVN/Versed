@@ -5,10 +5,11 @@ import LiquidGlass from 'liquid-glass-react';
 import { socket } from '../socket';
 import { RankBadge } from '../components/RankBadge';
 import { useAnimatedScore } from '../hooks/useAnimatedScore';
-import { NoOneGotItCardContent, GotItCardContent } from '../components/RevealShared';
+import { NoOneGotItCardContent, GotItCardContent, YearCardContent } from '../components/RevealShared';
+import { RoundIntro, PartyBadge } from '../components/RoundIntro';
 import { BackButton } from '../components/BackButton';
 import { APP_NAME, BID_OPTIONS } from '../config';
-import type { Hint, LeaderboardEntry, RoundResultEvent } from '../types';
+import type { Hint, LeaderboardEntry, PartyInfo, RoundResultEvent } from '../types';
 
 type Phase =
   | 'join' | 'waiting' | 'betting' | 'bid_submitted'
@@ -38,6 +39,10 @@ export interface PlayState {
   myStreak: number;
   mode: 'classic' | 'race';
   artistOnly: boolean;
+  party: PartyInfo | null;
+  artistGuessText: string;
+  stealVictims: { name: string; score: number }[] | null;
+  stealResult: { thief: string; victim: string; amount: number } | null;
   myRacePoints: number;
   myRaceTimeMs: number | null;
   leaderboard: LeaderboardEntry[];
@@ -51,6 +56,8 @@ export interface PlayState {
   setName: (v: string) => void;
   setBidIndex: (i: number | ((prev: number) => number)) => void;
   setGuessText: (v: string) => void;
+  setArtistGuessText: (v: string) => void;
+  submitStealVictim: (name: string) => void;
   join: () => void;
   rejoinSaved: () => void;
   submitBid: () => void;
@@ -94,6 +101,12 @@ function usePlayGame(pinParam?: string): PlayState {
   const [mode, setMode] = useState<'classic' | 'race'>('classic');
   const modeRef = useRef<'classic' | 'race'>('classic');
   const [artistOnly, setArtistOnly] = useState(false);
+  const [party, setParty] = useState<PartyInfo | null>(null);
+  const partyRef = useRef<PartyInfo | null>(null);
+  const [artistGuessText, setArtistGuessText] = useState('');
+  const artistGuessTextRef = useRef('');
+  const [stealVictims, setStealVictims] = useState<{ name: string; score: number }[] | null>(null);
+  const [stealResult, setStealResult] = useState<{ thief: string; victim: string; amount: number } | null>(null);
   const [myRacePoints, setMyRacePoints] = useState(0);
   const [myRaceTimeMs, setMyRaceTimeMs] = useState<number | null>(null);
   const [leaderboard, setLeaderboard] = useState<LeaderboardEntry[]>([]);
@@ -119,9 +132,10 @@ function usePlayGame(pinParam?: string): PlayState {
     guessInputRef.current?.blur();
     guessAutoSubmitTimerRef.current = null;
     const text = guessTextRef.current.trim();
+    const artistText = artistGuessTextRef.current.trim() || undefined;
     stopCountdown();
     if (text) {
-      socket.emit('submit_guess', { text }, (r: { correct: boolean; points?: number; timeMs?: number }) => {
+      socket.emit('submit_guess', { text, artistText }, (r: { correct: boolean; points?: number; timeMs?: number }) => {
         if (modeRef.current === 'race') {
           if (r.correct && r.points != null) setMyRacePoints(r.points);
           if (r.timeMs != null) setMyRaceTimeMs(r.timeMs);
@@ -134,6 +148,8 @@ function usePlayGame(pinParam?: string): PlayState {
     }
     guessTextRef.current = '';
     setGuessText('');
+    artistGuessTextRef.current = '';
+    setArtistGuessText('');
   }
 
   function autoSubmitBid() {
@@ -210,6 +226,7 @@ function usePlayGame(pinParam?: string): PlayState {
       roundIndex: number; total: number;
       hints: Hint[]; bettingTime?: number; endsAt?: number;
       mode?: 'classic' | 'race'; raceTime?: number; artistOnly?: boolean;
+      party?: PartyInfo;
       bidOptions?: number[]; bidScores?: number[];
     }) => {
       setRoundIndex(data.roundIndex);
@@ -217,11 +234,17 @@ function usePlayGame(pinParam?: string): PlayState {
       setHints(data.hints);
       guessTextRef.current = '';
       setGuessText('');
+      artistGuessTextRef.current = '';
+      setArtistGuessText('');
       setResult(null);
       setMyScoreDelta(0);
       setError('');
       setMyRacePoints(0);
       setMyRaceTimeMs(null);
+      setParty(data.party ?? null);
+      partyRef.current = data.party ?? null;
+      setStealVictims(null);
+      setStealResult(null);
       bidSubmittedRef.current = false;
       if (autoSubmitTimerRef.current) clearTimeout(autoSubmitTimerRef.current);
       if (guessAutoSubmitTimerRef.current) { clearTimeout(guessAutoSubmitTimerRef.current); guessAutoSubmitTimerRef.current = null; }
@@ -268,6 +291,14 @@ function usePlayGame(pinParam?: string): PlayState {
     });
 
     socket.on('your_turn', (data: { timeLimit: number; endsAt?: number }) => {
+      // Finale spectators just listen along: keep them on the watching screen
+      // with the song + timer, no input.
+      const p = partyRef.current;
+      if (p?.finale && myNameRef.current && !p.duelists.includes(myNameRef.current)) {
+        setSongPlaying(true);
+        startCountdown(data.endsAt ?? (Date.now() + data.timeLimit * 1000));
+        return;
+      }
       // Race mode: playback starts the instant everyone's turn begins, so the
       // song is actually playing here. Classic mode: this is a specific tier's
       // guessing turn, which only starts after the host has paused the song.
@@ -367,13 +398,25 @@ function usePlayGame(pinParam?: string): PlayState {
       setNewGamePin(newPin);
     });
 
+    // Party steal round: I won and get to pick a victim (list arrives with
+    // current scores); everyone sees the outcome.
+    socket.on('choose_steal', ({ victims }: { victims: { name: string; score: number }[] }) => {
+      setStealVictims(victims);
+    });
+
+    socket.on('steal_result', (r: { thief: string; victim: string; amount: number }) => {
+      setStealVictims(null);
+      setStealResult(r);
+    });
+
     return () => {
       stopCountdown();
       if (autoSubmitTimerRef.current) clearTimeout(autoSubmitTimerRef.current);
       if (guessAutoSubmitTimerRef.current) clearTimeout(guessAutoSubmitTimerRef.current);
       ['connect','disconnect','round_start','betting_closed','song_playing','guessing_start','your_turn',
        'round_result','score_update','score_sync','leaderboard','game_over',
-       'host_reconnecting','host_reconnected','host_disconnected','game_restarted','kicked']
+       'host_reconnecting','host_reconnected','host_disconnected','game_restarted','kicked',
+       'choose_steal','steal_result']
         .forEach(e => socket.off(e));
       socket.disconnect();
     };
@@ -435,7 +478,8 @@ function usePlayGame(pinParam?: string): PlayState {
     guessInputRef.current?.blur();
     if (guessAutoSubmitTimerRef.current) { clearTimeout(guessAutoSubmitTimerRef.current); guessAutoSubmitTimerRef.current = null; }
     stopCountdown();
-    socket.emit('submit_guess', { text: guessText }, (r: { correct: boolean; points?: number; timeMs?: number }) => {
+    const artistText = artistGuessTextRef.current.trim() || undefined;
+    socket.emit('submit_guess', { text: guessText, artistText }, (r: { correct: boolean; points?: number; timeMs?: number }) => {
       if (modeRef.current === 'race') {
         if (r.correct && r.points != null) setMyRacePoints(r.points);
         if (r.timeMs != null) setMyRaceTimeMs(r.timeMs);
@@ -498,9 +542,18 @@ function usePlayGame(pinParam?: string): PlayState {
     phase, pin, name, myName, error, roundIndex, totalRounds, hints,
     timeLeft, bettingTime, bidIndex, bidOptions, bidScores, myBid, guesserNames, lowestBid,
     guessText, result, myScore, myScoreDelta, myStreak, mode, artistOnly, myRacePoints, myRaceTimeMs,
+    party, artistGuessText, stealVictims, stealResult,
     leaderboard, leaderboardDeltas, songPlaying, reconnecting, hostReconnecting, savedSession, guessInputRef,
     newGamePin, rejoinNewGame,
     setPin, setName,
+    setArtistGuessText: (v: string) => {
+      artistGuessTextRef.current = v;
+      setArtistGuessText(v);
+    },
+    submitStealVictim: (victimName: string) => {
+      socket.emit('steal_victim', { name: victimName });
+      setStealVictims(null);
+    },
   setBidIndex: (i: number | ((prev: number) => number)) => {
     setBidIndex(prev => {
       const next = typeof i === 'function' ? i(prev) : i;
@@ -863,14 +916,17 @@ function WaitingView({ game }: Readonly<{ game: PlayState }>) {
 }
 
 export function BettingView({ game }: Readonly<{ game: PlayState }>) {
-  const { roundIndex, totalRounds, timeLeft, bettingTime, bidIndex, bidOptions, bidScores, error, submitBid, setBidIndex } = game;
+  const { roundIndex, totalRounds, timeLeft, bettingTime, bidIndex, bidOptions, bidScores, party, error, submitBid, setBidIndex } = game;
   const timerPct = bettingTime > 0 ? Math.max(0, (timeLeft / bettingTime)) * 100 : 0;
   const currentBid = bidOptions[bidIndex];
   const canGoLeft = bidIndex > 0;
   const canGoRight = bidIndex < bidOptions.length - 1;
   // Server-sent per-option scores; the formula fallback only covers a server
   // that predates the bidScores payload.
-  const estPoints = bidScores?.[bidIndex] ?? (500 + Math.round(1000 * Math.max(0, 1 - currentBid / 60)));
+  const basePoints = bidScores?.[bidIndex] ?? (500 + Math.round(1000 * Math.max(0, 1 - currentBid / 60)));
+  // Fold a known party multiplier into the preview; a hidden mystery shows ×?.
+  const estPoints = basePoints * (party?.multiplier ?? 1);
+  const mysteryHidden = party?.event === 'mystery' && party.multiplier === null;
 
   return (
     <div className="min-h-screen flex flex-col relative overflow-hidden" style={{ background: '#080812' }}>
@@ -909,6 +965,7 @@ export function BettingView({ game }: Readonly<{ game: PlayState }>) {
 
       {/* Bid picker */}
       <div className="flex-1 flex flex-col items-center justify-center gap-6 px-5" style={{ position: 'relative', zIndex: 2 }}>
+        <PartyBadge party={party} />
         <p style={{ color: 'rgba(255,255,255,0.32)', fontSize: '0.75rem', textTransform: 'uppercase', letterSpacing: '0.14em' }}>
           How many seconds do you need?
         </p>
@@ -949,6 +1006,7 @@ export function BettingView({ game }: Readonly<{ game: PlayState }>) {
             style={{ color: 'rgba(150,17,193,0.9)', fontWeight: 900, fontSize: '1.6rem', lineHeight: 1 }}
           >
             ~{estPoints.toLocaleString()}
+            {mysteryHidden && <span style={{ color: 'rgba(94,234,212,0.8)', fontSize: '1rem', marginLeft: '6px' }}>×?</span>}
           </span>
           <p style={{ color: 'rgba(255,255,255,0.22)', fontSize: '0.68rem' }}>pts + difficulty bonus</p>
         </div>
@@ -999,10 +1057,11 @@ function BidSubmittedView({ game }: Readonly<{ game: PlayState }>) {
 
 
 function WatchingView({ game }: Readonly<{ game: PlayState }>) {
-  const { lowestBid, guesserNames, mode, songPlaying } = game;
+  const { lowestBid, guesserNames, mode, songPlaying, party } = game;
   const [visible, setVisible] = useState(false);
   useEffect(() => { const t = setTimeout(() => setVisible(true), 30); return () => clearTimeout(t); }, []);
   const isRace = mode === 'race';
+  const isDuel = !!party?.finale;
 
   return (
     <div className="relative min-h-screen overflow-hidden">
@@ -1057,7 +1116,19 @@ function WatchingView({ game }: Readonly<{ game: PlayState }>) {
 
               <div style={{ width: '100%', height: '1px', background: 'rgba(255,255,255,0.07)' }} />
 
-              {isRace ? (
+              {isDuel ? (
+                <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '8px' }}>
+                  <span style={{ color: 'rgba(255,255,255,0.32)', fontSize: '0.6rem', letterSpacing: '0.2em', textTransform: 'uppercase' }}>
+                    The finale
+                  </span>
+                  <span style={{ display: 'inline-block', minWidth: '200px', color: 'white', fontWeight: 900, fontSize: '1.4rem', lineHeight: 1.3, textAlign: 'center' }}>
+                    {party!.duelists.join(' vs ')}
+                  </span>
+                  <span style={{ display: 'inline-block', minWidth: '160px', color: 'rgba(255,255,255,0.3)', fontSize: '0.82rem', textAlign: 'center' }}>
+                    First correct wins
+                  </span>
+                </div>
+              ) : isRace ? (
                 <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '8px' }}>
                   <span style={{ color: 'rgba(255,255,255,0.32)', fontSize: '0.6rem', letterSpacing: '0.2em', textTransform: 'uppercase' }}>
                     Get ready
@@ -1155,11 +1226,29 @@ function guessInputBoxStyle(isListening: boolean): { border: string; background:
 }
 
 function GuessingView({ game }: Readonly<{ game: PlayState }>) {
-  const { phase, timeLeft, myScore, guessText, guessInputRef, setGuessText, submitGuess, skipGuess, artistOnly, songPlaying, mode } = game;
+  const { phase, timeLeft, myScore, guessText, guessInputRef, setGuessText, submitGuess, skipGuess, artistOnly, songPlaying, mode, party, artistGuessText, setArtistGuessText } = game;
   const isListening = phase === 'watching';
-  const canSubmit = guessText.trim().length > 0;
+  // What this round wants answered: party rounds carry it per-round,
+  // classic/race games use the game-wide artist toggle.
+  const target: 'title' | 'artist' | 'both' | 'year' = party
+    ? (party.format === 'year' ? 'year' : party.target)
+    : (artistOnly ? 'artist' : 'title');
+  const isYear = target === 'year';
+  const canSubmit = isYear ? guessText.trim().length === 4 : guessText.trim().length > 0;
   const urgent = !isListening && timeLeft <= 5;
   const inputBoxStyle = guessInputBoxStyle(isListening);
+  const label = {
+    title: 'Name the song',
+    artist: 'Name the artist',
+    both: 'Name the song · artist = bonus',
+    year: 'Guess the release year',
+  }[target];
+  const placeholder = {
+    title: 'Type song title…',
+    artist: 'Type artist name…',
+    both: 'Type song title…',
+    year: 'e.g. 1994',
+  }[target];
 
   return (
     <div className="relative min-h-screen keyboard-resize flex flex-col overflow-hidden" style={{ background: '#080812' }}>
@@ -1180,7 +1269,7 @@ function GuessingView({ game }: Readonly<{ game: PlayState }>) {
           fontSize: '0.9rem', fontWeight: 600, letterSpacing: '0.03em',
           transition: 'color 0.5s ease',
         }}>
-          {artistOnly ? 'Name the artist' : 'Name the song'}
+          {label}
         </p>
 
         <div style={{
@@ -1193,19 +1282,44 @@ function GuessingView({ game }: Readonly<{ game: PlayState }>) {
           <input
             ref={guessInputRef}
             type="text"
-            placeholder={artistOnly ? 'Type artist name…' : 'Type song title…'}
+            inputMode={isYear ? 'numeric' : 'text'}
+            placeholder={placeholder}
             value={guessText}
-            onChange={e => setGuessText(e.target.value)}
+            onChange={e => setGuessText(isYear ? e.target.value.replace(/\D/g, '').slice(0, 4) : e.target.value)}
             onKeyDown={e => e.key === 'Enter' && canSubmit && submitGuess()}
             autoComplete="off" autoCorrect="off" spellCheck={false}
             style={{
               display: 'block', width: '100%', background: 'transparent', border: 'none',
               color: 'white', fontSize: '1.3rem', fontWeight: 700, textAlign: 'center',
               padding: '20px 16px', outline: 'none', fontFamily: 'inherit',
+              ...(isYear ? { letterSpacing: '0.2em' } : {}),
             }}
             className="placeholder-white/20"
           />
         </div>
+
+        {target === 'both' && (
+          <div style={{
+            width: '100%', borderRadius: '14px', overflow: 'hidden',
+            border: '1px solid rgba(0,200,195,0.25)',
+            background: 'rgba(0,200,195,0.05)',
+          }}>
+            <input
+              type="text"
+              placeholder="Artist (bonus points)…"
+              value={artistGuessText}
+              onChange={e => setArtistGuessText(e.target.value)}
+              onKeyDown={e => e.key === 'Enter' && canSubmit && submitGuess()}
+              autoComplete="off" autoCorrect="off" spellCheck={false}
+              style={{
+                display: 'block', width: '100%', background: 'transparent', border: 'none',
+                color: 'white', fontSize: '1.05rem', fontWeight: 600, textAlign: 'center',
+                padding: '14px 16px', outline: 'none', fontFamily: 'inherit',
+              }}
+              className="placeholder-white/20"
+            />
+          </div>
+        )}
       </div>
 
       {/* Actions */}
@@ -1331,6 +1445,154 @@ function PassedView({ game }: Readonly<{ game: PlayState }>) {
   );
 }
 
+// Party extras shown under the reveal card: revealed multiplier, steal outcome
+// (or "picking a victim…" while the thief decides).
+function PartyRevealExtras({ result, stealResult }: Readonly<{
+  result: RoundResultEvent;
+  stealResult: { thief: string; victim: string; amount: number } | null;
+}>) {
+  const party = result.party;
+  const chips: string[] = [];
+  if (party?.event === 'mystery' && party.multiplier !== null) chips.push(`Mystery multiplier · ×${party.multiplier}`);
+  else if (party?.event === 'double') chips.push('Double points · ×2');
+  const showPending = !stealResult && !!result.stealPending;
+  if (chips.length === 0 && !stealResult && !showPending) return null;
+  return (
+    <div className="flex flex-col items-center gap-2" style={{ maxWidth: '92vw' }}>
+      {chips.map(c => (
+        <span key={c} style={{
+          padding: '6px 16px', borderRadius: '100px',
+          background: 'rgba(0,200,195,0.1)', border: '1px solid rgba(0,200,195,0.3)',
+          color: 'rgba(94,234,212,0.9)', fontSize: '0.72rem', fontWeight: 700,
+          letterSpacing: '0.1em', textTransform: 'uppercase',
+        }}>{c}</span>
+      ))}
+      {stealResult && (
+        <span style={{
+          padding: '6px 16px', borderRadius: '100px',
+          background: 'rgba(248,113,113,0.1)', border: '1px solid rgba(248,113,113,0.35)',
+          color: 'rgba(252,165,165,0.95)', fontSize: '0.78rem', fontWeight: 600,
+        }}>
+          {stealResult.thief} stole {stealResult.amount.toLocaleString()} pts from {stealResult.victim}
+        </span>
+      )}
+      {showPending && (
+        <span style={{ color: 'rgba(255,255,255,0.35)', fontSize: '0.75rem' }}>
+          {result.stealPending} is choosing who to rob…
+        </span>
+      )}
+    </div>
+  );
+}
+
+// Full-screen victim picker for the steal-round winner.
+function StealPicker({ victims, onPick }: Readonly<{
+  victims: { name: string; score: number }[];
+  onPick: (name: string) => void;
+}>) {
+  return (
+    <div
+      className="fixed inset-0 flex flex-col items-center justify-center gap-6 p-6"
+      style={{ zIndex: 70, background: 'rgba(5,5,14,0.93)', backdropFilter: 'blur(24px)' }}
+    >
+      <div style={{ textAlign: 'center' }}>
+        <p style={{
+          fontSize: '1.7rem', fontWeight: 900, marginBottom: '8px',
+          background: 'linear-gradient(to bottom left, rgba(248,113,113,0.55) 0%, transparent 55%), linear-gradient(to top right, rgba(250,185,40,0.4) 0%, transparent 55%), #fff',
+          WebkitBackgroundClip: 'text', WebkitTextFillColor: 'transparent', backgroundClip: 'text',
+        }}>
+          You won the steal!
+        </p>
+        <p style={{ color: 'rgba(255,255,255,0.45)', fontSize: '0.85rem' }}>
+          Pick a victim — you take 15% of their score (min 300)
+        </p>
+      </div>
+      <div className="flex flex-col gap-2.5 w-full" style={{ maxWidth: '310px', maxHeight: '50vh', overflowY: 'auto' }}>
+        {victims.map(v => (
+          <button
+            key={v.name}
+            onClick={() => onPick(v.name)}
+            className="flex items-center justify-between px-5 py-3.5 rounded-2xl"
+            style={{
+              background: 'rgba(255,255,255,0.06)', border: '1px solid rgba(255,255,255,0.12)',
+              cursor: 'pointer', transition: 'background 0.15s ease, border-color 0.15s ease',
+            }}
+            onMouseEnter={e => { const el = e.currentTarget as HTMLElement; el.style.background = 'rgba(248,113,113,0.12)'; el.style.borderColor = 'rgba(248,113,113,0.4)'; }}
+            onMouseLeave={e => { const el = e.currentTarget as HTMLElement; el.style.background = 'rgba(255,255,255,0.06)'; el.style.borderColor = 'rgba(255,255,255,0.12)'; }}
+          >
+            <span className="text-white font-bold">{v.name}</span>
+            <span className="text-white/40 text-sm tabular-nums">{v.score.toLocaleString()} pts</span>
+          </button>
+        ))}
+      </div>
+    </div>
+  );
+}
+
+// Reveal for "guess the year" rounds: the year card plus everyone's distances.
+function YearRevealView({ game, result }: Readonly<{ game: PlayState; result: RoundResultEvent }>) {
+  const { myName, myScore, myScoreDelta, myStreak, stealResult } = game;
+  const cardH = result.coverUrl ? 500 : 330;
+  return (
+    <div className="page-enter relative min-h-screen flex flex-col items-center justify-center p-6 gap-5 overflow-hidden">
+      <img
+        src={`${import.meta.env.BASE_URL}background3.svg`}
+        alt=""
+        aria-hidden="true"
+        style={{ position: 'fixed', inset: 0, width: '100%', height: '100%', objectFit: 'cover', zIndex: 0 }}
+      />
+      <div style={{ position: 'fixed', inset: 0, zIndex: 1, background: 'rgba(5,5,14,0.82)', backdropFilter: 'blur(28px)' }} />
+      <div className="relative flex flex-col items-center gap-5 w-full" style={{ zIndex: 2 }}>
+        <div className="liquid-btn relative" style={{ width: '310px', height: `${cardH}px` }}>
+          <LiquidGlass
+            style={{ position: 'absolute', top: '50%', left: '50%' }}
+            displacementScale={55}
+            blurAmount={0.06}
+            saturation={130}
+            aberrationIntensity={1.5}
+            elasticity={0.08}
+            cornerRadius={20}
+            padding="24px 24px"
+          >
+            <YearCardContent result={result} />
+          </LiquidGlass>
+        </div>
+
+        <PartyRevealExtras result={result} stealResult={stealResult} />
+
+        {result.yearResults && result.yearResults.length > 0 && (
+          <div style={{ background: 'rgba(255,255,255,0.05)', border: '1px solid rgba(255,255,255,0.08)', borderRadius: '16px', padding: '8px 12px', width: '310px', maxWidth: '92vw' }} className="space-y-1">
+            {result.yearResults.map(r => (
+              <div key={r.name} className="flex justify-between items-center gap-2">
+                <span className={`text-xs min-w-0 truncate ${r.name === myName ? 'text-white font-semibold' : 'text-white/40'}`}>{r.name}</span>
+                <span className="text-xs text-right shrink-0">
+                  <span className={r.diff === 0 ? 'text-green-400' : 'text-white/40'}>
+                    {r.guess ?? '—'}{r.diff !== null && r.diff > 0 ? ` (${r.diff} off)` : r.diff === 0 ? ' · exact' : ''}
+                  </span>
+                  {r.points > 0 && <span className="ml-1.5 text-sky-400 font-semibold tabular-nums">+{r.points.toLocaleString()}</span>}
+                </span>
+              </div>
+            ))}
+          </div>
+        )}
+
+        <div style={{ background: 'rgba(255,255,255,0.05)', border: '1px solid rgba(255,255,255,0.08)', borderRadius: '16px', padding: '16px 32px', textAlign: 'center' }}>
+          {myScoreDelta > 0 && (
+            <p className="text-sky-400 text-sm font-bold tabular-nums">+{myScoreDelta.toLocaleString()} pts</p>
+          )}
+          <p className="text-3xl font-black text-white">{myScore.toLocaleString()}</p>
+          <p className="text-white/40 text-sm">your score</p>
+          {myStreak >= 2 && (
+            <p className="flex items-center justify-center gap-1 text-orange-400 text-xs font-bold mt-1">
+              <Flame className="w-3 h-3" />{myStreak} in a row
+            </p>
+          )}
+        </div>
+      </div>
+    </div>
+  );
+}
+
 export function RevealView({ game, result }: Readonly<{ game: PlayState; result: RoundResultEvent }>) {
   const { myName, myScore, myScoreDelta, myStreak, myRacePoints, myRaceTimeMs } = game;
   const isRace = result.mode === 'race';
@@ -1368,6 +1630,8 @@ export function RevealView({ game, result }: Readonly<{ game: PlayState; result:
               <NoOneGotItCardContent result={result} />
             </LiquidGlass>
           </div>
+
+          <PartyRevealExtras result={result} stealResult={game.stealResult} />
 
           {result.playerGuesses && result.playerGuesses.length > 0 && (
             <div style={{ background: 'rgba(255,255,255,0.05)', border: '1px solid rgba(255,255,255,0.08)', borderRadius: '16px', padding: '8px 12px', width: '310px', maxWidth: '92vw' }} className="space-y-1">
@@ -1418,6 +1682,8 @@ export function RevealView({ game, result }: Readonly<{ game: PlayState; result:
             <GotItCardContent result={result} myName={myName} />
           </LiquidGlass>
         </div>
+
+        <PartyRevealExtras result={result} stealResult={game.stealResult} />
 
         {result.playerGuesses && result.playerGuesses.length > 0 && (
           <div style={{ background: 'rgba(255,255,255,0.05)', border: '1px solid rgba(255,255,255,0.08)', borderRadius: '16px', padding: '8px 12px', width: '310px', maxWidth: '92vw' }} className="space-y-1">
@@ -1664,8 +1930,15 @@ export default function Play() {
       {phase === 'watching' && !imGuessing && <WatchingView game={game} />}
       {(phase === 'guessing' || (phase === 'watching' && imGuessing)) && <GuessingView game={game} />}
       {phase === 'passed' && <PassedView game={game} />}
-      {phase === 'reveal' && result && <RevealView game={game} result={result} />}
+      {phase === 'reveal' && result && (
+        result.party?.format === 'year'
+          ? <YearRevealView game={game} result={result} />
+          : <RevealView game={game} result={result} />
+      )}
       {(phase === 'leaderboard' || phase === 'finished') && <LeaderboardView game={game} />}
+
+      <RoundIntro party={game.party} roundKey={game.roundIndex} />
+      {game.stealVictims && <StealPicker victims={game.stealVictims} onPick={game.submitStealVictim} />}
 
       {reconnecting && (
         <div className="fixed inset-0 bg-black/70 backdrop-blur-sm flex flex-col items-center justify-center z-50 gap-3">

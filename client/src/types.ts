@@ -16,6 +16,25 @@ export interface PlayerInfo {
   streak?: number;
 }
 
+// Party mode: the per-round recipe as clients see it. A hidden mystery
+// multiplier arrives as null and is revealed (a number) on round_result.
+export interface PartyInfo {
+  format: 'classic' | 'race' | 'year';
+  target: 'title' | 'artist' | 'both';
+  event: 'double' | 'mystery' | 'steal' | 'snippet' | 'fullhints' | null;
+  multiplier: number | null;
+  intro: { title: string; tagline: string };
+  finale: boolean;
+  duelists: string[];
+}
+
+export interface YearResult {
+  name: string;
+  guess: number | null;
+  diff: number | null;
+  points: number;
+}
+
 export interface RoundResultEvent {
   correct: boolean;
   guesserName: string | null;
@@ -29,6 +48,9 @@ export interface RoundResultEvent {
   artistOnly?: boolean;
   correctGuessers?: string[];
   playerGuesses?: { name: string; guess: string | null; timeMs?: number | null; live?: boolean }[];
+  party?: PartyInfo;
+  yearResults?: YearResult[];
+  stealPending?: string;
 }
 
 declare global {

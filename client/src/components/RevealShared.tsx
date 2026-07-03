@@ -73,6 +73,48 @@ function SongInfo({ result }: Readonly<{ result: RoundResultEvent }>) {
   );
 }
 
+// Party "guess the year" rounds: the answer is a number, so the card leads
+// with the year and the closest player instead of a got-it/no-one-got-it state.
+export function YearCardContent({ result }: Readonly<{ result: RoundResultEvent }>) {
+  const winner = result.yearResults?.find(r => r.diff !== null);
+  return (
+    <div style={{ width: '262px', display: 'flex', flexDirection: 'column', alignItems: 'center', textAlign: 'center' }}>
+      <span style={{
+        color: 'rgba(255,255,255,0.28)', fontSize: '0.6rem', letterSpacing: '0.18em', textTransform: 'uppercase',
+        marginBottom: '6px', display: 'inline-block',
+      }}>
+        The year was
+      </span>
+      <span style={{
+        fontSize: '2.6rem', fontWeight: 900, lineHeight: 1,
+        background: 'linear-gradient(to bottom left, rgba(0,200,195,0.5) 0%, transparent 55%), linear-gradient(to top right, rgba(150,17,193,0.5) 0%, transparent 55%), #fff',
+        WebkitBackgroundClip: 'text', WebkitTextFillColor: 'transparent', backgroundClip: 'text',
+        marginBottom: '8px', display: 'inline-block', minWidth: '160px',
+      }}>
+        {result.year ? Math.floor(result.year) : '—'}
+      </span>
+      {winner && (
+        <span style={{ color: 'rgba(255,255,255,0.5)', fontSize: '0.82rem', marginBottom: '12px', display: 'inline-block', minWidth: '200px' }}>
+          {winner.name} was closest{winner.diff === 0 ? ' — exact!' : ` (${winner.diff} year${winner.diff === 1 ? '' : 's'} off)`}
+        </span>
+      )}
+      <div style={{ width: '100%', height: '1px', background: 'rgba(255,255,255,0.08)', marginBottom: '12px' }} />
+      {result.coverUrl && (
+        <img
+          src={result.coverUrl} alt="Album art"
+          style={{ width: '170px', height: '170px', borderRadius: '16px', objectFit: 'cover', marginBottom: '12px', boxShadow: '0 10px 36px rgba(0,0,0,0.65)' }}
+        />
+      )}
+      <span style={{ color: 'white', fontWeight: 900, fontSize: '1.05rem', lineHeight: 1.3, display: 'inline-block', minWidth: '220px' }}>
+        {result.songTitle}
+      </span>
+      <span style={{ color: 'rgba(255,255,255,0.45)', fontSize: '0.85rem', marginTop: '3px', display: 'inline-block', minWidth: '220px' }}>
+        {result.artist}
+      </span>
+    </div>
+  );
+}
+
 export function GotItCardContent({ result, myName }: Readonly<{ result: RoundResultEvent; myName?: string }>) {
   const artistOnly = result.artistOnly;
   const isRace = result.mode === 'race';
