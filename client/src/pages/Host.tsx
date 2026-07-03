@@ -9,7 +9,7 @@ import { useSpotify } from '../hooks/useSpotify';
 import { RankBadge } from '../components/RankBadge';
 import { useAnimatedScore } from '../hooks/useAnimatedScore';
 import { ConfettiBackground } from '../components/ConfettiBackground';
-import { NoOneGotItCardContent, GotItCardContent, YearCardContent } from '../components/RevealShared';
+import { NoOneGotItCardContent, GotItCardContent, YearCardContent, YearTimelineContent } from '../components/RevealShared';
 import { RoundIntro, PartyBadge, PartyRevealExtras } from '../components/RoundIntro';
 import { BackButton } from '../components/BackButton';
 import { APP_NAME, BACKEND_URL, RACE_TIME } from '../config';
@@ -1366,8 +1366,8 @@ export function RevealView({ game, result, instant = false }: Readonly<{ game: H
         game={game}
         result={result}
         instant={instant}
-        cardHeight={result.coverUrl ? 500 : 330}
-        cardContent={<YearCardContent result={result} />}
+        cardHeight={result.coverUrl ? 560 : 440}
+        cardContent={<YearTimelineContent result={result} />}
         isCorrectFor={(p) => !!result.yearResults?.some(r => r.name === p.name && r.diff === 0)}
       />
     );

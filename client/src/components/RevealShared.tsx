@@ -117,6 +117,147 @@ export function YearCardContent({ result }: Readonly<{ result: RoundResultEvent 
   );
 }
 
+export function YearTimelineContent({ result }: Readonly<{ result: RoundResultEvent }>) {
+  if (!result.yearResults) return null;
+
+  const year = result.year ? Math.floor(result.year) : null;
+  const guesses = result.yearResults.filter(r => r.guess !== null);
+  if (!year || guesses.length === 0) return <YearCardContent result={result} />;
+
+  const minGuess = Math.min(...guesses.map(g => g.guess!));
+  const maxGuess = Math.max(...guesses.map(g => g.guess!));
+  const min = Math.min(year, minGuess);
+  const max = Math.max(year, maxGuess);
+  const range = max === min ? 1 : max - min;
+  const pos = (y: number) => 6 + ((y - min) / range) * 88;
+
+  const sortedResults = [...result.yearResults].sort((a, b) => {
+    const diffA = a.diff ?? Infinity;
+    const diffB = b.diff ?? Infinity;
+    return diffA - diffB;
+  });
+
+  return (
+    <div style={{ width: '280px', display: 'flex', flexDirection: 'column', alignItems: 'center', textAlign: 'center' }}>
+      <span style={{
+        color: 'rgba(255,255,255,0.28)', fontSize: '0.6rem', letterSpacing: '0.18em', textTransform: 'uppercase',
+        marginBottom: '8px', display: 'inline-block',
+      }}>
+        The year was {year}
+      </span>
+
+      {/* Timeline */}
+      <div style={{ width: '100%', marginBottom: '16px' }}>
+        {/* Year markers */}
+        <div style={{ position: 'relative', height: '20px', marginBottom: '4px' }}>
+          {[min, Math.round(min + range / 2), max].map(y => (
+            <div
+              key={y}
+              style={{
+                position: 'absolute',
+                left: `${pos(y)}%`,
+                transform: 'translateX(-50%)',
+                fontSize: '0.65rem',
+                color: y === year ? 'rgba(255,255,255,0.9)' : 'rgba(255,255,255,0.4)',
+                fontWeight: y === year ? 'bold' : 'normal',
+              }}
+            >
+              {y}
+            </div>
+          ))}
+        </div>
+
+        {/* Timeline bar */}
+        <div style={{ position: 'relative', height: '4px', background: 'rgba(255,255,255,0.1)', borderRadius: '2px', marginBottom: '12px' }}>
+          {/* Correct year marker */}
+          <div
+            style={{
+              position: 'absolute',
+              left: `${pos(year)}%`,
+              transform: 'translateX(-50%)',
+              width: '8px',
+              height: '8px',
+              background: 'rgba(0,200,195,0.9)',
+              border: '1px solid rgba(0,255,250,0.8)',
+              borderRadius: '50%',
+              top: '-2px',
+            }}
+          />
+
+          {/* Guess markers */}
+          {sortedResults.map((r, i) => {
+            if (r.guess === null) return null;
+            const isClosest = i === 0 && r.diff !== null;
+            return (
+              <div
+                key={r.name}
+                style={{
+                  position: 'absolute',
+                  left: `${pos(r.guess)}%`,
+                  transform: 'translateX(-50%)',
+                  width: isClosest ? '6px' : '4px',
+                  height: isClosest ? '6px' : '4px',
+                  background: isClosest ? '#fbbf24' : 'rgba(255,255,255,0.4)',
+                  borderRadius: '50%',
+                  top: isClosest ? '0px' : '2px',
+                  transition: 'all 0.2s',
+                }}
+              />
+            );
+          })}
+        </div>
+      </div>
+
+      {/* Results list */}
+      <div style={{ width: '100%', maxHeight: '140px', overflowY: 'auto', borderRadius: '8px', background: 'rgba(255,255,255,0.03)', padding: '8px', marginBottom: '12px' }}>
+        {sortedResults.map((r, i) => {
+          if (r.guess === null) return null;
+          const isClosest = i === 0 && r.diff !== null;
+          return (
+            <div
+              key={r.name}
+              style={{
+                display: 'flex',
+                justifyContent: 'space-between',
+                alignItems: 'center',
+                padding: '4px 8px',
+                fontSize: '0.75rem',
+                borderBottom: i < sortedResults.length - 1 ? '1px solid rgba(255,255,255,0.05)' : 'none',
+              }}
+            >
+              <span style={{ color: isClosest ? '#fbbf24' : 'rgba(255,255,255,0.7)', fontWeight: isClosest ? 'bold' : 'normal' }}>
+                {r.name}
+              </span>
+              <span style={{ color: 'rgba(255,255,255,0.4)', marginLeft: '8px' }}>
+                {r.guess}{r.diff !== null && r.diff !== 0 ? ` (${r.diff > 0 ? '+' : ''}${r.diff})` : r.diff === 0 ? ' ✓' : ''}
+              </span>
+            </div>
+          );
+        })}
+        {result.yearResults.filter(r => r.guess === null).length > 0 && (
+          <div style={{ padding: '4px 8px', fontSize: '0.75rem', color: 'rgba(255,255,255,0.3)' }}>
+            {result.yearResults.filter(r => r.guess === null).length} didn't guess
+          </div>
+        )}
+      </div>
+
+      <div style={{ width: '100%', height: '1px', background: 'rgba(255,255,255,0.08)', marginBottom: '12px' }} />
+      {result.coverUrl && (
+        <img
+          src={result.coverUrl} alt="Album art"
+          style={{ width: '140px', height: '140px', borderRadius: '12px', objectFit: 'cover', marginBottom: '12px', boxShadow: '0 10px 36px rgba(0,0,0,0.65)' }}
+        />
+      )}
+      <span style={{ color: 'white', fontWeight: 900, fontSize: '0.95rem', lineHeight: 1.3, display: 'inline-block', minWidth: '220px' }}>
+        {result.songTitle}
+      </span>
+      <span style={{ color: 'rgba(255,255,255,0.45)', fontSize: '0.8rem', marginTop: '3px', display: 'inline-block', minWidth: '220px' }}>
+        {result.artist}
+      </span>
+    </div>
+  );
+}
+
 export function GotItCardContent({ result, myName }: Readonly<{ result: RoundResultEvent; myName?: string }>) {
   const artistOnly = result.artistOnly;
   const isRace = result.mode === 'race';
