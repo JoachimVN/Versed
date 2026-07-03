@@ -9,7 +9,7 @@ import { useSpotify } from '../hooks/useSpotify';
 import { RankBadge } from '../components/RankBadge';
 import { useAnimatedScore } from '../hooks/useAnimatedScore';
 import { ConfettiBackground } from '../components/ConfettiBackground';
-import { NoOneGotItCardContent, GotItCardContent, YearCardContent, YearTimelineContent, PillButton } from '../components/RevealShared';
+import { NoOneGotItCardContent, GotItCardContent, YearTimelineContent, PillButton } from '../components/RevealShared';
 import { RoundIntro, PartyBadge, PartyRevealExtras } from '../components/RoundIntro';
 import { BackButton } from '../components/BackButton';
 import { CircularTimer } from '../components/CircularTimer';
@@ -1041,7 +1041,7 @@ function BettingView({ game }: Readonly<{ game: HostState }>) {
       </div>
 
       {/* Skip / end */}
-      <div className="relative flex justify-center items-center gap-6 pb-7" style={{ zIndex: 2 }}>
+      <div className="relative flex flex-col justify-center items-center gap-2 pb-7" style={{ zIndex: 2 }}>
         <button
           onClick={skipTurn}
           style={{ background: 'none', border: 'none', color: 'rgba(255,255,255,0.12)', fontSize: '0.75rem', cursor: 'pointer', transition: 'color 0.2s ease' }}
@@ -1080,13 +1080,13 @@ export function PlayingView({ game }: Readonly<{ game: HostState }>) {
         <p className="text-white/40 text-sm">Round {roundIndex + 1}/{totalRounds}</p>
         <PartyBadge party={party} />
 
-        <div className="liquid-btn relative" style={{ width: '310px', height: countdown === null ? '400px' : '360px' }}>
+        <div className="liquid-btn relative" style={{ width: 'min(90vw, 620px)', height: countdown === null ? '400px' : '360px' }}>
           <LiquidGlass
             style={{ position: 'absolute', top: '50%', left: '50%' }}
             {...LIQUID_CARD_PROPS}
             padding="28px 28px"
           >
-            <div style={{ width: '254px', display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '16px' }}>
+            <div style={{ width: 'min(84vw, 564px)', display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '16px' }}>
               {countdown === null ? (
                 <>
                   <AudioBars playing={songPlaying} accent={accent} height={36} bpm={songTempo} />
@@ -1128,7 +1128,7 @@ export function PlayingView({ game }: Readonly<{ game: HostState }>) {
           </LiquidGlass>
         </div>
 
-        <div className="flex items-center gap-6 mt-2">
+        <div className="flex flex-col items-center gap-2 mt-2">
           <button onClick={skipTurn} className="text-white/20 text-xs hover:text-white/50 transition-colors">
             Skip round
           </button>
@@ -1180,7 +1180,7 @@ function GuessingView({ game }: Readonly<{ game: HostState }>) {
         </div>
 
         {othersWaiting && <p className="text-white/25 text-sm">Other players are waiting...</p>}
-        <div className="flex items-center gap-6 mt-2">
+        <div className="flex flex-col items-center gap-2 mt-2">
           <button onClick={skipTurn} className="text-white/20 text-xs hover:text-white/50 transition-colors">
             Skip turn
           </button>

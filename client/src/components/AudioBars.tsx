@@ -60,6 +60,7 @@ export function AudioBars({ playing, accent, height, bpm }: Readonly<{ playing: 
               background: barColor,
               animation: playing ? `${bar.anim} ${dur}s ease-in-out infinite` : 'none',
               animationDelay: `${delay}s`,
+              animationFillMode: playing ? 'backwards' : undefined,
               transformOrigin: 'center',
               transform: playing ? undefined : 'scaleY(0.07)',
             }}

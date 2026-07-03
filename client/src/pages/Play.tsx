@@ -1217,30 +1217,35 @@ function guessInputBoxStyle(isListening: boolean, focused: boolean): { border: s
 // 4-box OTP-style display for year guesses. A single transparent input
 // underneath keeps the real focus/keyboard target (so the mobile keyboard
 // never dismisses), while these boxes render its current characters.
+function YearDigitBox({ digit, active }: Readonly<{ digit: string; active: boolean }>) {
+  return (
+    <div
+      style={{
+        width: '48px', height: '58px', borderRadius: '12px',
+        display: 'flex', alignItems: 'center', justifyContent: 'center',
+        fontSize: '1.5rem', fontWeight: 800, color: 'white',
+        border: active ? '1px solid rgba(150,17,193,0.8)' : '1px solid rgba(255,255,255,0.12)',
+        background: active ? 'rgba(150,17,193,0.12)' : 'rgba(255,255,255,0.04)',
+        boxShadow: active ? '0 0 16px rgba(150,17,193,0.35)' : 'none',
+        transition: 'border-color 0.15s ease, background 0.15s ease, box-shadow 0.15s ease',
+      }}
+    >
+      {digit}
+    </div>
+  );
+}
+
+// A year guess is always exactly 4 digits — a fixed set of positional
+// slots, not a reorderable list, so each box is written out rather than
+// mapped over an index.
 function YearDigitBoxes({ value, focused }: Readonly<{ value: string; focused: boolean }>) {
-  const digits = Array.from({ length: 4 }, (_, i) => value[i] ?? '');
   const activeIndex = Math.min(value.length, 3);
   return (
     <div style={{ display: 'flex', gap: '10px', justifyContent: 'center', pointerEvents: 'none' }}>
-      {digits.map((d, i) => {
-        const isActive = focused && i === activeIndex;
-        return (
-          <div
-            key={`year-digit-${i}`}
-            style={{
-              width: '48px', height: '58px', borderRadius: '12px',
-              display: 'flex', alignItems: 'center', justifyContent: 'center',
-              fontSize: '1.5rem', fontWeight: 800, color: 'white',
-              border: isActive ? '1px solid rgba(150,17,193,0.8)' : '1px solid rgba(255,255,255,0.12)',
-              background: isActive ? 'rgba(150,17,193,0.12)' : 'rgba(255,255,255,0.04)',
-              boxShadow: isActive ? '0 0 16px rgba(150,17,193,0.35)' : 'none',
-              transition: 'border-color 0.15s ease, background 0.15s ease, box-shadow 0.15s ease',
-            }}
-          >
-            {d}
-          </div>
-        );
-      })}
+      <YearDigitBox digit={value[0] ?? ''} active={focused && activeIndex === 0} />
+      <YearDigitBox digit={value[1] ?? ''} active={focused && activeIndex === 1} />
+      <YearDigitBox digit={value[2] ?? ''} active={focused && activeIndex === 2} />
+      <YearDigitBox digit={value[3] ?? ''} active={focused && activeIndex === 3} />
     </div>
   );
 }

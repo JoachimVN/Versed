@@ -26,7 +26,10 @@ export function RoundIntro({ party, roundKey, dismissible = true }: Readonly<{ p
 
   return (
     <div
+      role={dismissible ? 'button' : undefined}
+      tabIndex={dismissible ? 0 : undefined}
       onClick={dismissible ? dismiss : undefined}
+      onKeyDown={dismissible ? (e) => { if (e.key === 'Enter' || e.key === ' ') dismiss(); } : undefined}
       style={{
         position: 'fixed', inset: 0, zIndex: 60,
         display: 'flex', alignItems: 'center', justifyContent: 'center',
