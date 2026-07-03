@@ -1110,7 +1110,7 @@ function WatchingView({ game }: Readonly<{ game: PlayState }>) {
                     key={bar.delay}
                     style={{
                       width: '3px', height: '100%', borderRadius: '2px',
-                      background: isRace ? 'rgba(234,88,12,0.75)' : 'rgba(150,17,193,0.75)',
+                      background: party?.format === 'year' ? 'rgba(0,200,195,0.75)' : isRace ? 'rgba(234,88,12,0.75)' : 'rgba(150,17,193,0.75)',
                       animation: songPlaying ? `${bar.anim} ${bar.dur}s ease-in-out infinite` : 'none',
                       animationDelay: `${bar.delay}s`,
                       transformOrigin: 'center',
@@ -1180,14 +1180,14 @@ function GetReadyBody({ isDuel, isRace, party, lowestBid, guesserNames, songPlay
 // guessing phase. Keeping a single component across both states means the input
 // element is never unmounted — focus and text survive the transition, which
 // prevents the mobile keyboard from dismissing mid-song.
-function ListeningHeader({ songPlaying }: Readonly<{ songPlaying: boolean }>) {
+function ListeningHeader({ songPlaying, party }: Readonly<{ songPlaying: boolean; party: PartyInfo | null }>) {
   return (
     <div className="flex flex-col items-center gap-2.5 pt-10 pb-4">
       <div style={{ display: 'flex', gap: '5px', alignItems: 'center', height: '28px', transition: 'opacity 0.3s ease', opacity: songPlaying ? 1 : 0.35 }}>
         {AUDIO_BARS.map((bar) => (
           <div key={bar.delay} style={{
             width: '3px', height: '100%', borderRadius: '2px',
-            background: 'rgba(150,17,193,0.6)',
+            background: party?.format === 'year' ? 'rgba(0,200,195,0.6)' : 'rgba(150,17,193,0.6)',
             animation: songPlaying ? `${bar.anim} ${bar.dur}s ease-in-out infinite` : 'none',
             animationDelay: `${bar.delay}s`, transformOrigin: 'center',
             transform: songPlaying ? undefined : 'scaleY(0.07)',
@@ -1204,7 +1204,7 @@ function ListeningHeader({ songPlaying }: Readonly<{ songPlaying: boolean }>) {
 // Race mode plays the song throughout the guessing window, so it keeps the
 // waveform going here too; classic has already stopped the song by the time
 // a tier's turn starts, so it stays timer-only.
-function ActiveHeader({ urgent, timeLeft, myScore, isRace, songPlaying }: Readonly<{ urgent: boolean; timeLeft: number; myScore: number; isRace: boolean; songPlaying: boolean }>) {
+function ActiveHeader({ urgent, timeLeft, myScore, isRace, party, songPlaying }: Readonly<{ urgent: boolean; timeLeft: number; myScore: number; isRace: boolean; party: PartyInfo | null; songPlaying: boolean }>) {
   return (
     <div className="flex flex-col gap-2 pt-5 pb-3">
       <div className="flex items-center justify-between px-5">
@@ -1219,12 +1219,12 @@ function ActiveHeader({ urgent, timeLeft, myScore, isRace, songPlaying }: Readon
           {myScore.toLocaleString()} pts
         </span>
       </div>
-      {isRace && (
+      {(isRace || party?.format === 'year') && (
         <div style={{ display: 'flex', gap: '5px', alignItems: 'center', justifyContent: 'center', height: '20px', transition: 'opacity 0.3s ease', opacity: songPlaying ? 1 : 0.35 }}>
           {AUDIO_BARS.map((bar) => (
             <div key={bar.delay} style={{
               width: '3px', height: '100%', borderRadius: '2px',
-              background: 'rgba(234,88,12,0.6)',
+              background: party?.format === 'year' ? 'rgba(0,200,195,0.6)' : 'rgba(234,88,12,0.6)',
               animation: songPlaying ? `${bar.anim} ${bar.dur}s ease-in-out infinite` : 'none',
               animationDelay: `${bar.delay}s`, transformOrigin: 'center',
               transform: songPlaying ? undefined : 'scaleY(0.07)',
@@ -1280,8 +1280,8 @@ function GuessingView({ game }: Readonly<{ game: PlayState }>) {
 
       {/* Header — waveform while listening, timer + score when active */}
       {isListening
-        ? <ListeningHeader songPlaying={songPlaying} />
-        : <ActiveHeader urgent={urgent} timeLeft={timeLeft} myScore={myScore} isRace={mode === 'race'} songPlaying={songPlaying} />}
+        ? <ListeningHeader songPlaying={songPlaying} party={party} />
+        : <ActiveHeader urgent={urgent} timeLeft={timeLeft} myScore={myScore} isRace={mode === 'race'} party={party} songPlaying={songPlaying} />}
 
       {/* Input area */}
       <div className="flex-1 flex flex-col items-center justify-center gap-5 px-5">
