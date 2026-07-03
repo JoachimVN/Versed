@@ -335,7 +335,10 @@ export function GotItCardContent({ result, myName }: Readonly<{ result: RoundRes
     labelText = count === 1 ? `${result.correctGuessers![0]} got it` : `${count} players got it`;
     labelGradient = 'linear-gradient(to bottom left, rgba(110,32,155,0.4) 0%, transparent 52%), linear-gradient(to top right, rgba(0,200,195,0.3) 0%, transparent 52%), #fff';
   } else {
-    const initial = result.guesserName?.[0]?.toUpperCase() ?? '?';
+    // String indexing grabs a single UTF-16 code unit, which mangles emoji
+    // (most are surrogate pairs) — iterate by code point instead so a name
+    // like "🐈maka" gets the full cat, not half of one.
+    const initial = Array.from(result.guesserName ?? '')[0]?.toUpperCase() ?? '?';
     iconNode = <span style={{ fontSize: '1.25rem', fontWeight: 900, color: 'rgba(255,255,255,0.7)' }}>{initial}</span>;
     iconBg = 'rgba(255,255,255,0.07)';
     iconBorder = 'rgba(255,255,255,0.12)';

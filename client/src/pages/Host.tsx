@@ -1368,7 +1368,7 @@ export function RevealView({ game, result, instant = false }: Readonly<{ game: H
       game={game}
       result={result}
       instant={instant}
-      cardHeight={result.coverUrl ? 440 : 240}
+      cardHeight={result.coverUrl ? 480 : 240}
       cardContent={<GotItCardContent result={result} />}
       isCorrectFor={(p) => isRace ? !!result.correctGuessers?.includes(p.name) : (p.name === result.guesserName)}
     />

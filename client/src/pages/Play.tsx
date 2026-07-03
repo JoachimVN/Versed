@@ -1690,7 +1690,7 @@ export function RevealView({ game, result }: Readonly<{ game: PlayState; result:
     <PlayRevealShell
       game={game}
       result={result}
-      cardHeight={result.coverUrl ? 440 : 240}
+      cardHeight={result.coverUrl ? 480 : 240}
       cardContent={<GotItCardContent result={result} myName={myName} />}
       guessesList={guessesList}
       scoreExtra={iGotItInRace && myRaceTimeMs != null && (
