@@ -404,6 +404,12 @@ function useHostGame(): HostState {
       setPlayerBids([]);
       setLowestBid(0);
       setReconnectingNames(new Set());
+      // Stale party data (e.g. a finale) must not survive into the new game —
+      // roundIndex resets to 0 here too, and RoundIntro re-fires its overlay
+      // on any roundIndex change while party is set, flashing the old round's
+      // announcement over the fresh lobby.
+      setParty(null);
+      setStealResult(null);
       stopCountdown();
       stopPlaybackBar();
       setPhase('lobby');
