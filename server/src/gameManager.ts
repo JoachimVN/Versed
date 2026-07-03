@@ -181,12 +181,12 @@ function introFor(format: PartyFormat, target: GuessTarget, event: PartyEvent | 
   };
   if (event) {
     const e = eventIntros[event];
-    return { title: e.title, tagline: `${e.tag} · ${flow} — ${goal}` };
+    return { title: e.title, tagline: `${e.tag} · ${flow} / ${goal}` };
   }
-  if (target === 'artist') return { title: 'Who Sings It?', tagline: `${flow} — name the artist` };
-  if (target === 'both') return { title: 'Double Duty', tagline: `${flow} — title wins, artist adds +${BOTH_ARTIST_BONUS}` };
+  if (target === 'artist') return { title: 'Who Sings It?', tagline: `${flow} / name the artist` };
+  if (target === 'both') return { title: 'Double Duty', tagline: `${flow} / title wins, artist adds +${BOTH_ARTIST_BONUS}` };
   return format === 'race'
-    ? { title: 'Race Round', tagline: 'Everyone guesses at once — speed wins' }
+    ? { title: 'Race Round', tagline: 'Everyone guesses at once / speed wins' }
     : { title: 'Classic Round', tagline: 'Bid low, score high' };
 }
 
@@ -232,7 +232,7 @@ function buildPartyConfig(game: Game): PartyConfig {
       duelistNames: top.map(p => p.name),
       intro: {
         title: 'The Finale',
-        tagline: `${top[0].name} vs ${top[1].name} — first correct wins ${DUEL_WIN_POINTS} pts`,
+        tagline: `${top[0].name} vs ${top[1].name} / first correct wins ${DUEL_WIN_POINTS} pts`,
       },
     };
   }

@@ -78,7 +78,7 @@ function SongInfo({ result }: Readonly<{ result: RoundResultEvent }>) {
 export function YearCardContent({ result }: Readonly<{ result: RoundResultEvent }>) {
   const winner = result.yearResults?.find(r => r.diff !== null);
   const pluralS = winner?.diff === 1 ? '' : 's';
-  const winnerDetail = winner && (winner.diff === 0 ? ' — exact!' : ` (${winner.diff} year${pluralS} off)`);
+  const winnerDetail = winner && (winner.diff === 0 ? ' · exact!' : ` (${winner.diff} year${pluralS} off)`);
   return (
     <div style={{ width: '262px', display: 'flex', flexDirection: 'column', alignItems: 'center', textAlign: 'center' }}>
       <span style={{
@@ -93,7 +93,7 @@ export function YearCardContent({ result }: Readonly<{ result: RoundResultEvent 
         WebkitBackgroundClip: 'text', WebkitTextFillColor: 'transparent', backgroundClip: 'text',
         marginBottom: '8px', display: 'inline-block', minWidth: '160px',
       }}>
-        {result.year ? Math.floor(result.year) : '—'}
+        {result.year ? Math.floor(result.year) : '–'}
       </span>
       {winner && (
         <span style={{ color: 'rgba(255,255,255,0.5)', fontSize: '0.82rem', marginBottom: '12px', display: 'inline-block', minWidth: '200px' }}>

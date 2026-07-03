@@ -695,11 +695,11 @@ function JoinView({ game }: Readonly<{ game: PlayState }>) {
               </div>
             </LiquidGlass>
           </button>
-          <p className="text-white/20 text-xs tracking-wider">— or join a different game —</p>
+          <p className="text-white/20 text-xs tracking-wider">or join a different game</p>
         </div>
       )}
 
-      {/* Input card — LiquidGlass */}
+      {/* Input card: LiquidGlass */}
       <div className="liquid-btn relative" style={{ width: '310px', height: '165px' }}>
         <LiquidGlass
           style={{ position: 'absolute', top: '50%', left: '50%' }}
@@ -1103,21 +1103,24 @@ function WatchingView({ game }: Readonly<{ game: PlayState }>) {
           >
             <div style={{ width: '254px', display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '18px' }}>
 
-              {/* Animated waveform — static until song actually starts */}
+              {/* Animated waveform: static until song actually starts */}
               <div style={{ display: 'flex', gap: '5px', alignItems: 'center', height: '36px', transition: 'opacity 0.3s ease', opacity: songPlaying ? 1 : 0.35 }}>
-                {AUDIO_BARS.map((bar) => (
+                {AUDIO_BARS.map((bar) => {
+                  const barColor = party?.format === 'year' ? 'rgba(0,200,195,0.75)' : isRace ? 'rgba(234,88,12,0.75)' : 'rgba(150,17,193,0.75)';
+                  return (
                   <div
                     key={bar.delay}
                     style={{
                       width: '3px', height: '100%', borderRadius: '2px',
-                      background: party?.format === 'year' ? 'rgba(0,200,195,0.75)' : isRace ? 'rgba(234,88,12,0.75)' : 'rgba(150,17,193,0.75)',
+                      background: barColor,
                       animation: songPlaying ? `${bar.anim} ${bar.dur}s ease-in-out infinite` : 'none',
                       animationDelay: `${bar.delay}s`,
                       transformOrigin: 'center',
                       transform: songPlaying ? undefined : 'scaleY(0.07)',
                     }}
                   />
-                ))}
+                );
+                })}
               </div>
 
               <div style={{ width: '100%', height: '1px', background: 'rgba(255,255,255,0.07)' }} />
@@ -1278,7 +1281,7 @@ function GuessingView({ game }: Readonly<{ game: PlayState }>) {
 
       <div className="relative flex flex-col flex-1" style={{ zIndex: 2 }}>
 
-      {/* Header — waveform while listening, timer + score when active */}
+      {/* Header: waveform while listening, timer + score when active */}
       {isListening
         ? <ListeningHeader songPlaying={songPlaying} party={party} />
         : <ActiveHeader urgent={urgent} timeLeft={timeLeft} myScore={myScore} isRace={mode === 'race'} party={party} songPlaying={songPlaying} />}
@@ -1485,7 +1488,7 @@ function StealPicker({ victims, onPick }: Readonly<{
           You won the steal!
         </p>
         <p style={{ color: 'rgba(255,255,255,0.45)', fontSize: '0.85rem' }}>
-          Pick a victim — you take 15% of their score (min 300)
+          Pick a victim: you take 15% of their score (min 300)
         </p>
       </div>
       <div className="flex flex-col gap-2.5 w-full" style={{ maxWidth: '310px', maxHeight: '50vh', overflowY: 'auto' }}>
@@ -1552,7 +1555,7 @@ function YearRevealView({ game, result }: Readonly<{ game: PlayState; result: Ro
                 <span className={`text-xs min-w-0 truncate ${r.name === myName ? 'text-white font-semibold' : 'text-white/40'}`}>{r.name}</span>
                 <span className="text-xs text-right shrink-0">
                   <span className={r.diff === 0 ? 'text-green-400' : 'text-white/40'}>
-                    {r.guess ?? '—'}{diffLabel}
+                    {r.guess ?? '–'}{diffLabel}
                   </span>
                   {r.points > 0 && <span className="ml-1.5 text-sky-400 font-semibold tabular-nums">+{r.points.toLocaleString()}</span>}
                 </span>

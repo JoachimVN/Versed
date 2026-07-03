@@ -1110,7 +1110,7 @@ export function PlayingView({ game }: Readonly<{ game: HostState }>) {
   // behave exactly like race rounds on this screen.
   const isRace = mode === 'race' || (party !== null && party.format !== 'classic');
   const raceStatus = party?.finale
-    ? `${party.duelists.join(' vs ')} — first correct wins`
+    ? `${party.duelists.join(' vs ')} - first correct wins`
     : `${answeredCount} / ${players.length} answered`;
   return (
     <div className="relative min-h-screen flex flex-col items-center justify-center p-6 gap-6 text-center overflow-hidden">
