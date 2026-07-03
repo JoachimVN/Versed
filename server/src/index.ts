@@ -384,7 +384,9 @@ io.on('connection', (socket) => {
     if (s?.bettingTime) game.bettingTime = Math.max(5, Math.min(60, Math.round(s.bettingTime)));
     if (s?.guessingTime) game.guessingTime = Math.max(5, Math.min(60, Math.round(s.guessingTime)));
     if (s?.totalRounds) game.totalRounds = Math.max(1, Math.min(30, Math.round(s.totalRounds)));
-    game.mode = s?.mode === 'race' ? 'race' : s?.mode === 'party' ? 'party' : 'classic';
+    if (s?.mode === 'race') game.mode = 'race';
+    else if (s?.mode === 'party') game.mode = 'party';
+    else game.mode = 'classic';
     if (s?.raceTime) game.raceTime = Math.max(10, Math.min(60, Math.round(s.raceTime)));
     game.raceWinnerOnly = s?.raceWinnerOnly === true;
     game.artistOnly = s?.artistOnly === true;

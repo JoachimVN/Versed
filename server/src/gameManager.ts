@@ -169,9 +169,9 @@ function generateAllHints(song: Song, suppressArtist: boolean): Hint[] {
 function introFor(format: PartyFormat, target: GuessTarget, event: PartyEvent | null): { title: string; tagline: string } {
   if (format === 'year') return { title: 'Guess the Year', tagline: 'Closest answer wins the round' };
   const flow = format === 'classic' ? 'Bid & guess' : 'Everyone races';
-  const goal = target === 'artist' ? 'name the artist'
-    : target === 'both' ? 'title + artist bonus'
-    : 'name the song';
+  let goal = 'name the song';
+  if (target === 'artist') goal = 'name the artist';
+  else if (target === 'both') goal = 'title + artist bonus';
   const eventIntros: Record<PartyEvent, { title: string; tag: string }> = {
     double: { title: 'Double Points', tag: 'Everything is worth 2×' },
     mystery: { title: 'Mystery Multiplier', tag: 'Revealed after the round: ×1, ×2 or ×3' },
@@ -188,6 +188,27 @@ function introFor(format: PartyFormat, target: GuessTarget, event: PartyEvent | 
   return format === 'race'
     ? { title: 'Race Round', tagline: 'Everyone guesses at once — speed wins' }
     : { title: 'Classic Round', tagline: 'Bid low, score high' };
+}
+
+function pickPartyTarget(format: PartyFormat): GuessTarget {
+  if (format === 'year') return 'title';
+  return pickWeighted<GuessTarget>([['title', 60], ['artist', 25], ['both', 15]]);
+}
+
+function pickPartyEvent(game: Game, format: PartyFormat, prevEvent: PartyEvent | null | undefined): PartyEvent | null {
+  if (format === 'year' || randomInt(0, 100) >= 60) return null;
+  const pool: [PartyEvent, number][] = [['double', 30], ['mystery', 25], ['snippet', 25]];
+  if (format === 'classic') pool.push(['fullhints', 20]);
+  // Steal needs someone else to steal from — pointless (and confusing to
+  // announce) in a 1-player game.
+  if (game.roundIndex >= 2 && game.players.size >= 2) pool.push(['steal', 20]);
+  return pickWeighted(pool.filter(([e]) => e !== prevEvent));
+}
+
+function eventMultiplier(event: PartyEvent | null): number {
+  if (event === 'double') return 2;
+  if (event === 'mystery') return 1 + randomInt(0, 3);
+  return 1;
 }
 
 // One random recipe per round: format + guess target + modifier, with just
@@ -226,20 +247,10 @@ function buildPartyConfig(game: Game): PartyConfig {
   const prev = game.currentRound?.party;
   let format = pickWeighted<PartyFormat>([['classic', 45], ['race', 40], ['year', 15]]);
   if (format === 'year' && prev?.format === 'year') format = 'race';
-  const target: GuessTarget = format === 'year'
-    ? 'title'
-    : pickWeighted<GuessTarget>([['title', 60], ['artist', 25], ['both', 15]]);
 
-  let event: PartyEvent | null = null;
-  if (format !== 'year' && randomInt(0, 100) < 60) {
-    const pool: [PartyEvent, number][] = [['double', 30], ['mystery', 25], ['snippet', 25]];
-    if (format === 'classic') pool.push(['fullhints', 20]);
-    // Steal needs someone else to steal from — pointless (and confusing to
-    // announce) in a 1-player game.
-    if (game.roundIndex >= 2 && game.players.size >= 2) pool.push(['steal', 20]);
-    event = pickWeighted(pool.filter(([e]) => e !== prev?.event));
-  }
-  const multiplier = event === 'double' ? 2 : event === 'mystery' ? 1 + randomInt(0, 3) : 1;
+  const target = pickPartyTarget(format);
+  const event = pickPartyEvent(game, format, prev?.event);
+  const multiplier = eventMultiplier(event);
 
   return { ...plain, format, target, event, multiplier, intro: introFor(format, target, event) };
 }
@@ -783,7 +794,8 @@ export function finalizeYearRound(game: Game): YearResult[] {
     return { name: e.player.name, guess: e.guess, diff: e.diff, points };
   });
 
-  round.yearResults = results.sort((a, b) => (a.diff ?? 9999) - (b.diff ?? 9999));
+  results.sort((a, b) => (a.diff ?? 9999) - (b.diff ?? 9999));
+  round.yearResults = results;
   return round.yearResults;
 }
 

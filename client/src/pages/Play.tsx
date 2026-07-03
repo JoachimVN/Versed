@@ -1116,44 +1116,56 @@ function WatchingView({ game }: Readonly<{ game: PlayState }>) {
 
               <div style={{ width: '100%', height: '1px', background: 'rgba(255,255,255,0.07)' }} />
 
-              {isDuel ? (
-                <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '8px' }}>
-                  <span style={{ color: 'rgba(255,255,255,0.32)', fontSize: '0.6rem', letterSpacing: '0.2em', textTransform: 'uppercase' }}>
-                    The finale
-                  </span>
-                  <span style={{ display: 'inline-block', minWidth: '200px', color: 'white', fontWeight: 900, fontSize: '1.4rem', lineHeight: 1.3, textAlign: 'center' }}>
-                    {party!.duelists.join(' vs ')}
-                  </span>
-                  <span style={{ display: 'inline-block', minWidth: '160px', color: 'rgba(255,255,255,0.3)', fontSize: '0.82rem', textAlign: 'center' }}>
-                    First correct wins
-                  </span>
-                </div>
-              ) : isRace ? (
-                <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '8px' }}>
-                  <span style={{ color: 'rgba(255,255,255,0.32)', fontSize: '0.6rem', letterSpacing: '0.2em', textTransform: 'uppercase' }}>
-                    Get ready
-                  </span>
-                  <span style={{ display: 'inline-block', minWidth: '200px', color: 'white', fontWeight: 900, fontSize: '1.4rem', lineHeight: 1.3, textAlign: 'center' }}>
-                    Everyone guesses at once
-                  </span>
-                </div>
-              ) : (
-                <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '6px' }}>
-                  <span style={{ color: 'rgba(255,255,255,0.32)', fontSize: '0.6rem', letterSpacing: '0.2em', textTransform: 'uppercase' }}>
-                    {songPlaying ? 'Listen closely' : 'Get ready'}
-                  </span>
-                  <span style={{ display: 'inline-block', minWidth: '200px', color: 'white', fontWeight: 900, fontSize: '1.5rem', lineHeight: 1.25, textAlign: 'center' }}>
-                    {guesserNames.join(' & ')}
-                  </span>
-                  <span style={{ display: 'inline-block', minWidth: '160px', color: 'rgba(255,255,255,0.3)', fontSize: '0.82rem', textAlign: 'center' }}>
-                    guesses after {lowestBid}s
-                  </span>
-                </div>
-              )}
+              <GetReadyBody isDuel={isDuel} isRace={isRace} party={party} lowestBid={lowestBid} guesserNames={guesserNames} songPlaying={songPlaying} />
             </div>
           </LiquidGlass>
         </div>
       </div>
+    </div>
+  );
+}
+
+function GetReadyBody({ isDuel, isRace, party, lowestBid, guesserNames, songPlaying }: Readonly<{
+  isDuel: boolean; isRace: boolean; party: PartyInfo | null; lowestBid: number; guesserNames: string[]; songPlaying: boolean;
+}>) {
+  if (isDuel) {
+    return (
+      <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '8px' }}>
+        <span style={{ color: 'rgba(255,255,255,0.32)', fontSize: '0.6rem', letterSpacing: '0.2em', textTransform: 'uppercase' }}>
+          The finale
+        </span>
+        <span style={{ display: 'inline-block', minWidth: '200px', color: 'white', fontWeight: 900, fontSize: '1.4rem', lineHeight: 1.3, textAlign: 'center' }}>
+          {party!.duelists.join(' vs ')}
+        </span>
+        <span style={{ display: 'inline-block', minWidth: '160px', color: 'rgba(255,255,255,0.3)', fontSize: '0.82rem', textAlign: 'center' }}>
+          First correct wins
+        </span>
+      </div>
+    );
+  }
+  if (isRace) {
+    return (
+      <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '8px' }}>
+        <span style={{ color: 'rgba(255,255,255,0.32)', fontSize: '0.6rem', letterSpacing: '0.2em', textTransform: 'uppercase' }}>
+          Get ready
+        </span>
+        <span style={{ display: 'inline-block', minWidth: '200px', color: 'white', fontWeight: 900, fontSize: '1.4rem', lineHeight: 1.3, textAlign: 'center' }}>
+          Everyone guesses at once
+        </span>
+      </div>
+    );
+  }
+  return (
+    <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '6px' }}>
+      <span style={{ color: 'rgba(255,255,255,0.32)', fontSize: '0.6rem', letterSpacing: '0.2em', textTransform: 'uppercase' }}>
+        {songPlaying ? 'Listen closely' : 'Get ready'}
+      </span>
+      <span style={{ display: 'inline-block', minWidth: '200px', color: 'white', fontWeight: 900, fontSize: '1.5rem', lineHeight: 1.25, textAlign: 'center' }}>
+        {guesserNames.join(' & ')}
+      </span>
+      <span style={{ display: 'inline-block', minWidth: '160px', color: 'rgba(255,255,255,0.3)', fontSize: '0.82rem', textAlign: 'center' }}>
+        guesses after {lowestBid}s
+      </span>
     </div>
   );
 }
@@ -1230,9 +1242,12 @@ function GuessingView({ game }: Readonly<{ game: PlayState }>) {
   const isListening = phase === 'watching';
   // What this round wants answered: party rounds carry it per-round,
   // classic/race games use the game-wide artist toggle.
-  const target: 'title' | 'artist' | 'both' | 'year' = party
-    ? (party.format === 'year' ? 'year' : party.target)
-    : (artistOnly ? 'artist' : 'title');
+  let target: 'title' | 'artist' | 'both' | 'year';
+  if (party) {
+    target = party.format === 'year' ? 'year' : party.target;
+  } else {
+    target = artistOnly ? 'artist' : 'title';
+  }
   const isYear = target === 'year';
   const canSubmit = isYear ? guessText.trim().length === 4 : guessText.trim().length > 0;
   const urgent = !isListening && timeLeft <= 5;
@@ -1522,17 +1537,22 @@ function YearRevealView({ game, result }: Readonly<{ game: PlayState; result: Ro
 
         {result.yearResults && result.yearResults.length > 0 && (
           <div style={{ background: 'rgba(255,255,255,0.05)', border: '1px solid rgba(255,255,255,0.08)', borderRadius: '16px', padding: '8px 12px', width: '310px', maxWidth: '92vw' }} className="space-y-1">
-            {result.yearResults.map(r => (
+            {result.yearResults.map(r => {
+              let diffLabel = '';
+              if (r.diff === 0) diffLabel = ' · exact';
+              else if (r.diff !== null && r.diff > 0) diffLabel = ` (${r.diff} off)`;
+              return (
               <div key={r.name} className="flex justify-between items-center gap-2">
                 <span className={`text-xs min-w-0 truncate ${r.name === myName ? 'text-white font-semibold' : 'text-white/40'}`}>{r.name}</span>
                 <span className="text-xs text-right shrink-0">
                   <span className={r.diff === 0 ? 'text-green-400' : 'text-white/40'}>
-                    {r.guess ?? '—'}{r.diff !== null && r.diff > 0 ? ` (${r.diff} off)` : r.diff === 0 ? ' · exact' : ''}
+                    {r.guess ?? '—'}{diffLabel}
                   </span>
                   {r.points > 0 && <span className="ml-1.5 text-sky-400 font-semibold tabular-nums">+{r.points.toLocaleString()}</span>}
                 </span>
               </div>
-            ))}
+              );
+            })}
           </div>
         )}
 

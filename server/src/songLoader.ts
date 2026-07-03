@@ -88,12 +88,12 @@ export function loadSongs(): Song[] {
       bbPeak: num(f[col.bb_peak]),
       bbChartWeeks: num(f[col.bb_chart_weeks]),
       durationMs: num(f[col.duration_ms]),
-      tempo: tempoIdx !== undefined ? num(f[tempoIdx]) : null,
+      tempo: tempoIdx === undefined ? null : num(f[tempoIdx]),
       spotifyStreams: num(f[col.spotify_streams]),
       youtubeViews: num(f[col.youtube_views]),
       spotifyTrackId: trackId,
       finalScore: num(f[col.final_score]) ?? 0,
-      albumArtUrl: (artIdx !== undefined ? f[artIdx]?.trim() : '') || null,
+      albumArtUrl: (artIdx === undefined ? '' : f[artIdx]?.trim()) || null,
     });
   }
 

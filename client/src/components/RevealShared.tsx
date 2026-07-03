@@ -77,6 +77,7 @@ function SongInfo({ result }: Readonly<{ result: RoundResultEvent }>) {
 // with the year and the closest player instead of a got-it/no-one-got-it state.
 export function YearCardContent({ result }: Readonly<{ result: RoundResultEvent }>) {
   const winner = result.yearResults?.find(r => r.diff !== null);
+  const winnerDetail = winner && (winner.diff === 0 ? ' — exact!' : ` (${winner.diff} year${winner.diff === 1 ? '' : 's'} off)`);
   return (
     <div style={{ width: '262px', display: 'flex', flexDirection: 'column', alignItems: 'center', textAlign: 'center' }}>
       <span style={{
@@ -95,7 +96,7 @@ export function YearCardContent({ result }: Readonly<{ result: RoundResultEvent 
       </span>
       {winner && (
         <span style={{ color: 'rgba(255,255,255,0.5)', fontSize: '0.82rem', marginBottom: '12px', display: 'inline-block', minWidth: '200px' }}>
-          {winner.name} was closest{winner.diff === 0 ? ' — exact!' : ` (${winner.diff} year${winner.diff === 1 ? '' : 's'} off)`}
+          {winner.name} was closest{winnerDetail}
         </span>
       )}
       <div style={{ width: '100%', height: '1px', background: 'rgba(255,255,255,0.08)', marginBottom: '12px' }} />
