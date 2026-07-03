@@ -21,7 +21,7 @@ export interface PlayerInfo {
 export interface PartyInfo {
   format: 'classic' | 'race' | 'year';
   target: 'title' | 'artist' | 'both';
-  event: 'double' | 'mystery' | 'steal' | 'snippet' | 'fullhints' | null;
+  event: 'double' | 'mystery' | 'steal' | 'snippet' | 'fullhints' | 'blind' | null;
   multiplier: number | null;
   intro: { title: string; tagline: string };
   finale: boolean;

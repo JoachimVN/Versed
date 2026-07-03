@@ -173,6 +173,7 @@ export function PartyBadge({ party }: Readonly<{ party: PartyInfo | null }>) {
   if (party.event === 'steal') bits.push('STEAL ROUND');
   if (party.event === 'snippet') bits.push('SNIPPET');
   if (party.event === 'fullhints') bits.push('OPEN BOOK');
+  if (party.event === 'blind') bits.push('BLIND BET · NO HINTS');
   return (
     <div style={{ display: 'flex', gap: '6px', justifyContent: 'center', flexWrap: 'wrap' }}>
       {bits.map(b => (

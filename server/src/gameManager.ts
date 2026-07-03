@@ -178,6 +178,7 @@ function introFor(format: PartyFormat, target: GuessTarget, event: PartyEvent | 
     steal: { title: 'Steal Round', tag: 'Win the round, then rob another player' },
     snippet: { title: 'Snippet Roulette', tag: 'The clip starts somewhere mid-song' },
     fullhints: { title: 'Open Book', tag: 'Every hint on the table' },
+    blind: { title: 'Blind Bet', tag: 'No hints at all — bid on ears alone' },
   };
   if (event) {
     const e = eventIntros[event];
@@ -198,7 +199,7 @@ function pickPartyTarget(format: PartyFormat): GuessTarget {
 function pickPartyEvent(game: Game, format: PartyFormat, prevEvent: PartyEvent | null | undefined): PartyEvent | null {
   if (format === 'year' || randomInt(0, 100) >= 60) return null;
   const pool: [PartyEvent, number][] = [['double', 30], ['mystery', 25], ['snippet', 25]];
-  if (format === 'classic') pool.push(['fullhints', 20]);
+  if (format === 'classic') pool.push(['fullhints', 20], ['blind', 20]);
   // Steal needs someone else to steal from — pointless (and confusing to
   // announce) in a 1-player game.
   if (game.roundIndex >= 2 && game.players.size >= 2) pool.push(['steal', 20]);
@@ -374,9 +375,14 @@ function buildRound(usedSongIds: Set<string>, artistOnly = false, party?: PartyC
   // Any target other than plain 'title' means the artist is (part of) the
   // answer, so artist hints would give it away.
   const suppressArtist = party ? party.target !== 'title' : artistOnly;
-  const hints = party?.format === 'classic' && party.event === 'fullhints'
-    ? generateAllHints(song, suppressArtist)
-    : generateHints(song, suppressArtist);
+  let hints: Hint[];
+  if (party?.format === 'classic' && party.event === 'blind') {
+    hints = [];
+  } else if (party?.format === 'classic' && party.event === 'fullhints') {
+    hints = generateAllHints(song, suppressArtist);
+  } else {
+    hints = generateHints(song, suppressArtist);
+  }
 
   return {
     song,
