@@ -895,6 +895,24 @@ io.on('connection', (socket) => {
 
     game.phaseTimer = setTimeout(() => {
       if (game.phase !== 'guessing' || round.answered) return;
+      // A guesser's own client auto-submits at this same deadline, but that's
+      // a race against the network — this server timer firing first would
+      // otherwise just discard whatever they'd typed. Give their live draft
+      // one last look before moving the round on.
+      const auto = gm.finalizeGuessDrafts(game);
+      if (auto) {
+        io.to(game.pin).emit('round_result', {
+          correct: true,
+          guesserName: auto.guesserName,
+          ...songFields(game, round),
+          points: auto.points,
+          playerGuesses: gm.getRoundGuesses(game),
+          stealPending: stealPendingName(game, round),
+        });
+        emitScoreUpdate(game);
+        maybeOfferSteal(game);
+        return;
+      }
       advanceTierOrReveal(game);
     }, game.guessingTime * 1000);
   }

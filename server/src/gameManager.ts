@@ -853,6 +853,27 @@ export function finalizeRaceDrafts(game: Game): void {
   }
 }
 
+// Same idea as finalizeRaceDrafts, but for the classic bid/tier flow: a
+// tier's guessing timer expiring used to just advance to the next tier
+// (or reveal) without ever looking at what the current guessers had typed,
+// so a slow/backgrounded client whose own auto-submit timer missed the
+// deadline just lost their answer. Auto-submits the first correct draft
+// found (in tier order) so it scores exactly like a real submission would.
+export function finalizeGuessDrafts(
+  game: Game,
+): { correct: true; points: number; guesserName: string; allDone: boolean } | null {
+  const round = game.currentRound;
+  if (!round || game.phase !== 'guessing' || round.answered) return null;
+  for (const id of round.guesserSocketIds) {
+    if (round.passed.has(id)) continue;
+    const draft = round.liveDrafts.get(id)?.trim();
+    if (!draft) continue;
+    const result = recordGuess(game, id, draft);
+    if (result?.correct) return result as { correct: true; points: number; guesserName: string; allDone: boolean };
+  }
+  return null;
+}
+
 // Called on every keystroke so an opponent's in-progress guess survives even
 // if the round ends (someone else wins) before they get a chance to submit.
 export function updateLiveDraft(game: Game, socketId: string, text: string): void {
