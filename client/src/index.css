@@ -101,3 +101,24 @@ body {
   0%, 100% { transform: scaleY(0.1); }
   45%       { transform: scaleY(0.7); }
 }
+
+@keyframes badgeBreathe {
+  0%, 100% { transform: scale(1); }
+  50%       { transform: scale(1.06); }
+}
+
+@keyframes badgePulse {
+  0%   { transform: scale(1); opacity: 0.7; }
+  100% { transform: scale(1.7); opacity: 0; }
+}
+
+@keyframes markerCelebrate {
+  0%   { transform: scale(0.4); opacity: 0; }
+  60%  { transform: scale(1.35); opacity: 1; }
+  100% { transform: scale(1); opacity: 1; }
+}
+
+@keyframes markerGlowPulse {
+  0%, 100% { box-shadow: 0 0 0 0 rgba(251,191,36,0.5); }
+  50%       { box-shadow: 0 0 0 6px rgba(251,191,36,0); }
+}

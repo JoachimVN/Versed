@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { Music, Check, Loader2, Copy, Settings, Flame, Coins, Clock, PartyPopper } from 'lucide-react';
+import { Check, Loader2, Copy, Settings, Flame, Coins, Clock, PartyPopper } from 'lucide-react';
 import LiquidGlass from 'liquid-glass-react';
 import QRCodeLib from 'react-qr-code';
 const QRCode = QRCodeLib as unknown as React.FC<{ value: string; size?: number }>;
@@ -12,6 +12,8 @@ import { ConfettiBackground } from '../components/ConfettiBackground';
 import { NoOneGotItCardContent, GotItCardContent, YearCardContent, YearTimelineContent } from '../components/RevealShared';
 import { RoundIntro, PartyBadge, PartyRevealExtras } from '../components/RoundIntro';
 import { BackButton } from '../components/BackButton';
+import { CircularTimer } from '../components/CircularTimer';
+import { NowPlayingBadge } from '../components/NowPlayingBadge';
 import { APP_NAME, BACKEND_URL, RACE_TIME } from '../config';
 import type { Hint, LeaderboardEntry, PartyInfo, PlayerInfo, RoundResultEvent } from '../types';
 
@@ -33,6 +35,7 @@ export interface HostState {
   hints: Hint[];
   bettingTime: number;
   timeLeft: number;
+  timerTotal: number;
   bidCount: number;
   countdown: number | null;
   guesserNames: string[];
@@ -92,6 +95,7 @@ function useHostGame(): HostState {
   const [hints, setHints] = useState<Hint[]>([]);
   const [bettingTime, setBettingTime] = useState(15);
   const [timeLeft, setTimeLeft] = useState(0);
+  const [timerTotal, setTimerTotal] = useState(0);
   const [bidCount, setBidCount] = useState(0);
   const [countdown, setCountdown] = useState<number | null>(null);
   const [guesserNames, setGuesserNames] = useState<string[]>([]);
@@ -127,6 +131,7 @@ function useHostGame(): HostState {
   function startCountdown(seconds: number) {
     stopCountdown();
     setTimeLeft(Math.ceil(seconds));
+    setTimerTotal(Math.ceil(seconds));
     timerRef.current = setInterval(() => {
       setTimeLeft(t => {
         if (t <= 1) { stopCountdown(); return 0; }
@@ -418,7 +423,7 @@ function useHostGame(): HostState {
 
   return {
     spotify, phase, pin, players, roundIndex, totalRounds, hints,
-    bettingTime, timeLeft, bidCount, countdown, guesserNames, lowestBid, playerBids,
+    bettingTime, timeLeft, timerTotal, bidCount, countdown, guesserNames, lowestBid, playerBids,
     result, roundDeltas, leaderboard, copied, playProgress, inviteUrl,
     settingsOpen, bettingTimeSetting, guessingTimeSetting, roundsSetting,
     mode, raceTimeSetting, raceWinnerOnly, artistOnly, party, stealResult, answeredCount,
@@ -431,64 +436,6 @@ function useHostGame(): HostState {
     endGame: () => socket.emit('end_game'),
     removePlayer: (name: string) => socket.emit('kick_player', { name }),
   };
-}
-
-// ─── Circular countdown timer ─────────────────────────────────────────────────
-
-function timerColor(pct: number): string {
-  if (pct > 0.6) return 'rgba(52,211,153,0.9)';
-  if (pct > 0.35) return 'rgba(251,191,36,0.9)';
-  if (pct > 0.12) return 'rgba(249,115,22,0.9)';
-  return 'rgba(239,68,68,0.9)';
-}
-
-function CircularTimer({ timeLeft, total }: Readonly<{ timeLeft: number; total: number }>) {
-  const size = 128;
-  const sw = 5;
-  const r = (size - sw * 2) / 2;
-  const circ = 2 * Math.PI * r;
-
-  const endsAtRef = useRef(0);
-  const [pct, setPct] = useState(total > 0 ? Math.max(0, Math.min(1, timeLeft / total)) : 0);
-
-  useEffect(() => {
-    if (total <= 0) return;
-    if (timeLeft <= 0) {
-      setPct(0);
-      return;
-    }
-    endsAtRef.current = Date.now() + timeLeft * 1000;
-    let rafId: number;
-    const tick = () => {
-      const remaining = endsAtRef.current - Date.now();
-      const p = Math.max(0, Math.min(1, remaining / (total * 1000)));
-      setPct(p);
-      if (p > 0) rafId = requestAnimationFrame(tick);
-    };
-    rafId = requestAnimationFrame(tick);
-    return () => cancelAnimationFrame(rafId);
-  }, [timeLeft, total]);
-
-  return (
-    <div className="relative" style={{ width: size, height: size }}>
-      <svg width={size} height={size} className="absolute inset-0" style={{ transform: 'rotate(-90deg)' }}>
-        <circle cx={size / 2} cy={size / 2} r={r} fill="none" stroke="rgba(255,255,255,0.07)" strokeWidth={sw} />
-        <circle
-          cx={size / 2} cy={size / 2} r={r} fill="none"
-          stroke={timerColor(pct)}
-          strokeWidth={sw}
-          strokeDasharray={circ}
-          strokeDashoffset={circ * (1 - pct)}
-          strokeLinecap="round"
-          style={{ transition: 'stroke 0.4s ease' }}
-        />
-      </svg>
-      <div className="absolute inset-0 flex flex-col items-center justify-center">
-        <span className="text-white font-black" style={{ fontSize: '1.9rem', lineHeight: 1 }}>{timeLeft}</span>
-        <span style={{ color: 'rgba(255,255,255,0.3)', fontSize: '0.6rem', textTransform: 'uppercase', letterSpacing: '0.14em' }}>sec</span>
-      </div>
-    </div>
-  );
 }
 
 // ─── Bid timeline ────────────────────────────────────────────────────────────
@@ -1104,55 +1051,83 @@ function BettingView({ game }: Readonly<{ game: HostState }>) {
   );
 }
 
+// Which brand accent a round reads as: year rounds get teal (matching Play.tsx),
+// race/non-classic party rounds get orange, classic stays purple.
+function roundAccent(isRace: boolean, party: PartyInfo | null): 'classic' | 'race' | 'year' {
+  if (party?.format === 'year') return 'year';
+  return isRace ? 'race' : 'classic';
+}
+
 export function PlayingView({ game }: Readonly<{ game: HostState }>) {
-  const { roundIndex, totalRounds, countdown, guesserNames, lowestBid, playerBids, playProgress, timeLeft, mode, answeredCount, players, skipTurn, endGame, party } = game;
+  const { roundIndex, totalRounds, countdown, guesserNames, lowestBid, playerBids, timeLeft, timerTotal, mode, answeredCount, players, skipTurn, endGame, party } = game;
   // Party rounds that aren't classic-format arrive with an empty bid state and
   // behave exactly like race rounds on this screen.
   const isRace = mode === 'race' || (party !== null && party.format !== 'classic');
   const raceStatus = party?.finale
     ? `${party.duelists.join(' vs ')} - first correct wins`
     : `${answeredCount} / ${players.length} answered`;
+  const accent = roundAccent(isRace, party);
   return (
-    <div className="relative min-h-screen flex flex-col items-center justify-center p-6 gap-6 text-center overflow-hidden">
+    <div className="relative min-h-screen flex flex-col items-center justify-center p-6 gap-5 text-center overflow-hidden">
       <img src={`${import.meta.env.BASE_URL}background4.svg`} alt="" aria-hidden="true" style={{ position: 'fixed', inset: 0, width: '100%', height: '100%', objectFit: 'cover', zIndex: 0 }} />
       <div style={{ position: 'fixed', inset: 0, zIndex: 1, background: 'rgba(5,5,14,0.82)', backdropFilter: 'blur(28px)' }} />
-      <div className="flex flex-col items-center gap-6 text-center w-full" style={{ position: 'relative', zIndex: 2 }}>
-        <p className="text-white/50">Round {roundIndex + 1}/{totalRounds}</p>
+      <div className="flex flex-col items-center gap-5 text-center w-full" style={{ position: 'relative', zIndex: 2 }}>
+        <p className="text-white/40 text-sm">Round {roundIndex + 1}/{totalRounds}</p>
         <PartyBadge party={party} />
-        {countdown === null ? (
-          <>
-            <Music className="w-16 h-16 text-white animate-pulse" />
-            {isRace ? (
-              <p className="text-white/50">{raceStatus}</p>
-            ) : (
-              <p className="text-white/50">{guesserNames.join(' & ')} will guess</p>
-            )}
-            <div className="w-full max-w-sm bg-white/10 rounded-full h-2 overflow-hidden">
-              <div className="bg-purple-500 h-2 rounded-full" style={{ width: `${playProgress * 100}%` }} />
+
+        <div className="liquid-btn relative" style={{ width: '310px', height: countdown === null ? '320px' : '300px' }}>
+          <LiquidGlass
+            style={{ position: 'absolute', top: '50%', left: '50%' }}
+            displacementScale={55}
+            blurAmount={0.06}
+            saturation={130}
+            aberrationIntensity={1.5}
+            elasticity={0.08}
+            cornerRadius={20}
+            padding="28px 28px"
+          >
+            <div style={{ width: '254px', display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '16px' }}>
+              {countdown === null ? (
+                <>
+                  <NowPlayingBadge playing accent={accent} size={56} />
+                  <span style={{ color: 'rgba(255,255,255,0.5)', fontSize: '0.9rem', display: 'inline-block', minWidth: '210px', textAlign: 'center' }}>
+                    {isRace ? raceStatus : `${guesserNames.join(' & ')} will guess`}
+                  </span>
+                  <div style={{ width: '100%', height: '1px', background: 'rgba(255,255,255,0.07)' }} />
+                  <CircularTimer timeLeft={timeLeft} total={timerTotal} size={110} />
+                  {!isRace && (
+                    <div className="w-full">
+                      <BidTimeline bids={playerBids} lowestBid={lowestBid} />
+                    </div>
+                  )}
+                </>
+              ) : (
+                <>
+                  <span style={{ color: 'rgba(255,255,255,0.32)', fontSize: '0.6rem', letterSpacing: '0.2em', textTransform: 'uppercase' }}>
+                    Get ready
+                  </span>
+                  <div className="text-8xl font-black text-white" style={{ animation: 'badgeBreathe 1s ease-in-out infinite' }}>{countdown}</div>
+                  <div style={{ width: '100%', height: '1px', background: 'rgba(255,255,255,0.07)' }} />
+                  {isRace ? (
+                    <span style={{ color: 'rgba(255,255,255,0.5)', fontSize: '0.9rem', display: 'inline-block', minWidth: '210px', textAlign: 'center' }}>
+                      {party?.finale ? party.duelists.join(' vs ') : 'Everyone will guess'}
+                    </span>
+                  ) : (
+                    <>
+                      <span style={{ color: 'rgba(255,255,255,0.5)', fontSize: '0.9rem', display: 'inline-block', minWidth: '210px', textAlign: 'center' }}>
+                        {guesserNames.join(' & ')} will guess
+                      </span>
+                      <div className="w-full">
+                        <BidTimeline bids={playerBids} lowestBid={lowestBid} />
+                      </div>
+                    </>
+                  )}
+                </>
+              )}
             </div>
-            <p className="text-white font-black text-2xl">{timeLeft}s</p>
-            {!isRace && (
-              <div className="w-full max-w-sm">
-                <BidTimeline bids={playerBids} lowestBid={lowestBid} />
-              </div>
-            )}
-          </>
-        ) : (
-          <>
-            <p className="text-white/40 text-sm uppercase tracking-widest">Get ready</p>
-            <div className="text-8xl font-black text-white animate-pulse">{countdown}</div>
-            {isRace ? (
-              <p className="text-white/50">{party?.finale ? party.duelists.join(' vs ') : 'Everyone will guess'}</p>
-            ) : (
-              <>
-                <p className="text-white/50">{guesserNames.join(' & ')} will guess</p>
-                <div className="w-full max-w-sm">
-                  <BidTimeline bids={playerBids} lowestBid={lowestBid} />
-                </div>
-              </>
-            )}
-          </>
-        )}
+          </LiquidGlass>
+        </div>
+
         <div className="flex items-center gap-6 mt-2">
           <button onClick={skipTurn} className="text-white/20 text-xs hover:text-white/50 transition-colors">
             Skip round
@@ -1165,23 +1140,46 @@ export function PlayingView({ game }: Readonly<{ game: HostState }>) {
 }
 
 function GuessingView({ game }: Readonly<{ game: HostState }>) {
-  const { roundIndex, totalRounds, guesserNames, lowestBid, playerBids, timeLeft, skipTurn, endGame, party } = game;
+  const { roundIndex, totalRounds, guesserNames, lowestBid, playerBids, timeLeft, timerTotal, mode, party, skipTurn, endGame } = game;
+  const isRace = mode === 'race' || (party !== null && party.format !== 'classic');
+  const accent = roundAccent(isRace, party);
   return (
-    <div className="relative min-h-screen flex flex-col items-center justify-center p-6 gap-6 text-center overflow-hidden">
+    <div className="relative min-h-screen flex flex-col items-center justify-center p-6 gap-5 text-center overflow-hidden">
       <img src={`${import.meta.env.BASE_URL}background4.svg`} alt="" aria-hidden="true" style={{ position: 'fixed', inset: 0, width: '100%', height: '100%', objectFit: 'cover', zIndex: 0 }} />
       <div style={{ position: 'fixed', inset: 0, zIndex: 1, background: 'rgba(5,5,14,0.82)', backdropFilter: 'blur(28px)' }} />
-      <div className="flex flex-col items-center gap-6 text-center w-full" style={{ position: 'relative', zIndex: 2 }}>
-        <p className="text-white/50">Round {roundIndex + 1}/{totalRounds}</p>
+      <div className="flex flex-col items-center gap-5 text-center w-full" style={{ position: 'relative', zIndex: 2 }}>
+        <p className="text-white/40 text-sm">Round {roundIndex + 1}/{totalRounds}</p>
         <PartyBadge party={party} />
-        <div>
-          <p className="text-white/50 text-sm mb-1">Guessing</p>
-          <p className="text-white font-black text-2xl">{guesserNames.join(' & ')}</p>
+
+        <div className="liquid-btn relative" style={{ width: '310px', height: '320px' }}>
+          <LiquidGlass
+            style={{ position: 'absolute', top: '50%', left: '50%' }}
+            displacementScale={55}
+            blurAmount={0.06}
+            saturation={130}
+            aberrationIntensity={1.5}
+            elasticity={0.08}
+            cornerRadius={20}
+            padding="28px 28px"
+          >
+            <div style={{ width: '254px', display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '16px' }}>
+              <NowPlayingBadge playing accent={accent} size={48} />
+              <span style={{ color: 'rgba(255,255,255,0.32)', fontSize: '0.6rem', letterSpacing: '0.2em', textTransform: 'uppercase' }}>
+                Guessing
+              </span>
+              <span style={{ color: 'white', fontWeight: 900, fontSize: '1.4rem', lineHeight: 1.3, display: 'inline-block', minWidth: '210px', textAlign: 'center' }}>
+                {guesserNames.join(' & ')}
+              </span>
+              <div style={{ width: '100%', height: '1px', background: 'rgba(255,255,255,0.07)' }} />
+              <CircularTimer timeLeft={timeLeft} total={timerTotal} size={110} />
+              <div className="w-full">
+                <BidTimeline bids={playerBids} lowestBid={lowestBid} />
+              </div>
+            </div>
+          </LiquidGlass>
         </div>
-        <p className="text-white font-black text-5xl">{timeLeft}s</p>
-        <div className="w-full max-w-sm">
-          <BidTimeline bids={playerBids} lowestBid={lowestBid} />
-        </div>
-        <p className="text-white/30 text-sm">Other players are waiting...</p>
+
+        <p className="text-white/25 text-sm">Other players are waiting...</p>
         <div className="flex items-center gap-6 mt-2">
           <button onClick={skipTurn} className="text-white/20 text-xs hover:text-white/50 transition-colors">
             Skip turn
@@ -1366,8 +1364,8 @@ export function RevealView({ game, result, instant = false }: Readonly<{ game: H
         game={game}
         result={result}
         instant={instant}
-        cardHeight={result.coverUrl ? 560 : 440}
-        cardContent={<YearTimelineContent result={result} />}
+        cardHeight={result.coverUrl ? 500 : 380}
+        cardContent={<YearTimelineContent result={result} showGuessValues={false} />}
         isCorrectFor={(p) => !!result.yearResults?.some(r => r.name === p.name && r.diff === 0)}
       />
     );
@@ -1460,7 +1458,9 @@ function LeaderboardView({ game }: Readonly<{ game: HostState }>) {
       </div>
 
       {/* Mid-game leaderboard is the resume point after a host page reload,
-          so it needs its own way to continue the game. */}
+          so it needs its own way to continue the game. No "End game" here —
+          ending it would just swap to this same view's finished state, and
+          early-ending is already available from every in-round screen. */}
       {!isFinished && (
         <div className="relative z-10 flex justify-center pb-2">
           <button
@@ -1487,9 +1487,6 @@ function LeaderboardView({ game }: Readonly<{ game: HostState }>) {
               </div>
             </LiquidGlass>
           </button>
-          <div className="flex justify-center pt-1">
-            <EndGameButton endGame={game.endGame} />
-          </div>
         </div>
       )}
 

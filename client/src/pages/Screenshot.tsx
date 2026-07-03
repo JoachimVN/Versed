@@ -36,6 +36,7 @@ const MOCK_HOST: HostState = {
   hints: [],
   bettingTime: 15,
   timeLeft: 2,
+  timerTotal: 15,
   bidCount: 3,
   countdown: null,
   guesserNames: ['Anna'],

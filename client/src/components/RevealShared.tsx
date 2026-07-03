@@ -117,7 +117,7 @@ export function YearCardContent({ result }: Readonly<{ result: RoundResultEvent 
   );
 }
 
-export function YearTimelineContent({ result }: Readonly<{ result: RoundResultEvent }>) {
+export function YearTimelineContent({ result, showGuessValues = true }: Readonly<{ result: RoundResultEvent; showGuessValues?: boolean }>) {
   if (!result.yearResults) return null;
 
   const year = result.year ? Math.floor(result.year) : null;
@@ -131,117 +131,95 @@ export function YearTimelineContent({ result }: Readonly<{ result: RoundResultEv
   const range = max === min ? 1 : max - min;
   const pos = (y: number) => 6 + ((y - min) / range) * 88;
 
-  const sortedResults = [...result.yearResults].sort((a, b) => {
-    const diffA = a.diff ?? Infinity;
-    const diffB = b.diff ?? Infinity;
-    return diffA - diffB;
-  });
+  // Server presorts yearResults by diff ascending, so the first non-null diff is the best.
+  const bestDiff = result.yearResults.find(r => r.diff !== null)?.diff ?? null;
+
+  // Group by identical guess so ties share one marker instead of overlapping dots.
+  const groups: { guess: number; entries: typeof guesses }[] = [];
+  for (const r of guesses) {
+    const existing = groups.find(g => g.guess === r.guess);
+    if (existing) existing.entries.push(r);
+    else groups.push({ guess: r.guess!, entries: [r] });
+  }
+  groups.sort((a, b) => a.guess - b.guess);
+
+  const passCount = result.yearResults.length - guesses.length;
 
   return (
     <div style={{ width: '280px', display: 'flex', flexDirection: 'column', alignItems: 'center', textAlign: 'center' }}>
       <span style={{
         color: 'rgba(255,255,255,0.28)', fontSize: '0.6rem', letterSpacing: '0.18em', textTransform: 'uppercase',
-        marginBottom: '8px', display: 'inline-block',
+        marginBottom: '4px', display: 'inline-block',
       }}>
-        The year was {year}
+        The year was
+      </span>
+      <span style={{
+        fontSize: '2.2rem', fontWeight: 900, lineHeight: 1,
+        background: 'linear-gradient(to bottom left, rgba(0,200,195,0.5) 0%, transparent 55%), linear-gradient(to top right, rgba(150,17,193,0.5) 0%, transparent 55%), #fff',
+        WebkitBackgroundClip: 'text', WebkitTextFillColor: 'transparent', backgroundClip: 'text',
+        marginBottom: '22px', display: 'inline-block', minWidth: '140px',
+      }}>
+        {year}
       </span>
 
       {/* Timeline */}
-      <div style={{ width: '100%', marginBottom: '16px' }}>
-        {/* Year markers */}
-        <div style={{ position: 'relative', height: '20px', marginBottom: '4px' }}>
-          {[min, Math.round(min + range / 2), max].map(y => (
-            <div
-              key={y}
-              style={{
-                position: 'absolute',
-                left: `${pos(y)}%`,
-                transform: 'translateX(-50%)',
-                fontSize: '0.65rem',
-                color: y === year ? 'rgba(255,255,255,0.9)' : 'rgba(255,255,255,0.4)',
-                fontWeight: y === year ? 'bold' : 'normal',
-              }}
-            >
-              {y}
-            </div>
-          ))}
+      <div style={{ position: 'relative', width: '100%', height: '86px', marginBottom: '8px' }}>
+        <div style={{ position: 'absolute', left: 0, right: 0, top: '43px', height: '3px', background: 'rgba(255,255,255,0.08)', borderRadius: '2px' }} />
+
+        {/* Actual-year tick */}
+        <div style={{
+          position: 'absolute', left: `${pos(year)}%`, top: '28px', transform: 'translateX(-50%)',
+          width: '2px', height: '30px', background: 'rgba(0,200,195,0.5)', borderRadius: '1px',
+        }} />
+        <div style={{
+          position: 'absolute', left: `${pos(year)}%`, top: '60px', transform: 'translateX(-50%)',
+          fontSize: '0.6rem', color: 'rgba(94,234,212,0.9)', fontWeight: 700, whiteSpace: 'nowrap',
+        }}>
+          actual
         </div>
 
-        {/* Timeline bar */}
-        <div style={{ position: 'relative', height: '4px', background: 'rgba(255,255,255,0.1)', borderRadius: '2px', marginBottom: '12px' }}>
-          {/* Correct year marker */}
-          <div
-            style={{
-              position: 'absolute',
-              left: `${pos(year)}%`,
-              transform: 'translateX(-50%)',
-              width: '8px',
-              height: '8px',
-              background: 'rgba(0,200,195,0.9)',
-              border: '1px solid rgba(0,255,250,0.8)',
-              borderRadius: '50%',
-              top: '-2px',
-            }}
-          />
-
-          {/* Guess markers */}
-          {sortedResults.map((r, i) => {
-            if (r.guess === null) return null;
-            const isClosest = i === 0 && r.diff !== null;
-            return (
-              <div
-                key={r.name}
-                style={{
-                  position: 'absolute',
-                  left: `${pos(r.guess)}%`,
-                  transform: 'translateX(-50%)',
-                  width: isClosest ? '6px' : '4px',
-                  height: isClosest ? '6px' : '4px',
-                  background: isClosest ? '#fbbf24' : 'rgba(255,255,255,0.4)',
-                  borderRadius: '50%',
-                  top: isClosest ? '0px' : '2px',
-                  transition: 'all 0.2s',
-                }}
-              />
-            );
-          })}
-        </div>
-      </div>
-
-      {/* Results list */}
-      <div style={{ width: '100%', maxHeight: '140px', overflowY: 'auto', borderRadius: '8px', background: 'rgba(255,255,255,0.03)', padding: '8px', marginBottom: '12px' }}>
-        {sortedResults.map((r, i) => {
-          if (r.guess === null) return null;
-          const isClosest = i === 0 && r.diff !== null;
+        {groups.map((group, i) => {
+          const isBest = bestDiff !== null && group.entries[0].diff === bestDiff;
+          const above = i % 2 === 0;
+          const names = group.entries.map(e => e.name).join(', ');
+          const label = showGuessValues ? `${names} · ${group.guess}` : names;
           return (
             <div
-              key={r.name}
+              key={group.guess}
               style={{
-                display: 'flex',
-                justifyContent: 'space-between',
-                alignItems: 'center',
-                padding: '4px 8px',
-                fontSize: '0.75rem',
-                borderBottom: i < sortedResults.length - 1 ? '1px solid rgba(255,255,255,0.05)' : 'none',
+                position: 'absolute', left: `${pos(group.guess)}%`, top: '43px',
+                transform: 'translate(-50%, -50%)',
+                animation: 'markerCelebrate 0.5s ease-out both',
+                animationDelay: `${0.1 + i * 0.09}s`,
               }}
             >
-              <span style={{ color: isClosest ? '#fbbf24' : 'rgba(255,255,255,0.7)', fontWeight: isClosest ? 'bold' : 'normal' }}>
-                {r.name}
+              <span style={{
+                position: 'absolute', left: '50%', transform: 'translateX(-50%)',
+                [above ? 'bottom' : 'top']: '13px',
+                fontSize: '0.62rem', whiteSpace: 'nowrap',
+                color: isBest ? '#fbbf24' : 'rgba(255,255,255,0.55)',
+                fontWeight: isBest ? 800 : 600,
+              }}>
+                {label}
               </span>
-              <span style={{ color: 'rgba(255,255,255,0.4)', marginLeft: '8px' }}>
-                {r.guess}{r.diff !== null && r.diff !== 0 ? ` (${r.diff > 0 ? '+' : ''}${r.diff})` : r.diff === 0 ? ' ✓' : ''}
-              </span>
+              <div style={{
+                width: isBest ? '10px' : '6px', height: isBest ? '10px' : '6px', borderRadius: '50%',
+                background: isBest ? '#fbbf24' : 'rgba(255,255,255,0.5)',
+                border: isBest ? '2px solid rgba(255,255,255,0.5)' : 'none',
+                animation: isBest ? 'markerGlowPulse 1.8s ease-in-out infinite' : 'none',
+              }} />
             </div>
           );
         })}
-        {result.yearResults.filter(r => r.guess === null).length > 0 && (
-          <div style={{ padding: '4px 8px', fontSize: '0.75rem', color: 'rgba(255,255,255,0.3)' }}>
-            {result.yearResults.filter(r => r.guess === null).length} didn't guess
-          </div>
-        )}
       </div>
 
-      <div style={{ width: '100%', height: '1px', background: 'rgba(255,255,255,0.08)', marginBottom: '12px' }} />
+      {passCount > 0 && (
+        <span style={{ color: 'rgba(255,255,255,0.25)', fontSize: '0.68rem', marginBottom: '4px' }}>
+          {passCount} didn't guess
+        </span>
+      )}
+
+      <div style={{ width: '100%', height: '1px', background: 'rgba(255,255,255,0.08)', marginTop: '8px', marginBottom: '12px' }} />
       {result.coverUrl && (
         <img
           src={result.coverUrl} alt="Album art"

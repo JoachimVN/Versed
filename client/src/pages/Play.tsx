@@ -9,6 +9,8 @@ import { useKeyboardOpen } from '../hooks/useViewportHeight';
 import { NoOneGotItCardContent, GotItCardContent, YearCardContent } from '../components/RevealShared';
 import { RoundIntro, PartyBadge, PartyRevealExtras } from '../components/RoundIntro';
 import { BackButton } from '../components/BackButton';
+import { CircularTimer, timerColor } from '../components/CircularTimer';
+import { NowPlayingBadge } from '../components/NowPlayingBadge';
 import { APP_NAME, BID_OPTIONS } from '../config';
 import type { Hint, LeaderboardEntry, PartyInfo, RoundResultEvent } from '../types';
 
@@ -579,13 +581,6 @@ function usePlayGame(pinParam?: string): PlayState {
 function guessTextClass(guess: string | null, correct: boolean): string {
   if (guess === null) return 'text-white/15 italic';
   return correct ? 'text-green-400' : 'text-white/20 italic';
-}
-
-function timerColor(pct: number): string {
-  if (pct > 0.6) return 'rgba(52,211,153,0.85)';
-  if (pct > 0.35) return 'rgba(251,191,36,0.85)';
-  if (pct > 0.12) return 'rgba(249,115,22,0.85)';
-  return 'rgba(239,68,68,0.85)';
 }
 
 // Each bar gets a unique animation name, duration, and delay so they move independently.
