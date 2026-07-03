@@ -20,6 +20,45 @@ export interface Hint {
   imageUrl?: string;
 }
 
+// ─── Party mode ───────────────────────────────────────────────────────────────
+
+// How a party round plays out. 'classic' and 'race' reuse those modes' whole
+// flows; 'year' rides the race flow but everyone answers a release year and
+// the closest answer wins.
+export type PartyFormat = 'classic' | 'race' | 'year';
+export type GuessTarget = 'title' | 'artist' | 'both';
+export type PartyEvent = 'double' | 'mystery' | 'steal' | 'snippet' | 'fullhints';
+
+export interface PartyConfig {
+  format: PartyFormat;
+  target: GuessTarget;              // what the guess is checked against (ignored for 'year')
+  event: PartyEvent | null;
+  multiplier: number;               // actual value — clients see null while a mystery is unrevealed
+  intro: { title: string; tagline: string };
+  finale: boolean;                  // last round: top-2 duel, first correct wins
+  duelistIds: string[];             // socketIds of the duelists (finale only)
+  duelistNames: string[];
+}
+
+// What clients are allowed to see of a PartyConfig (no socketIds, mystery
+// multiplier hidden until the reveal).
+export interface PartyClientView {
+  format: PartyFormat;
+  target: GuessTarget;
+  event: PartyEvent | null;
+  multiplier: number | null;
+  intro: { title: string; tagline: string };
+  finale: boolean;
+  duelists: string[];
+}
+
+export interface YearResult {
+  name: string;
+  guess: number | null;             // null = no/invalid answer
+  diff: number | null;
+  points: number;
+}
+
 // Bidders grouped by bid value. Tiers are played in ascending bid order: the
 // lowest bidders guess first (on the least audio), and each failed tier hands
 // off to the next-lowest, who hear their own — longer — bid's worth of audio.
@@ -32,6 +71,12 @@ export interface Round {
   song: Song;
   hints: Hint[];
   coverUrl?: string;
+  // Party-mode fields
+  party?: PartyConfig;
+  snippetMs?: number;               // 'snippet' event: playback starts here instead of 0
+  stealBy?: string;                 // socketId of the round winner allowed to steal
+  stealDone?: boolean;
+  yearResults?: YearResult[];       // 'year' rounds: filled at round end
   bids: Map<string, number>;
   bidTiers: BidTier[];
   tierIndex: number;
@@ -58,7 +103,7 @@ export interface Player {
   streak: number;
 }
 
-export type GameMode = 'classic' | 'race';
+export type GameMode = 'classic' | 'race' | 'party';
 
 export type GamePhase =
   | 'lobby'

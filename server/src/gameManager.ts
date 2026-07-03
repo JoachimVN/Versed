@@ -1,5 +1,8 @@
 import { randomInt } from 'node:crypto';
-import { Game, Hint, Player, Round, Song } from './types';
+import {
+  Game, GuessTarget, Hint, PartyClientView, PartyConfig, PartyEvent, PartyFormat,
+  Player, Round, Song, YearResult,
+} from './types';
 import { loadSongs } from './songLoader';
 import { isCorrectGuess, isCorrectArtistGuess } from './fuzzyMatch';
 
@@ -14,6 +17,15 @@ export const RACE_TIME = 30;
 export const RACE_DECAY_WINDOW = 12;
 export const RACE_FLOOR = 200;
 export const RACE_BASE = 1000;
+
+// ─── Party mode tuning ────────────────────────────────────────────────────────
+export const BOTH_ARTIST_BONUS = 300;  // 'both' target: extra for also naming the artist
+export const STEAL_PCT = 0.15;         // steal takes 15% of the victim's score…
+export const STEAL_MIN = 300;          // …but never less than this (capped at their total)
+export const DUEL_WIN_POINTS = 1500;   // finale: first correct duelist takes this
+export const YEAR_MAX_POINTS = 1000;   // year round: exact answer
+export const YEAR_POINTS_SLOPE = 120;  // …minus this per year off
+export const YEAR_WINNER_BONUS = 500;  // closest answer bonus (split on ties)
 
 // The tiniest bids ask for so little audio that a clip can land entirely inside
 // a song's near-silent lead-in and reveal nothing — pure bad luck the bidder
@@ -56,6 +68,16 @@ function shuffle<T>(arr: T[]): T[] {
     [c[i], c[j]] = [c[j], c[i]];
   }
   return c;
+}
+
+function pickWeighted<T>(entries: [T, number][]): T {
+  const total = entries.reduce((sum, [, w]) => sum + w, 0);
+  let r = randomInt(0, total);
+  for (const [value, w] of entries) {
+    if (r < w) return value;
+    r -= w;
+  }
+  return entries[entries.length - 1][0];
 }
 
 function getInitials(artist: string): string {
@@ -125,6 +147,155 @@ function generateHints(song: Song, artistOnly = false): Hint[] {
   return selected;
 }
 
+// 'fullhints' rounds: every hint we have, deduplicated — one time hint (year
+// beats decade), and the full artist line instead of initials.
+function generateAllHints(song: Song, suppressArtist: boolean): Hint[] {
+  const hints: Hint[] = [];
+  if (song.year) hints.push({ label: 'Release year', value: String(Math.floor(song.year)) });
+  else if (song.decade) hints.push({ label: 'Era', value: `${song.decade}s` });
+  if (song.spotifyStreams) hints.push({ label: 'Streams', value: formatStreams(song.spotifyStreams) });
+  if (song.durationMs) hints.push({ label: 'Duration', value: formatDuration(song.durationMs) });
+  if (!suppressArtist) {
+    const fullArtist = song.featuredArtists
+      ? `${song.artist} feat. ${song.featuredArtists}`
+      : song.artist;
+    hints.push({ label: 'Artist(s)', value: fullArtist });
+  }
+  return hints;
+}
+
+// ─── Party round recipes ─────────────────────────────────────────────────────
+
+function introFor(format: PartyFormat, target: GuessTarget, event: PartyEvent | null): { title: string; tagline: string } {
+  if (format === 'year') return { title: 'Guess the Year', tagline: 'Closest answer wins the round' };
+  const flow = format === 'classic' ? 'Bid & guess' : 'Everyone races';
+  const goal = target === 'artist' ? 'name the artist'
+    : target === 'both' ? 'title + artist bonus'
+    : 'name the song';
+  const eventIntros: Record<PartyEvent, { title: string; tag: string }> = {
+    double: { title: 'Double Points', tag: 'Everything is worth 2×' },
+    mystery: { title: 'Mystery Multiplier', tag: 'Revealed after the round: ×1, ×2 or ×3' },
+    steal: { title: 'Steal Round', tag: 'Win the round, then rob another player' },
+    snippet: { title: 'Snippet Roulette', tag: 'The clip starts somewhere mid-song' },
+    fullhints: { title: 'Open Book', tag: 'Every hint on the table' },
+  };
+  if (event) {
+    const e = eventIntros[event];
+    return { title: e.title, tagline: `${e.tag} · ${flow} — ${goal}` };
+  }
+  if (target === 'artist') return { title: 'Who Sings It?', tagline: `${flow} — name the artist` };
+  if (target === 'both') return { title: 'Double Duty', tagline: `${flow} — title wins, artist adds +${BOTH_ARTIST_BONUS}` };
+  return format === 'race'
+    ? { title: 'Race Round', tagline: 'Everyone guesses at once — speed wins' }
+    : { title: 'Classic Round', tagline: 'Bid low, score high' };
+}
+
+// One random recipe per round: format + guess target + modifier, with just
+// enough constraints to keep it feeling curated — round 1 is a plain warm-up,
+// the same event never repeats twice in a row, steal waits until scores exist,
+// and the last round is a top-2 duel.
+function buildPartyConfig(game: Game): PartyConfig {
+  const plain: Omit<PartyConfig, 'format' | 'target' | 'event' | 'multiplier' | 'intro'> = {
+    finale: false, duelistIds: [], duelistNames: [],
+  };
+
+  const isLast = game.roundIndex === game.totalRounds - 1;
+  if (isLast && game.totalRounds > 1 && game.players.size >= 2) {
+    const top = Array.from(game.players.values())
+      .sort((a, b) => b.score - a.score)
+      .slice(0, 2);
+    return {
+      format: 'race', target: 'title', event: null, multiplier: 1,
+      finale: true,
+      duelistIds: top.map(p => p.socketId),
+      duelistNames: top.map(p => p.name),
+      intro: {
+        title: 'The Finale',
+        tagline: `${top[0].name} vs ${top[1].name} — first correct wins ${DUEL_WIN_POINTS} pts`,
+      },
+    };
+  }
+
+  if (game.roundIndex === 0) {
+    return {
+      ...plain, format: 'classic', target: 'title', event: null, multiplier: 1,
+      intro: { title: 'Warm-Up', tagline: 'A classic round to get going' },
+    };
+  }
+
+  const prev = game.currentRound?.party;
+  let format = pickWeighted<PartyFormat>([['classic', 45], ['race', 40], ['year', 15]]);
+  if (format === 'year' && prev?.format === 'year') format = 'race';
+  const target: GuessTarget = format === 'year'
+    ? 'title'
+    : pickWeighted<GuessTarget>([['title', 60], ['artist', 25], ['both', 15]]);
+
+  let event: PartyEvent | null = null;
+  if (format !== 'year' && randomInt(0, 100) < 60) {
+    const pool: [PartyEvent, number][] = [['double', 30], ['mystery', 25], ['snippet', 25]];
+    if (format === 'classic') pool.push(['fullhints', 20]);
+    if (game.roundIndex >= 2) pool.push(['steal', 20]);
+    event = pickWeighted(pool.filter(([e]) => e !== prev?.event));
+  }
+  const multiplier = event === 'double' ? 2 : event === 'mystery' ? 1 + randomInt(0, 3) : 1;
+
+  return { ...plain, format, target, event, multiplier, intro: introFor(format, target, event) };
+}
+
+// The sanitized view clients get: no socketIds, and a mystery multiplier stays
+// hidden (null) until the reveal.
+export function partyView(round: Round, revealed = false): PartyClientView | undefined {
+  const p = round.party;
+  if (!p) return undefined;
+  return {
+    format: p.format,
+    target: p.target,
+    event: p.event,
+    multiplier: p.event === 'mystery' && !revealed ? null : p.multiplier,
+    intro: p.intro,
+    finale: p.finale,
+    duelists: p.duelistNames,
+  };
+}
+
+function roundMultiplier(round: Round): number {
+  return round.party?.multiplier ?? 1;
+}
+
+// What this round's guess is checked against. Party rounds carry it per-round;
+// classic/race games fall back to the game-wide artistOnly toggle.
+type EffectiveTarget = GuessTarget | 'year';
+function effectiveTarget(game: Game, round: Round): EffectiveTarget {
+  if (round.party) return round.party.format === 'year' ? 'year' : round.party.target;
+  return game.artistOnly ? 'artist' : 'title';
+}
+
+function checkGuess(
+  target: GuessTarget, text: string, artistText: string | undefined, song: Song,
+): { correct: boolean; artistBonus: boolean } {
+  if (target === 'artist') {
+    return { correct: isCorrectArtistGuess(text, song.artist, song.featuredArtists), artistBonus: false };
+  }
+  const correct = isCorrectGuess(text, song.title);
+  const artistBonus = target === 'both' && correct && !!artistText
+    && isCorrectArtistGuess(artistText, song.artist, song.featuredArtists);
+  return { correct, artistBonus };
+}
+
+// Race-flow rounds are everyone-at-once; party rounds ride it for every
+// non-classic format.
+export function isRaceFlowRound(game: Game, round: Round): boolean {
+  if (game.mode === 'race') return true;
+  return !!round.party && round.party.format !== 'classic';
+}
+
+// Who actually plays a race-flow round — the duelists in a finale, everyone
+// otherwise.
+function raceParticipants(game: Game, round: Round): string[] {
+  if (round.party?.finale) return round.party.duelistIds.filter(id => game.players.has(id));
+  return Array.from(game.players.keys());
+}
+
 function difficultyBonus(rank: number): number {
   return Math.round(500 * Math.max(0, 1 - (rank - 1) / Math.max(songs.length - 1, 1)));
 }
@@ -163,12 +334,42 @@ export function calcRaceWinnerPoints(elapsedMs: number, raceTime: number, rank: 
   return speed + difficultyBonus(rank);
 }
 
-function buildRound(usedSongIds: Set<string>, artistOnly = false): Round {
-  const pool = songs.filter(s => !usedSongIds.has(s.spotifyTrackId));
-  const song = pool.length > 0 ? pickRandom(pool) : pickRandom(songs);
+function buildRound(usedSongIds: Set<string>, artistOnly = false, party?: PartyConfig): Round {
+  let pool = songs.filter(s => !usedSongIds.has(s.spotifyTrackId));
+  if (pool.length === 0) pool = songs;
+  // A year round is unplayable without a known year.
+  if (party?.format === 'year') {
+    const withYear = pool.filter(s => s.year !== null);
+    if (withYear.length > 0) pool = withYear;
+  }
+  const song = pickRandom(pool);
+
+  // Snippet roulette needs a known, long-enough duration to aim inside the
+  // song; silently downgrade to a plain round when the data's missing.
+  let snippetMs: number | undefined;
+  if (party?.event === 'snippet') {
+    if (song.durationMs && song.durationMs > 60_000) {
+      const min = Math.round(song.durationMs * 0.15);
+      const max = Math.round(song.durationMs * 0.65);
+      snippetMs = min + randomInt(0, Math.max(1, max - min));
+    } else {
+      party.event = null;
+      party.intro = introFor(party.format, party.target, null);
+    }
+  }
+
+  // Any target other than plain 'title' means the artist is (part of) the
+  // answer, so artist hints would give it away.
+  const suppressArtist = party ? party.target !== 'title' : artistOnly;
+  const hints = party?.format === 'classic' && party.event === 'fullhints'
+    ? generateAllHints(song, suppressArtist)
+    : generateHints(song, suppressArtist);
+
   return {
     song,
-    hints: generateHints(song, artistOnly),
+    hints,
+    party,
+    snippetMs,
     bids: new Map(),
     bidTiers: [],
     tierIndex: 0,
@@ -260,6 +461,8 @@ function migrateRoundSocketId(round: Round, oldId: string, newId: string): void 
   if (round.correctGuessers.delete(oldId)) round.correctGuessers.add(newId);
   const guessTime = round.guessTimes.get(oldId);
   if (guessTime !== undefined) { round.guessTimes.set(newId, guessTime); round.guessTimes.delete(oldId); }
+  if (round.party) round.party.duelistIds = round.party.duelistIds.map(id => (id === oldId ? newId : id));
+  if (round.stealBy === oldId) round.stealBy = newId;
 }
 
 export function renamePlayer(game: Game, socketId: string, newName: string): Player | null {
@@ -308,7 +511,10 @@ export function removeSocket(socketId: string): { game: Game; wasHost: boolean }
 
 export function startRound(game: Game): Round {
   if (game.phaseTimer) clearTimeout(game.phaseTimer);
-  const round = buildRound(game.usedSongIds, game.artistOnly);
+  // Build the party recipe before replacing currentRound — it reads the
+  // previous round's format/event to avoid repeats.
+  const party = game.mode === 'party' ? buildPartyConfig(game) : undefined;
+  const round = buildRound(game.usedSongIds, game.artistOnly, party);
   game.usedSongIds.add(round.song.spotifyTrackId);
   game.currentRound = round;
   game.phase = 'betting';
@@ -389,7 +595,8 @@ export function settleStreaks(game: Game, round: Round): void {
 export function recordGuess(
   game: Game,
   socketId: string,
-  text: string
+  text: string,
+  artistText?: string,
 ): { correct: boolean; points: number; guesserName: string; allDone: boolean } | null {
   const round = game.currentRound;
   if (!round) return null;
@@ -402,19 +609,24 @@ export function recordGuess(
   if (round.answered || round.passed.has(socketId)) return null;
 
   round.guesses.set(socketId, text);
-  const correct = game.artistOnly
-    ? isCorrectArtistGuess(text, round.song.artist, round.song.featuredArtists)
-    : isCorrectGuess(text, round.song.title);
+  const target = effectiveTarget(game, round);
+  if (target === 'year') return null; // year rounds never run the classic flow
+  const { correct, artistBonus } = checkGuess(target, text, artistText, round.song);
   const guesserName = game.players.get(socketId)?.name ?? '';
 
   if (correct) {
     round.answered = true;
     round.correctGuesserName = guesserName;
     const player = game.players.get(socketId)!;
-    const points = calcPoints(round.lowestBid, round.song.rank);
+    const points = (calcPoints(round.lowestBid, round.song.rank)
+      + (artistBonus ? BOTH_ARTIST_BONUS : 0)) * roundMultiplier(round);
     player.score += points;
     player.streak += 1;
     round.scoredSocketIds.add(socketId);
+    if (round.party?.event === 'steal') {
+      round.stealBy = socketId;
+      round.stealDone = false;
+    }
     game.phase = 'reveal';
     settleStreaks(game, round);
     return { correct: true, points, guesserName, allDone: false };
@@ -448,15 +660,28 @@ export function markRaceStarted(game: Game): void {
   game.phase = 'guessing';
 }
 
-function applyRaceCorrectGuess(game: Game, round: Round, socketId: string, elapsedMs: number): number {
+function applyRaceCorrectGuess(
+  game: Game, round: Round, socketId: string, elapsedMs: number, artistBonus: boolean,
+): number {
   const isFirst = round.firstCorrectAt === null;
   if (isFirst) round.firstCorrectAt = Date.now();
   round.correctGuessers.add(socketId);
   round.guessTimes.set(socketId, elapsedMs);
   if (!isFirst && game.raceWinnerOnly) return 0;
-  const points = game.raceWinnerOnly
-    ? calcRaceWinnerPoints(elapsedMs, game.raceTime, round.song.rank)
-    : calcRacePoints(isFirst, elapsedMs, round.firstCorrectAt! - round.playStartAt!, round.song.rank);
+  let base: number;
+  if (round.party?.finale) {
+    // Duel: winner-takes-all, flat stakes.
+    base = isFirst ? DUEL_WIN_POINTS : 0;
+  } else if (game.raceWinnerOnly) {
+    base = calcRaceWinnerPoints(elapsedMs, game.raceTime, round.song.rank);
+  } else {
+    base = calcRacePoints(isFirst, elapsedMs, round.firstCorrectAt! - round.playStartAt!, round.song.rank);
+  }
+  const points = (base + (artistBonus ? BOTH_ARTIST_BONUS : 0)) * roundMultiplier(round);
+  if (isFirst && round.party?.event === 'steal') {
+    round.stealBy = socketId;
+    round.stealDone = false;
+  }
   const player = game.players.get(socketId)!;
   player.score += points;
   if (points > 0) {
@@ -470,25 +695,34 @@ export function recordRaceGuess(
   game: Game,
   socketId: string,
   text: string,
+  artistText?: string,
 ): { correct: boolean; points: number; elapsedMs: number; allDone: boolean } | null {
   const round = game.currentRound;
   if (!round) return null;
   if (!game.players.has(socketId)) return null;
   if (game.phase !== 'guessing') return null;
   if (round.passed.has(socketId)) return null;
-  if (game.raceWinnerOnly && round.firstCorrectAt !== null) return null;
+  if (round.party?.finale && !round.party.duelistIds.includes(socketId)) return null;
+  if ((game.raceWinnerOnly || round.party?.finale) && round.firstCorrectAt !== null) return null;
 
   const elapsedMs = Date.now() - (round.playStartAt ?? Date.now());
   round.guesses.set(socketId, text);
   round.passed.add(socketId);
-  const correct = game.artistOnly
-    ? isCorrectArtistGuess(text, round.song.artist, round.song.featuredArtists)
-    : isCorrectGuess(text, round.song.title);
+  const participants = raceParticipants(game, round);
 
-  const points = correct ? applyRaceCorrectGuess(game, round, socketId, elapsedMs) : 0;
+  const target = effectiveTarget(game, round);
+  if (target === 'year') {
+    // Year answers are only scored once the round ends and every distance is
+    // known — see finalizeYearRound.
+    const allDone = participants.every(id => round.passed.has(id));
+    return { correct: false, points: 0, elapsedMs, allDone };
+  }
 
-  const allDone = (game.raceWinnerOnly && correct)
-    || Array.from(game.players.keys()).every(id => round.passed.has(id));
+  const { correct, artistBonus } = checkGuess(target, text, artistText, round.song);
+  const points = correct ? applyRaceCorrectGuess(game, round, socketId, elapsedMs, artistBonus) : 0;
+
+  const allDone = ((game.raceWinnerOnly || round.party?.finale === true) && correct)
+    || participants.every(id => round.passed.has(id));
   return { correct, points, elapsedMs, allDone };
 }
 
@@ -501,11 +735,80 @@ export function skipRaceGuess(
   if (!game.players.has(socketId)) return null;
   if (game.phase !== 'guessing') return null;
   if (round.passed.has(socketId)) return null;
+  if (round.party?.finale && !round.party.duelistIds.includes(socketId)) return null;
 
   round.guesses.set(socketId, null);
   round.passed.add(socketId);
-  const allDone = Array.from(game.players.keys()).every(id => round.passed.has(id));
+  const allDone = raceParticipants(game, round).every(id => round.passed.has(id));
   return { allDone };
+}
+
+// Year rounds are scored in one pass at the end: exact answers pay the most,
+// points fall off per year of distance, and the closest player(s) take a
+// winner bonus on top.
+export function finalizeYearRound(game: Game): YearResult[] {
+  const round = game.currentRound!;
+  const actual = Math.floor(round.song.year ?? 0);
+  const mult = roundMultiplier(round);
+
+  const entries = Array.from(game.players.entries()).map(([id, player]) => {
+    const raw = round.guesses.get(id);
+    const parsed = raw ? Number.parseInt(raw.replace(/\D/g, ''), 10) : Number.NaN;
+    const valid = Number.isFinite(parsed) && parsed >= 1000 && parsed <= 3000;
+    return {
+      id, player,
+      guess: valid ? parsed : null,
+      diff: valid ? Math.abs(parsed - actual) : null,
+    };
+  });
+
+  const diffs = entries.filter(e => e.diff !== null).map(e => e.diff!);
+  const best = diffs.length > 0 ? Math.min(...diffs) : null;
+  const winners = best === null ? 0 : entries.filter(e => e.diff === best).length;
+
+  const results: YearResult[] = entries.map(e => {
+    let points = 0;
+    if (e.diff !== null) {
+      points = Math.max(0, YEAR_MAX_POINTS - YEAR_POINTS_SLOPE * e.diff);
+      if (e.diff === best) points += Math.round(YEAR_WINNER_BONUS / winners);
+      points *= mult;
+    }
+    if (points > 0) {
+      e.player.score += points;
+      e.player.streak += 1;
+      round.scoredSocketIds.add(e.id);
+    }
+    return { name: e.player.name, guess: e.guess, diff: e.diff, points };
+  });
+
+  round.yearResults = results.sort((a, b) => (a.diff ?? 9999) - (b.diff ?? 9999));
+  return round.yearResults;
+}
+
+// ─── Steal round ─────────────────────────────────────────────────────────────
+
+export function stealCandidates(game: Game, thiefId: string): { name: string; score: number }[] {
+  return Array.from(game.players.values())
+    .filter(p => p.socketId !== thiefId)
+    .sort((a, b) => b.score - a.score)
+    .map(p => ({ name: p.name, score: p.score }));
+}
+
+export function executeSteal(
+  game: Game, thiefId: string, victimName: string,
+): { thief: string; victim: string; amount: number } | null {
+  const round = game.currentRound;
+  if (!round || game.phase !== 'reveal') return null;
+  if (round.stealBy !== thiefId || round.stealDone) return null;
+  const thief = game.players.get(thiefId);
+  const victim = Array.from(game.players.values()).find(p => p.name === victimName);
+  if (!thief || !victim || victim.socketId === thiefId) return null;
+
+  const amount = Math.min(victim.score, Math.max(STEAL_MIN, Math.round(victim.score * STEAL_PCT)));
+  round.stealDone = true;
+  victim.score -= amount;
+  thief.score += amount;
+  return { thief: thief.name, victim: victim.name, amount };
 }
 
 // A race round can end (timeout, or someone winning in winner-only mode)
@@ -529,7 +832,7 @@ export function finalizeRaceDrafts(game: Game): void {
 export function updateLiveDraft(game: Game, socketId: string, text: string): void {
   const round = game.currentRound;
   if (!round) return;
-  if (game.mode === 'classic' && !round.guesserSocketIds.includes(socketId)) return;
+  if (!isRaceFlowRound(game, round) && !round.guesserSocketIds.includes(socketId)) return;
   if (game.phase !== 'guessing' && game.phase !== 'playing') return;
   if (round.passed.has(socketId)) return;
   round.liveDrafts.set(socketId, text);
