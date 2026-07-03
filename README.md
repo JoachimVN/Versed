@@ -17,6 +17,9 @@
 <p align="center">
   <img src="https://github.com/JoachimVN/Versed/actions/workflows/ci.yml/badge.svg" alt="CI" />
   <img src="https://github.com/JoachimVN/Versed/actions/workflows/codeql.yml/badge.svg" alt="CodeQL" />
+  <a href="https://sonarcloud.io/summary/new_code?id=JoachimVN_music-quiz">
+    <img src="https://sonarcloud.io/api/project_badges/measure?project=JoachimVN_music-quiz&metric=alert_status" alt="Quality Gate Status" />
+  </a>
 </p>
 
 ---
@@ -45,11 +48,15 @@
 
 ## How it plays
 
-The host's screen is the "board" — everyone else joins from their phone. Each round you don't just guess the song, you **bid how few seconds of it you need to hear**. Lowest bid gets the first shot. Hear less, score more.
+The host's screen is the "board" — everyone else joins from their phone.
 
 1. **Host** connects Spotify, shares a short game PIN.
 2. **Players** join at `/play`, enter the PIN and a name.
-3. Each round runs four phases:
+3. Host picks a mode and starts the game.
+
+### Classic
+
+Bid how few seconds of the clip you need to hear. Lowest bid gets the first shot — hear less, score more.
 
 | Phase | Duration | What happens |
 |-------|----------|--------------|
@@ -58,13 +65,21 @@ The host's screen is the "board" — everyone else joins from their phone. Each 
 | **Guessing** | configurable | Winner(s) type the title — fuzzy-matched, so typos count |
 | **Reveal** | — | Song + points shown, running leaderboard updated |
 
-4. After the configured number of rounds, final scores are tallied.
-
 **Scoring** rewards bold bids and rarer songs:
 
 ```
 points = 500  +  up to 1000 (lower bid → more)  +  up to 500 (rarer song → more)
 ```
+
+### Race
+
+Everyone hears the clip at the same time and races to type the answer — speed sets the score. The host can restrict scoring to the fastest correct player only, and/or require the artist as well as the title.
+
+### Party
+
+Every round deals a random, announced recipe: a format (classic bid-off, race, or closest-guess-the-year), what you need to guess (title, artist, or both for a bonus), and sometimes a twist — double points, a hidden ×1–3 multiplier revealed at the reveal, a steal where the round winner takes a cut of a victim's score, snippet roulette (the clip starts mid-song), full hints, a blind bet with no hints at all, or "Down to the Wire" (the clip plays the song's final stretch instead of the intro). Round 1 is always a plain warm-up, twists never repeat back-to-back, and the last round is a top-2 duel worth 1500 points to whoever answers first.
+
+After the configured number of rounds, final scores are tallied.
 
 > Requires **Spotify Premium** on the host account.
 
@@ -72,11 +87,12 @@ points = 500  +  up to 1000 (lower bid → more)  +  up to 500 (rarer song → m
 
 ## Features
 
-- **Bid-based guessing** — the lowest bidder hears the least audio and scores the most
+- **Three game modes** — Classic (bid-based), Race (speed-based), and Party (a random recipe of format + twist each round)
+- **Bid-based guessing** — in Classic, the lowest bidder hears the least audio and scores the most
 - **Fuzzy matching** — typos, punctuation, and common substitutions ("4"/"for", "u"/"you") all handled
 - **Server-authoritative timing** — the host confirms the real audible start of each clip so durations stay accurate across network conditions
 - **Mid-game join** — players can join after the game has started and are synced to the current phase
-- **Customizable settings** — host can adjust bet time, guess time, and round count before starting
+- **Customizable settings** — host can adjust bet time, guess time, round count, and mode-specific options before starting
 - **Reconnect recovery** — dropped connections snap back to the correct phase on reconnect
 - **3000+ song catalogue** with hints generated from release year, decade, chart stats, and stream counts
 
