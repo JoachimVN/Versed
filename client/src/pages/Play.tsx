@@ -1106,7 +1106,8 @@ function WatchingView({ game }: Readonly<{ game: PlayState }>) {
               {/* Animated waveform: static until song actually starts */}
               <div style={{ display: 'flex', gap: '5px', alignItems: 'center', height: '36px', transition: 'opacity 0.3s ease', opacity: songPlaying ? 1 : 0.35 }}>
                 {AUDIO_BARS.map((bar) => {
-                  const barColor = party?.format === 'year' ? 'rgba(0,200,195,0.75)' : isRace ? 'rgba(234,88,12,0.75)' : 'rgba(150,17,193,0.75)';
+                  const nonYearColor = isRace ? 'rgba(234,88,12,0.75)' : 'rgba(150,17,193,0.75)';
+                  const barColor = party?.format === 'year' ? 'rgba(0,200,195,0.75)' : nonYearColor;
                   return (
                   <div
                     key={bar.delay}
