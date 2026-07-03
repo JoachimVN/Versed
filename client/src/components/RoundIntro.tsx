@@ -29,11 +29,12 @@ export function RoundIntro({ party, roundKey, dismissible = true }: Readonly<{ p
   // a flow badge always shows it up front regardless of which flavor of
   // intro is displayed. Year rounds skip it — "Guess the Year" is already
   // unambiguous on its own.
-  const flowBadge = party.format === 'race'
-    ? { label: 'Race Round', color: 'rgba(253,186,116,0.95)', bg: 'rgba(234,88,12,0.14)', border: 'rgba(234,88,12,0.4)' }
-    : party.format === 'classic'
-      ? { label: 'Classic Round', color: 'rgba(216,180,254,0.95)', bg: 'rgba(150,17,193,0.14)', border: 'rgba(150,17,193,0.4)' }
-      : null;
+  let flowBadge: { label: string; color: string; bg: string; border: string } | null = null;
+  if (party.format === 'race') {
+    flowBadge = { label: 'Race Round', color: 'rgba(253,186,116,0.95)', bg: 'rgba(234,88,12,0.14)', border: 'rgba(234,88,12,0.4)' };
+  } else if (party.format === 'classic') {
+    flowBadge = { label: 'Classic Round', color: 'rgba(216,180,254,0.95)', bg: 'rgba(150,17,193,0.14)', border: 'rgba(150,17,193,0.4)' };
+  }
 
   const overlayStyle = {
     position: 'fixed' as const, inset: 0, zIndex: 60,
@@ -156,6 +157,16 @@ export function PartyRevealExtras({ result, stealResult }: Readonly<{
   );
 }
 
+// Static label for every event except 'mystery', whose bit depends on the
+// revealed multiplier value.
+const EVENT_BITS: Partial<Record<NonNullable<PartyInfo['event']>, string>> = {
+  double: '2× POINTS',
+  steal: 'STEAL ROUND',
+  snippet: 'SNIPPET',
+  fullhints: 'OPEN BOOK',
+  blind: 'BLIND BET · NO HINTS',
+};
+
 // Small chip summarising the active round's recipe, shown on in-round screens.
 export function PartyBadge({ party }: Readonly<{ party: PartyInfo | null }>) {
   if (!party) return null;
@@ -168,12 +179,11 @@ export function PartyBadge({ party }: Readonly<{ party: PartyInfo | null }>) {
   if (party.finale) bits.push(`FINALE · ${party.duelists.join(' vs ')}`);
   if (party.target === 'artist') bits.push('NAME THE ARTIST');
   else if (party.target === 'both') bits.push('TITLE + ARTIST');
-  if (party.event === 'double') bits.push('2× POINTS');
   if (party.event === 'mystery') bits.push(party.multiplier === null ? 'MYSTERY ×?' : `MYSTERY ×${party.multiplier}`);
-  if (party.event === 'steal') bits.push('STEAL ROUND');
-  if (party.event === 'snippet') bits.push('SNIPPET');
-  if (party.event === 'fullhints') bits.push('OPEN BOOK');
-  if (party.event === 'blind') bits.push('BLIND BET · NO HINTS');
+  else if (party.event) {
+    const label = EVENT_BITS[party.event];
+    if (label) bits.push(label);
+  }
   return (
     <div style={{ display: 'flex', gap: '6px', justifyContent: 'center', flexWrap: 'wrap' }}>
       {bits.map(b => (
