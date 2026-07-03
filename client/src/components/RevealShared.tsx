@@ -222,6 +222,11 @@ export function YearTimelineContent({ result, showGuessValues = true }: Readonly
   // Someone nailed the year exactly — the actual-year tick and its label
   // pick up the same gold as the winning dot, instead of staying teal.
   const exactMatch = bestDiff === 0;
+  // The winner's marker is gold only for a spot-on guess; otherwise "just
+  // won" (closest, not exact) reads as the same green as a correct guess.
+  const winnerColor = exactMatch ? '#fbbf24' : '#4ade80';
+  const winnerColorSoft = exactMatch ? 'rgba(251,191,36,0.85)' : 'rgba(74,222,128,0.85)';
+  const winnerGlowAnim = exactMatch ? 'markerGlowPulse' : 'markerGlowPulseGreen';
 
   const passCount = result.yearResults.length - guesses.length;
 
@@ -269,23 +274,23 @@ export function YearTimelineContent({ result, showGuessValues = true }: Readonly
                 position: 'absolute', left: '50%', transform: 'translateX(-50%)',
                 bottom: `${nameOffset}px`,
                 fontSize: '0.62rem', whiteSpace: 'nowrap',
-                color: isBest ? '#fbbf24' : 'rgba(255,255,255,0.55)',
+                color: isBest ? winnerColor : 'rgba(255,255,255,0.55)',
                 fontWeight: isBest ? 800 : 600,
               }}>
                 {names}
               </span>
               <div style={{
                 width: isBest ? '10px' : '6px', height: isBest ? '10px' : '6px', borderRadius: '50%',
-                background: isBest ? '#fbbf24' : 'rgba(255,255,255,0.5)',
+                background: isBest ? winnerColor : 'rgba(255,255,255,0.5)',
                 border: isBest ? '2px solid rgba(255,255,255,0.5)' : 'none',
-                animation: isBest ? 'markerGlowPulse 1.8s ease-in-out infinite' : 'none',
+                animation: isBest ? `${winnerGlowAnim} 1.8s ease-in-out infinite` : 'none',
               }} />
               {showGuessValues && !isExact && (
                 <span style={{
                   position: 'absolute', left: '50%', transform: 'translateX(-50%)',
                   top: `${yearOffset}px`,
                   fontSize: '0.6rem', whiteSpace: 'nowrap',
-                  color: isBest ? 'rgba(251,191,36,0.85)' : 'rgba(255,255,255,0.35)',
+                  color: isBest ? winnerColorSoft : 'rgba(255,255,255,0.35)',
                   fontWeight: isBest ? 700 : 500,
                 }}>
                   {group.guess}
