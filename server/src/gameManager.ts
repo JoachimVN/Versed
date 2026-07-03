@@ -278,7 +278,7 @@ function roundMultiplier(round: Round): number {
 // What this round's guess is checked against. Party rounds carry it per-round;
 // classic/race games fall back to the game-wide artistOnly toggle.
 type EffectiveTarget = GuessTarget | 'year';
-function effectiveTarget(game: Game, round: Round): EffectiveTarget {
+export function effectiveTarget(game: Game, round: Round): EffectiveTarget {
   if (round.party) return round.party.format === 'year' ? 'year' : round.party.target;
   return game.artistOnly ? 'artist' : 'title';
 }

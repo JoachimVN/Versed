@@ -751,7 +751,12 @@ io.on('connection', (socket) => {
       featuredArtists: round.song.featuredArtists,
       year: round.song.year,
       coverUrl: round.coverUrl,
-      artistOnly: game.artistOnly,
+      // Party rounds carry their own per-round target (title/artist/both),
+      // independent of the game-wide artistOnly toggle classic/race use —
+      // the reveal card's "song was"/"artist was" label has to match
+      // whichever one actually decided the guess, or a correct artist-only
+      // guess reads as a title mismatch (and vice versa).
+      artistOnly: gm.effectiveTarget(game, round) === 'artist',
       // Reveal payloads always carry the full party config (mystery revealed).
       party: gm.partyView(round, true),
     };
