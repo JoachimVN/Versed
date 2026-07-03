@@ -59,6 +59,8 @@ const MOCK_HOST: HostState = {
   raceTimeSetting: 30,
   raceWinnerOnly: false,
   artistOnly: false,
+  party: null,
+  stealResult: null,
   answeredCount: 0,
   reconnecting: false,
   reconnectingCount: 0,

@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import type { PartyInfo } from '../types';
+import type { PartyInfo, RoundResultEvent } from '../types';
 
 // How long the announcement stays up. Betting/countdown timers run underneath,
 // so this must stay comfortably shorter than the shortest phase.
@@ -56,6 +56,46 @@ export function RoundIntro({ party, roundKey }: Readonly<{ party: PartyInfo | nu
           {party.intro.tagline}
         </p>
       </div>
+    </div>
+  );
+}
+
+// Party extras shown under the reveal card: revealed multiplier, steal outcome
+// (or "picking a victim…" while the thief decides). Shared by host and player.
+export function PartyRevealExtras({ result, stealResult }: Readonly<{
+  result: RoundResultEvent;
+  stealResult: { thief: string; victim: string; amount: number } | null;
+}>) {
+  const party = result.party;
+  const chips: string[] = [];
+  if (party?.event === 'mystery' && party.multiplier !== null) chips.push(`Mystery multiplier · ×${party.multiplier}`);
+  else if (party?.event === 'double') chips.push('Double points · ×2');
+  const showPending = !stealResult && !!result.stealPending;
+  if (chips.length === 0 && !stealResult && !showPending) return null;
+  return (
+    <div className="flex flex-col items-center gap-2" style={{ maxWidth: '92vw' }}>
+      {chips.map(c => (
+        <span key={c} style={{
+          padding: '6px 16px', borderRadius: '100px',
+          background: 'rgba(0,200,195,0.1)', border: '1px solid rgba(0,200,195,0.3)',
+          color: 'rgba(94,234,212,0.9)', fontSize: '0.72rem', fontWeight: 700,
+          letterSpacing: '0.1em', textTransform: 'uppercase',
+        }}>{c}</span>
+      ))}
+      {stealResult && (
+        <span style={{
+          padding: '6px 16px', borderRadius: '100px',
+          background: 'rgba(248,113,113,0.1)', border: '1px solid rgba(248,113,113,0.35)',
+          color: 'rgba(252,165,165,0.95)', fontSize: '0.78rem', fontWeight: 600,
+        }}>
+          {stealResult.thief} stole {stealResult.amount.toLocaleString()} pts from {stealResult.victim}
+        </span>
+      )}
+      {showPending && (
+        <span style={{ color: 'rgba(255,255,255,0.35)', fontSize: '0.75rem' }}>
+          {result.stealPending} is choosing who to rob…
+        </span>
+      )}
     </div>
   );
 }

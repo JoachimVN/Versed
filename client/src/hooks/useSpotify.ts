@@ -27,6 +27,9 @@ export function useSpotify() {
   // Incremented by prepareTrack and pauseTrack; startPrepared bails if it
   // changes mid-flight, preventing orphaned stop timers and stale resumes.
   const playGenRef = useRef(0);
+  // Where the prepared track starts (party "snippet" rounds start mid-song);
+  // startPrepared seeks here and playback detection is offset by it.
+  const preparedPositionRef = useRef(0);
   // True when the access token was restored from sessionStorage: it may be
   // arbitrarily old (tokens live 1h), so refresh it right away instead of
   // waiting out the first 50-minute interval.
@@ -141,10 +144,10 @@ export function useSpotify() {
     if (stopTimerRef.current) { clearTimeout(stopTimerRef.current); stopTimerRef.current = null; }
   }
 
-  // Resolve once audio is genuinely playing from near the start, so the play
-  // window is timed from the audible start rather than the resume() call
-  // (which precedes real output by 100-300ms of device/SDK latency).
-  function waitForPlaybackStart(): Promise<void> {
+  // Resolve once audio is genuinely playing from near the intended start, so
+  // the play window is timed from the audible start rather than the resume()
+  // call (which precedes real output by 100-300ms of device/SDK latency).
+  function waitForPlaybackStart(startPositionMs: number): Promise<void> {
     return new Promise((resolve) => {
       let done = false;
       const finish = () => {
@@ -156,9 +159,9 @@ export function useSpotify() {
       };
       const poll = setInterval(async () => {
         const st = await playerRef.current?.getCurrentState();
-        // >40ms: past the very start, so audio is really flowing.
-        // <1500ms: not the stale position left over from buffering.
-        if (st && !st.paused && st.position > 40 && st.position < 1500) finish();
+        // >start+40ms: past the very start, so audio is really flowing.
+        // <start+1500ms: not the stale position left over from buffering.
+        if (st && !st.paused && st.position > startPositionMs + 40 && st.position < startPositionMs + 1500) finish();
       }, 20);
       const safety = setTimeout(finish, 2500);
     });
@@ -166,7 +169,7 @@ export function useSpotify() {
 
   // Buffer the track ahead of time, muted, so the actual start is instant and
   // gapless. Returns true once Spotify accepted the play request.
-  async function prepareTrack(trackId: string) {
+  async function prepareTrack(trackId: string, positionMs = 0) {
     const token = accessTokenRef.current;
     const device = deviceIdRef.current;
     if (!device || !token) {
@@ -176,6 +179,7 @@ export function useSpotify() {
     clearStopTimer();
     playGenRef.current += 1;
     playStateRef.current = 'preparing';
+    preparedPositionRef.current = positionMs;
     await playerRef.current?.setVolume(0);
     const res = await fetch(`https://api.spotify.com/v1/me/player/play?device_id=${device}`, {
       method: 'PUT',
@@ -183,7 +187,7 @@ export function useSpotify() {
         Authorization: `Bearer ${token}`,
         'Content-Type': 'application/json',
       },
-      body: JSON.stringify({ uris: [`spotify:track:${trackId}`], position_ms: 0 }),
+      body: JSON.stringify({ uris: [`spotify:track:${trackId}`], position_ms: positionMs }),
     });
     if (!res.ok) {
       const body = await res.text();
@@ -207,11 +211,12 @@ export function useSpotify() {
     if (playStateRef.current !== 'preparing') return false;
     clearStopTimer();
     const gen = playGenRef.current;
+    const startPos = preparedPositionRef.current;
     playStateRef.current = 'playing';
-    await playerRef.current?.seek(0);
+    await playerRef.current?.seek(startPos);
     await playerRef.current?.setVolume(0.8);
     await playerRef.current?.resume();
-    await waitForPlaybackStart();
+    await waitForPlaybackStart(startPos);
     // Another prepareTrack/pauseTrack started while we were waiting — don't
     // arm a stop timer that would fire at the wrong time.
     if (gen !== playGenRef.current) return false;
