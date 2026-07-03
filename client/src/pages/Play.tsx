@@ -6,9 +6,12 @@ import { socket } from '../socket';
 import { RankBadge } from '../components/RankBadge';
 import { useAnimatedScore } from '../hooks/useAnimatedScore';
 import { useKeyboardOpen } from '../hooks/useViewportHeight';
-import { NoOneGotItCardContent, GotItCardContent, YearCardContent } from '../components/RevealShared';
+import { NoOneGotItCardContent, GotItCardContent, YearTimelineContent } from '../components/RevealShared';
 import { RoundIntro, PartyBadge, PartyRevealExtras } from '../components/RoundIntro';
 import { BackButton } from '../components/BackButton';
+import { CircularTimer, timerColor } from '../components/CircularTimer';
+import { AudioBars } from '../components/AudioBars';
+import { LIQUID_CARD_PROPS, LIQUID_PILL_PROPS } from '../components/liquidGlassPresets';
 import { APP_NAME, BID_OPTIONS } from '../config';
 import type { Hint, LeaderboardEntry, PartyInfo, RoundResultEvent } from '../types';
 
@@ -26,6 +29,7 @@ export interface PlayState {
   totalRounds: number;
   hints: Hint[];
   timeLeft: number;
+  timerTotal: number;
   bettingTime: number;
   bidIndex: number;
   bidOptions: number[];
@@ -43,12 +47,13 @@ export interface PlayState {
   party: PartyInfo | null;
   artistGuessText: string;
   stealVictims: { name: string; score: number }[] | null;
-  stealResult: { thief: string; victim: string; amount: number } | null;
+  stealResult: { thief: string; victim: string; amount: number; skipped?: boolean } | null;
   myRacePoints: number;
   myRaceTimeMs: number | null;
   leaderboard: LeaderboardEntry[];
   leaderboardDeltas: Record<string, number>;
   songPlaying: boolean;
+  songTempo: number | null;
   reconnecting: boolean;
   hostReconnecting: boolean;
   savedSession: { pin: string; name: string } | null;
@@ -59,6 +64,7 @@ export interface PlayState {
   setGuessText: (v: string) => void;
   setArtistGuessText: (v: string) => void;
   submitStealVictim: (name: string) => void;
+  skipSteal: () => void;
   join: () => void;
   rejoinSaved: () => void;
   submitBid: () => void;
@@ -81,6 +87,7 @@ function usePlayGame(pinParam?: string): PlayState {
   const [totalRounds, setTotalRounds] = useState(10);
   const [hints, setHints] = useState<Hint[]>([]);
   const [timeLeft, setTimeLeft] = useState(0);
+  const [timerTotal, setTimerTotal] = useState(0);
   const [bettingTime, setBettingTime] = useState(15);
   const [bidIndex, setBidIndex] = useState(4); // default: 2s (index 4)
   const bidIndexRef = useRef(4);
@@ -107,13 +114,14 @@ function usePlayGame(pinParam?: string): PlayState {
   const [artistGuessText, setArtistGuessText] = useState('');
   const artistGuessTextRef = useRef('');
   const [stealVictims, setStealVictims] = useState<{ name: string; score: number }[] | null>(null);
-  const [stealResult, setStealResult] = useState<{ thief: string; victim: string; amount: number } | null>(null);
+  const [stealResult, setStealResult] = useState<{ thief: string; victim: string; amount: number; skipped?: boolean } | null>(null);
   const [myRacePoints, setMyRacePoints] = useState(0);
   const [myRaceTimeMs, setMyRaceTimeMs] = useState<number | null>(null);
   const [leaderboard, setLeaderboard] = useState<LeaderboardEntry[]>([]);
   const leaderboardRef = useRef<LeaderboardEntry[]>([]);
   const [leaderboardDeltas, setLeaderboardDeltas] = useState<Record<string, number>>({});
   const [songPlaying, setSongPlaying] = useState(false);
+  const [songTempo, setSongTempo] = useState<number | null>(null);
   const [reconnecting, setReconnecting] = useState(false);
   const [hostReconnecting, setHostReconnecting] = useState(false);
   const [newGamePin, setNewGamePin] = useState<string | null>(null);
@@ -172,6 +180,7 @@ function usePlayGame(pinParam?: string): PlayState {
 
   function startCountdown(endsAt: number) {
     stopCountdown();
+    setTimerTotal(Math.max(1, Math.ceil((endsAt - Date.now()) / 1000)));
     const tick = () => {
       const remaining = Math.ceil(Math.max(0, endsAt - Date.now()) / 1000);
       setTimeLeft(remaining);
@@ -229,10 +238,12 @@ function usePlayGame(pinParam?: string): PlayState {
       mode?: 'classic' | 'race'; raceTime?: number; artistOnly?: boolean;
       party?: PartyInfo;
       bidOptions?: number[]; bidScores?: number[];
+      tempo?: number | null;
     }) => {
       setRoundIndex(data.roundIndex);
       setTotalRounds(data.total);
       setHints(data.hints);
+      setSongTempo(data.tempo ?? null);
       guessTextRef.current = '';
       setGuessText('');
       artistGuessTextRef.current = '';
@@ -405,7 +416,7 @@ function usePlayGame(pinParam?: string): PlayState {
       setStealVictims(victims);
     });
 
-    socket.on('steal_result', (r: { thief: string; victim: string; amount: number }) => {
+    socket.on('steal_result', (r: { thief: string; victim: string; amount: number; skipped?: boolean }) => {
       setStealVictims(null);
       setStealResult(r);
     });
@@ -541,10 +552,10 @@ function usePlayGame(pinParam?: string): PlayState {
 
   return {
     phase, pin, name, myName, error, roundIndex, totalRounds, hints,
-    timeLeft, bettingTime, bidIndex, bidOptions, bidScores, myBid, guesserNames, lowestBid,
+    timeLeft, timerTotal, bettingTime, bidIndex, bidOptions, bidScores, myBid, guesserNames, lowestBid,
     guessText, result, myScore, myScoreDelta, myStreak, mode, artistOnly, myRacePoints, myRaceTimeMs,
     party, artistGuessText, stealVictims, stealResult,
-    leaderboard, leaderboardDeltas, songPlaying, reconnecting, hostReconnecting, savedSession, guessInputRef,
+    leaderboard, leaderboardDeltas, songPlaying, songTempo, reconnecting, hostReconnecting, savedSession, guessInputRef,
     newGamePin, rejoinNewGame,
     setPin, setName,
     setArtistGuessText: (v: string) => {
@@ -553,6 +564,10 @@ function usePlayGame(pinParam?: string): PlayState {
     },
     submitStealVictim: (victimName: string) => {
       socket.emit('steal_victim', { name: victimName });
+      setStealVictims(null);
+    },
+    skipSteal: () => {
+      socket.emit('skip_steal');
       setStealVictims(null);
     },
   setBidIndex: (i: number | ((prev: number) => number)) => {
@@ -575,26 +590,6 @@ function guessTextClass(guess: string | null, correct: boolean): string {
   if (guess === null) return 'text-white/15 italic';
   return correct ? 'text-green-400' : 'text-white/20 italic';
 }
-
-function timerColor(pct: number): string {
-  if (pct > 0.6) return 'rgba(52,211,153,0.85)';
-  if (pct > 0.35) return 'rgba(251,191,36,0.85)';
-  if (pct > 0.12) return 'rgba(249,115,22,0.85)';
-  return 'rgba(239,68,68,0.85)';
-}
-
-// Each bar gets a unique animation name, duration, and delay so they move independently.
-const AUDIO_BARS = [
-  { anim: 'audioBarC', dur: 1.1, delay: 0    },
-  { anim: 'audioBar',  dur: 1.5, delay: 0.14 },
-  { anim: 'audioBarD', dur: 0.85,delay: 0.28 },
-  { anim: 'audioBarB', dur: 1.7, delay: 0.07 },
-  { anim: 'audioBar',  dur: 1, delay: 0.42 },
-  { anim: 'audioBarC', dur: 1.3, delay: 0.21 },
-  { anim: 'audioBarD', dur: 0.9, delay: 0.35 },
-  { anim: 'audioBarB', dur: 1.6, delay: 0.08 },
-  { anim: 'audioBarC', dur: 1.2, delay: 0.26 },
-] as const;
 
 function bidArrowStyle(enabled: boolean, pressed: boolean, hovered: boolean): { bg: string; border: string } {
   if (!enabled) return { bg: 'rgba(255,255,255,0.03)', border: '1px solid rgba(255,255,255,0.04)' };
@@ -679,12 +674,7 @@ function JoinView({ game }: Readonly<{ game: PlayState }>) {
             }} />
             <LiquidGlass
               style={{ position: 'absolute', top: '50%', left: '50%' }}
-              displacementScale={64}
-              blurAmount={0.05}
-              saturation={130}
-              aberrationIntensity={2}
-              elasticity={0.12}
-              cornerRadius={100}
+              {...LIQUID_PILL_PROPS}
               padding="13px 48px"
             >
               <div style={{ textAlign: 'center', whiteSpace: 'nowrap', minWidth: '214px' }}>
@@ -695,20 +685,15 @@ function JoinView({ game }: Readonly<{ game: PlayState }>) {
               </div>
             </LiquidGlass>
           </button>
-          <p className="text-white/20 text-xs tracking-wider">— or join a different game —</p>
+          <p className="text-white/20 text-xs tracking-wider">or join a different game</p>
         </div>
       )}
 
-      {/* Input card — LiquidGlass */}
+      {/* Input card: LiquidGlass */}
       <div className="liquid-btn relative" style={{ width: '310px', height: '165px' }}>
         <LiquidGlass
           style={{ position: 'absolute', top: '50%', left: '50%' }}
-          displacementScale={55}
-          blurAmount={0.06}
-          saturation={130}
-          aberrationIntensity={1.5}
-          elasticity={0.08}
-          cornerRadius={20}
+          {...LIQUID_CARD_PROPS}
           padding="20px 24px"
         >
           <div style={{ width: '262px', textAlign: 'center' }}>
@@ -802,12 +787,7 @@ function JoinView({ game }: Readonly<{ game: PlayState }>) {
             filter: joinHovered ? 'drop-shadow(0 0 10px rgba(0, 128, 126, 0.65))' : 'drop-shadow(0 0 0px rgba(0, 128, 126, 0))',
             transition: 'filter 0.25s ease',
           }}
-          displacementScale={64}
-          blurAmount={0.05}
-          saturation={130}
-          aberrationIntensity={2}
-          elasticity={0.12}
-          cornerRadius={100}
+          {...LIQUID_PILL_PROPS}
           padding="18px 96px"
         >
           <span className="text-white font-bold text-xl" style={{ whiteSpace: 'nowrap' }}>Join game</span>
@@ -856,12 +836,7 @@ function WaitingView({ game }: Readonly<{ game: PlayState }>) {
         <div className="liquid-btn relative" style={{ width: '310px', height: '330px' }}>
           <LiquidGlass
             style={{ position: 'absolute', top: '50%', left: '50%' }}
-            displacementScale={55}
-            blurAmount={0.06}
-            saturation={130}
-            aberrationIntensity={1.5}
-            elasticity={0.08}
-            cornerRadius={20}
+            {...LIQUID_CARD_PROPS}
             padding="24px 28px"
           >
             <div style={{ width: '254px', minHeight: '220px', display: 'flex', flexDirection: 'column', alignItems: 'center' }}>
@@ -1030,13 +1005,7 @@ export function BettingView({ game }: Readonly<{ game: PlayState }>) {
         >
           <LiquidGlass
             style={{ position: 'absolute', top: '50%', left: '50%' }}
-            displacementScale={64}
-            blurAmount={0.05}
-            saturation={130}
-            aberrationIntensity={2}
-            elasticity={0.12}
-            cornerRadius={100}
-            padding="18px 36px"
+            {...LIQUID_PILL_PROPS}
           >
             <div style={{ position: 'relative' }}>
               <div style={{ position: 'absolute', inset: '-18px -36px', borderRadius: '100px', pointerEvents: 'none', background: 'rgba(110,32,155,0.15)' }} />
@@ -1062,12 +1031,14 @@ function BidSubmittedView({ game }: Readonly<{ game: PlayState }>) {
 }
 
 
-function WatchingView({ game }: Readonly<{ game: PlayState }>) {
-  const { lowestBid, guesserNames, mode, songPlaying, party } = game;
+export function WatchingView({ game }: Readonly<{ game: PlayState }>) {
+  const { lowestBid, guesserNames, mode, songPlaying, songTempo, party, roundIndex, totalRounds, myScore, myStreak } = game;
   const [visible, setVisible] = useState(false);
   useEffect(() => { const t = setTimeout(() => setVisible(true), 30); return () => clearTimeout(t); }, []);
   const isRace = mode === 'race';
   const isDuel = !!party?.finale;
+  const nonYearAccent = isRace ? 'race' : 'classic';
+  const watchAccent = party?.format === 'year' ? 'year' : nonYearAccent;
 
   return (
     <div className="relative min-h-screen overflow-hidden">
@@ -1082,7 +1053,7 @@ function WatchingView({ game }: Readonly<{ game: PlayState }>) {
 
       {/* Content */}
       <div
-        className="relative flex flex-col items-center justify-center min-h-screen gap-8 p-6"
+        className="relative flex flex-col items-center min-h-screen gap-6 px-5 py-8"
         style={{
           zIndex: 2,
           transition: 'opacity 0.4s ease, transform 0.4s ease',
@@ -1090,41 +1061,45 @@ function WatchingView({ game }: Readonly<{ game: PlayState }>) {
           transform: visible ? 'translateY(0)' : 'translateY(14px)',
         }}
       >
-        <div className="liquid-btn relative" style={{ width: '310px', height: '240px' }}>
-          <LiquidGlass
-            style={{ position: 'absolute', top: '50%', left: '50%' }}
-            displacementScale={55}
-            blurAmount={0.06}
-            saturation={130}
-            aberrationIntensity={1.5}
-            elasticity={0.08}
-            cornerRadius={20}
-            padding="28px 28px"
-          >
-            <div style={{ width: '254px', display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '18px' }}>
+        <div className="flex flex-col items-center gap-2">
+          <p style={{ color: 'rgba(255,255,255,0.4)', fontSize: '0.85rem' }}>
+            Round {roundIndex + 1}<span style={{ color: 'rgba(255,255,255,0.2)' }}>/{totalRounds}</span>
+          </p>
+          <PartyBadge party={party} />
+        </div>
 
-              {/* Animated waveform — static until song actually starts */}
-              <div style={{ display: 'flex', gap: '5px', alignItems: 'center', height: '36px', transition: 'opacity 0.3s ease', opacity: songPlaying ? 1 : 0.35 }}>
-                {AUDIO_BARS.map((bar) => (
-                  <div
-                    key={bar.delay}
-                    style={{
-                      width: '3px', height: '100%', borderRadius: '2px',
-                      background: isRace ? 'rgba(234,88,12,0.75)' : 'rgba(150,17,193,0.75)',
-                      animation: songPlaying ? `${bar.anim} ${bar.dur}s ease-in-out infinite` : 'none',
-                      animationDelay: `${bar.delay}s`,
-                      transformOrigin: 'center',
-                      transform: songPlaying ? undefined : 'scaleY(0.07)',
-                    }}
-                  />
-                ))}
+        <div className="flex-1 flex items-center justify-center w-full">
+          <div className="liquid-btn relative" style={{ width: 'min(90vw, 360px)', height: 'min(75vh, 620px)' }}>
+            <LiquidGlass
+              style={{ position: 'absolute', top: '50%', left: '50%' }}
+              displacementScale={58}
+              blurAmount={0.06}
+              saturation={130}
+              aberrationIntensity={1.5}
+              elasticity={0.08}
+              cornerRadius={28}
+              padding="80px 24px"
+            >
+              <div style={{ width: '298px', display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '44px' }}>
+
+                <AudioBars playing={songPlaying} accent={watchAccent} height={56} bpm={songTempo} />
+
+                <div style={{ width: '100%', height: '1px', background: 'rgba(255,255,255,0.07)' }} />
+
+                <GetReadyBody isDuel={isDuel} isRace={isRace} party={party} lowestBid={lowestBid} guesserNames={guesserNames} songPlaying={songPlaying} />
               </div>
+            </LiquidGlass>
+          </div>
+        </div>
 
-              <div style={{ width: '100%', height: '1px', background: 'rgba(255,255,255,0.07)' }} />
-
-              <GetReadyBody isDuel={isDuel} isRace={isRace} party={party} lowestBid={lowestBid} guesserNames={guesserNames} songPlaying={songPlaying} />
-            </div>
-          </LiquidGlass>
+        <div style={{ background: 'rgba(255,255,255,0.05)', border: '1px solid rgba(255,255,255,0.08)', borderRadius: '16px', padding: '10px 30px', textAlign: 'center' }}>
+          <p className="text-white font-black text-2xl tabular-nums">{myScore.toLocaleString()}</p>
+          <p className="text-white/35 text-xs">your score</p>
+          {myStreak >= 2 && (
+            <p className="flex items-center justify-center gap-1 text-orange-400 text-xs font-bold mt-1">
+              <Flame className="w-3 h-3" />{myStreak} in a row
+            </p>
+          )}
         </div>
       </div>
     </div>
@@ -1136,14 +1111,14 @@ function GetReadyBody({ isDuel, isRace, party, lowestBid, guesserNames, songPlay
 }>) {
   if (isDuel) {
     return (
-      <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '8px' }}>
-        <span style={{ color: 'rgba(255,255,255,0.32)', fontSize: '0.6rem', letterSpacing: '0.2em', textTransform: 'uppercase' }}>
+      <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '10px' }}>
+        <span style={{ color: 'rgba(255,255,255,0.32)', fontSize: '0.65rem', letterSpacing: '0.2em', textTransform: 'uppercase' }}>
           The finale
         </span>
-        <span style={{ display: 'inline-block', minWidth: '200px', color: 'white', fontWeight: 900, fontSize: '1.4rem', lineHeight: 1.3, textAlign: 'center' }}>
+        <span style={{ display: 'inline-block', minWidth: '220px', color: 'white', fontWeight: 900, fontSize: '1.65rem', lineHeight: 1.3, textAlign: 'center' }}>
           {party!.duelists.join(' vs ')}
         </span>
-        <span style={{ display: 'inline-block', minWidth: '160px', color: 'rgba(255,255,255,0.3)', fontSize: '0.82rem', textAlign: 'center' }}>
+        <span style={{ display: 'inline-block', minWidth: '170px', color: 'rgba(255,255,255,0.3)', fontSize: '0.88rem', textAlign: 'center' }}>
           First correct wins
         </span>
       </div>
@@ -1151,27 +1126,42 @@ function GetReadyBody({ isDuel, isRace, party, lowestBid, guesserNames, songPlay
   }
   if (isRace) {
     return (
-      <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '8px' }}>
-        <span style={{ color: 'rgba(255,255,255,0.32)', fontSize: '0.6rem', letterSpacing: '0.2em', textTransform: 'uppercase' }}>
+      <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '10px' }}>
+        <span style={{ color: 'rgba(255,255,255,0.32)', fontSize: '0.65rem', letterSpacing: '0.2em', textTransform: 'uppercase' }}>
           Get ready
         </span>
-        <span style={{ display: 'inline-block', minWidth: '200px', color: 'white', fontWeight: 900, fontSize: '1.4rem', lineHeight: 1.3, textAlign: 'center' }}>
+        <span style={{ display: 'inline-block', minWidth: '220px', color: 'white', fontWeight: 900, fontSize: '1.65rem', lineHeight: 1.3, textAlign: 'center' }}>
           Everyone guesses at once
         </span>
       </div>
     );
   }
   return (
-    <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '6px' }}>
-      <span style={{ color: 'rgba(255,255,255,0.32)', fontSize: '0.6rem', letterSpacing: '0.2em', textTransform: 'uppercase' }}>
+    <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '10px' }}>
+      <span style={{ color: 'rgba(255,255,255,0.32)', fontSize: '0.65rem', letterSpacing: '0.2em', textTransform: 'uppercase' }}>
         {songPlaying ? 'Listen closely' : 'Get ready'}
       </span>
-      <span style={{ display: 'inline-block', minWidth: '200px', color: 'white', fontWeight: 900, fontSize: '1.5rem', lineHeight: 1.25, textAlign: 'center' }}>
+      <span style={{
+        display: 'inline-block', minWidth: '220px', textAlign: 'center',
+        fontWeight: 900, fontSize: '1.75rem', lineHeight: 1.25,
+        background: 'linear-gradient(to bottom left, rgba(0,200,195,0.4) 0%, transparent 55%), linear-gradient(to top right, rgba(150,17,193,0.5) 0%, transparent 55%), #fff',
+        WebkitBackgroundClip: 'text', WebkitTextFillColor: 'transparent', backgroundClip: 'text',
+      }}>
         {guesserNames.join(' & ')}
       </span>
-      <span style={{ display: 'inline-block', minWidth: '160px', color: 'rgba(255,255,255,0.3)', fontSize: '0.82rem', textAlign: 'center' }}>
-        guesses after {lowestBid}s
-      </span>
+      <div style={{ display: 'flex', alignItems: 'center', gap: '7px' }}>
+        <div style={{ display: 'flex', gap: '3px' }}>
+          {[0, 1, 2].map(i => (
+            <div key={i} style={{
+              width: '4px', height: '4px', borderRadius: '50%', background: 'rgba(150,17,193,0.8)',
+              animation: 'dotBounce 1.4s ease-in-out infinite', animationDelay: `${i * 0.18}s`,
+            }} />
+          ))}
+        </div>
+        <span style={{ display: 'inline-block', color: 'rgba(255,255,255,0.3)', fontSize: '0.88rem', textAlign: 'center' }}>
+          guesses after {lowestBid}s
+        </span>
+      </div>
     </div>
   );
 }
@@ -1180,20 +1170,11 @@ function GetReadyBody({ isDuel, isRace, party, lowestBid, guesserNames, songPlay
 // guessing phase. Keeping a single component across both states means the input
 // element is never unmounted — focus and text survive the transition, which
 // prevents the mobile keyboard from dismissing mid-song.
-function ListeningHeader({ songPlaying }: Readonly<{ songPlaying: boolean }>) {
+function ListeningHeader({ songPlaying, songTempo, party }: Readonly<{ songPlaying: boolean; songTempo: number | null; party: PartyInfo | null }>) {
+  const accent = party?.format === 'year' ? 'year' : 'classic';
   return (
     <div className="flex flex-col items-center gap-2.5 pt-10 pb-4">
-      <div style={{ display: 'flex', gap: '5px', alignItems: 'center', height: '28px', transition: 'opacity 0.3s ease', opacity: songPlaying ? 1 : 0.35 }}>
-        {AUDIO_BARS.map((bar) => (
-          <div key={bar.delay} style={{
-            width: '3px', height: '100%', borderRadius: '2px',
-            background: 'rgba(150,17,193,0.6)',
-            animation: songPlaying ? `${bar.anim} ${bar.dur}s ease-in-out infinite` : 'none',
-            animationDelay: `${bar.delay}s`, transformOrigin: 'center',
-            transform: songPlaying ? undefined : 'scaleY(0.07)',
-          }} />
-        ))}
-      </div>
+      <AudioBars playing={songPlaying} accent={accent} height={28} bpm={songTempo} />
       <span style={{ color: 'rgba(255,255,255,0.28)', fontSize: '0.72rem', letterSpacing: '0.08em' }}>
         {songPlaying ? 'Your song is playing…' : 'Get ready…'}
       </span>
@@ -1204,47 +1185,73 @@ function ListeningHeader({ songPlaying }: Readonly<{ songPlaying: boolean }>) {
 // Race mode plays the song throughout the guessing window, so it keeps the
 // waveform going here too; classic has already stopped the song by the time
 // a tier's turn starts, so it stays timer-only.
-function ActiveHeader({ urgent, timeLeft, myScore, isRace, songPlaying }: Readonly<{ urgent: boolean; timeLeft: number; myScore: number; isRace: boolean; songPlaying: boolean }>) {
+function ActiveHeader({ timeLeft, timerTotal, myScore, isRace, party, songPlaying, songTempo }: Readonly<{ timeLeft: number; timerTotal: number; myScore: number; isRace: boolean; party: PartyInfo | null; songPlaying: boolean; songTempo: number | null }>) {
+  const isYear = party?.format === 'year';
+  const accent = isYear ? 'year' : 'race';
   return (
-    <div className="flex flex-col gap-2 pt-5 pb-3">
-      <div className="flex items-center justify-between px-5">
+    <div className="flex flex-col items-center gap-2 pt-4 pb-3">
+      <div className="flex items-center justify-between w-full px-5">
         <span style={{ color: 'rgba(255,255,255,0.32)', fontSize: '0.85rem', fontWeight: 600 }}>Your turn</span>
-        <span
-          className="font-black text-4xl tabular-nums"
-          style={{ color: urgent ? timerColor(0) : 'white', transition: 'color 0.3s ease' }}
-        >
-          {timeLeft}s
-        </span>
         <span style={{ color: 'rgba(255,255,255,0.28)', fontSize: '0.8rem', fontWeight: 500 }}>
           {myScore.toLocaleString()} pts
         </span>
       </div>
-      {isRace && (
-        <div style={{ display: 'flex', gap: '5px', alignItems: 'center', justifyContent: 'center', height: '20px', transition: 'opacity 0.3s ease', opacity: songPlaying ? 1 : 0.35 }}>
-          {AUDIO_BARS.map((bar) => (
-            <div key={bar.delay} style={{
-              width: '3px', height: '100%', borderRadius: '2px',
-              background: 'rgba(234,88,12,0.6)',
-              animation: songPlaying ? `${bar.anim} ${bar.dur}s ease-in-out infinite` : 'none',
-              animationDelay: `${bar.delay}s`, transformOrigin: 'center',
-              transform: songPlaying ? undefined : 'scaleY(0.07)',
-            }} />
-          ))}
-        </div>
+      <CircularTimer timeLeft={timeLeft} total={timerTotal} size={80} />
+      {(isRace || isYear) && (
+        <AudioBars playing={songPlaying} accent={accent} height={20} bpm={songTempo} />
       )}
     </div>
   );
 }
 
-function guessInputBoxStyle(isListening: boolean): { border: string; background: string; boxShadow: string } {
+function guessInputBoxStyle(isListening: boolean, focused: boolean): { border: string; background: string; boxShadow: string } {
   if (isListening) {
     return { border: '1px solid rgba(255,255,255,0.07)', background: 'rgba(255,255,255,0.03)', boxShadow: 'none' };
+  }
+  if (focused) {
+    return { border: '1px solid rgba(150,17,193,0.7)', background: 'rgba(150,17,193,0.1)', boxShadow: '0 0 28px rgba(0,200,195,0.18), 0 0 20px rgba(150,17,193,0.22)' };
   }
   return { border: '1px solid rgba(150,17,193,0.4)', background: 'rgba(150,17,193,0.08)', boxShadow: '0 0 24px rgba(150,17,193,0.1)' };
 }
 
-function GuessingView({ game }: Readonly<{ game: PlayState }>) {
-  const { phase, timeLeft, myScore, guessText, guessInputRef, setGuessText, submitGuess, skipGuess, artistOnly, songPlaying, mode, party, artistGuessText, setArtistGuessText } = game;
+// 4-box OTP-style display for year guesses. A single transparent input
+// underneath keeps the real focus/keyboard target (so the mobile keyboard
+// never dismisses), while these boxes render its current characters.
+function YearDigitBox({ digit, active }: Readonly<{ digit: string; active: boolean }>) {
+  return (
+    <div
+      style={{
+        width: '48px', height: '58px', borderRadius: '12px',
+        display: 'flex', alignItems: 'center', justifyContent: 'center',
+        fontSize: '1.5rem', fontWeight: 800, color: 'white',
+        border: active ? '1px solid rgba(150,17,193,0.8)' : '1px solid rgba(255,255,255,0.12)',
+        background: active ? 'rgba(150,17,193,0.12)' : 'rgba(255,255,255,0.04)',
+        boxShadow: active ? '0 0 16px rgba(150,17,193,0.35)' : 'none',
+        transition: 'border-color 0.15s ease, background 0.15s ease, box-shadow 0.15s ease',
+      }}
+    >
+      {digit}
+    </div>
+  );
+}
+
+// A year guess is always exactly 4 digits — a fixed set of positional
+// slots, not a reorderable list, so each box is written out rather than
+// mapped over an index.
+function YearDigitBoxes({ value, focused }: Readonly<{ value: string; focused: boolean }>) {
+  const activeIndex = Math.min(value.length, 3);
+  return (
+    <div style={{ display: 'flex', gap: '10px', justifyContent: 'center', pointerEvents: 'none' }}>
+      <YearDigitBox digit={value[0] ?? ''} active={focused && activeIndex === 0} />
+      <YearDigitBox digit={value[1] ?? ''} active={focused && activeIndex === 1} />
+      <YearDigitBox digit={value[2] ?? ''} active={focused && activeIndex === 2} />
+      <YearDigitBox digit={value[3] ?? ''} active={focused && activeIndex === 3} />
+    </div>
+  );
+}
+
+export function GuessingView({ game }: Readonly<{ game: PlayState }>) {
+  const { phase, timeLeft, timerTotal, myScore, guessText, guessInputRef, setGuessText, submitGuess, skipGuess, artistOnly, songPlaying, songTempo, mode, party, artistGuessText, setArtistGuessText } = game;
   const isListening = phase === 'watching';
   // What this round wants answered: party rounds carry it per-round,
   // classic/race games use the game-wide artist toggle.
@@ -1256,8 +1263,8 @@ function GuessingView({ game }: Readonly<{ game: PlayState }>) {
   }
   const isYear = target === 'year';
   const canSubmit = isYear ? guessText.trim().length === 4 : guessText.trim().length > 0;
-  const urgent = !isListening && timeLeft <= 5;
-  const inputBoxStyle = guessInputBoxStyle(isListening);
+  const [inputFocused, setInputFocused] = useState(false);
+  const inputBoxStyle = guessInputBoxStyle(isListening, inputFocused);
   const label = {
     title: 'Name the song',
     artist: 'Name the artist',
@@ -1278,10 +1285,10 @@ function GuessingView({ game }: Readonly<{ game: PlayState }>) {
 
       <div className="relative flex flex-col flex-1" style={{ zIndex: 2 }}>
 
-      {/* Header — waveform while listening, timer + score when active */}
+      {/* Header: waveform while listening, timer + score when active */}
       {isListening
-        ? <ListeningHeader songPlaying={songPlaying} />
-        : <ActiveHeader urgent={urgent} timeLeft={timeLeft} myScore={myScore} isRace={mode === 'race'} songPlaying={songPlaying} />}
+        ? <ListeningHeader songPlaying={songPlaying} songTempo={songTempo} party={party} />
+        : <ActiveHeader timeLeft={timeLeft} timerTotal={timerTotal} myScore={myScore} isRace={mode === 'race'} party={party} songPlaying={songPlaying} songTempo={songTempo} />}
 
       {/* Input area */}
       <div className="flex-1 flex flex-col items-center justify-center gap-5 px-5">
@@ -1293,31 +1300,53 @@ function GuessingView({ game }: Readonly<{ game: PlayState }>) {
           {label}
         </p>
 
-        <div style={{
-          width: '100%', borderRadius: '16px', overflow: 'hidden',
-          border: inputBoxStyle.border,
-          background: inputBoxStyle.background,
-          boxShadow: inputBoxStyle.boxShadow,
-          transition: 'border-color 0.5s ease, background 0.5s ease, box-shadow 0.5s ease',
-        }}>
-          <input
-            ref={guessInputRef}
-            type="text"
-            inputMode={isYear ? 'numeric' : 'text'}
-            placeholder={placeholder}
-            value={guessText}
-            onChange={e => setGuessText(isYear ? e.target.value.replace(/\D/g, '').slice(0, 4) : e.target.value)}
-            onKeyDown={e => e.key === 'Enter' && canSubmit && submitGuess()}
-            autoComplete="off" autoCorrect="off" spellCheck={false}
-            style={{
-              display: 'block', width: '100%', background: 'transparent', border: 'none',
-              color: 'white', fontSize: '1.3rem', fontWeight: 700, textAlign: 'center',
-              padding: '20px 16px', outline: 'none', fontFamily: 'inherit',
-              ...(isYear ? { letterSpacing: '0.2em' } : {}),
-            }}
-            className="placeholder-white/20"
-          />
-        </div>
+        {isYear ? (
+          <div style={{ position: 'relative' }}>
+            <YearDigitBoxes value={guessText} focused={inputFocused} />
+            <input
+              ref={guessInputRef}
+              type="text"
+              inputMode="numeric"
+              value={guessText}
+              onChange={e => setGuessText(e.target.value.replace(/\D/g, '').slice(0, 4))}
+              onKeyDown={e => e.key === 'Enter' && canSubmit && submitGuess()}
+              onFocus={() => setInputFocused(true)}
+              onBlur={() => setInputFocused(false)}
+              autoComplete="off" autoCorrect="off" spellCheck={false}
+              style={{
+                position: 'absolute', inset: 0, width: '100%', height: '100%',
+                background: 'transparent', border: 'none', outline: 'none',
+                color: 'transparent', caretColor: 'transparent', fontSize: '1.5rem',
+              }}
+            />
+          </div>
+        ) : (
+          <div style={{
+            width: '100%', borderRadius: '16px', overflow: 'hidden',
+            border: inputBoxStyle.border,
+            background: inputBoxStyle.background,
+            boxShadow: inputBoxStyle.boxShadow,
+            transition: 'border-color 0.5s ease, background 0.5s ease, box-shadow 0.5s ease',
+          }}>
+            <input
+              ref={guessInputRef}
+              type="text"
+              placeholder={placeholder}
+              value={guessText}
+              onChange={e => setGuessText(e.target.value)}
+              onKeyDown={e => e.key === 'Enter' && canSubmit && submitGuess()}
+              onFocus={() => setInputFocused(true)}
+              onBlur={() => setInputFocused(false)}
+              autoComplete="off" autoCorrect="off" spellCheck={false}
+              style={{
+                display: 'block', width: '100%', background: 'transparent', border: 'none',
+                color: 'white', fontSize: '1.3rem', fontWeight: 700, textAlign: 'center',
+                padding: '20px 16px', outline: 'none', fontFamily: 'inherit',
+              }}
+              className="placeholder-white/20"
+            />
+          </div>
+        )}
 
         {target === 'both' && (
           <div style={{
@@ -1359,9 +1388,7 @@ function GuessingView({ game }: Readonly<{ game: PlayState }>) {
         >
           <LiquidGlass
             style={{ position: 'absolute', top: '50%', left: '50%' }}
-            displacementScale={64} blurAmount={0.05} saturation={130}
-            aberrationIntensity={2} elasticity={0.12} cornerRadius={100}
-            padding="18px 36px"
+            {...LIQUID_PILL_PROPS}
           >
             <div style={{ position: 'relative' }}>
               <div style={{ position: 'absolute', inset: '-18px -36px', borderRadius: '100px', pointerEvents: 'none', background: 'rgba(110,32,155,0.15)' }} />
@@ -1415,12 +1442,7 @@ function PassedView({ game }: Readonly<{ game: PlayState }>) {
         <div className="liquid-btn relative" style={{ width: '310px', height: gotIt ? '180px' : '150px' }}>
           <LiquidGlass
             style={{ position: 'absolute', top: '50%', left: '50%' }}
-            displacementScale={55}
-            blurAmount={0.06}
-            saturation={130}
-            aberrationIntensity={1.5}
-            elasticity={0.08}
-            cornerRadius={20}
+            {...LIQUID_CARD_PROPS}
             padding="28px 28px"
           >
             <div style={{ width: '254px', display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '14px' }}>
@@ -1467,9 +1489,10 @@ function PassedView({ game }: Readonly<{ game: PlayState }>) {
 }
 
 // Full-screen victim picker for the steal-round winner.
-function StealPicker({ victims, onPick }: Readonly<{
+function StealPicker({ victims, onPick, onSkip }: Readonly<{
   victims: { name: string; score: number }[];
   onPick: (name: string) => void;
+  onSkip: () => void;
 }>) {
   return (
     <div
@@ -1485,7 +1508,7 @@ function StealPicker({ victims, onPick }: Readonly<{
           You won the steal!
         </p>
         <p style={{ color: 'rgba(255,255,255,0.45)', fontSize: '0.85rem' }}>
-          Pick a victim — you take 15% of their score (min 300)
+          Pick a victim: you take 15% of their score (min 300)
         </p>
       </div>
       <div className="flex flex-col gap-2.5 w-full" style={{ maxWidth: '310px', maxHeight: '50vh', overflowY: 'auto' }}>
@@ -1506,16 +1529,37 @@ function StealPicker({ victims, onPick }: Readonly<{
           </button>
         ))}
       </div>
+      <button
+        onClick={onSkip}
+        style={{ background: 'none', border: 'none', color: 'rgba(255,255,255,0.2)', fontSize: '0.82rem', cursor: 'pointer', transition: 'color 0.2s ease' }}
+        onMouseEnter={e => { (e.currentTarget as HTMLElement).style.color = 'rgba(255,255,255,0.5)'; }}
+        onMouseLeave={e => { (e.currentTarget as HTMLElement).style.color = 'rgba(255,255,255,0.2)'; }}
+      >
+        Skip, don't steal
+      </button>
     </div>
   );
 }
 
 // Reveal for "guess the year" rounds: the year card plus everyone's distances.
-function YearRevealView({ game, result }: Readonly<{ game: PlayState; result: RoundResultEvent }>) {
-  const { myName, myScore, myScoreDelta, myStreak, stealResult } = game;
-  const cardH = result.coverUrl ? 500 : 330;
+// Shared shell for the three reveal-screen variants (year / no-one-got-it /
+// got-it): page background, liquid card, party extras, a guesses list, and
+// the player's score box. Only the card content, guesses list, and an
+// optional extra line under the score differ between them.
+function PlayRevealShell({
+  game, result, cardHeight, cardContent, guessesList, scoreExtra, wide = false,
+}: Readonly<{
+  game: PlayState;
+  result: RoundResultEvent;
+  cardHeight: number;
+  cardContent: React.ReactNode;
+  guessesList: React.ReactNode;
+  scoreExtra?: React.ReactNode;
+  wide?: boolean;
+}>) {
+  const { myScore, myScoreDelta, myStreak, stealResult } = game;
   return (
-    <div className="page-enter relative min-h-screen flex flex-col items-center justify-center p-6 gap-5 overflow-hidden">
+    <div className={`page-enter relative min-h-screen flex flex-col items-center justify-center gap-5 overflow-hidden ${wide ? 'px-2 py-6' : 'p-6'}`}>
       <img
         src={`${import.meta.env.BASE_URL}background3.svg`}
         alt=""
@@ -1524,43 +1568,19 @@ function YearRevealView({ game, result }: Readonly<{ game: PlayState; result: Ro
       />
       <div style={{ position: 'fixed', inset: 0, zIndex: 1, background: 'rgba(5,5,14,0.82)', backdropFilter: 'blur(28px)' }} />
       <div className="relative flex flex-col items-center gap-5 w-full" style={{ zIndex: 2 }}>
-        <div className="liquid-btn relative" style={{ width: '310px', height: `${cardH}px` }}>
+        <div className="liquid-btn relative" style={{ width: wide ? 'min(88vw, 366px)' : '310px', height: `${cardHeight}px` }}>
           <LiquidGlass
             style={{ position: 'absolute', top: '50%', left: '50%' }}
-            displacementScale={55}
-            blurAmount={0.06}
-            saturation={130}
-            aberrationIntensity={1.5}
-            elasticity={0.08}
-            cornerRadius={20}
-            padding="24px 24px"
+            {...LIQUID_CARD_PROPS}
+            padding={wide ? '18px 18px' : '24px 24px'}
           >
-            <YearCardContent result={result} />
+            {cardContent}
           </LiquidGlass>
         </div>
 
         <PartyRevealExtras result={result} stealResult={stealResult} />
 
-        {result.yearResults && result.yearResults.length > 0 && (
-          <div style={{ background: 'rgba(255,255,255,0.05)', border: '1px solid rgba(255,255,255,0.08)', borderRadius: '16px', padding: '8px 12px', width: '310px', maxWidth: '92vw' }} className="space-y-1">
-            {result.yearResults.map(r => {
-              let diffLabel = '';
-              if (r.diff === 0) diffLabel = ' · exact';
-              else if (r.diff !== null && r.diff > 0) diffLabel = ` (${r.diff} off)`;
-              return (
-              <div key={r.name} className="flex justify-between items-center gap-2">
-                <span className={`text-xs min-w-0 truncate ${r.name === myName ? 'text-white font-semibold' : 'text-white/40'}`}>{r.name}</span>
-                <span className="text-xs text-right shrink-0">
-                  <span className={r.diff === 0 ? 'text-green-400' : 'text-white/40'}>
-                    {r.guess ?? '—'}{diffLabel}
-                  </span>
-                  {r.points > 0 && <span className="ml-1.5 text-sky-400 font-semibold tabular-nums">+{r.points.toLocaleString()}</span>}
-                </span>
-              </div>
-              );
-            })}
-          </div>
-        )}
+        {guessesList}
 
         <div style={{ background: 'rgba(255,255,255,0.05)', border: '1px solid rgba(255,255,255,0.08)', borderRadius: '16px', padding: '16px 32px', textAlign: 'center' }}>
           {myScoreDelta > 0 && (
@@ -1568,6 +1588,7 @@ function YearRevealView({ game, result }: Readonly<{ game: PlayState; result: Ro
           )}
           <p className="text-3xl font-black text-white">{myScore.toLocaleString()}</p>
           <p className="text-white/40 text-sm">your score</p>
+          {scoreExtra}
           {myStreak >= 2 && (
             <p className="flex items-center justify-center gap-1 text-orange-400 text-xs font-bold mt-1">
               <Flame className="w-3 h-3" />{myStreak} in a row
@@ -1579,138 +1600,98 @@ function YearRevealView({ game, result }: Readonly<{ game: PlayState; result: Ro
   );
 }
 
+function YearRevealView({ game, result }: Readonly<{ game: PlayState; result: RoundResultEvent }>) {
+  const { myName } = game;
+  // The timeline card already shows every player's guess and distance —
+  // this strip only adds what it doesn't: points earned this round.
+  const scorers = (result.yearResults ?? []).filter(r => r.points > 0).sort((a, b) => b.points - a.points);
+  const guessesList = scorers.length > 0 && (
+    <div style={{ background: 'rgba(255,255,255,0.05)', border: '1px solid rgba(255,255,255,0.08)', borderRadius: '16px', padding: '8px 12px', width: '310px', maxWidth: '92vw' }} className="space-y-1">
+      {scorers.map(r => (
+        <div key={r.name} className="flex justify-between items-center gap-2">
+          <span className={`text-xs min-w-0 truncate ${r.name === myName ? 'text-white font-semibold' : 'text-white/40'}`}>{r.name}</span>
+          <span className="ml-1.5 text-xs text-sky-400 font-semibold tabular-nums shrink-0">+{r.points.toLocaleString()}</span>
+        </div>
+      ))}
+    </div>
+  );
+  return (
+    <PlayRevealShell
+      game={game}
+      result={result}
+      wide
+      cardHeight={result.coverUrl ? 500 : 380}
+      cardContent={<YearTimelineContent result={result} />}
+      guessesList={guessesList}
+    />
+  );
+}
+
 export function RevealView({ game, result }: Readonly<{ game: PlayState; result: RoundResultEvent }>) {
-  const { myName, myScore, myScoreDelta, myStreak, myRacePoints, myRaceTimeMs } = game;
+  const { myName, myRacePoints, myRaceTimeMs } = game;
   const isRace = result.mode === 'race';
   const iGotItInRace = isRace && !!result.correctGuessers?.includes(myName);
 
-  const bg3 = (
-    <>
-      <img
-        src={`${import.meta.env.BASE_URL}background3.svg`}
-        alt=""
-        aria-hidden="true"
-        style={{ position: 'fixed', inset: 0, width: '100%', height: '100%', objectFit: 'cover', zIndex: 0 }}
-      />
-      <div style={{ position: 'fixed', inset: 0, zIndex: 1, background: 'rgba(5,5,14,0.82)', backdropFilter: 'blur(28px)' }} />
-    </>
-  );
-
   if (!result.correct) {
-    const cardH = result.coverUrl ? 480 : 240;
-    return (
-      <div className="page-enter relative min-h-screen flex flex-col items-center justify-center p-6 gap-5 overflow-hidden">
-        {bg3}
-        <div className="relative flex flex-col items-center gap-5 w-full" style={{ zIndex: 2 }}>
-          <div className="liquid-btn relative" style={{ width: '310px', height: `${cardH}px` }}>
-            <LiquidGlass
-              style={{ position: 'absolute', top: '50%', left: '50%' }}
-              displacementScale={55}
-              blurAmount={0.06}
-              saturation={130}
-              aberrationIntensity={1.5}
-              elasticity={0.08}
-              cornerRadius={20}
-              padding="24px 24px"
-            >
-              <NoOneGotItCardContent result={result} />
-            </LiquidGlass>
-          </div>
-
-          <PartyRevealExtras result={result} stealResult={game.stealResult} />
-
-          {result.playerGuesses && result.playerGuesses.length > 0 && (
-            <div style={{ background: 'rgba(255,255,255,0.05)', border: '1px solid rgba(255,255,255,0.08)', borderRadius: '16px', padding: '8px 12px', width: '310px', maxWidth: '92vw' }} className="space-y-1">
-              {result.playerGuesses.map(g => (
-                <div key={g.name} className="flex justify-between items-center gap-2">
-                  <span className="text-white/40 text-xs min-w-0 truncate">{g.name}</span>
-                  <span className={`text-xs text-right min-w-0 truncate italic ${g.guess === null ? 'text-white/15' : 'text-white/20'}`}>
-                    {g.guess === null ? 'skipped' : (() => {const ellipsis = g.live ? '…' : ''; return `"${g.guess}${ellipsis}"`;})()}
-                  </span>
-                </div>
-              ))}
+    const guessesList = result.playerGuesses && result.playerGuesses.length > 0 && (
+      <div style={{ background: 'rgba(255,255,255,0.05)', border: '1px solid rgba(255,255,255,0.08)', borderRadius: '16px', padding: '8px 12px', width: '310px', maxWidth: '92vw' }} className="space-y-1">
+        {result.playerGuesses.map(g => {
+          const ellipsis = g.live ? '…' : '';
+          return (
+            <div key={g.name} className="flex justify-between items-center gap-2">
+              <span className="text-white/40 text-xs min-w-0 truncate">{g.name}</span>
+              <span className={`text-xs text-right min-w-0 truncate italic ${g.guess === null ? 'text-white/15' : 'text-white/20'}`}>
+                {g.guess === null ? 'skipped' : `"${g.guess}${ellipsis}"`}
+              </span>
             </div>
-          )}
-
-          <div style={{ background: 'rgba(255,255,255,0.05)', border: '1px solid rgba(255,255,255,0.08)', borderRadius: '16px', padding: '16px 32px', textAlign: 'center' }}>
-            {myScoreDelta > 0 && (
-              <p className="text-sky-400 text-sm font-bold tabular-nums">+{myScoreDelta.toLocaleString()} pts</p>
-            )}
-            <p className="text-3xl font-black text-white">{myScore.toLocaleString()}</p>
-            <p className="text-white/40 text-sm">your score</p>
-            {myStreak >= 2 && (
-              <p className="flex items-center justify-center gap-1 text-orange-400 text-xs font-bold mt-1">
-                <Flame className="w-3 h-3" />{myStreak} in a row
-              </p>
-            )}
-          </div>
-        </div>
+          );
+        })}
       </div>
+    );
+    return (
+      <PlayRevealShell
+        game={game}
+        result={result}
+        cardHeight={result.coverUrl ? 480 : 240}
+        cardContent={<NoOneGotItCardContent result={result} />}
+        guessesList={guessesList}
+      />
     );
   }
 
-  const cardH = result.coverUrl ? 440 : 240;
-  return (
-    <div className="page-enter relative min-h-screen flex flex-col items-center justify-center p-6 gap-5 overflow-hidden">
-      {bg3}
-      <div className="relative flex flex-col items-center gap-5 w-full" style={{ zIndex: 2 }}>
-        <div className="liquid-btn relative" style={{ width: '310px', height: `${cardH}px` }}>
-          <LiquidGlass
-            style={{ position: 'absolute', top: '50%', left: '50%' }}
-            displacementScale={55}
-            blurAmount={0.06}
-            saturation={130}
-            aberrationIntensity={1.5}
-            elasticity={0.08}
-            cornerRadius={20}
-            padding="24px 24px"
-          >
-            <GotItCardContent result={result} myName={myName} />
-          </LiquidGlass>
-        </div>
-
-        <PartyRevealExtras result={result} stealResult={game.stealResult} />
-
-        {result.playerGuesses && result.playerGuesses.length > 0 && (
-          <div style={{ background: 'rgba(255,255,255,0.05)', border: '1px solid rgba(255,255,255,0.08)', borderRadius: '16px', padding: '8px 12px', width: '310px', maxWidth: '92vw' }} className="space-y-1">
-            {result.playerGuesses.map(g => {
-              const correct = isRace ? !!result.correctGuessers?.includes(g.name) : (g.name === result.guesserName);
-              const guessClass = guessTextClass(g.guess, correct);
-              const ellipsis = g.live ? '…' : '';
-              return (
-                <div key={g.name} className="flex justify-between items-center gap-2">
-                  <span className={`text-xs min-w-0 truncate ${correct ? 'text-white font-semibold' : 'text-white/30'}`}>{g.name}</span>
-                  <span className={`text-xs text-right min-w-0 truncate ${guessClass}`}>
-                    {g.guess === null ? 'skipped' : `"${g.guess}${ellipsis}"`}
-                    {correct && g.timeMs != null && (
-                      <span className="ml-1 text-white/25 text-xs">{(g.timeMs / 1000).toFixed(1)}s</span>
-                    )}
-                  </span>
-                </div>
-              );
-            })}
+  const guessesList = result.playerGuesses && result.playerGuesses.length > 0 && (
+    <div style={{ background: 'rgba(255,255,255,0.05)', border: '1px solid rgba(255,255,255,0.08)', borderRadius: '16px', padding: '8px 12px', width: '310px', maxWidth: '92vw' }} className="space-y-1">
+      {result.playerGuesses.map(g => {
+        const correct = isRace ? !!result.correctGuessers?.includes(g.name) : (g.name === result.guesserName);
+        const guessClass = guessTextClass(g.guess, correct);
+        const ellipsis = g.live ? '…' : '';
+        return (
+          <div key={g.name} className="flex justify-between items-center gap-2">
+            <span className={`text-xs min-w-0 truncate ${correct ? 'text-white font-semibold' : 'text-white/30'}`}>{g.name}</span>
+            <span className={`text-xs text-right min-w-0 truncate ${guessClass}`}>
+              {g.guess === null ? 'skipped' : `"${g.guess}${ellipsis}"`}
+              {correct && g.timeMs != null && (
+                <span className="ml-1 text-white/25 text-xs">{(g.timeMs / 1000).toFixed(1)}s</span>
+              )}
+            </span>
           </div>
-        )}
-
-        <div style={{ background: 'rgba(255,255,255,0.05)', border: '1px solid rgba(255,255,255,0.08)', borderRadius: '16px', padding: '16px 32px', textAlign: 'center' }}>
-          {myScoreDelta > 0 && (
-            <p className="text-sky-400 text-sm font-bold tabular-nums">+{myScoreDelta.toLocaleString()} pts</p>
-          )}
-          <p className="text-3xl font-black text-white">{myScore.toLocaleString()}</p>
-          <p className="text-white/40 text-sm">your score</p>
-          {iGotItInRace && myRaceTimeMs != null && (
-            <p className="text-green-400 text-xs font-semibold mt-1">
-              You got it in {(myRaceTimeMs / 1000).toFixed(1)}s · +{myRacePoints}
-            </p>
-          )}
-          {myStreak >= 2 && (
-            <p className="flex items-center justify-center gap-1 text-orange-400 text-xs font-bold mt-1">
-              <Flame className="w-3 h-3" />{myStreak} in a row
-            </p>
-          )}
-        </div>
-      </div>
+        );
+      })}
     </div>
+  );
+  return (
+    <PlayRevealShell
+      game={game}
+      result={result}
+      cardHeight={result.coverUrl ? 440 : 240}
+      cardContent={<GotItCardContent result={result} myName={myName} />}
+      guessesList={guessesList}
+      scoreExtra={iGotItInRace && myRaceTimeMs != null && (
+        <p className="text-green-400 text-xs font-semibold mt-1">
+          You got it in {(myRaceTimeMs / 1000).toFixed(1)}s · +{myRacePoints}
+        </p>
+      )}
+    />
   );
 }
 
@@ -1827,13 +1808,7 @@ function LeaderboardView({ game }: Readonly<{ game: PlayState }>) {
               >
                 <LiquidGlass
                   style={{ position: 'absolute', top: '50%', left: '50%' }}
-                  displacementScale={64}
-                  blurAmount={0.05}
-                  saturation={130}
-                  aberrationIntensity={2}
-                  elasticity={0.12}
-                  cornerRadius={100}
-                  padding="18px 36px"
+                  {...LIQUID_PILL_PROPS}
                 >
                   <div style={{ position: 'relative' }}>
                     <div style={{ position: 'absolute', inset: '-18px -36px', borderRadius: '100px', pointerEvents: 'none', background: 'rgba(0,128,126,0.18)' }} />
@@ -1854,13 +1829,7 @@ function LeaderboardView({ game }: Readonly<{ game: PlayState }>) {
           >
             <LiquidGlass
               style={{ position: 'absolute', top: '50%', left: '50%' }}
-              displacementScale={64}
-              blurAmount={0.05}
-              saturation={130}
-              aberrationIntensity={2}
-              elasticity={0.12}
-              cornerRadius={100}
-              padding="18px 36px"
+              {...LIQUID_PILL_PROPS}
             >
               <span className="text-white font-bold text-xl" style={{ whiteSpace: 'nowrap', position: 'relative', display: 'inline-block', minWidth: '210px', textAlign: 'center' }}>
                 Leave
@@ -1923,8 +1892,8 @@ export default function Play() {
       )}
       {(phase === 'leaderboard' || phase === 'finished') && <LeaderboardView game={game} />}
 
-      <RoundIntro party={game.party} roundKey={game.roundIndex} />
-      {game.stealVictims && <StealPicker victims={game.stealVictims} onPick={game.submitStealVictim} />}
+      <RoundIntro party={game.party} roundKey={game.roundIndex} dismissible={false} />
+      {game.stealVictims && <StealPicker victims={game.stealVictims} onPick={game.submitStealVictim} onSkip={game.skipSteal} />}
 
       {reconnecting && (
         <div className="fixed inset-0 bg-black/70 backdrop-blur-sm flex flex-col items-center justify-center z-50 gap-3">

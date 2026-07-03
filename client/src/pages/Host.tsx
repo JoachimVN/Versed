@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { Music, Check, Loader2, Copy, Settings, Flame, Coins, Clock, PartyPopper } from 'lucide-react';
+import { Check, Loader2, Copy, Settings, Flame, Coins, Clock, PartyPopper } from 'lucide-react';
 import LiquidGlass from 'liquid-glass-react';
 import QRCodeLib from 'react-qr-code';
 const QRCode = QRCodeLib as unknown as React.FC<{ value: string; size?: number }>;
@@ -9,15 +9,18 @@ import { useSpotify } from '../hooks/useSpotify';
 import { RankBadge } from '../components/RankBadge';
 import { useAnimatedScore } from '../hooks/useAnimatedScore';
 import { ConfettiBackground } from '../components/ConfettiBackground';
-import { NoOneGotItCardContent, GotItCardContent, YearCardContent } from '../components/RevealShared';
+import { NoOneGotItCardContent, GotItCardContent, YearTimelineContent, PillButton } from '../components/RevealShared';
 import { RoundIntro, PartyBadge, PartyRevealExtras } from '../components/RoundIntro';
 import { BackButton } from '../components/BackButton';
+import { CircularTimer } from '../components/CircularTimer';
+import { AudioBars } from '../components/AudioBars';
+import { LIQUID_CARD_PROPS, LIQUID_PILL_PROPS } from '../components/liquidGlassPresets';
 import { APP_NAME, BACKEND_URL, RACE_TIME } from '../config';
 import type { Hint, LeaderboardEntry, PartyInfo, PlayerInfo, RoundResultEvent } from '../types';
 
 type Phase = 'connect' | 'lobby' | 'betting' | 'playing' | 'guessing' | 'reveal' | 'leaderboard' | 'finished';
 type Mode = 'classic' | 'race' | 'party';
-interface SongInfo { title: string; artist: string; trackId: string }
+interface SongInfo { title: string; artist: string; trackId: string; tempo?: number | null }
 
 const wait = (ms: number) => new Promise<void>(resolve => setTimeout(resolve, ms));
 
@@ -33,6 +36,7 @@ export interface HostState {
   hints: Hint[];
   bettingTime: number;
   timeLeft: number;
+  timerTotal: number;
   bidCount: number;
   countdown: number | null;
   guesserNames: string[];
@@ -53,11 +57,13 @@ export interface HostState {
   raceWinnerOnly: boolean;
   artistOnly: boolean;
   party: PartyInfo | null;
-  stealResult: { thief: string; victim: string; amount: number } | null;
+  stealResult: { thief: string; victim: string; amount: number; skipped?: boolean } | null;
   answeredCount: number;
   reconnecting: boolean;
   reconnectingCount: number;
   gameExpired: boolean;
+  songPlaying: boolean;
+  songTempo: number | null;
   toggleSettings: () => void;
   setBettingTimeSetting: (v: number) => void;
   setGuessingTimeSetting: (v: number) => void;
@@ -92,6 +98,7 @@ function useHostGame(): HostState {
   const [hints, setHints] = useState<Hint[]>([]);
   const [bettingTime, setBettingTime] = useState(15);
   const [timeLeft, setTimeLeft] = useState(0);
+  const [timerTotal, setTimerTotal] = useState(0);
   const [bidCount, setBidCount] = useState(0);
   const [countdown, setCountdown] = useState<number | null>(null);
   const [guesserNames, setGuesserNames] = useState<string[]>([]);
@@ -111,11 +118,13 @@ function useHostGame(): HostState {
   const [raceWinnerOnly, setRaceWinnerOnly] = useState(false);
   const [artistOnly, setArtistOnly] = useState(false);
   const [party, setParty] = useState<PartyInfo | null>(null);
-  const [stealResult, setStealResult] = useState<{ thief: string; victim: string; amount: number } | null>(null);
+  const [stealResult, setStealResult] = useState<{ thief: string; victim: string; amount: number; skipped?: boolean } | null>(null);
   const [answeredCount, setAnsweredCount] = useState(0);
   const [reconnecting, setReconnecting] = useState(false);
   const [reconnectingNames, setReconnectingNames] = useState<Set<string>>(new Set());
   const [gameExpired, setGameExpired] = useState(false);
+  const [songPlaying, setSongPlaying] = useState(false);
+  const [songTempo, setSongTempo] = useState<number | null>(null);
   const timerRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const playRafRef = useRef<number | null>(null);
   const playGenRef = useRef(0);
@@ -127,6 +136,7 @@ function useHostGame(): HostState {
   function startCountdown(seconds: number) {
     stopCountdown();
     setTimeLeft(Math.ceil(seconds));
+    setTimerTotal(Math.ceil(seconds));
     timerRef.current = setInterval(() => {
       setTimeLeft(t => {
         if (t <= 1) { stopCountdown(); return 0; }
@@ -237,6 +247,7 @@ function useHostGame(): HostState {
       setAnsweredCount(0);
       setParty(data.party ?? null);
       setStealResult(null);
+      setSongTempo(data.song.tempo ?? null);
       if (data.mode === 'race') {
         setPhase('playing');
       } else {
@@ -257,6 +268,7 @@ function useHostGame(): HostState {
       setGuesserNames(data.guesserNames);
       setPlayerBids(data.playerBids ?? []);
       stopCountdown();
+      setSongPlaying(false);
       // Brief pause so the last dot's fill animation is visible before transitioning.
       setTimeout(() => setPhase('playing'), 600);
     });
@@ -286,6 +298,7 @@ function useHostGame(): HostState {
       // doesn't start a guessing timer for a round that's already over.
       const started = await spotify.startPrepared(data.durationMs);
       if (!started) return;
+      setSongPlaying(true);
       socket.emit('song_started');
       startCountdown(data.durationMs / 1000);
       startPlaybackBar(data.durationMs);
@@ -294,6 +307,7 @@ function useHostGame(): HostState {
     socket.on('guessing_start', (data: { guesserNames: string[]; timeLimit: number }) => {
       ++playGenRef.current;
       spotify.pauseTrack();
+      setSongPlaying(false);
       stopCountdown();
       stopPlaybackBar();
       setGuesserNames(data.guesserNames);
@@ -306,6 +320,7 @@ function useHostGame(): HostState {
       stopCountdown();
       stopPlaybackBar();
       spotify.pauseTrack();
+      setSongPlaying(false);
       setResult(data);
       setPhase('reveal');
     });
@@ -333,11 +348,12 @@ function useHostGame(): HostState {
       stopCountdown();
       stopPlaybackBar();
       spotify.pauseTrack();
+      setSongPlaying(false);
       setLeaderboard(lb);
       setPhase('finished');
     });
 
-    socket.on('steal_result', (r: { thief: string; victim: string; amount: number }) => {
+    socket.on('steal_result', (r: { thief: string; victim: string; amount: number; skipped?: boolean }) => {
       setStealResult(r);
     });
 
@@ -418,11 +434,11 @@ function useHostGame(): HostState {
 
   return {
     spotify, phase, pin, players, roundIndex, totalRounds, hints,
-    bettingTime, timeLeft, bidCount, countdown, guesserNames, lowestBid, playerBids,
+    bettingTime, timeLeft, timerTotal, bidCount, countdown, guesserNames, lowestBid, playerBids,
     result, roundDeltas, leaderboard, copied, playProgress, inviteUrl,
     settingsOpen, bettingTimeSetting, guessingTimeSetting, roundsSetting,
     mode, raceTimeSetting, raceWinnerOnly, artistOnly, party, stealResult, answeredCount,
-    reconnecting, reconnectingCount: reconnectingNames.size, gameExpired,
+    reconnecting, reconnectingCount: reconnectingNames.size, gameExpired, songPlaying, songTempo,
     toggleSettings: () => setSettingsOpen(o => !o),
     setBettingTimeSetting, setGuessingTimeSetting, setRoundsSetting,
     setMode, setRaceTimeSetting, setRaceWinnerOnly, setArtistOnly,
@@ -431,64 +447,6 @@ function useHostGame(): HostState {
     endGame: () => socket.emit('end_game'),
     removePlayer: (name: string) => socket.emit('kick_player', { name }),
   };
-}
-
-// ─── Circular countdown timer ─────────────────────────────────────────────────
-
-function timerColor(pct: number): string {
-  if (pct > 0.6) return 'rgba(52,211,153,0.9)';
-  if (pct > 0.35) return 'rgba(251,191,36,0.9)';
-  if (pct > 0.12) return 'rgba(249,115,22,0.9)';
-  return 'rgba(239,68,68,0.9)';
-}
-
-function CircularTimer({ timeLeft, total }: Readonly<{ timeLeft: number; total: number }>) {
-  const size = 128;
-  const sw = 5;
-  const r = (size - sw * 2) / 2;
-  const circ = 2 * Math.PI * r;
-
-  const endsAtRef = useRef(0);
-  const [pct, setPct] = useState(total > 0 ? Math.max(0, Math.min(1, timeLeft / total)) : 0);
-
-  useEffect(() => {
-    if (total <= 0) return;
-    if (timeLeft <= 0) {
-      setPct(0);
-      return;
-    }
-    endsAtRef.current = Date.now() + timeLeft * 1000;
-    let rafId: number;
-    const tick = () => {
-      const remaining = endsAtRef.current - Date.now();
-      const p = Math.max(0, Math.min(1, remaining / (total * 1000)));
-      setPct(p);
-      if (p > 0) rafId = requestAnimationFrame(tick);
-    };
-    rafId = requestAnimationFrame(tick);
-    return () => cancelAnimationFrame(rafId);
-  }, [timeLeft, total]);
-
-  return (
-    <div className="relative" style={{ width: size, height: size }}>
-      <svg width={size} height={size} className="absolute inset-0" style={{ transform: 'rotate(-90deg)' }}>
-        <circle cx={size / 2} cy={size / 2} r={r} fill="none" stroke="rgba(255,255,255,0.07)" strokeWidth={sw} />
-        <circle
-          cx={size / 2} cy={size / 2} r={r} fill="none"
-          stroke={timerColor(pct)}
-          strokeWidth={sw}
-          strokeDasharray={circ}
-          strokeDashoffset={circ * (1 - pct)}
-          strokeLinecap="round"
-          style={{ transition: 'stroke 0.4s ease' }}
-        />
-      </svg>
-      <div className="absolute inset-0 flex flex-col items-center justify-center">
-        <span className="text-white font-black" style={{ fontSize: '1.9rem', lineHeight: 1 }}>{timeLeft}</span>
-        <span style={{ color: 'rgba(255,255,255,0.3)', fontSize: '0.6rem', textTransform: 'uppercase', letterSpacing: '0.14em' }}>sec</span>
-      </div>
-    </div>
-  );
 }
 
 // ─── Bid timeline ────────────────────────────────────────────────────────────
@@ -764,6 +722,16 @@ function EndGameButton({ endGame }: Readonly<{ endGame: () => void }>) {
 
 function ConnectView({ game }: Readonly<{ game: HostState }>) {
   const { spotify } = game;
+  const searchParams = new URLSearchParams(globalThis.location.search);
+  const error = searchParams.get('error');
+
+  const errorMessages: Record<string, string> = {
+    'access_denied': 'You denied authorization.',
+    'user_denied_authorization': 'You denied authorization.',
+    'cancelled': 'Authorization was cancelled.',
+  };
+  const errorMsg = error ? (errorMessages[error] ?? 'Authorization failed.') : null;
+
   return (
     <div className="min-h-screen flex flex-col items-center justify-center gap-6 p-6">
       <BackButton />
@@ -771,12 +739,17 @@ function ConnectView({ game }: Readonly<{ game: HostState }>) {
       {spotify.isConnected && !spotify.playerReady ? (
         <p className="text-white/50">Connecting to Spotify...</p>
       ) : (
-        <a
-          href={`${BACKEND_URL}/api/auth/spotify`}
-          className="px-8 py-4 rounded-2xl bg-[#1DB954] text-white font-bold text-xl hover:bg-[#1ed760] transition-colors"
-        >
-          Connect Spotify
-        </a>
+        <>
+          <a
+            href={`${BACKEND_URL}/api/auth/spotify`}
+            className="px-8 py-4 rounded-2xl bg-[#1DB954] text-white font-bold text-xl hover:bg-[#1ed760] transition-colors"
+          >
+            Connect Spotify
+          </a>
+          {errorMsg && (
+            <p className="text-red-400 text-sm text-center">{errorMsg} <a href={globalThis.location.pathname} className="underline">Try again</a></p>
+          )}
+        </>
       )}
       <p className="text-white/30 text-sm">Requires Spotify Premium</p>
     </div>
@@ -890,13 +863,7 @@ function StartButton({ players, mode, startGame }: Readonly<{ players: PlayerInf
           filter: hovered && !disabled ? hoverShadow : 'drop-shadow(0 0 0px rgba(0,0,0,0))',
           transition: 'filter 0.25s ease',
         }}
-        displacementScale={64}
-        blurAmount={0.05}
-        saturation={130}
-        aberrationIntensity={2}
-        elasticity={0.12}
-        cornerRadius={100}
-        padding="18px 36px"
+        {...LIQUID_PILL_PROPS}
       >
         <div style={{ position: 'relative' }}>
           <div style={{
@@ -1074,7 +1041,7 @@ function BettingView({ game }: Readonly<{ game: HostState }>) {
       </div>
 
       {/* Skip / end */}
-      <div className="relative flex justify-center items-center gap-6 pb-7" style={{ zIndex: 2 }}>
+      <div className="relative flex flex-col justify-center items-center gap-2 pb-7" style={{ zIndex: 2 }}>
         <button
           onClick={skipTurn}
           style={{ background: 'none', border: 'none', color: 'rgba(255,255,255,0.12)', fontSize: '0.75rem', cursor: 'pointer', transition: 'color 0.2s ease' }}
@@ -1089,56 +1056,79 @@ function BettingView({ game }: Readonly<{ game: HostState }>) {
   );
 }
 
+// Which brand accent a round reads as: year rounds get teal (matching Play.tsx),
+// race/non-classic party rounds get orange, classic stays purple.
+function roundAccent(isRace: boolean, party: PartyInfo | null): 'classic' | 'race' | 'year' {
+  if (party?.format === 'year') return 'year';
+  return isRace ? 'race' : 'classic';
+}
+
 export function PlayingView({ game }: Readonly<{ game: HostState }>) {
-  const { roundIndex, totalRounds, countdown, guesserNames, lowestBid, playerBids, playProgress, timeLeft, mode, answeredCount, players, skipTurn, endGame, party } = game;
+  const { roundIndex, totalRounds, countdown, guesserNames, lowestBid, playerBids, timeLeft, timerTotal, mode, answeredCount, players, skipTurn, endGame, party, songPlaying, songTempo } = game;
   // Party rounds that aren't classic-format arrive with an empty bid state and
   // behave exactly like race rounds on this screen.
   const isRace = mode === 'race' || (party !== null && party.format !== 'classic');
   const raceStatus = party?.finale
-    ? `${party.duelists.join(' vs ')} — first correct wins`
+    ? `${party.duelists.join(' vs ')} - first correct wins`
     : `${answeredCount} / ${players.length} answered`;
+  const accent = roundAccent(isRace, party);
   return (
-    <div className="relative min-h-screen flex flex-col items-center justify-center p-6 gap-6 text-center overflow-hidden">
+    <div className="relative min-h-screen flex flex-col items-center justify-center p-6 gap-5 text-center overflow-hidden">
       <img src={`${import.meta.env.BASE_URL}background4.svg`} alt="" aria-hidden="true" style={{ position: 'fixed', inset: 0, width: '100%', height: '100%', objectFit: 'cover', zIndex: 0 }} />
       <div style={{ position: 'fixed', inset: 0, zIndex: 1, background: 'rgba(5,5,14,0.82)', backdropFilter: 'blur(28px)' }} />
-      <div className="flex flex-col items-center gap-6 text-center w-full" style={{ position: 'relative', zIndex: 2 }}>
-        <p className="text-white/50">Round {roundIndex + 1}/{totalRounds}</p>
+      <div className="flex flex-col items-center gap-5 text-center w-full" style={{ position: 'relative', zIndex: 2 }}>
+        <p className="text-white/40 text-sm">Round {roundIndex + 1}/{totalRounds}</p>
         <PartyBadge party={party} />
-        {countdown === null ? (
-          <>
-            <Music className="w-16 h-16 text-white animate-pulse" />
-            {isRace ? (
-              <p className="text-white/50">{raceStatus}</p>
-            ) : (
-              <p className="text-white/50">{guesserNames.join(' & ')} will guess</p>
-            )}
-            <div className="w-full max-w-sm bg-white/10 rounded-full h-2 overflow-hidden">
-              <div className="bg-purple-500 h-2 rounded-full" style={{ width: `${playProgress * 100}%` }} />
+
+        <div className="liquid-btn relative" style={{ width: 'min(77vw, 527px)', height: countdown === null ? '340px' : '306px' }}>
+          <LiquidGlass
+            style={{ position: 'absolute', top: '50%', left: '50%' }}
+            {...LIQUID_CARD_PROPS}
+            padding="28px 28px"
+          >
+            <div style={{ width: 'min(71vw, 479px)', display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '16px' }}>
+              {countdown === null ? (
+                <>
+                  <AudioBars playing={songPlaying} accent={accent} height={36} bpm={songTempo} />
+                  <span style={{ color: 'rgba(255,255,255,0.5)', fontSize: '0.9rem', display: 'inline-block', minWidth: '210px', textAlign: 'center' }}>
+                    {isRace ? raceStatus : `${guesserNames.join(' & ')} will guess`}
+                  </span>
+                  <div style={{ width: '100%', height: '1px', background: 'rgba(255,255,255,0.07)' }} />
+                  <CircularTimer timeLeft={timeLeft} total={timerTotal} size={90} />
+                  {!isRace && (
+                    <div className="w-full">
+                      <BidTimeline bids={playerBids} lowestBid={lowestBid} />
+                    </div>
+                  )}
+                </>
+              ) : (
+                <>
+                  <span style={{ color: 'rgba(255,255,255,0.32)', fontSize: '0.6rem', letterSpacing: '0.2em', textTransform: 'uppercase' }}>
+                    Get ready
+                  </span>
+                  <div className="text-8xl font-black text-white" style={{ animation: 'badgeBreathe 1s ease-in-out infinite' }}>{countdown}</div>
+                  <div style={{ width: '100%', height: '1px', background: 'rgba(255,255,255,0.07)' }} />
+                  {isRace ? (
+                    <span style={{ color: 'rgba(255,255,255,0.5)', fontSize: '0.9rem', display: 'inline-block', minWidth: '210px', textAlign: 'center' }}>
+                      {party?.finale ? party.duelists.join(' vs ') : 'Everyone will guess'}
+                    </span>
+                  ) : (
+                    <>
+                      <span style={{ color: 'rgba(255,255,255,0.5)', fontSize: '0.9rem', display: 'inline-block', minWidth: '210px', textAlign: 'center' }}>
+                        {guesserNames.join(' & ')} will guess
+                      </span>
+                      <div className="w-full">
+                        <BidTimeline bids={playerBids} lowestBid={lowestBid} />
+                      </div>
+                    </>
+                  )}
+                </>
+              )}
             </div>
-            <p className="text-white font-black text-2xl">{timeLeft}s</p>
-            {!isRace && (
-              <div className="w-full max-w-sm">
-                <BidTimeline bids={playerBids} lowestBid={lowestBid} />
-              </div>
-            )}
-          </>
-        ) : (
-          <>
-            <p className="text-white/40 text-sm uppercase tracking-widest">Get ready</p>
-            <div className="text-8xl font-black text-white animate-pulse">{countdown}</div>
-            {isRace ? (
-              <p className="text-white/50">{party?.finale ? party.duelists.join(' vs ') : 'Everyone will guess'}</p>
-            ) : (
-              <>
-                <p className="text-white/50">{guesserNames.join(' & ')} will guess</p>
-                <div className="w-full max-w-sm">
-                  <BidTimeline bids={playerBids} lowestBid={lowestBid} />
-                </div>
-              </>
-            )}
-          </>
-        )}
-        <div className="flex items-center gap-6 mt-2">
+          </LiquidGlass>
+        </div>
+
+        <div className="flex flex-col items-center gap-2 mt-2">
           <button onClick={skipTurn} className="text-white/20 text-xs hover:text-white/50 transition-colors">
             Skip round
           </button>
@@ -1150,24 +1140,47 @@ export function PlayingView({ game }: Readonly<{ game: HostState }>) {
 }
 
 function GuessingView({ game }: Readonly<{ game: HostState }>) {
-  const { roundIndex, totalRounds, guesserNames, lowestBid, playerBids, timeLeft, skipTurn, endGame, party } = game;
+  const { roundIndex, totalRounds, guesserNames, lowestBid, playerBids, timeLeft, timerTotal, mode, party, skipTurn, endGame } = game;
+  const isRace = mode === 'race' || (party !== null && party.format !== 'classic');
+  const accent = roundAccent(isRace, party);
+  // Bidders who placed a bid this round but aren't in the current tier —
+  // if everyone bid the same (or there's only one player), there's no one
+  // else left waiting on a later turn.
+  const othersWaiting = playerBids.length > guesserNames.length;
   return (
-    <div className="relative min-h-screen flex flex-col items-center justify-center p-6 gap-6 text-center overflow-hidden">
+    <div className="relative min-h-screen flex flex-col items-center justify-center p-6 gap-5 text-center overflow-hidden">
       <img src={`${import.meta.env.BASE_URL}background4.svg`} alt="" aria-hidden="true" style={{ position: 'fixed', inset: 0, width: '100%', height: '100%', objectFit: 'cover', zIndex: 0 }} />
       <div style={{ position: 'fixed', inset: 0, zIndex: 1, background: 'rgba(5,5,14,0.82)', backdropFilter: 'blur(28px)' }} />
-      <div className="flex flex-col items-center gap-6 text-center w-full" style={{ position: 'relative', zIndex: 2 }}>
-        <p className="text-white/50">Round {roundIndex + 1}/{totalRounds}</p>
+      <div className="flex flex-col items-center gap-5 text-center w-full" style={{ position: 'relative', zIndex: 2 }}>
+        <p className="text-white/40 text-sm">Round {roundIndex + 1}/{totalRounds}</p>
         <PartyBadge party={party} />
-        <div>
-          <p className="text-white/50 text-sm mb-1">Guessing</p>
-          <p className="text-white font-black text-2xl">{guesserNames.join(' & ')}</p>
+
+        <div className="liquid-btn relative" style={{ width: '310px', height: '420px' }}>
+          <LiquidGlass
+            style={{ position: 'absolute', top: '50%', left: '50%' }}
+            {...LIQUID_CARD_PROPS}
+            padding="28px 28px"
+          >
+            <div style={{ width: '254px', display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '16px' }}>
+              {/* Audio is always paused by the time this view mounts (guessing_start pauses it). */}
+              <AudioBars playing={false} accent={accent} height={32} />
+              <span style={{ color: 'rgba(255,255,255,0.32)', fontSize: '0.6rem', letterSpacing: '0.2em', textTransform: 'uppercase' }}>
+                Guessing
+              </span>
+              <span style={{ color: 'white', fontWeight: 900, fontSize: '1.4rem', lineHeight: 1.3, display: 'inline-block', minWidth: '210px', textAlign: 'center' }}>
+                {guesserNames.join(' & ')}
+              </span>
+              <div style={{ width: '100%', height: '1px', background: 'rgba(255,255,255,0.07)' }} />
+              <CircularTimer timeLeft={timeLeft} total={timerTotal} size={90} />
+              <div className="w-full">
+                <BidTimeline bids={playerBids} lowestBid={lowestBid} />
+              </div>
+            </div>
+          </LiquidGlass>
         </div>
-        <p className="text-white font-black text-5xl">{timeLeft}s</p>
-        <div className="w-full max-w-sm">
-          <BidTimeline bids={playerBids} lowestBid={lowestBid} />
-        </div>
-        <p className="text-white/30 text-sm">Other players are waiting...</p>
-        <div className="flex items-center gap-6 mt-2">
+
+        {othersWaiting && <p className="text-white/25 text-sm">Other players are waiting...</p>}
+        <div className="flex flex-col items-center gap-2 mt-2">
           <button onClick={skipTurn} className="text-white/20 text-xs hover:text-white/50 transition-colors">
             Skip turn
           </button>
@@ -1194,7 +1207,8 @@ function RevealPlayerRow({
   const skipped = entry?.guess === null;
   let guessText: string | null = null;
   if (entry) {
-    guessText = skipped ? 'skipped' : `"${entry.guess}${entry.live ? '…' : ''}"`;
+    const ellipsis = entry.live ? '…' : '';
+    guessText = skipped ? 'skipped' : `"${entry.guess}${ellipsis}"`;
   }
   const guessCls = (!skipped && correct) ? 'text-green-400 text-xs truncate min-w-0' : 'text-white/20 italic text-xs truncate min-w-0';
   if (!entry) {
@@ -1252,7 +1266,7 @@ function RevealPlayerRow({
 }
 
 function RevealShell({
-  game, result, instant, cardHeight, cardContent, isCorrectFor,
+  game, result, instant, cardHeight, cardContent, isCorrectFor, wide = false,
 }: Readonly<{
   game: HostState;
   result: RoundResultEvent;
@@ -1260,10 +1274,11 @@ function RevealShell({
   cardHeight: number;
   cardContent: React.ReactNode;
   isCorrectFor: (player: PlayerInfo) => boolean;
+  wide?: boolean;
 }>) {
   const { roundIndex, totalRounds, players, roundDeltas, removePlayer, endGame, stealResult } = game;
   return (
-    <div className="page-enter relative min-h-screen flex flex-col items-center p-6 gap-5 overflow-hidden">
+    <div className={`page-enter relative min-h-screen flex flex-col items-center gap-5 overflow-hidden ${wide ? 'px-2 py-6' : 'p-6'}`}>
       <img
         src={`${import.meta.env.BASE_URL}background3.svg`}
         alt=""
@@ -1273,16 +1288,11 @@ function RevealShell({
       <div style={{ position: 'fixed', inset: 0, zIndex: 1, background: 'rgba(5,5,14,0.82)', backdropFilter: 'blur(28px)' }} />
       <p className="text-white/40 text-sm self-start" style={{ position: 'relative', zIndex: 2 }}>{roundIndex + 1} / {totalRounds}</p>
 
-      <div className="liquid-btn relative" style={{ width: '310px', height: `${cardHeight}px`, zIndex: 2 }}>
+      <div className="liquid-btn relative" style={{ width: wide ? 'min(88vw, 366px)' : '310px', height: `${cardHeight}px`, zIndex: 2 }}>
         <LiquidGlass
           style={{ position: 'absolute', top: '50%', left: '50%' }}
-          displacementScale={55}
-          blurAmount={0.06}
-          saturation={130}
-          aberrationIntensity={1.5}
-          elasticity={0.08}
-          cornerRadius={20}
-          padding="24px 24px"
+          {...LIQUID_CARD_PROPS}
+          padding={wide ? '18px 18px' : '24px 24px'}
         >
           {cardContent}
         </LiquidGlass>
@@ -1307,30 +1317,11 @@ function RevealShell({
         ))}
       </div>
 
-      <button
-        type="button"
-        className="liquid-btn relative cursor-pointer border-0 bg-transparent p-0"
-        style={{ width: '310px', height: '64px', borderRadius: '100px', background: 'rgba(0,0,0,0.001)', zIndex: 2 }}
+      <PillButton
         onClick={() => socket.emit('next_round')}
-      >
-        <LiquidGlass
-          style={{ position: 'absolute', top: '50%', left: '50%' }}
-          displacementScale={64}
-          blurAmount={0.05}
-          saturation={130}
-          aberrationIntensity={2}
-          elasticity={0.12}
-          cornerRadius={100}
-          padding="18px 36px"
-        >
-          <div style={{ position: 'relative' }}>
-            <div style={{ position: 'absolute', inset: '-18px -36px', borderRadius: '100px', pointerEvents: 'none', background: 'rgba(110,32,155,0.12)' }} />
-            <span className="text-white font-bold text-xl" style={{ whiteSpace: 'nowrap', position: 'relative', display: 'inline-block', minWidth: '210px', textAlign: 'center' }}>
-              {roundIndex + 1 >= totalRounds ? 'Final Results' : 'Next Round'}
-            </span>
-          </div>
-        </LiquidGlass>
-      </button>
+        label={roundIndex + 1 >= totalRounds ? 'Final Results' : 'Next Round'}
+        zIndex={2}
+      />
 
       {roundIndex + 1 < totalRounds && (
         <div style={{ position: 'relative', zIndex: 2 }}>
@@ -1351,8 +1342,9 @@ export function RevealView({ game, result, instant = false }: Readonly<{ game: H
         game={game}
         result={result}
         instant={instant}
-        cardHeight={result.coverUrl ? 500 : 330}
-        cardContent={<YearCardContent result={result} />}
+        cardHeight={result.coverUrl ? 500 : 380}
+        cardContent={<YearTimelineContent result={result} />}
+        wide
         isCorrectFor={(p) => !!result.yearResults?.some(r => r.name === p.name && r.diff === 0)}
       />
     );
@@ -1445,65 +1437,21 @@ function LeaderboardView({ game }: Readonly<{ game: HostState }>) {
       </div>
 
       {/* Mid-game leaderboard is the resume point after a host page reload,
-          so it needs its own way to continue the game. */}
+          so it needs its own way to continue the game. No "End game" here —
+          ending it would just swap to this same view's finished state, and
+          early-ending is already available from every in-round screen. */}
       {!isFinished && (
         <div className="relative z-10 flex justify-center pb-2">
-          <button
-            type="button"
-            className="liquid-btn relative cursor-pointer border-0 bg-transparent p-0"
-            style={{ width: '310px', height: '64px', borderRadius: '100px', background: 'rgba(0,0,0,0.001)' }}
+          <PillButton
             onClick={() => socket.emit('next_round')}
-          >
-            <LiquidGlass
-              style={{ position: 'absolute', top: '50%', left: '50%' }}
-              displacementScale={64}
-              blurAmount={0.05}
-              saturation={130}
-              aberrationIntensity={2}
-              elasticity={0.12}
-              cornerRadius={100}
-              padding="18px 36px"
-            >
-              <div style={{ position: 'relative' }}>
-                <div style={{ position: 'absolute', inset: '-18px -36px', borderRadius: '100px', pointerEvents: 'none', background: 'rgba(110,32,155,0.12)' }} />
-                <span className="text-white font-bold text-xl" style={{ whiteSpace: 'nowrap', position: 'relative', display: 'inline-block', minWidth: '210px', textAlign: 'center' }}>
-                  {roundIndex + 1 >= totalRounds ? 'Final Results' : 'Next Round'}
-                </span>
-              </div>
-            </LiquidGlass>
-          </button>
-          <div className="flex justify-center pt-1">
-            <EndGameButton endGame={game.endGame} />
-          </div>
+            label={roundIndex + 1 >= totalRounds ? 'Final Results' : 'Next Round'}
+          />
         </div>
       )}
 
       {isFinished && (
         <div className="relative z-10 flex flex-col items-center gap-3">
-          <button
-            type="button"
-            className="liquid-btn relative cursor-pointer border-0 bg-transparent p-0"
-            style={{ width: '310px', height: '64px', borderRadius: '100px', background: 'rgba(0,0,0,0.001)' }}
-            onClick={game.newGame}
-          >
-            <LiquidGlass
-              style={{ position: 'absolute', top: '50%', left: '50%' }}
-              displacementScale={64}
-              blurAmount={0.05}
-              saturation={130}
-              aberrationIntensity={2}
-              elasticity={0.12}
-              cornerRadius={100}
-              padding="18px 36px"
-            >
-              <div style={{ position: 'relative' }}>
-                <div style={{ position: 'absolute', inset: '-18px -36px', borderRadius: '100px', pointerEvents: 'none', background: 'rgba(110,32,155,0.12)' }} />
-                <span className="text-white font-bold text-xl" style={{ whiteSpace: 'nowrap', position: 'relative', display: 'inline-block', minWidth: '210px', textAlign: 'center' }}>
-                  New Game
-                </span>
-              </div>
-            </LiquidGlass>
-          </button>
+          <PillButton onClick={game.newGame} label="New Game" />
         </div>
       )}
     </div>
@@ -1541,12 +1489,7 @@ export default function Host() {
           <div className="liquid-btn relative" style={{ width: '310px', height: '230px' }}>
             <LiquidGlass
               style={{ position: 'absolute', top: '50%', left: '50%' }}
-              displacementScale={55}
-              blurAmount={0.06}
-              saturation={130}
-              aberrationIntensity={1.5}
-              elasticity={0.08}
-              cornerRadius={20}
+              {...LIQUID_CARD_PROPS}
               padding="32px 28px"
             >
               <div style={{ width: '254px', display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '12px' }}>

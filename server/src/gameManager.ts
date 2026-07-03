@@ -181,12 +181,12 @@ function introFor(format: PartyFormat, target: GuessTarget, event: PartyEvent | 
   };
   if (event) {
     const e = eventIntros[event];
-    return { title: e.title, tagline: `${e.tag} · ${flow} — ${goal}` };
+    return { title: e.title, tagline: `${e.tag} · ${flow} / ${goal}` };
   }
-  if (target === 'artist') return { title: 'Who Sings It?', tagline: `${flow} — name the artist` };
-  if (target === 'both') return { title: 'Double Duty', tagline: `${flow} — title wins, artist adds +${BOTH_ARTIST_BONUS}` };
+  if (target === 'artist') return { title: 'Who Sings It?', tagline: `${flow} / name the artist` };
+  if (target === 'both') return { title: 'Double Duty', tagline: `${flow} / title wins, artist adds +${BOTH_ARTIST_BONUS}` };
   return format === 'race'
-    ? { title: 'Race Round', tagline: 'Everyone guesses at once — speed wins' }
+    ? { title: 'Race Round', tagline: 'Everyone guesses at once / speed wins' }
     : { title: 'Classic Round', tagline: 'Bid low, score high' };
 }
 
@@ -232,7 +232,7 @@ function buildPartyConfig(game: Game): PartyConfig {
       duelistNames: top.map(p => p.name),
       intro: {
         title: 'The Finale',
-        tagline: `${top[0].name} vs ${top[1].name} — first correct wins ${DUEL_WIN_POINTS} pts`,
+        tagline: `${top[0].name} vs ${top[1].name} / first correct wins ${DUEL_WIN_POINTS} pts`,
       },
     };
   }
@@ -823,6 +823,18 @@ export function executeSteal(
   victim.score -= amount;
   thief.score += amount;
   return { thief: thief.name, victim: victim.name, amount };
+}
+
+// Thief declines to steal from anyone. Marks the steal resolved (so
+// stealPendingName stops reporting them as still deciding) without moving points.
+export function skipSteal(game: Game, thiefId: string): { thief: string } | null {
+  const round = game.currentRound;
+  if (!round || game.phase !== 'reveal') return null;
+  if (round.stealBy !== thiefId || round.stealDone) return null;
+  const thief = game.players.get(thiefId);
+  if (!thief) return null;
+  round.stealDone = true;
+  return { thief: thief.name };
 }
 
 // A race round can end (timeout, or someone winning in winner-only mode)

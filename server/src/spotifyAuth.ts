@@ -24,8 +24,11 @@ router.get('/spotify', (_req, res) => {
 });
 
 router.get('/callback', async (req, res) => {
+  const frontendBase = process.env.FRONTEND_URL ?? '';
+  const error = req.query.error as string;
+  if (error) return res.redirect(`${frontendBase}/host?error=${error}`);
   const code = req.query.code as string;
-  if (!code) return res.redirect('/?error=no_code');
+  if (!code) return res.redirect(`${frontendBase}/host?error=cancelled`);
 
   try {
     const credentials = Buffer.from(
@@ -47,7 +50,6 @@ router.get('/callback', async (req, res) => {
       }
     );
 
-    const frontendBase = process.env.FRONTEND_URL ?? '';
     // Tokens go in the URL fragment, not the query string: fragments never
     // leave the browser, so they can't end up in server/proxy logs, and the
     // client strips them from history immediately after reading them.
@@ -55,7 +57,7 @@ router.get('/callback', async (req, res) => {
       `${frontendBase}/host#access_token=${data.access_token}&refresh_token=${data.refresh_token}`
     );
   } catch {
-    res.redirect('/?error=auth_failed');
+    res.redirect(`${frontendBase}/host?error=auth_failed`);
   }
 });
 
