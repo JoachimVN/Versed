@@ -764,6 +764,16 @@ function EndGameButton({ endGame }: Readonly<{ endGame: () => void }>) {
 
 function ConnectView({ game }: Readonly<{ game: HostState }>) {
   const { spotify } = game;
+  const searchParams = new URLSearchParams(globalThis.location.search);
+  const error = searchParams.get('error');
+
+  const errorMessages: Record<string, string> = {
+    'access_denied': 'You denied authorization.',
+    'user_denied_authorization': 'You denied authorization.',
+    'cancelled': 'Authorization was cancelled.',
+  };
+  const errorMsg = error ? (errorMessages[error] ?? 'Authorization failed.') : null;
+
   return (
     <div className="min-h-screen flex flex-col items-center justify-center gap-6 p-6">
       <BackButton />
@@ -771,12 +781,17 @@ function ConnectView({ game }: Readonly<{ game: HostState }>) {
       {spotify.isConnected && !spotify.playerReady ? (
         <p className="text-white/50">Connecting to Spotify...</p>
       ) : (
-        <a
-          href={`${BACKEND_URL}/api/auth/spotify`}
-          className="px-8 py-4 rounded-2xl bg-[#1DB954] text-white font-bold text-xl hover:bg-[#1ed760] transition-colors"
-        >
-          Connect Spotify
-        </a>
+        <>
+          <a
+            href={`${BACKEND_URL}/api/auth/spotify`}
+            className="px-8 py-4 rounded-2xl bg-[#1DB954] text-white font-bold text-xl hover:bg-[#1ed760] transition-colors"
+          >
+            Connect Spotify
+          </a>
+          {errorMsg && (
+            <p className="text-red-400 text-sm text-center">{errorMsg} <a href={globalThis.location.pathname} className="underline">Try again</a></p>
+          )}
+        </>
       )}
       <p className="text-white/30 text-sm">Requires Spotify Premium</p>
     </div>

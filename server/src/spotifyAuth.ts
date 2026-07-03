@@ -24,8 +24,10 @@ router.get('/spotify', (_req, res) => {
 });
 
 router.get('/callback', async (req, res) => {
+  const error = req.query.error as string;
+  if (error) return res.redirect(`/?error=${error}`);
   const code = req.query.code as string;
-  if (!code) return res.redirect('/?error=no_code');
+  if (!code) return res.redirect('/?error=cancelled');
 
   try {
     const credentials = Buffer.from(
