@@ -52,8 +52,8 @@ body {
    away from visibly "rescales" the new screen you land on. Only screens
    with a focused input opt into the animated version via .keyboard-resize. */
 .min-h-screen {
-  height: var(--app-height, 100vh);
-  min-height: var(--app-height, 100vh);
+  height: calc(var(--app-height, 100vh) - env(safe-area-inset-top, 0px) - env(safe-area-inset-bottom, 0px));
+  min-height: calc(var(--app-height, 100vh) - env(safe-area-inset-top, 0px) - env(safe-area-inset-bottom, 0px));
 }
 
 .keyboard-resize {

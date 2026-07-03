@@ -69,8 +69,18 @@ export default function App() {
         />
       </div>
       {/* Content layer: shrinks to --app-height so it stays anchored to the
-          top and reflows above the keyboard instead of being covered by it. */}
-      <div style={{ position: 'fixed', top: 0, left: 0, right: 0, height: 'var(--app-height, 100vh)' }}>
+          top and reflows above the keyboard instead of being covered by it.
+          Offset below the status bar/notch via safe-area-inset-top — with
+          viewport-fit=cover (see index.html) the background above is allowed
+          to paint full-bleed under the notch and home indicator, but this
+          layer (and everything in it: back buttons, nav, etc.) should stay
+          clear of them, so it starts below the inset instead of at the true
+          top. This div's own height stays the full --app-height (it's just a
+          transparent positioning wrapper), but page roots use .min-h-screen,
+          which subtracts both the top offset consumed here and the bottom
+          inset, so they land flush with the safe area instead of
+          overshooting past it. */}
+      <div style={{ position: 'fixed', top: 'env(safe-area-inset-top, 0px)', left: 0, right: 0, height: 'var(--app-height, 100vh)' }}>
         <RouteTracker />
         <Routes>
           <Route path="/" element={<Home />} />
