@@ -19,7 +19,7 @@ import type { Hint, LeaderboardEntry, PartyInfo, PlayerInfo, RoundResultEvent } 
 
 type Phase = 'connect' | 'lobby' | 'betting' | 'playing' | 'guessing' | 'reveal' | 'leaderboard' | 'finished';
 type Mode = 'classic' | 'race' | 'party';
-interface SongInfo { title: string; artist: string; trackId: string }
+interface SongInfo { title: string; artist: string; trackId: string; tempo?: number | null }
 
 const wait = (ms: number) => new Promise<void>(resolve => setTimeout(resolve, ms));
 
@@ -62,6 +62,7 @@ export interface HostState {
   reconnectingCount: number;
   gameExpired: boolean;
   songPlaying: boolean;
+  songTempo: number | null;
   toggleSettings: () => void;
   setBettingTimeSetting: (v: number) => void;
   setGuessingTimeSetting: (v: number) => void;
@@ -122,6 +123,7 @@ function useHostGame(): HostState {
   const [reconnectingNames, setReconnectingNames] = useState<Set<string>>(new Set());
   const [gameExpired, setGameExpired] = useState(false);
   const [songPlaying, setSongPlaying] = useState(false);
+  const [songTempo, setSongTempo] = useState<number | null>(null);
   const timerRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const playRafRef = useRef<number | null>(null);
   const playGenRef = useRef(0);
@@ -244,6 +246,7 @@ function useHostGame(): HostState {
       setAnsweredCount(0);
       setParty(data.party ?? null);
       setStealResult(null);
+      setSongTempo(data.song.tempo ?? null);
       if (data.mode === 'race') {
         setPhase('playing');
       } else {
@@ -434,7 +437,7 @@ function useHostGame(): HostState {
     result, roundDeltas, leaderboard, copied, playProgress, inviteUrl,
     settingsOpen, bettingTimeSetting, guessingTimeSetting, roundsSetting,
     mode, raceTimeSetting, raceWinnerOnly, artistOnly, party, stealResult, answeredCount,
-    reconnecting, reconnectingCount: reconnectingNames.size, gameExpired, songPlaying,
+    reconnecting, reconnectingCount: reconnectingNames.size, gameExpired, songPlaying, songTempo,
     toggleSettings: () => setSettingsOpen(o => !o),
     setBettingTimeSetting, setGuessingTimeSetting, setRoundsSetting,
     setMode, setRaceTimeSetting, setRaceWinnerOnly, setArtistOnly,
@@ -1066,7 +1069,7 @@ function roundAccent(isRace: boolean, party: PartyInfo | null): 'classic' | 'rac
 }
 
 export function PlayingView({ game }: Readonly<{ game: HostState }>) {
-  const { roundIndex, totalRounds, countdown, guesserNames, lowestBid, playerBids, timeLeft, timerTotal, mode, answeredCount, players, skipTurn, endGame, party, songPlaying } = game;
+  const { roundIndex, totalRounds, countdown, guesserNames, lowestBid, playerBids, timeLeft, timerTotal, mode, answeredCount, players, skipTurn, endGame, party, songPlaying, songTempo } = game;
   // Party rounds that aren't classic-format arrive with an empty bid state and
   // behave exactly like race rounds on this screen.
   const isRace = mode === 'race' || (party !== null && party.format !== 'classic');
@@ -1096,7 +1099,7 @@ export function PlayingView({ game }: Readonly<{ game: HostState }>) {
             <div style={{ width: '254px', display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '16px' }}>
               {countdown === null ? (
                 <>
-                  <AudioBars playing={songPlaying} accent={accent} height={36} />
+                  <AudioBars playing={songPlaying} accent={accent} height={36} bpm={songTempo} />
                   <span style={{ color: 'rgba(255,255,255,0.5)', fontSize: '0.9rem', display: 'inline-block', minWidth: '210px', textAlign: 'center' }}>
                     {isRace ? raceStatus : `${guesserNames.join(' & ')} will guess`}
                   </span>

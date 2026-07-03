@@ -151,6 +151,7 @@ io.on('connection', (socket) => {
         party: gm.partyView(round),
         bidOptions: gm.BID_OPTIONS,
         bidScores: gm.bidScoreTable(),
+        tempo: round.song.tempo,
       });
       return;
     }
@@ -669,6 +670,7 @@ io.on('connection', (socket) => {
         raceTime: game.raceTime,
         artistOnly: game.artistOnly,
         party,
+        tempo: round.song.tempo,
       });
       io.to(`host:${game.pin}`).emit('host_round_start', {
         roundIndex: game.roundIndex,
@@ -682,6 +684,7 @@ io.on('connection', (socket) => {
           title: round.song.title,
           artist: round.song.artist,
           trackId: round.song.spotifyTrackId,
+          tempo: round.song.tempo,
         },
       });
 
@@ -718,6 +721,7 @@ io.on('connection', (socket) => {
       // keeps the UI from drifting out of sync with server-side scoring.
       bidOptions: gm.BID_OPTIONS,
       bidScores: gm.bidScoreTable(),
+      tempo: round.song.tempo,
     });
     io.to(`host:${game.pin}`).emit('host_round_start', {
       roundIndex: game.roundIndex,
@@ -732,6 +736,7 @@ io.on('connection', (socket) => {
         title: round.song.title,
         artist: round.song.artist,
         trackId: round.song.spotifyTrackId,
+        tempo: round.song.tempo,
       },
     });
 
