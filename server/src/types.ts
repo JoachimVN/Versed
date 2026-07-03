@@ -8,10 +8,12 @@ export interface Song {
   bbPeak: number | null;
   bbChartWeeks: number | null;
   durationMs: number | null;
+  tempo: number | null;
   spotifyStreams: number | null;
   youtubeViews: number | null;
   spotifyTrackId: string;
   finalScore: number;
+  albumArtUrl: string | null;
 }
 
 export interface Hint {

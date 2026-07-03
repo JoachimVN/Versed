@@ -629,7 +629,11 @@ io.on('connection', (socket) => {
     const party = gm.partyView(round);
     const isRaceFlow = game.mode === 'race' || (round.party && round.party.format !== 'classic');
 
-    const coverUrl = await getAlbumArtUrl(round.song.spotifyTrackId);
+    // Prefer the precomputed art from the CSV (Music Popularity Index resolves
+    // it offline via Spotify's oEmbed endpoint) so a normal round never calls
+    // the Spotify Web API at all; only fall back to the live, quota-limited
+    // call for songs the pipeline hasn't covered yet.
+    const coverUrl = round.song.albumArtUrl ?? await getAlbumArtUrl(round.song.spotifyTrackId);
     if (coverUrl) {
       round.coverUrl = coverUrl;
       // Classic-flow rounds have a 1-in-4 chance of a blurred-art hint;
