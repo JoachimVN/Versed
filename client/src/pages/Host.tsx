@@ -569,20 +569,26 @@ function SettingsPanel({ game, open }: Readonly<{ game: HostState; open: boolean
 
         <div className="px-5 py-4 space-y-4">
           {/* Party mixes classic and race rounds, so it needs all three timers.
-              "Guess the year" rides the race flow even in Classic mode, so it
-              needs the race/round timer instead of bet+guess. */}
-          {mode !== 'race' && !yearOnly && (
+              "Guess the year" rides the race flow even in Classic mode, so bet
+              time doesn't apply there — but keep it visible-and-disabled
+              rather than yanking it, same as the mode toggles below. */}
+          {mode !== 'race' && (
             <>
-              <SettingRow label="Bet time" value={bettingTimeSetting} unit="s"
+              <SettingRow label="Bet time" value={bettingTimeSetting} unit="s" disabled={mode === 'classic' && yearOnly}
                 onDec={() => setBettingTimeSetting(Math.max(5, bettingTimeSetting - 5))}
                 onInc={() => setBettingTimeSetting(Math.min(60, bettingTimeSetting + 5))} />
-              <SettingRow label="Guess time" value={guessingTimeSetting} unit="s"
+              <SettingRow label="Guess time" value={guessingTimeSetting} unit="s" disabled={mode === 'classic' && yearOnly}
                 onDec={() => setGuessingTimeSetting(Math.max(5, guessingTimeSetting - 5))}
                 onInc={() => setGuessingTimeSetting(Math.min(60, guessingTimeSetting + 5))} />
             </>
           )}
-          {(mode !== 'classic' || yearOnly) && (
+          {mode !== 'classic' && (
             <SettingRow label={mode === 'party' ? 'Race time' : 'Round time'} value={raceTimeSetting} unit="s"
+              onDec={() => setRaceTimeSetting(Math.max(10, raceTimeSetting - 5))}
+              onInc={() => setRaceTimeSetting(Math.min(60, raceTimeSetting + 5))} />
+          )}
+          {mode === 'classic' && (
+            <SettingRow label="Round time" value={raceTimeSetting} unit="s" disabled={!yearOnly}
               onDec={() => setRaceTimeSetting(Math.max(10, raceTimeSetting - 5))}
               onInc={() => setRaceTimeSetting(Math.min(60, raceTimeSetting + 5))} />
           )}
@@ -646,15 +652,18 @@ function JoinCard({ pin, copied, copyInvite }: Readonly<{ pin: string; copied: b
 
 // ─── Settings row / toggle ────────────────────────────────────────────────────
 
-function SettingRow({ label, value, unit, onDec, onInc }: Readonly<{
-  label: string; value: number; unit: string; onDec: () => void; onInc: () => void;
+function SettingRow({ label, value, unit, onDec, onInc, disabled }: Readonly<{
+  label: string; value: number; unit: string; onDec: () => void; onInc: () => void; disabled?: boolean;
 }>) {
   return (
     <div className="flex items-center justify-between">
-      <span style={{ color: 'rgba(255,255,255,0.5)', fontSize: '0.875rem' }}>{label}</span>
+      <span style={{ color: disabled ? 'rgba(255,255,255,0.25)' : 'rgba(255,255,255,0.5)', fontSize: '0.875rem' }}>
+        {label}
+      </span>
       <div className="flex items-center gap-2.5">
         <button
-          onClick={onDec}
+          onClick={disabled ? undefined : onDec}
+          disabled={disabled}
           className="flex items-center justify-center active:scale-90 transition-transform"
           style={{
             width: '28px', height: '28px', borderRadius: '50%',
@@ -662,14 +671,19 @@ function SettingRow({ label, value, unit, onDec, onInc }: Readonly<{
             border: '1px solid rgba(255,255,255,0.09)',
             color: 'rgba(255,255,255,0.55)',
             fontSize: '1.1rem', lineHeight: 1,
-            cursor: 'pointer',
+            cursor: disabled ? 'not-allowed' : 'pointer',
+            opacity: disabled ? 0.4 : 1,
           }}
         >−</button>
-        <span style={{ color: 'white', fontWeight: 700, minWidth: '42px', textAlign: 'center', fontSize: '0.9375rem' }}>
+        <span style={{
+          color: disabled ? 'rgba(255,255,255,0.4)' : 'white',
+          fontWeight: 700, minWidth: '42px', textAlign: 'center', fontSize: '0.9375rem',
+        }}>
           {value}{unit}
         </span>
         <button
-          onClick={onInc}
+          onClick={disabled ? undefined : onInc}
+          disabled={disabled}
           className="flex items-center justify-center active:scale-90 transition-transform"
           style={{
             width: '28px', height: '28px', borderRadius: '50%',
@@ -677,7 +691,8 @@ function SettingRow({ label, value, unit, onDec, onInc }: Readonly<{
             border: '1px solid rgba(255,255,255,0.09)',
             color: 'rgba(255,255,255,0.55)',
             fontSize: '1.1rem', lineHeight: 1,
-            cursor: 'pointer',
+            cursor: disabled ? 'not-allowed' : 'pointer',
+            opacity: disabled ? 0.4 : 1,
           }}
         >+</button>
       </div>
