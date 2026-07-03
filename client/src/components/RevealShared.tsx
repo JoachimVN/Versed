@@ -1,5 +1,27 @@
 import { Check, Trophy, X } from 'lucide-react';
+import LiquidGlass from 'liquid-glass-react';
 import type { RoundResultEvent } from '../types';
+import { LIQUID_PILL_PROPS } from './liquidGlassPresets';
+
+export function PillButton({ onClick, label, zIndex }: Readonly<{ onClick: () => void; label: string; zIndex?: number }>) {
+  return (
+    <button
+      type="button"
+      className="liquid-btn relative cursor-pointer border-0 bg-transparent p-0"
+      style={{ width: '310px', height: '64px', borderRadius: '100px', background: 'rgba(0,0,0,0.001)', zIndex }}
+      onClick={onClick}
+    >
+      <LiquidGlass style={{ position: 'absolute', top: '50%', left: '50%' }} {...LIQUID_PILL_PROPS}>
+        <div style={{ position: 'relative' }}>
+          <div style={{ position: 'absolute', inset: '-18px -36px', borderRadius: '100px', pointerEvents: 'none', background: 'rgba(110,32,155,0.12)' }} />
+          <span className="text-white font-bold text-xl" style={{ whiteSpace: 'nowrap', position: 'relative', display: 'inline-block', minWidth: '210px', textAlign: 'center' }}>
+            {label}
+          </span>
+        </div>
+      </LiquidGlass>
+    </button>
+  );
+}
 
 export function NoOneGotItCardContent({ result }: Readonly<{ result: RoundResultEvent }>) {
   const artistOnly = result.artistOnly;

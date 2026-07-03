@@ -11,6 +11,7 @@ import { RoundIntro, PartyBadge, PartyRevealExtras } from '../components/RoundIn
 import { BackButton } from '../components/BackButton';
 import { CircularTimer, timerColor } from '../components/CircularTimer';
 import { AudioBars } from '../components/AudioBars';
+import { LIQUID_CARD_PROPS, LIQUID_PILL_PROPS } from '../components/liquidGlassPresets';
 import { APP_NAME, BID_OPTIONS } from '../config';
 import type { Hint, LeaderboardEntry, PartyInfo, RoundResultEvent } from '../types';
 
@@ -673,12 +674,7 @@ function JoinView({ game }: Readonly<{ game: PlayState }>) {
             }} />
             <LiquidGlass
               style={{ position: 'absolute', top: '50%', left: '50%' }}
-              displacementScale={64}
-              blurAmount={0.05}
-              saturation={130}
-              aberrationIntensity={2}
-              elasticity={0.12}
-              cornerRadius={100}
+              {...LIQUID_PILL_PROPS}
               padding="13px 48px"
             >
               <div style={{ textAlign: 'center', whiteSpace: 'nowrap', minWidth: '214px' }}>
@@ -697,12 +693,7 @@ function JoinView({ game }: Readonly<{ game: PlayState }>) {
       <div className="liquid-btn relative" style={{ width: '310px', height: '165px' }}>
         <LiquidGlass
           style={{ position: 'absolute', top: '50%', left: '50%' }}
-          displacementScale={55}
-          blurAmount={0.06}
-          saturation={130}
-          aberrationIntensity={1.5}
-          elasticity={0.08}
-          cornerRadius={20}
+          {...LIQUID_CARD_PROPS}
           padding="20px 24px"
         >
           <div style={{ width: '262px', textAlign: 'center' }}>
@@ -796,12 +787,7 @@ function JoinView({ game }: Readonly<{ game: PlayState }>) {
             filter: joinHovered ? 'drop-shadow(0 0 10px rgba(0, 128, 126, 0.65))' : 'drop-shadow(0 0 0px rgba(0, 128, 126, 0))',
             transition: 'filter 0.25s ease',
           }}
-          displacementScale={64}
-          blurAmount={0.05}
-          saturation={130}
-          aberrationIntensity={2}
-          elasticity={0.12}
-          cornerRadius={100}
+          {...LIQUID_PILL_PROPS}
           padding="18px 96px"
         >
           <span className="text-white font-bold text-xl" style={{ whiteSpace: 'nowrap' }}>Join game</span>
@@ -850,12 +836,7 @@ function WaitingView({ game }: Readonly<{ game: PlayState }>) {
         <div className="liquid-btn relative" style={{ width: '310px', height: '330px' }}>
           <LiquidGlass
             style={{ position: 'absolute', top: '50%', left: '50%' }}
-            displacementScale={55}
-            blurAmount={0.06}
-            saturation={130}
-            aberrationIntensity={1.5}
-            elasticity={0.08}
-            cornerRadius={20}
+            {...LIQUID_CARD_PROPS}
             padding="24px 28px"
           >
             <div style={{ width: '254px', minHeight: '220px', display: 'flex', flexDirection: 'column', alignItems: 'center' }}>
@@ -1024,13 +1005,7 @@ export function BettingView({ game }: Readonly<{ game: PlayState }>) {
         >
           <LiquidGlass
             style={{ position: 'absolute', top: '50%', left: '50%' }}
-            displacementScale={64}
-            blurAmount={0.05}
-            saturation={130}
-            aberrationIntensity={2}
-            elasticity={0.12}
-            cornerRadius={100}
-            padding="18px 36px"
+            {...LIQUID_PILL_PROPS}
           >
             <div style={{ position: 'relative' }}>
               <div style={{ position: 'absolute', inset: '-18px -36px', borderRadius: '100px', pointerEvents: 'none', background: 'rgba(110,32,155,0.15)' }} />
@@ -1251,7 +1226,7 @@ function YearDigitBoxes({ value, focused }: Readonly<{ value: string; focused: b
         const isActive = focused && i === activeIndex;
         return (
           <div
-            key={i}
+            key={`year-digit-${i}`}
             style={{
               width: '48px', height: '58px', borderRadius: '12px',
               display: 'flex', alignItems: 'center', justifyContent: 'center',
@@ -1408,9 +1383,7 @@ export function GuessingView({ game }: Readonly<{ game: PlayState }>) {
         >
           <LiquidGlass
             style={{ position: 'absolute', top: '50%', left: '50%' }}
-            displacementScale={64} blurAmount={0.05} saturation={130}
-            aberrationIntensity={2} elasticity={0.12} cornerRadius={100}
-            padding="18px 36px"
+            {...LIQUID_PILL_PROPS}
           >
             <div style={{ position: 'relative' }}>
               <div style={{ position: 'absolute', inset: '-18px -36px', borderRadius: '100px', pointerEvents: 'none', background: 'rgba(110,32,155,0.15)' }} />
@@ -1464,12 +1437,7 @@ function PassedView({ game }: Readonly<{ game: PlayState }>) {
         <div className="liquid-btn relative" style={{ width: '310px', height: gotIt ? '180px' : '150px' }}>
           <LiquidGlass
             style={{ position: 'absolute', top: '50%', left: '50%' }}
-            displacementScale={55}
-            blurAmount={0.06}
-            saturation={130}
-            aberrationIntensity={1.5}
-            elasticity={0.08}
-            cornerRadius={20}
+            {...LIQUID_CARD_PROPS}
             padding="28px 28px"
           >
             <div style={{ width: '254px', display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '14px' }}>
@@ -1569,14 +1537,24 @@ function StealPicker({ victims, onPick, onSkip }: Readonly<{
 }
 
 // Reveal for "guess the year" rounds: the year card plus everyone's distances.
-function YearRevealView({ game, result }: Readonly<{ game: PlayState; result: RoundResultEvent }>) {
-  const { myName, myScore, myScoreDelta, myStreak, stealResult } = game;
-  const cardH = result.coverUrl ? 500 : 380;
-  // The timeline card already shows every player's guess and distance —
-  // this strip only adds what it doesn't: points earned this round.
-  const scorers = (result.yearResults ?? []).filter(r => r.points > 0).sort((a, b) => b.points - a.points);
+// Shared shell for the three reveal-screen variants (year / no-one-got-it /
+// got-it): page background, liquid card, party extras, a guesses list, and
+// the player's score box. Only the card content, guesses list, and an
+// optional extra line under the score differ between them.
+function PlayRevealShell({
+  game, result, cardHeight, cardContent, guessesList, scoreExtra, wide = false,
+}: Readonly<{
+  game: PlayState;
+  result: RoundResultEvent;
+  cardHeight: number;
+  cardContent: React.ReactNode;
+  guessesList: React.ReactNode;
+  scoreExtra?: React.ReactNode;
+  wide?: boolean;
+}>) {
+  const { myScore, myScoreDelta, myStreak, stealResult } = game;
   return (
-    <div className="page-enter relative min-h-screen flex flex-col items-center justify-center px-2 py-6 gap-5 overflow-hidden">
+    <div className={`page-enter relative min-h-screen flex flex-col items-center justify-center gap-5 overflow-hidden ${wide ? 'px-2 py-6' : 'p-6'}`}>
       <img
         src={`${import.meta.env.BASE_URL}background3.svg`}
         alt=""
@@ -1585,33 +1563,19 @@ function YearRevealView({ game, result }: Readonly<{ game: PlayState; result: Ro
       />
       <div style={{ position: 'fixed', inset: 0, zIndex: 1, background: 'rgba(5,5,14,0.82)', backdropFilter: 'blur(28px)' }} />
       <div className="relative flex flex-col items-center gap-5 w-full" style={{ zIndex: 2 }}>
-        <div className="liquid-btn relative" style={{ width: 'min(88vw, 366px)', height: `${cardH}px` }}>
+        <div className="liquid-btn relative" style={{ width: wide ? 'min(88vw, 366px)' : '310px', height: `${cardHeight}px` }}>
           <LiquidGlass
             style={{ position: 'absolute', top: '50%', left: '50%' }}
-            displacementScale={55}
-            blurAmount={0.06}
-            saturation={130}
-            aberrationIntensity={1.5}
-            elasticity={0.08}
-            cornerRadius={20}
-            padding="18px 18px"
+            {...LIQUID_CARD_PROPS}
+            padding={wide ? '18px 18px' : '24px 24px'}
           >
-            <YearTimelineContent result={result} />
+            {cardContent}
           </LiquidGlass>
         </div>
 
         <PartyRevealExtras result={result} stealResult={stealResult} />
 
-        {scorers.length > 0 && (
-          <div style={{ background: 'rgba(255,255,255,0.05)', border: '1px solid rgba(255,255,255,0.08)', borderRadius: '16px', padding: '8px 12px', width: '310px', maxWidth: '92vw' }} className="space-y-1">
-            {scorers.map(r => (
-              <div key={r.name} className="flex justify-between items-center gap-2">
-                <span className={`text-xs min-w-0 truncate ${r.name === myName ? 'text-white font-semibold' : 'text-white/40'}`}>{r.name}</span>
-                <span className="ml-1.5 text-xs text-sky-400 font-semibold tabular-nums shrink-0">+{r.points.toLocaleString()}</span>
-              </div>
-            ))}
-          </div>
-        )}
+        {guessesList}
 
         <div style={{ background: 'rgba(255,255,255,0.05)', border: '1px solid rgba(255,255,255,0.08)', borderRadius: '16px', padding: '16px 32px', textAlign: 'center' }}>
           {myScoreDelta > 0 && (
@@ -1619,6 +1583,7 @@ function YearRevealView({ game, result }: Readonly<{ game: PlayState; result: Ro
           )}
           <p className="text-3xl font-black text-white">{myScore.toLocaleString()}</p>
           <p className="text-white/40 text-sm">your score</p>
+          {scoreExtra}
           {myStreak >= 2 && (
             <p className="flex items-center justify-center gap-1 text-orange-400 text-xs font-bold mt-1">
               <Flame className="w-3 h-3" />{myStreak} in a row
@@ -1630,138 +1595,98 @@ function YearRevealView({ game, result }: Readonly<{ game: PlayState; result: Ro
   );
 }
 
+function YearRevealView({ game, result }: Readonly<{ game: PlayState; result: RoundResultEvent }>) {
+  const { myName } = game;
+  // The timeline card already shows every player's guess and distance —
+  // this strip only adds what it doesn't: points earned this round.
+  const scorers = (result.yearResults ?? []).filter(r => r.points > 0).sort((a, b) => b.points - a.points);
+  const guessesList = scorers.length > 0 && (
+    <div style={{ background: 'rgba(255,255,255,0.05)', border: '1px solid rgba(255,255,255,0.08)', borderRadius: '16px', padding: '8px 12px', width: '310px', maxWidth: '92vw' }} className="space-y-1">
+      {scorers.map(r => (
+        <div key={r.name} className="flex justify-between items-center gap-2">
+          <span className={`text-xs min-w-0 truncate ${r.name === myName ? 'text-white font-semibold' : 'text-white/40'}`}>{r.name}</span>
+          <span className="ml-1.5 text-xs text-sky-400 font-semibold tabular-nums shrink-0">+{r.points.toLocaleString()}</span>
+        </div>
+      ))}
+    </div>
+  );
+  return (
+    <PlayRevealShell
+      game={game}
+      result={result}
+      wide
+      cardHeight={result.coverUrl ? 500 : 380}
+      cardContent={<YearTimelineContent result={result} />}
+      guessesList={guessesList}
+    />
+  );
+}
+
 export function RevealView({ game, result }: Readonly<{ game: PlayState; result: RoundResultEvent }>) {
-  const { myName, myScore, myScoreDelta, myStreak, myRacePoints, myRaceTimeMs } = game;
+  const { myName, myRacePoints, myRaceTimeMs } = game;
   const isRace = result.mode === 'race';
   const iGotItInRace = isRace && !!result.correctGuessers?.includes(myName);
 
-  const bg3 = (
-    <>
-      <img
-        src={`${import.meta.env.BASE_URL}background3.svg`}
-        alt=""
-        aria-hidden="true"
-        style={{ position: 'fixed', inset: 0, width: '100%', height: '100%', objectFit: 'cover', zIndex: 0 }}
-      />
-      <div style={{ position: 'fixed', inset: 0, zIndex: 1, background: 'rgba(5,5,14,0.82)', backdropFilter: 'blur(28px)' }} />
-    </>
-  );
-
   if (!result.correct) {
-    const cardH = result.coverUrl ? 480 : 240;
-    return (
-      <div className="page-enter relative min-h-screen flex flex-col items-center justify-center p-6 gap-5 overflow-hidden">
-        {bg3}
-        <div className="relative flex flex-col items-center gap-5 w-full" style={{ zIndex: 2 }}>
-          <div className="liquid-btn relative" style={{ width: '310px', height: `${cardH}px` }}>
-            <LiquidGlass
-              style={{ position: 'absolute', top: '50%', left: '50%' }}
-              displacementScale={55}
-              blurAmount={0.06}
-              saturation={130}
-              aberrationIntensity={1.5}
-              elasticity={0.08}
-              cornerRadius={20}
-              padding="24px 24px"
-            >
-              <NoOneGotItCardContent result={result} />
-            </LiquidGlass>
-          </div>
-
-          <PartyRevealExtras result={result} stealResult={game.stealResult} />
-
-          {result.playerGuesses && result.playerGuesses.length > 0 && (
-            <div style={{ background: 'rgba(255,255,255,0.05)', border: '1px solid rgba(255,255,255,0.08)', borderRadius: '16px', padding: '8px 12px', width: '310px', maxWidth: '92vw' }} className="space-y-1">
-              {result.playerGuesses.map(g => (
-                <div key={g.name} className="flex justify-between items-center gap-2">
-                  <span className="text-white/40 text-xs min-w-0 truncate">{g.name}</span>
-                  <span className={`text-xs text-right min-w-0 truncate italic ${g.guess === null ? 'text-white/15' : 'text-white/20'}`}>
-                    {g.guess === null ? 'skipped' : (() => {const ellipsis = g.live ? '…' : ''; return `"${g.guess}${ellipsis}"`;})()}
-                  </span>
-                </div>
-              ))}
+    const guessesList = result.playerGuesses && result.playerGuesses.length > 0 && (
+      <div style={{ background: 'rgba(255,255,255,0.05)', border: '1px solid rgba(255,255,255,0.08)', borderRadius: '16px', padding: '8px 12px', width: '310px', maxWidth: '92vw' }} className="space-y-1">
+        {result.playerGuesses.map(g => {
+          const ellipsis = g.live ? '…' : '';
+          return (
+            <div key={g.name} className="flex justify-between items-center gap-2">
+              <span className="text-white/40 text-xs min-w-0 truncate">{g.name}</span>
+              <span className={`text-xs text-right min-w-0 truncate italic ${g.guess === null ? 'text-white/15' : 'text-white/20'}`}>
+                {g.guess === null ? 'skipped' : `"${g.guess}${ellipsis}"`}
+              </span>
             </div>
-          )}
-
-          <div style={{ background: 'rgba(255,255,255,0.05)', border: '1px solid rgba(255,255,255,0.08)', borderRadius: '16px', padding: '16px 32px', textAlign: 'center' }}>
-            {myScoreDelta > 0 && (
-              <p className="text-sky-400 text-sm font-bold tabular-nums">+{myScoreDelta.toLocaleString()} pts</p>
-            )}
-            <p className="text-3xl font-black text-white">{myScore.toLocaleString()}</p>
-            <p className="text-white/40 text-sm">your score</p>
-            {myStreak >= 2 && (
-              <p className="flex items-center justify-center gap-1 text-orange-400 text-xs font-bold mt-1">
-                <Flame className="w-3 h-3" />{myStreak} in a row
-              </p>
-            )}
-          </div>
-        </div>
+          );
+        })}
       </div>
+    );
+    return (
+      <PlayRevealShell
+        game={game}
+        result={result}
+        cardHeight={result.coverUrl ? 480 : 240}
+        cardContent={<NoOneGotItCardContent result={result} />}
+        guessesList={guessesList}
+      />
     );
   }
 
-  const cardH = result.coverUrl ? 440 : 240;
-  return (
-    <div className="page-enter relative min-h-screen flex flex-col items-center justify-center p-6 gap-5 overflow-hidden">
-      {bg3}
-      <div className="relative flex flex-col items-center gap-5 w-full" style={{ zIndex: 2 }}>
-        <div className="liquid-btn relative" style={{ width: '310px', height: `${cardH}px` }}>
-          <LiquidGlass
-            style={{ position: 'absolute', top: '50%', left: '50%' }}
-            displacementScale={55}
-            blurAmount={0.06}
-            saturation={130}
-            aberrationIntensity={1.5}
-            elasticity={0.08}
-            cornerRadius={20}
-            padding="24px 24px"
-          >
-            <GotItCardContent result={result} myName={myName} />
-          </LiquidGlass>
-        </div>
-
-        <PartyRevealExtras result={result} stealResult={game.stealResult} />
-
-        {result.playerGuesses && result.playerGuesses.length > 0 && (
-          <div style={{ background: 'rgba(255,255,255,0.05)', border: '1px solid rgba(255,255,255,0.08)', borderRadius: '16px', padding: '8px 12px', width: '310px', maxWidth: '92vw' }} className="space-y-1">
-            {result.playerGuesses.map(g => {
-              const correct = isRace ? !!result.correctGuessers?.includes(g.name) : (g.name === result.guesserName);
-              const guessClass = guessTextClass(g.guess, correct);
-              const ellipsis = g.live ? '…' : '';
-              return (
-                <div key={g.name} className="flex justify-between items-center gap-2">
-                  <span className={`text-xs min-w-0 truncate ${correct ? 'text-white font-semibold' : 'text-white/30'}`}>{g.name}</span>
-                  <span className={`text-xs text-right min-w-0 truncate ${guessClass}`}>
-                    {g.guess === null ? 'skipped' : `"${g.guess}${ellipsis}"`}
-                    {correct && g.timeMs != null && (
-                      <span className="ml-1 text-white/25 text-xs">{(g.timeMs / 1000).toFixed(1)}s</span>
-                    )}
-                  </span>
-                </div>
-              );
-            })}
+  const guessesList = result.playerGuesses && result.playerGuesses.length > 0 && (
+    <div style={{ background: 'rgba(255,255,255,0.05)', border: '1px solid rgba(255,255,255,0.08)', borderRadius: '16px', padding: '8px 12px', width: '310px', maxWidth: '92vw' }} className="space-y-1">
+      {result.playerGuesses.map(g => {
+        const correct = isRace ? !!result.correctGuessers?.includes(g.name) : (g.name === result.guesserName);
+        const guessClass = guessTextClass(g.guess, correct);
+        const ellipsis = g.live ? '…' : '';
+        return (
+          <div key={g.name} className="flex justify-between items-center gap-2">
+            <span className={`text-xs min-w-0 truncate ${correct ? 'text-white font-semibold' : 'text-white/30'}`}>{g.name}</span>
+            <span className={`text-xs text-right min-w-0 truncate ${guessClass}`}>
+              {g.guess === null ? 'skipped' : `"${g.guess}${ellipsis}"`}
+              {correct && g.timeMs != null && (
+                <span className="ml-1 text-white/25 text-xs">{(g.timeMs / 1000).toFixed(1)}s</span>
+              )}
+            </span>
           </div>
-        )}
-
-        <div style={{ background: 'rgba(255,255,255,0.05)', border: '1px solid rgba(255,255,255,0.08)', borderRadius: '16px', padding: '16px 32px', textAlign: 'center' }}>
-          {myScoreDelta > 0 && (
-            <p className="text-sky-400 text-sm font-bold tabular-nums">+{myScoreDelta.toLocaleString()} pts</p>
-          )}
-          <p className="text-3xl font-black text-white">{myScore.toLocaleString()}</p>
-          <p className="text-white/40 text-sm">your score</p>
-          {iGotItInRace && myRaceTimeMs != null && (
-            <p className="text-green-400 text-xs font-semibold mt-1">
-              You got it in {(myRaceTimeMs / 1000).toFixed(1)}s · +{myRacePoints}
-            </p>
-          )}
-          {myStreak >= 2 && (
-            <p className="flex items-center justify-center gap-1 text-orange-400 text-xs font-bold mt-1">
-              <Flame className="w-3 h-3" />{myStreak} in a row
-            </p>
-          )}
-        </div>
-      </div>
+        );
+      })}
     </div>
+  );
+  return (
+    <PlayRevealShell
+      game={game}
+      result={result}
+      cardHeight={result.coverUrl ? 440 : 240}
+      cardContent={<GotItCardContent result={result} myName={myName} />}
+      guessesList={guessesList}
+      scoreExtra={iGotItInRace && myRaceTimeMs != null && (
+        <p className="text-green-400 text-xs font-semibold mt-1">
+          You got it in {(myRaceTimeMs / 1000).toFixed(1)}s · +{myRacePoints}
+        </p>
+      )}
+    />
   );
 }
 
@@ -1878,13 +1803,7 @@ function LeaderboardView({ game }: Readonly<{ game: PlayState }>) {
               >
                 <LiquidGlass
                   style={{ position: 'absolute', top: '50%', left: '50%' }}
-                  displacementScale={64}
-                  blurAmount={0.05}
-                  saturation={130}
-                  aberrationIntensity={2}
-                  elasticity={0.12}
-                  cornerRadius={100}
-                  padding="18px 36px"
+                  {...LIQUID_PILL_PROPS}
                 >
                   <div style={{ position: 'relative' }}>
                     <div style={{ position: 'absolute', inset: '-18px -36px', borderRadius: '100px', pointerEvents: 'none', background: 'rgba(0,128,126,0.18)' }} />
@@ -1905,13 +1824,7 @@ function LeaderboardView({ game }: Readonly<{ game: PlayState }>) {
           >
             <LiquidGlass
               style={{ position: 'absolute', top: '50%', left: '50%' }}
-              displacementScale={64}
-              blurAmount={0.05}
-              saturation={130}
-              aberrationIntensity={2}
-              elasticity={0.12}
-              cornerRadius={100}
-              padding="18px 36px"
+              {...LIQUID_PILL_PROPS}
             >
               <span className="text-white font-bold text-xl" style={{ whiteSpace: 'nowrap', position: 'relative', display: 'inline-block', minWidth: '210px', textAlign: 'center' }}>
                 Leave

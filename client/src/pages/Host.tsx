@@ -9,11 +9,12 @@ import { useSpotify } from '../hooks/useSpotify';
 import { RankBadge } from '../components/RankBadge';
 import { useAnimatedScore } from '../hooks/useAnimatedScore';
 import { ConfettiBackground } from '../components/ConfettiBackground';
-import { NoOneGotItCardContent, GotItCardContent, YearCardContent, YearTimelineContent } from '../components/RevealShared';
+import { NoOneGotItCardContent, GotItCardContent, YearCardContent, YearTimelineContent, PillButton } from '../components/RevealShared';
 import { RoundIntro, PartyBadge, PartyRevealExtras } from '../components/RoundIntro';
 import { BackButton } from '../components/BackButton';
 import { CircularTimer } from '../components/CircularTimer';
 import { AudioBars } from '../components/AudioBars';
+import { LIQUID_CARD_PROPS, LIQUID_PILL_PROPS } from '../components/liquidGlassPresets';
 import { APP_NAME, BACKEND_URL, RACE_TIME } from '../config';
 import type { Hint, LeaderboardEntry, PartyInfo, PlayerInfo, RoundResultEvent } from '../types';
 
@@ -862,13 +863,7 @@ function StartButton({ players, mode, startGame }: Readonly<{ players: PlayerInf
           filter: hovered && !disabled ? hoverShadow : 'drop-shadow(0 0 0px rgba(0,0,0,0))',
           transition: 'filter 0.25s ease',
         }}
-        displacementScale={64}
-        blurAmount={0.05}
-        saturation={130}
-        aberrationIntensity={2}
-        elasticity={0.12}
-        cornerRadius={100}
-        padding="18px 36px"
+        {...LIQUID_PILL_PROPS}
       >
         <div style={{ position: 'relative' }}>
           <div style={{
@@ -1088,12 +1083,7 @@ export function PlayingView({ game }: Readonly<{ game: HostState }>) {
         <div className="liquid-btn relative" style={{ width: '310px', height: countdown === null ? '400px' : '360px' }}>
           <LiquidGlass
             style={{ position: 'absolute', top: '50%', left: '50%' }}
-            displacementScale={55}
-            blurAmount={0.06}
-            saturation={130}
-            aberrationIntensity={1.5}
-            elasticity={0.08}
-            cornerRadius={20}
+            {...LIQUID_CARD_PROPS}
             padding="28px 28px"
           >
             <div style={{ width: '254px', display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '16px' }}>
@@ -1168,12 +1158,7 @@ function GuessingView({ game }: Readonly<{ game: HostState }>) {
         <div className="liquid-btn relative" style={{ width: '310px', height: '420px' }}>
           <LiquidGlass
             style={{ position: 'absolute', top: '50%', left: '50%' }}
-            displacementScale={55}
-            blurAmount={0.06}
-            saturation={130}
-            aberrationIntensity={1.5}
-            elasticity={0.08}
-            cornerRadius={20}
+            {...LIQUID_CARD_PROPS}
             padding="28px 28px"
           >
             <div style={{ width: '254px', display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '16px' }}>
@@ -1222,7 +1207,8 @@ function RevealPlayerRow({
   const skipped = entry?.guess === null;
   let guessText: string | null = null;
   if (entry) {
-    guessText = skipped ? 'skipped' : `"${entry.guess}${entry.live ? '…' : ''}"`;
+    const ellipsis = entry.live ? '…' : '';
+    guessText = skipped ? 'skipped' : `"${entry.guess}${ellipsis}"`;
   }
   const guessCls = (!skipped && correct) ? 'text-green-400 text-xs truncate min-w-0' : 'text-white/20 italic text-xs truncate min-w-0';
   if (!entry) {
@@ -1305,12 +1291,7 @@ function RevealShell({
       <div className="liquid-btn relative" style={{ width: wide ? 'min(88vw, 366px)' : '310px', height: `${cardHeight}px`, zIndex: 2 }}>
         <LiquidGlass
           style={{ position: 'absolute', top: '50%', left: '50%' }}
-          displacementScale={55}
-          blurAmount={0.06}
-          saturation={130}
-          aberrationIntensity={1.5}
-          elasticity={0.08}
-          cornerRadius={20}
+          {...LIQUID_CARD_PROPS}
           padding={wide ? '18px 18px' : '24px 24px'}
         >
           {cardContent}
@@ -1336,30 +1317,11 @@ function RevealShell({
         ))}
       </div>
 
-      <button
-        type="button"
-        className="liquid-btn relative cursor-pointer border-0 bg-transparent p-0"
-        style={{ width: '310px', height: '64px', borderRadius: '100px', background: 'rgba(0,0,0,0.001)', zIndex: 2 }}
+      <PillButton
         onClick={() => socket.emit('next_round')}
-      >
-        <LiquidGlass
-          style={{ position: 'absolute', top: '50%', left: '50%' }}
-          displacementScale={64}
-          blurAmount={0.05}
-          saturation={130}
-          aberrationIntensity={2}
-          elasticity={0.12}
-          cornerRadius={100}
-          padding="18px 36px"
-        >
-          <div style={{ position: 'relative' }}>
-            <div style={{ position: 'absolute', inset: '-18px -36px', borderRadius: '100px', pointerEvents: 'none', background: 'rgba(110,32,155,0.12)' }} />
-            <span className="text-white font-bold text-xl" style={{ whiteSpace: 'nowrap', position: 'relative', display: 'inline-block', minWidth: '210px', textAlign: 'center' }}>
-              {roundIndex + 1 >= totalRounds ? 'Final Results' : 'Next Round'}
-            </span>
-          </div>
-        </LiquidGlass>
-      </button>
+        label={roundIndex + 1 >= totalRounds ? 'Final Results' : 'Next Round'}
+        zIndex={2}
+      />
 
       {roundIndex + 1 < totalRounds && (
         <div style={{ position: 'relative', zIndex: 2 }}>
@@ -1480,59 +1442,16 @@ function LeaderboardView({ game }: Readonly<{ game: HostState }>) {
           early-ending is already available from every in-round screen. */}
       {!isFinished && (
         <div className="relative z-10 flex justify-center pb-2">
-          <button
-            type="button"
-            className="liquid-btn relative cursor-pointer border-0 bg-transparent p-0"
-            style={{ width: '310px', height: '64px', borderRadius: '100px', background: 'rgba(0,0,0,0.001)' }}
+          <PillButton
             onClick={() => socket.emit('next_round')}
-          >
-            <LiquidGlass
-              style={{ position: 'absolute', top: '50%', left: '50%' }}
-              displacementScale={64}
-              blurAmount={0.05}
-              saturation={130}
-              aberrationIntensity={2}
-              elasticity={0.12}
-              cornerRadius={100}
-              padding="18px 36px"
-            >
-              <div style={{ position: 'relative' }}>
-                <div style={{ position: 'absolute', inset: '-18px -36px', borderRadius: '100px', pointerEvents: 'none', background: 'rgba(110,32,155,0.12)' }} />
-                <span className="text-white font-bold text-xl" style={{ whiteSpace: 'nowrap', position: 'relative', display: 'inline-block', minWidth: '210px', textAlign: 'center' }}>
-                  {roundIndex + 1 >= totalRounds ? 'Final Results' : 'Next Round'}
-                </span>
-              </div>
-            </LiquidGlass>
-          </button>
+            label={roundIndex + 1 >= totalRounds ? 'Final Results' : 'Next Round'}
+          />
         </div>
       )}
 
       {isFinished && (
         <div className="relative z-10 flex flex-col items-center gap-3">
-          <button
-            type="button"
-            className="liquid-btn relative cursor-pointer border-0 bg-transparent p-0"
-            style={{ width: '310px', height: '64px', borderRadius: '100px', background: 'rgba(0,0,0,0.001)' }}
-            onClick={game.newGame}
-          >
-            <LiquidGlass
-              style={{ position: 'absolute', top: '50%', left: '50%' }}
-              displacementScale={64}
-              blurAmount={0.05}
-              saturation={130}
-              aberrationIntensity={2}
-              elasticity={0.12}
-              cornerRadius={100}
-              padding="18px 36px"
-            >
-              <div style={{ position: 'relative' }}>
-                <div style={{ position: 'absolute', inset: '-18px -36px', borderRadius: '100px', pointerEvents: 'none', background: 'rgba(110,32,155,0.12)' }} />
-                <span className="text-white font-bold text-xl" style={{ whiteSpace: 'nowrap', position: 'relative', display: 'inline-block', minWidth: '210px', textAlign: 'center' }}>
-                  New Game
-                </span>
-              </div>
-            </LiquidGlass>
-          </button>
+          <PillButton onClick={game.newGame} label="New Game" />
         </div>
       )}
     </div>
@@ -1570,12 +1489,7 @@ export default function Host() {
           <div className="liquid-btn relative" style={{ width: '310px', height: '230px' }}>
             <LiquidGlass
               style={{ position: 'absolute', top: '50%', left: '50%' }}
-              displacementScale={55}
-              blurAmount={0.06}
-              saturation={130}
-              aberrationIntensity={1.5}
-              elasticity={0.08}
-              cornerRadius={20}
+              {...LIQUID_CARD_PROPS}
               padding="32px 28px"
             >
               <div style={{ width: '254px', display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '12px' }}>
