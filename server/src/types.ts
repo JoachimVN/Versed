@@ -29,7 +29,7 @@ export interface Hint {
 // the closest answer wins.
 export type PartyFormat = 'classic' | 'race' | 'year';
 export type GuessTarget = 'title' | 'artist' | 'both';
-export type PartyEvent = 'double' | 'mystery' | 'steal' | 'snippet' | 'fullhints';
+export type PartyEvent = 'double' | 'mystery' | 'steal' | 'snippet' | 'fullhints' | 'blind' | 'outro';
 
 export interface PartyConfig {
   format: PartyFormat;

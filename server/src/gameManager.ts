@@ -20,8 +20,8 @@ export const RACE_BASE = 1000;
 
 // ─── Party mode tuning ────────────────────────────────────────────────────────
 export const BOTH_ARTIST_BONUS = 300;  // 'both' target: extra for also naming the artist
-export const STEAL_PCT = 0.15;         // steal takes 15% of the victim's score…
-export const STEAL_MIN = 300;          // …but never less than this (capped at their total)
+export const STEAL_PCT = 0.25;         // steal takes 15% of the victim's score…
+export const STEAL_MIN = 400;          // …but never less than this (capped at their total)
 export const DUEL_WIN_POINTS = 1500;   // finale: first correct duelist takes this
 export const YEAR_MAX_POINTS = 1000;   // year round: exact answer
 export const YEAR_POINTS_SLOPE = 120;  // …minus this per year off
@@ -178,6 +178,8 @@ function introFor(format: PartyFormat, target: GuessTarget, event: PartyEvent | 
     steal: { title: 'Steal Round', tag: 'Win the round, then rob another player' },
     snippet: { title: 'Snippet Roulette', tag: 'The clip starts somewhere mid-song' },
     fullhints: { title: 'Open Book', tag: 'Every hint on the table' },
+    blind: { title: 'Blind Bet', tag: 'No hints at all — bid on ears alone' },
+    outro: { title: 'Down to the Wire', tag: "The clip plays the song's final stretch" },
   };
   if (event) {
     const e = eventIntros[event];
@@ -198,7 +200,8 @@ function pickPartyTarget(format: PartyFormat): GuessTarget {
 function pickPartyEvent(game: Game, format: PartyFormat, prevEvent: PartyEvent | null | undefined): PartyEvent | null {
   if (format === 'year' || randomInt(0, 100) >= 60) return null;
   const pool: [PartyEvent, number][] = [['double', 30], ['mystery', 25], ['snippet', 25]];
-  if (format === 'classic') pool.push(['fullhints', 20]);
+  if (format === 'classic') pool.push(['fullhints', 20], ['blind', 20]);
+  if (format === 'race') pool.push(['outro', 25]);
   // Steal needs someone else to steal from — pointless (and confusing to
   // announce) in a 1-player game.
   if (game.roundIndex >= 2 && game.players.size >= 2) pool.push(['steal', 20]);
@@ -278,7 +281,7 @@ function roundMultiplier(round: Round): number {
 // What this round's guess is checked against. Party rounds carry it per-round;
 // classic/race games fall back to the game-wide artistOnly toggle.
 type EffectiveTarget = GuessTarget | 'year';
-function effectiveTarget(game: Game, round: Round): EffectiveTarget {
+export function effectiveTarget(game: Game, round: Round): EffectiveTarget {
   if (round.party) return round.party.format === 'year' ? 'year' : round.party.target;
   return game.artistOnly ? 'artist' : 'title';
 }
@@ -347,7 +350,34 @@ export function calcRaceWinnerPoints(elapsedMs: number, raceTime: number, rank: 
   return speed + difficultyBonus(rank);
 }
 
-function buildRound(usedSongIds: Set<string>, artistOnly = false, party?: PartyConfig): Round {
+// Snippet roulette and 'outro' both need a known, long-enough duration to
+// aim inside the song; silently downgrade to a plain round when the data's
+// missing (or, for 'outro', too short to leave a real "before" to skip).
+// Mutates party.event/intro on downgrade — returns the clip's start offset.
+function computeSnippetPosition(song: Song, party: PartyConfig, raceTimeSec: number): number | undefined {
+  if (party.event === 'snippet') {
+    if (!song.durationMs || song.durationMs <= 60_000) {
+      party.event = null;
+      party.intro = introFor(party.format, party.target, null);
+      return undefined;
+    }
+    const min = Math.round(song.durationMs * 0.15);
+    const max = Math.round(song.durationMs * 0.65);
+    return min + randomInt(0, Math.max(1, max - min));
+  }
+  if (party.event === 'outro') {
+    const raceMs = raceTimeSec * 1000;
+    if (!song.durationMs || song.durationMs <= raceMs + 20_000) {
+      party.event = null;
+      party.intro = introFor(party.format, party.target, null);
+      return undefined;
+    }
+    return song.durationMs - raceMs;
+  }
+  return undefined;
+}
+
+function buildRound(usedSongIds: Set<string>, artistOnly = false, party?: PartyConfig, raceTimeSec = 15): Round {
   let pool = songs.filter(s => !usedSongIds.has(s.spotifyTrackId));
   if (pool.length === 0) pool = songs;
   // A year round is unplayable without a known year.
@@ -357,26 +387,19 @@ function buildRound(usedSongIds: Set<string>, artistOnly = false, party?: PartyC
   }
   const song = pickRandom(pool);
 
-  // Snippet roulette needs a known, long-enough duration to aim inside the
-  // song; silently downgrade to a plain round when the data's missing.
-  let snippetMs: number | undefined;
-  if (party?.event === 'snippet') {
-    if (song.durationMs && song.durationMs > 60_000) {
-      const min = Math.round(song.durationMs * 0.15);
-      const max = Math.round(song.durationMs * 0.65);
-      snippetMs = min + randomInt(0, Math.max(1, max - min));
-    } else {
-      party.event = null;
-      party.intro = introFor(party.format, party.target, null);
-    }
-  }
+  const snippetMs = party ? computeSnippetPosition(song, party, raceTimeSec) : undefined;
 
   // Any target other than plain 'title' means the artist is (part of) the
   // answer, so artist hints would give it away.
   const suppressArtist = party ? party.target !== 'title' : artistOnly;
-  const hints = party?.format === 'classic' && party.event === 'fullhints'
-    ? generateAllHints(song, suppressArtist)
-    : generateHints(song, suppressArtist);
+  let hints: Hint[];
+  if (party?.format === 'classic' && party.event === 'blind') {
+    hints = [];
+  } else if (party?.format === 'classic' && party.event === 'fullhints') {
+    hints = generateAllHints(song, suppressArtist);
+  } else {
+    hints = generateHints(song, suppressArtist);
+  }
 
   return {
     song,
@@ -527,7 +550,7 @@ export function startRound(game: Game): Round {
   // Build the party recipe before replacing currentRound — it reads the
   // previous round's format/event to avoid repeats.
   const party = game.mode === 'party' ? buildPartyConfig(game) : undefined;
-  const round = buildRound(game.usedSongIds, game.artistOnly, party);
+  const round = buildRound(game.usedSongIds, game.artistOnly, party, game.raceTime);
   game.usedSongIds.add(round.song.spotifyTrackId);
   game.currentRound = round;
   game.phase = 'betting';
@@ -851,6 +874,27 @@ export function finalizeRaceDrafts(game: Game): void {
     const draft = round.liveDrafts.get(id)?.trim();
     if (draft) recordRaceGuess(game, id, draft);
   }
+}
+
+// Same idea as finalizeRaceDrafts, but for the classic bid/tier flow: a
+// tier's guessing timer expiring used to just advance to the next tier
+// (or reveal) without ever looking at what the current guessers had typed,
+// so a slow/backgrounded client whose own auto-submit timer missed the
+// deadline just lost their answer. Auto-submits the first correct draft
+// found (in tier order) so it scores exactly like a real submission would.
+export function finalizeGuessDrafts(
+  game: Game,
+): { correct: true; points: number; guesserName: string; allDone: boolean } | null {
+  const round = game.currentRound;
+  if (!round || game.phase !== 'guessing' || round.answered) return null;
+  for (const id of round.guesserSocketIds) {
+    if (round.passed.has(id)) continue;
+    const draft = round.liveDrafts.get(id)?.trim();
+    if (!draft) continue;
+    const result = recordGuess(game, id, draft);
+    if (result?.correct) return result as { correct: true; points: number; guesserName: string; allDone: boolean };
+  }
+  return null;
 }
 
 // Called on every keystroke so an opponent's in-progress guess survives even

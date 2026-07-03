@@ -649,8 +649,9 @@ io.on('connection', (socket) => {
     if (coverUrl) {
       round.coverUrl = coverUrl;
       // Classic-flow rounds have a 1-in-4 chance of a blurred-art hint;
-      // 'fullhints' rounds always get it.
+      // 'fullhints' rounds always get it, 'blind' rounds never do.
       const wantArt = !isRaceFlow && (game.mode === 'classic' || game.mode === 'party')
+        && round.party?.event !== 'blind'
         && (round.party?.event === 'fullhints' || randomInt(4) === 0);
       if (wantArt) {
         round.hints.push({ label: 'Album art', value: '', imageUrl: coverUrl });
@@ -751,7 +752,12 @@ io.on('connection', (socket) => {
       featuredArtists: round.song.featuredArtists,
       year: round.song.year,
       coverUrl: round.coverUrl,
-      artistOnly: game.artistOnly,
+      // Party rounds carry their own per-round target (title/artist/both),
+      // independent of the game-wide artistOnly toggle classic/race use —
+      // the reveal card's "song was"/"artist was" label has to match
+      // whichever one actually decided the guess, or a correct artist-only
+      // guess reads as a title mismatch (and vice versa).
+      artistOnly: gm.effectiveTarget(game, round) === 'artist',
       // Reveal payloads always carry the full party config (mystery revealed).
       party: gm.partyView(round, true),
     };
@@ -890,6 +896,24 @@ io.on('connection', (socket) => {
 
     game.phaseTimer = setTimeout(() => {
       if (game.phase !== 'guessing' || round.answered) return;
+      // A guesser's own client auto-submits at this same deadline, but that's
+      // a race against the network — this server timer firing first would
+      // otherwise just discard whatever they'd typed. Give their live draft
+      // one last look before moving the round on.
+      const auto = gm.finalizeGuessDrafts(game);
+      if (auto) {
+        io.to(game.pin).emit('round_result', {
+          correct: true,
+          guesserName: auto.guesserName,
+          ...songFields(game, round),
+          points: auto.points,
+          playerGuesses: gm.getRoundGuesses(game),
+          stealPending: stealPendingName(game, round),
+        });
+        emitScoreUpdate(game);
+        maybeOfferSteal(game);
+        return;
+      }
       advanceTierOrReveal(game);
     }, game.guessingTime * 1000);
   }

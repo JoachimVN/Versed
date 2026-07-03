@@ -318,7 +318,14 @@ function usePlayGame(pinParam?: string): PlayState {
       const endsAt = data.endsAt ?? (Date.now() + data.timeLimit * 1000);
       startCountdown(endsAt);
       setPhase('guessing');
-      setTimeout(() => guessInputRef.current?.focus(), 100);
+      // Don't steal focus if the player already jumped into an input while
+      // listening (e.g. typing the artist bonus field) — only autofocus the
+      // title field when nothing's being typed into yet.
+      setTimeout(() => {
+        const active = document.activeElement;
+        const alreadyTyping = active instanceof HTMLInputElement || active instanceof HTMLTextAreaElement;
+        if (!alreadyTyping) guessInputRef.current?.focus();
+      }, 100);
       if (guessAutoSubmitTimerRef.current) clearTimeout(guessAutoSubmitTimerRef.current);
       guessAutoSubmitTimerRef.current = setTimeout(autoSubmitGuess, Math.max(0, endsAt - Date.now()));
     });
@@ -1683,7 +1690,7 @@ export function RevealView({ game, result }: Readonly<{ game: PlayState; result:
     <PlayRevealShell
       game={game}
       result={result}
-      cardHeight={result.coverUrl ? 440 : 240}
+      cardHeight={result.coverUrl ? 480 : 240}
       cardContent={<GotItCardContent result={result} myName={myName} />}
       guessesList={guessesList}
       scoreExtra={iGotItInRace && myRaceTimeMs != null && (
