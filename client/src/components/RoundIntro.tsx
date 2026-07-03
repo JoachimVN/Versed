@@ -24,53 +24,64 @@ export function RoundIntro({ party, roundKey, dismissible = true }: Readonly<{ p
 
   const dismiss = () => setVisible(false);
 
-  return (
+  const overlayStyle = {
+    position: 'fixed' as const, inset: 0, zIndex: 60,
+    display: 'flex', alignItems: 'center', justifyContent: 'center',
+    background: 'rgba(5,5,14,0.9)', backdropFilter: 'blur(24px)',
+    opacity: visible ? 1 : 0,
+    pointerEvents: visible ? 'auto' as const : 'none' as const,
+    transition: 'opacity 0.4s ease',
+  };
+
+  const content = (
     <div
-      role={dismissible ? 'button' : undefined}
-      tabIndex={dismissible ? 0 : undefined}
-      onClick={dismissible ? dismiss : undefined}
-      onKeyDown={dismissible ? (e) => { if (e.key === 'Enter' || e.key === ' ') dismiss(); } : undefined}
       style={{
-        position: 'fixed', inset: 0, zIndex: 60,
-        display: 'flex', alignItems: 'center', justifyContent: 'center',
-        background: 'rgba(5,5,14,0.9)', backdropFilter: 'blur(24px)',
-        opacity: visible ? 1 : 0,
-        pointerEvents: visible ? 'auto' : 'none',
-        transition: 'opacity 0.4s ease',
-        cursor: dismissible ? 'pointer' : 'default',
+        textAlign: 'center', padding: '0 28px',
+        transform: visible ? 'scale(1) translateY(0)' : 'scale(0.94) translateY(8px)',
+        transition: 'transform 0.4s ease',
       }}
     >
-      <div
+      <p style={{ color: 'rgba(255,255,255,0.32)', fontSize: '0.68rem', letterSpacing: '0.32em', textTransform: 'uppercase', marginBottom: '12px' }}>
+        {party.finale ? 'Last round' : 'Next up'}
+      </p>
+      <h2
         style={{
-          textAlign: 'center', padding: '0 28px',
-          transform: visible ? 'scale(1) translateY(0)' : 'scale(0.94) translateY(8px)',
-          transition: 'transform 0.4s ease',
+          fontSize: '2.5rem', fontWeight: 900, lineHeight: 1.1,
+          letterSpacing: '0.02em', textTransform: 'uppercase',
+          fontFamily: "'Montserrat', sans-serif",
+          background: 'linear-gradient(to bottom left, rgba(0,200,195,0.5) 0%, transparent 55%), linear-gradient(to top right, rgba(150,17,193,0.55) 0%, transparent 55%), #fff',
+          WebkitBackgroundClip: 'text', WebkitTextFillColor: 'transparent', backgroundClip: 'text',
+          marginBottom: '14px',
         }}
       >
-        <p style={{ color: 'rgba(255,255,255,0.32)', fontSize: '0.68rem', letterSpacing: '0.32em', textTransform: 'uppercase', marginBottom: '12px' }}>
-          {party.finale ? 'Last round' : 'Next up'}
+        {party.intro.title}
+      </h2>
+      <p style={{ color: 'rgba(255,255,255,0.5)', fontSize: '0.95rem', lineHeight: 1.5, maxWidth: '340px', margin: '0 auto' }}>
+        {party.intro.tagline}
+      </p>
+      {dismissible && (
+        <p style={{ color: 'rgba(255,255,255,0.22)', fontSize: '0.68rem', letterSpacing: '0.1em', textTransform: 'uppercase', marginTop: '22px' }}>
+          Tap to skip
         </p>
-        <h2
-          style={{
-            fontSize: '2.5rem', fontWeight: 900, lineHeight: 1.1,
-            letterSpacing: '0.02em', textTransform: 'uppercase',
-            fontFamily: "'Montserrat', sans-serif",
-            background: 'linear-gradient(to bottom left, rgba(0,200,195,0.5) 0%, transparent 55%), linear-gradient(to top right, rgba(150,17,193,0.55) 0%, transparent 55%), #fff',
-            WebkitBackgroundClip: 'text', WebkitTextFillColor: 'transparent', backgroundClip: 'text',
-            marginBottom: '14px',
-          }}
-        >
-          {party.intro.title}
-        </h2>
-        <p style={{ color: 'rgba(255,255,255,0.5)', fontSize: '0.95rem', lineHeight: 1.5, maxWidth: '340px', margin: '0 auto' }}>
-          {party.intro.tagline}
-        </p>
-        {dismissible && (
-          <p style={{ color: 'rgba(255,255,255,0.22)', fontSize: '0.68rem', letterSpacing: '0.1em', textTransform: 'uppercase', marginTop: '22px' }}>
-            Tap to skip
-          </p>
-        )}
-      </div>
+      )}
+    </div>
+  );
+
+  if (dismissible) {
+    return (
+      <button
+        type="button"
+        onClick={dismiss}
+        style={{ ...overlayStyle, border: 'none', padding: 0, margin: 0, font: 'inherit', color: 'inherit', cursor: 'pointer' }}
+      >
+        {content}
+      </button>
+    );
+  }
+
+  return (
+    <div style={{ ...overlayStyle, cursor: 'default' }}>
+      {content}
     </div>
   );
 }

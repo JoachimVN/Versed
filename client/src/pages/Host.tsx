@@ -1080,13 +1080,13 @@ export function PlayingView({ game }: Readonly<{ game: HostState }>) {
         <p className="text-white/40 text-sm">Round {roundIndex + 1}/{totalRounds}</p>
         <PartyBadge party={party} />
 
-        <div className="liquid-btn relative" style={{ width: 'min(90vw, 620px)', height: countdown === null ? '400px' : '360px' }}>
+        <div className="liquid-btn relative" style={{ width: 'min(77vw, 527px)', height: countdown === null ? '340px' : '306px' }}>
           <LiquidGlass
             style={{ position: 'absolute', top: '50%', left: '50%' }}
             {...LIQUID_CARD_PROPS}
             padding="28px 28px"
           >
-            <div style={{ width: 'min(84vw, 564px)', display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '16px' }}>
+            <div style={{ width: 'min(71vw, 479px)', display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '16px' }}>
               {countdown === null ? (
                 <>
                   <AudioBars playing={songPlaying} accent={accent} height={36} bpm={songTempo} />
