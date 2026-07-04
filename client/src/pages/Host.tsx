@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useRef, useMemo } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { Check, Loader2, Copy, Settings, Flame, Coins, Clock, PartyPopper } from 'lucide-react';
+import { Check, Loader2, Copy, Settings, Flame, Coins, Clock, PartyPopper, Volume2, VolumeX } from 'lucide-react';
 import LiquidGlass from 'liquid-glass-react';
 import QRCodeLib from 'react-qr-code';
 const QRCode = QRCodeLib as unknown as React.FC<{ value: string; size?: number }>;
@@ -926,6 +926,7 @@ function SettingsButton({ settingsOpen, toggleSettings }: Readonly<{ settingsOpe
       onClick={toggleSettings}
       onMouseEnter={() => setHovered(true)}
       onMouseLeave={() => setHovered(false)}
+      tabIndex={0}
       className="absolute top-5 right-5 flex items-center gap-2 rounded-full transition-all duration-200 z-10"
       style={{
         background: bg,
@@ -980,6 +981,7 @@ function ModeToggle({ mode, setMode }: Readonly<{ mode: Mode; setMode: (m: Mode)
         <button
           key={key}
           onClick={() => setMode(key)}
+          tabIndex={0}
           className="relative flex-1 py-2.5 rounded-xl text-sm font-semibold z-10 transition-colors duration-200 flex items-center justify-center gap-1.5"
           style={{ color: mode === key ? MODE_STYLE[key].text : 'rgba(255,255,255,0.45)', background: 'transparent', border: 'none', cursor: 'pointer' }}
         >
@@ -1002,6 +1004,7 @@ function StartButton({ players, mode, startGame }: Readonly<{ players: PlayerInf
   return (
     <button
       type="button"
+      tabIndex={0}
       className="liquid-btn relative cursor-pointer border-0 bg-transparent p-0 mt-auto"
       style={{
         width: '310px', height: '64px', borderRadius: '100px',
@@ -1048,11 +1051,14 @@ function StartButton({ players, mode, startGame }: Readonly<{ players: PlayerInf
 // element, leaving an audible click/gap at the loop boundary. decodeAudioData
 // does honor it, and looping the decoded AudioBuffer via AudioBufferSourceNode
 // is sample-accurate.
-function useLobbyMusic() {
+function useLobbyMusic(muffled: boolean) {
   const ctxRef = useRef<AudioContext | null>(null);
   const sourceRef = useRef<AudioBufferSourceNode | null>(null);
   const gainRef = useRef<GainNode | null>(null);
+  const filterRef = useRef<BiquadFilterNode | null>(null);
   const fadeIntervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
+  const mutedRef = useRef(false);
+  const [muted, setMuted] = useState(false);
 
   useEffect(() => {
     let cancelled = false;
@@ -1065,16 +1071,19 @@ function useLobbyMusic() {
         const arrayBuffer = await res.arrayBuffer();
         const buffer = await ctx.decodeAudioData(arrayBuffer);
         if (cancelled) return;
+        const filter = ctx.createBiquadFilter();
+        filter.type = 'lowpass';
+        filter.frequency.value = 22050; // fully open — no audible filtering
         const gain = ctx.createGain();
-        gain.gain.value = 1;
-        gain.connect(ctx.destination);
+        gain.gain.value = mutedRef.current ? 0 : 1;
         const source = ctx.createBufferSource();
         source.buffer = buffer;
         source.loop = true;
-        source.connect(gain);
+        source.connect(filter).connect(gain).connect(ctx.destination);
         source.start(0);
         sourceRef.current = source;
         gainRef.current = gain;
+        filterRef.current = filter;
       } catch { /* fetch/decode failed; lobby just stays silent */ }
     })();
 
@@ -1084,46 +1093,118 @@ function useLobbyMusic() {
     const resume = () => { ctx.resume().catch(() => {}); };
     document.addEventListener('pointerdown', resume);
     document.addEventListener('keydown', resume);
+    // Backgrounding the tab suspends the context; resume the instant it's
+    // foregrounded again instead of silently waiting for a click on the page.
+    const onVisibility = () => { if (document.visibilityState === 'visible') resume(); };
+    document.addEventListener('visibilitychange', onVisibility);
 
     return () => {
       cancelled = true;
       document.removeEventListener('pointerdown', resume);
       document.removeEventListener('keydown', resume);
+      document.removeEventListener('visibilitychange', onVisibility);
       if (fadeIntervalRef.current) { clearInterval(fadeIntervalRef.current); fadeIntervalRef.current = null; }
       sourceRef.current?.stop();
       ctx.close().catch(() => {});
     };
   }, []);
 
-  // Returns a promise that resolves once the fade finishes, so callers that
-  // navigate away can wait for it first instead of cutting the music off
-  // mid-fade.
-  const fadeOut = () => new Promise<void>(resolve => {
+  // Smoothly filters out the high end when the game-expired dialog pops up,
+  // so the music reads as muffled behind the popup instead of playing on
+  // as if nothing happened.
+  useEffect(() => {
+    const ctx = ctxRef.current;
+    const filter = filterRef.current;
+    if (!ctx || !filter) return;
+    filter.frequency.cancelScheduledValues(ctx.currentTime);
+    filter.frequency.setValueAtTime(filter.frequency.value, ctx.currentTime);
+    filter.frequency.exponentialRampToValueAtTime(muffled ? 400 : 22050, ctx.currentTime + 1.2);
+  }, [muffled]);
+
+  const rampGain = (target: number, durationMs: number) => new Promise<void>(resolve => {
     const gain = gainRef.current;
-    const source = sourceRef.current;
-    if (!gain || !source) { resolve(); return; }
+    if (!gain) { resolve(); return; }
     if (fadeIntervalRef.current) clearInterval(fadeIntervalRef.current);
     const steps = 20;
+    const start = gain.gain.value;
     let i = 0;
     fadeIntervalRef.current = setInterval(() => {
       i++;
-      gain.gain.value = Math.max(0, 1 - i / steps);
+      gain.gain.value = start + (target - start) * (i / steps);
       if (i >= steps) {
         clearInterval(fadeIntervalRef.current!);
         fadeIntervalRef.current = null;
-        source.stop();
+        gain.gain.value = target;
         resolve();
       }
-    }, 40);
+    }, durationMs / steps);
   });
 
-  return { fadeOut };
+  // Fades out and stops playback entirely, so callers that navigate away can
+  // wait for it first instead of cutting the music off mid-fade.
+  const fadeOut = async () => {
+    await rampGain(0, 800);
+    sourceRef.current?.stop();
+  };
+
+  const toggleMute = () => {
+    const next = !mutedRef.current;
+    mutedRef.current = next;
+    setMuted(next);
+    rampGain(next ? 0 : 1, 250);
+  };
+
+  return { fadeOut, muted, toggleMute };
+}
+
+function MuteButton({ muted, toggleMute }: Readonly<{ muted: boolean; toggleMute: () => void }>) {
+  const [hovered, setHovered] = useState(false);
+  return (
+    <button
+      onClick={toggleMute}
+      onMouseEnter={() => setHovered(true)}
+      onMouseLeave={() => setHovered(false)}
+      tabIndex={0}
+      aria-label={muted ? 'Unmute lobby music' : 'Mute lobby music'}
+      aria-pressed={muted}
+      className="absolute bottom-5 right-5 flex items-center justify-center rounded-full transition-all duration-200 z-10"
+      style={{
+        width: '38px', height: '38px',
+        background: hovered ? 'rgba(255,255,255,0.11)' : 'rgba(255,255,255,0.06)',
+        border: '1px solid rgba(255,255,255,0.10)',
+        backdropFilter: 'blur(12px)',
+        color: muted ? 'rgba(255,255,255,0.4)' : 'rgba(255,255,255,0.7)',
+        cursor: 'pointer',
+      }}
+    >
+      <span style={{ position: 'relative', width: '16px', height: '16px', display: 'inline-block' }}>
+        <Volume2
+          className="w-4 h-4"
+          style={{
+            position: 'absolute', inset: 0,
+            opacity: muted ? 0 : 1,
+            transform: muted ? 'scale(0.6) rotate(-15deg)' : 'scale(1) rotate(0deg)',
+            transition: 'opacity 0.25s ease, transform 0.25s ease',
+          }}
+        />
+        <VolumeX
+          className="w-4 h-4"
+          style={{
+            position: 'absolute', inset: 0,
+            opacity: muted ? 1 : 0,
+            transform: muted ? 'scale(1) rotate(0deg)' : 'scale(0.6) rotate(15deg)',
+            transition: 'opacity 0.25s ease, transform 0.25s ease',
+          }}
+        />
+      </span>
+    </button>
+  );
 }
 
 function LobbyView({ game }: Readonly<{ game: HostState }>) {
-  const { spotify, pin, players, createGame, startGame, mode, settingsOpen, toggleSettings, setMode, removePlayer } = game;
+  const { spotify, pin, players, createGame, startGame, mode, settingsOpen, toggleSettings, setMode, removePlayer, gameExpired } = game;
   const [lobbyVisible, setLobbyVisible] = useState(false);
-  const { fadeOut } = useLobbyMusic();
+  const { fadeOut, muted, toggleMute } = useLobbyMusic(gameExpired);
 
   useEffect(() => {
     if (!pin) { setLobbyVisible(false); return; }
@@ -1144,6 +1225,7 @@ function LobbyView({ game }: Readonly<{ game: HostState }>) {
     <div className="min-h-screen relative flex flex-col overflow-hidden">
       <BackButton zIndex={10} beforeNavigate={fadeOut} />
       <SettingsButton settingsOpen={settingsOpen} toggleSettings={toggleSettings} />
+      <MuteButton muted={muted} toggleMute={toggleMute} />
 
       <SettingsPanel game={game} open={settingsOpen} />
 
@@ -1172,6 +1254,7 @@ function LobbyView({ game }: Readonly<{ game: HostState }>) {
                 <button
                   key={p.name}
                   onClick={() => removePlayer(p.name)}
+                  tabIndex={0}
                   className="relative group px-3 py-1.5 rounded-full bg-white/10 text-white text-sm font-semibold"
                   aria-label={`Remove ${p.name}`}
                 >

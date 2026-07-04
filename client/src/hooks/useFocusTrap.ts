@@ -21,10 +21,19 @@ export function useFocusTrap<T extends HTMLElement>(containerRef: React.RefObjec
 
     const focusables = () => Array.from(container.querySelectorAll<HTMLElement>(FOCUSABLE_SELECTOR));
     const first = focusables()[0];
-    (first ?? container).focus();
+    const target = first ?? container;
+    // This focus() call happens in an effect, decoupled from whatever click
+    // opened the overlay, so Chromium can't tell it apart from a real
+    // keyboard-driven focus and paints a :focus-visible ring even when the
+    // overlay was opened with a mouse. Suppress just that one ring, and drop
+    // the suppression the moment real keyboard nav (Tab) happens so it still
+    // shows up for actual keyboard users tabbing inside the trap.
+    target.classList.add('suppress-focus-ring');
+    target.focus();
 
     const handleKeyDown = (e: KeyboardEvent) => {
       if (e.key !== 'Tab') return;
+      target.classList.remove('suppress-focus-ring');
       const items = focusables();
       if (items.length === 0) { e.preventDefault(); return; }
       const currentIndex = items.indexOf(document.activeElement as HTMLElement);
@@ -39,6 +48,7 @@ export function useFocusTrap<T extends HTMLElement>(containerRef: React.RefObjec
     container.addEventListener('keydown', handleKeyDown);
     return () => {
       container.removeEventListener('keydown', handleKeyDown);
+      target.classList.remove('suppress-focus-ring');
       previouslyFocused.current?.focus?.();
     };
   }, [active, containerRef]);

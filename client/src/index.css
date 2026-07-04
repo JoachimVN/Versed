@@ -50,6 +50,13 @@ body {
   outline-offset: 3px;
 }
 
+/* useFocusTrap's initial focus() runs in an effect, so Chromium can't tell
+   it apart from real keyboard nav and shows a ring even after a mouse click
+   opened the overlay. That hook adds/removes this class around the ring. */
+.suppress-focus-ring:focus-visible {
+  outline: none;
+}
+
 /* Pins full-screen layouts to the visible area above an open mobile keyboard
    instead of letting the keyboard cover them; --app-height is kept in sync
    by useViewportHeight() via window.visualViewport. An exact height (not
