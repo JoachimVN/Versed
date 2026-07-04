@@ -40,16 +40,17 @@ jobs:
           PORTFOLIO_TOKEN: ${{ secrets.PORTFOLIO_TOKEN }}
         run: git clone "https://x-access-token:${PORTFOLIO_TOKEN}@github.com/JoachimVN/Portfolio.git" portfolio
 
-      - name: Sync built client -> versed/
+      - name: Sync built client -> projects/versed/
         run: |
-          rm -rf portfolio/versed
-          cp -r client/dist portfolio/versed
+          rm -rf portfolio/projects/versed
+          mkdir -p portfolio/projects
+          cp -r client/dist portfolio/projects/versed
 
       - name: Commit and push
         run: |
           cd portfolio
           git config user.name "github-actions[bot]"
           git config user.email "github-actions[bot]@users.noreply.github.com"
-          git add versed/
+          git add projects/versed/
           git diff --staged --quiet || git commit -m "chore: sync Versed from Versed@${{ github.sha }}"
           git push
