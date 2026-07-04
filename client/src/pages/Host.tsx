@@ -38,8 +38,8 @@ interface SavedHostSettings {
   raceTime: number; raceWinnerOnly: boolean; artistOnly: boolean; yearOnly: boolean; difficulty: Difficulty;
 }
 const HOST_SETTINGS_KEY = 'versed_host_settings';
-const MODES: Mode[] = ['classic', 'race', 'party'];
-const DIFFICULTIES: Difficulty[] = ['easy', 'medium', 'hard'];
+const MODES: Set<Mode> = new Set(['classic', 'race', 'party']);
+const DIFFICULTIES: Set<Difficulty> = new Set(['easy', 'medium', 'hard']);
 
 function loadSavedHostSettings(): Partial<SavedHostSettings> {
   try {
@@ -48,12 +48,12 @@ function loadSavedHostSettings(): Partial<SavedHostSettings> {
       bettingTime: typeof raw.bettingTime === 'number' ? raw.bettingTime : undefined,
       guessingTime: typeof raw.guessingTime === 'number' ? raw.guessingTime : undefined,
       rounds: typeof raw.rounds === 'number' ? raw.rounds : undefined,
-      mode: MODES.includes(raw.mode) ? raw.mode : undefined,
+      mode: MODES.has(raw.mode) ? raw.mode : undefined,
       raceTime: typeof raw.raceTime === 'number' ? raw.raceTime : undefined,
       raceWinnerOnly: typeof raw.raceWinnerOnly === 'boolean' ? raw.raceWinnerOnly : undefined,
       artistOnly: typeof raw.artistOnly === 'boolean' ? raw.artistOnly : undefined,
       yearOnly: typeof raw.yearOnly === 'boolean' ? raw.yearOnly : undefined,
-      difficulty: DIFFICULTIES.includes(raw.difficulty) ? raw.difficulty : undefined,
+      difficulty: DIFFICULTIES.has(raw.difficulty) ? raw.difficulty : undefined,
     };
   } catch { return {}; }
 }
@@ -574,7 +574,7 @@ function SettingsPanel({ game, open }: Readonly<{ game: HostState; open: boolean
     setBettingTimeSetting, setGuessingTimeSetting, setRoundsSetting, setRaceTimeSetting, setRaceWinnerOnly, setArtistOnly, setYearOnly, setDifficulty,
     toggleSettings,
   } = game;
-  const panelRef = useRef<HTMLDivElement>(null);
+  const panelRef = useRef<HTMLDialogElement>(null);
   useEscapeKey(toggleSettings, open);
   useFocusTrap(panelRef, open);
   // "Guess the year" has no single title/artist answer, so it can't run
@@ -592,14 +592,21 @@ function SettingsPanel({ game, open }: Readonly<{ game: HostState; open: boolean
     if (next) setYearOnly(false);
   };
   return (
-    <div
+    <dialog
       ref={panelRef}
-      role="dialog"
+      open
       aria-modal="true"
       aria-label="Game settings"
       className="absolute right-5 z-20"
       style={{
         top: '68px',
+        left: 'auto',
+        bottom: 'auto',
+        margin: 0,
+        border: 'none',
+        padding: 0,
+        background: 'transparent',
+        color: 'inherit',
         opacity: open ? 1 : 0,
         transform: open ? 'translateY(0) scale(1)' : 'translateY(-10px) scale(0.96)',
         pointerEvents: open ? 'auto' : 'none',
@@ -664,7 +671,7 @@ function SettingsPanel({ game, open }: Readonly<{ game: HostState; open: boolean
           </div>
         )}
       </div>
-    </div>
+    </dialog>
   );
 }
 
@@ -1043,8 +1050,20 @@ function useLobbyMusic(pin: string) {
     if (!audio) return;
     audio.volume = 1;
     audio.currentTime = 0;
-    audio.play().catch(() => { /* autoplay may be blocked until a user gesture */ });
-    return () => { audio.pause(); };
+    const tryPlay = () => audio.play().catch(() => { /* still blocked; wait for the next interaction */ });
+    tryPlay();
+    // Right after the Spotify OAuth redirect lands on /host, the page hasn't
+    // seen a user gesture yet, so browsers often block autoplay here (this is
+    // why the music "sometimes" doesn't start). Retry on the first tap/click/
+    // keypress so it reliably kicks in once the host actually interacts.
+    const resumeOnInteraction = () => tryPlay();
+    document.addEventListener('pointerdown', resumeOnInteraction, { once: true });
+    document.addEventListener('keydown', resumeOnInteraction, { once: true });
+    return () => {
+      audio.pause();
+      document.removeEventListener('pointerdown', resumeOnInteraction);
+      document.removeEventListener('keydown', resumeOnInteraction);
+    };
   }, [pin]);
 
   const fadeOut = () => {
@@ -1089,7 +1108,9 @@ function LobbyView({ game }: Readonly<{ game: HostState }>) {
 
   return (
     <div className="min-h-screen relative flex flex-col overflow-hidden">
-      <audio ref={audioRef} src={`${import.meta.env.BASE_URL}theme.mp3`} loop />
+      <audio ref={audioRef} src={`${import.meta.env.BASE_URL}theme.mp3`} loop preload="auto">
+        <track kind="captions" label="No spoken content" />
+      </audio>
       <BackButton zIndex={10} />
       <SettingsButton settingsOpen={settingsOpen} toggleSettings={toggleSettings} />
 
@@ -1716,7 +1737,7 @@ export default function Host() {
   const game = useHostGame();
   const navigate = useNavigate();
   const { phase, result, reconnecting, reconnectingCount, gameExpired } = game;
-  const gameExpiredRef = useRef<HTMLDivElement>(null);
+  const gameExpiredRef = useRef<HTMLDialogElement>(null);
   useEscapeKey(() => navigate('/'), gameExpired);
   useFocusTrap(gameExpiredRef, gameExpired);
 
@@ -1740,13 +1761,22 @@ export default function Host() {
         </div>
       )}
       {gameExpired && (
-        <div
+        <dialog
           ref={gameExpiredRef}
-          role="dialog"
+          open
           aria-modal="true"
           aria-label="Game expired"
           className="fixed inset-0 flex items-center justify-center z-50"
-          style={{ background: 'rgba(8,8,18,0.92)', backdropFilter: 'blur(12px)' }}
+          style={{
+            width: '100%',
+            height: '100%',
+            margin: 0,
+            border: 'none',
+            padding: 0,
+            color: 'inherit',
+            background: 'rgba(8,8,18,0.92)',
+            backdropFilter: 'blur(12px)',
+          }}
         >
           <div style={{ position: 'absolute', inset: 0, pointerEvents: 'none', background: 'radial-gradient(ellipse 60% 40% at 50% 50%, rgba(86,20,140,0.22) 0%, transparent 65%)' }} />
           <div className="liquid-btn relative" style={{ width: '310px', height: '230px' }}>
@@ -1772,7 +1802,7 @@ export default function Host() {
               </div>
             </LiquidGlass>
           </div>
-        </div>
+        </dialog>
       )}
       {reconnectingCount > 0 && !reconnecting && (
         <div className="fixed bottom-5 right-5 flex items-center gap-2 bg-white/8 backdrop-blur-sm rounded-full px-3 py-1.5 z-40">
