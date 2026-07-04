@@ -46,6 +46,7 @@ export interface RoundResultEvent {
   points: number;
   mode?: 'classic' | 'race';
   artistOnly?: boolean;
+  yearOnly?: boolean;
   correctGuessers?: string[];
   playerGuesses?: { name: string; guess: string | null; timeMs?: number | null; live?: boolean }[];
   party?: PartyInfo;

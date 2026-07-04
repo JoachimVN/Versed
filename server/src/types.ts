@@ -130,6 +130,7 @@ export interface Game {
   raceTime: number;
   raceWinnerOnly: boolean;
   artistOnly: boolean;
+  yearOnly: boolean;
   currentRound: Round | null;
   usedSongIds: Set<string>;
   phaseTimer: ReturnType<typeof setTimeout> | null;
