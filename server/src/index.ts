@@ -396,10 +396,11 @@ io.on('connection', (socket) => {
     // leak a stale 'year' accent/target into party rounds client-side.
     const isParty = game.mode === 'party';
     game.yearOnly = !isParty && s?.yearOnly === true;
-    // "Winner only" is meaningful for year rounds too (restricts scoring to
-    // the closest guess) — it's inert outside Race mode either way, so no
-    // need to gate it on yearOnly here.
-    game.raceWinnerOnly = s?.raceWinnerOnly === true;
+    // The client only ever shows this toggle in Race mode, and its one
+    // useState persists across mode switches in the lobby — gate it here too,
+    // or a stale `true` left over from a previous Race game would silently
+    // force winner-take-all scoring onto Party's race-format rounds.
+    game.raceWinnerOnly = game.mode === 'race' && s?.raceWinnerOnly === true;
     // Year isn't a title/artist target, so it can't coexist with artist-only.
     game.artistOnly = !isParty && !game.yearOnly && s?.artistOnly === true;
     game.roundIndex = 0;
