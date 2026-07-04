@@ -878,15 +878,12 @@ function yearGuessEntries(game: Game, round: Round, actual: number) {
   });
 }
 
-// Race-flow year rounds are scored in one pass at the end: exact answers pay
-// the most, points fall off per year of distance, and the closest player(s)
-// take a winner bonus on top. With `raceWinnerOnly`, only the closest
-// guess(es) score at all — everyone else gets zero, same as winner-only does
-// for title races.
-export function finalizeYearRound(game: Game): YearResult[] {
-  const round = game.currentRound!;
+// Shared "closest guess wins" scorer: exact answers pay the most, points fall
+// off per year of distance, and the closest player(s) take a winner bonus on
+// top. `winnerOnly` restricts scoring to just that closest guess — everyone
+// else gets zero, same as winner-only does for title races.
+function scoreYearGuesses(game: Game, round: Round, mult: number, winnerOnly: boolean): YearResult[] {
   const actual = Math.floor(round.song.year ?? 0);
-  const mult = roundMultiplier(round);
   const preRoundScores = currentScores(game);
 
   const entries = yearGuessEntries(game, round, actual);
@@ -896,7 +893,7 @@ export function finalizeYearRound(game: Game): YearResult[] {
 
   const results: YearResult[] = entries.map(e => {
     let points = 0;
-    if (e.diff !== null && (!game.raceWinnerOnly || e.diff === best)) {
+    if (e.diff !== null && (!winnerOnly || e.diff === best)) {
       points = Math.max(0, YEAR_MAX_POINTS - YEAR_POINTS_SLOPE * e.diff);
       if (e.diff === best) points += Math.round(YEAR_WINNER_BONUS / winners);
       points *= mult;
@@ -913,6 +910,13 @@ export function finalizeYearRound(game: Game): YearResult[] {
   results.sort((a, b) => (a.diff ?? 9999) - (b.diff ?? 9999));
   round.yearResults = results;
   return round.yearResults;
+}
+
+// Race-flow year rounds are scored in one pass at the end, once every
+// distance is known.
+export function finalizeYearRound(game: Game): YearResult[] {
+  const round = game.currentRound!;
+  return scoreYearGuesses(game, round, roundMultiplier(round), game.raceWinnerOnly);
 }
 
 // Classic-flow year round that ended early on an exact guess — scored like
@@ -933,36 +937,10 @@ function finalizeClassicYearWin(game: Game, round: Round, winnerId: string, winn
 
 // Classic-flow year round where every tier had its turn and nobody guessed
 // exactly right — falls back to closest-guess-wins across everyone who did
-// guess, same distance formula as the race-flow version. `raceWinnerOnly`
-// doesn't apply here (Classic has no such toggle).
+// guess. Classic has no "winner only" toggle and no party multiplier.
 export function finalizeClassicYearRound(game: Game): YearResult[] {
   const round = game.currentRound!;
-  const actual = Math.floor(round.song.year ?? 0);
-  const preRoundScores = currentScores(game);
-
-  const entries = yearGuessEntries(game, round, actual);
-  const diffs = entries.filter(e => e.diff !== null).map(e => e.diff!);
-  const best = diffs.length > 0 ? Math.min(...diffs) : null;
-  const winners = best === null ? 0 : entries.filter(e => e.diff === best).length;
-
-  const results: YearResult[] = entries.map(e => {
-    let points = 0;
-    if (e.diff !== null) {
-      points = Math.max(0, YEAR_MAX_POINTS - YEAR_POINTS_SLOPE * e.diff);
-      if (e.diff === best) points += Math.round(YEAR_WINNER_BONUS / winners);
-    }
-    if (points > 0) {
-      points += pityBonus(preRoundScores, e.id);
-      e.player.score += points;
-      e.player.streak += 1;
-      round.scoredSocketIds.add(e.id);
-    }
-    return { name: e.player.name, guess: e.guess, diff: e.diff, points };
-  });
-
-  results.sort((a, b) => (a.diff ?? 9999) - (b.diff ?? 9999));
-  round.yearResults = results;
-  return round.yearResults;
+  return scoreYearGuesses(game, round, 1, false);
 }
 
 // ─── Steal round ─────────────────────────────────────────────────────────────
