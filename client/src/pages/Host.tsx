@@ -1037,59 +1037,93 @@ function StartButton({ players, mode, startGame }: Readonly<{ players: PlayerInf
   );
 }
 
-// Waiting-room music: starts as soon as the PIN/QR is up, loops, and fades
-// out (rather than cutting) the moment the host starts the game — no fade-in,
-// it should just already be playing by the time anyone looks at the screen.
-function useLobbyMusic(pin: string) {
-  const audioRef = useRef<HTMLAudioElement | null>(null);
-  const fadeRef = useRef<ReturnType<typeof setInterval> | null>(null);
+// Waiting-room music: starts the instant LobbyView mounts (right after the
+// Spotify OAuth redirect — deliberately not gated on `pin`, since that isn't
+// set until the create_game round trip and Spotify device registration both
+// finish, several seconds later) and fades out (rather than cutting) when the
+// host leaves the lobby, by starting the game or backing out.
+//
+// Uses the Web Audio API instead of <audio loop>: Chromium doesn't honor an
+// MP3's LAME gapless-encoding metadata when it restarts a looping <audio>
+// element, leaving an audible click/gap at the loop boundary. decodeAudioData
+// does honor it, and looping the decoded AudioBuffer via AudioBufferSourceNode
+// is sample-accurate.
+function useLobbyMusic() {
+  const ctxRef = useRef<AudioContext | null>(null);
+  const sourceRef = useRef<AudioBufferSourceNode | null>(null);
+  const gainRef = useRef<GainNode | null>(null);
+  const fadeIntervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
   useEffect(() => {
-    if (!pin) return;
-    const audio = audioRef.current;
-    if (!audio) return;
-    audio.volume = 1;
-    audio.currentTime = 0;
-    const tryPlay = () => audio.play().catch(() => { /* still blocked; wait for the next interaction */ });
-    tryPlay();
-    // Right after the Spotify OAuth redirect lands on /host, the page hasn't
-    // seen a user gesture yet, so browsers often block autoplay here (this is
-    // why the music "sometimes" doesn't start). Retry on the first tap/click/
-    // keypress so it reliably kicks in once the host actually interacts.
-    const resumeOnInteraction = () => tryPlay();
-    document.addEventListener('pointerdown', resumeOnInteraction, { once: true });
-    document.addEventListener('keydown', resumeOnInteraction, { once: true });
-    return () => {
-      audio.pause();
-      document.removeEventListener('pointerdown', resumeOnInteraction);
-      document.removeEventListener('keydown', resumeOnInteraction);
-    };
-  }, [pin]);
+    let cancelled = false;
+    const ctx = new AudioContext();
+    ctxRef.current = ctx;
 
-  const fadeOut = () => {
-    const audio = audioRef.current;
-    if (!audio || audio.paused) return;
-    if (fadeRef.current) clearInterval(fadeRef.current);
+    (async () => {
+      try {
+        const res = await fetch(`${import.meta.env.BASE_URL}theme.mp3`);
+        const arrayBuffer = await res.arrayBuffer();
+        const buffer = await ctx.decodeAudioData(arrayBuffer);
+        if (cancelled) return;
+        const gain = ctx.createGain();
+        gain.gain.value = 1;
+        gain.connect(ctx.destination);
+        const source = ctx.createBufferSource();
+        source.buffer = buffer;
+        source.loop = true;
+        source.connect(gain);
+        source.start(0);
+        sourceRef.current = source;
+        gainRef.current = gain;
+      } catch { /* fetch/decode failed; lobby just stays silent */ }
+    })();
+
+    // A fresh AudioContext starts suspended until a user gesture. Right after
+    // the OAuth redirect there hasn't been one yet, so resume on the first
+    // interaction (a harmless no-op once it's already running).
+    const resume = () => { ctx.resume().catch(() => {}); };
+    document.addEventListener('pointerdown', resume);
+    document.addEventListener('keydown', resume);
+
+    return () => {
+      cancelled = true;
+      document.removeEventListener('pointerdown', resume);
+      document.removeEventListener('keydown', resume);
+      if (fadeIntervalRef.current) { clearInterval(fadeIntervalRef.current); fadeIntervalRef.current = null; }
+      sourceRef.current?.stop();
+      ctx.close().catch(() => {});
+    };
+  }, []);
+
+  // Returns a promise that resolves once the fade finishes, so callers that
+  // navigate away can wait for it first instead of cutting the music off
+  // mid-fade.
+  const fadeOut = () => new Promise<void>(resolve => {
+    const gain = gainRef.current;
+    const source = sourceRef.current;
+    if (!gain || !source) { resolve(); return; }
+    if (fadeIntervalRef.current) clearInterval(fadeIntervalRef.current);
     const steps = 20;
     let i = 0;
-    fadeRef.current = setInterval(() => {
+    fadeIntervalRef.current = setInterval(() => {
       i++;
-      audio.volume = Math.max(0, 1 - i / steps);
+      gain.gain.value = Math.max(0, 1 - i / steps);
       if (i >= steps) {
-        clearInterval(fadeRef.current!);
-        fadeRef.current = null;
-        audio.pause();
+        clearInterval(fadeIntervalRef.current!);
+        fadeIntervalRef.current = null;
+        source.stop();
+        resolve();
       }
     }, 40);
-  };
+  });
 
-  return { audioRef, fadeOut };
+  return { fadeOut };
 }
 
 function LobbyView({ game }: Readonly<{ game: HostState }>) {
   const { spotify, pin, players, createGame, startGame, mode, settingsOpen, toggleSettings, setMode, removePlayer } = game;
   const [lobbyVisible, setLobbyVisible] = useState(false);
-  const { audioRef, fadeOut } = useLobbyMusic(pin);
+  const { fadeOut } = useLobbyMusic();
 
   useEffect(() => {
     if (!pin) { setLobbyVisible(false); return; }
@@ -1108,10 +1142,7 @@ function LobbyView({ game }: Readonly<{ game: HostState }>) {
 
   return (
     <div className="min-h-screen relative flex flex-col overflow-hidden">
-      <audio ref={audioRef} src={`${import.meta.env.BASE_URL}theme.mp3`} loop preload="auto">
-        <track kind="captions" label="No spoken content" />
-      </audio>
-      <BackButton zIndex={10} />
+      <BackButton zIndex={10} beforeNavigate={fadeOut} />
       <SettingsButton settingsOpen={settingsOpen} toggleSettings={toggleSettings} />
 
       <SettingsPanel game={game} open={settingsOpen} />
