@@ -310,15 +310,14 @@ function checkGuess(
 }
 
 // Race-flow rounds are everyone-at-once; party rounds ride it for every
-// non-classic format.
+// non-classic format. Classic-mode "Guess the year" still rides the normal
+// bid/tier flow — an exact year ends it early like any other classic round,
+// otherwise the closest guess wins once every tier's had its turn (see
+// `recordGuess`'s 'year' branch and `finalizeClassicYearWin`).
 export function isRaceFlowRound(game: Game, round: Round): boolean {
   if (game.mode === 'race') return true;
   if (round.party) return round.party.format !== 'classic';
-  // "Guess the year" has no correct/incorrect single answer to turn-take
-  // over — every guess is scored against every other once the round ends —
-  // so, unlike artist-only, it can't ride the classic bid/tier flow even in
-  // a Classic-mode game.
-  return game.yearOnly;
+  return false;
 }
 
 // Who actually plays a race-flow round — the duelists in a finale, everyone
@@ -701,32 +700,61 @@ export function recordGuess(
 
   round.guesses.set(socketId, text);
   const target = effectiveTarget(game, round);
-  if (target === 'year') return null; // year rounds never run the classic flow
-  const { correct, artistBonus } = checkGuess(target, text, artistText, round.song);
   const guesserName = game.players.get(socketId)?.name ?? '';
 
-  if (correct) {
-    round.answered = true;
-    round.correctGuesserName = guesserName;
-    const player = game.players.get(socketId)!;
-    const points = (calcPoints(round.lowestBid, round.song.rank)
-      + (artistBonus ? BOTH_ARTIST_BONUS : 0)) * roundMultiplier(round)
+  if (target === 'year') {
+    const guess = parseYearGuess(text);
+    const correct = guess !== null && guess === Math.floor(round.song.year ?? 0);
+    if (!correct) return failGuess(round, socketId, guesserName);
+    const points = calcPoints(round.lowestBid, round.song.rank) * roundMultiplier(round)
       + pityBonus(currentScores(game), socketId);
-    player.score += points;
-    player.streak += 1;
-    round.scoredSocketIds.add(socketId);
-    if (round.party?.event === 'steal') {
-      round.stealBy = socketId;
-      round.stealDone = false;
-    }
-    game.phase = 'reveal';
-    settleStreaks(game, round);
-    return { correct: true, points, guesserName, allDone: false };
+    const result = applyClassicWin(game, round, socketId, guesserName, points);
+    // The year reveal UI reads exclusively from `yearResults` (never from
+    // correct/guesserName/points), so an early exact-match win still needs a
+    // results table — everyone else's guess is shown for context, but only
+    // the winner scores.
+    finalizeClassicYearWin(game, round, socketId, points);
+    return result;
   }
 
+  const { correct, artistBonus } = checkGuess(target, text, artistText, round.song);
+  if (!correct) return failGuess(round, socketId, guesserName);
+
+  const points = (calcPoints(round.lowestBid, round.song.rank)
+    + (artistBonus ? BOTH_ARTIST_BONUS : 0)) * roundMultiplier(round)
+    + pityBonus(currentScores(game), socketId);
+  return applyClassicWin(game, round, socketId, guesserName, points);
+}
+
+// A guesser's turn ends without a win — hand them off to "passed" and report
+// whether the whole tier is now done (every guesser guessed or passed).
+function failGuess(
+  round: Round, socketId: string, guesserName: string,
+): { correct: false; points: number; guesserName: string; allDone: boolean } {
   round.passed.add(socketId);
   const allDone = round.guesserSocketIds.every(id => round.passed.has(id));
   return { correct: false, points: 0, guesserName, allDone };
+}
+
+// Shared bookkeeping for a classic-flow round-winning guess (title, artist,
+// or year target): marks the round answered, pays out, extends the streak,
+// arms a pending steal if this round has one, and ends the round.
+function applyClassicWin(
+  game: Game, round: Round, socketId: string, guesserName: string, points: number,
+): { correct: true; points: number; guesserName: string; allDone: false } {
+  round.answered = true;
+  round.correctGuesserName = guesserName;
+  const player = game.players.get(socketId)!;
+  player.score += points;
+  player.streak += 1;
+  round.scoredSocketIds.add(socketId);
+  if (round.party?.event === 'steal') {
+    round.stealBy = socketId;
+    round.stealDone = false;
+  }
+  game.phase = 'reveal';
+  settleStreaks(game, round);
+  return { correct: true, points, guesserName, allDone: false };
 }
 
 // A guesser forfeits their turn without guessing. Once every guesser in the
@@ -836,26 +864,83 @@ export function skipRaceGuess(
   return { allDone };
 }
 
-// Year rounds are scored in one pass at the end: exact answers pay the most,
-// points fall off per year of distance, and the closest player(s) take a
-// winner bonus on top.
+// Parses a year guess (digits only, plausible range) or null if unusable.
+function parseYearGuess(raw: string | null | undefined): number | null {
+  if (!raw) return null;
+  const parsed = Number.parseInt(raw.replace(/\D/g, ''), 10);
+  return Number.isFinite(parsed) && parsed >= 1000 && parsed <= 3000 ? parsed : null;
+}
+
+function yearGuessEntries(game: Game, round: Round, actual: number) {
+  return Array.from(game.players.entries()).map(([id, player]) => {
+    const guess = parseYearGuess(round.guesses.get(id));
+    return { id, player, guess, diff: guess === null ? null : Math.abs(guess - actual) };
+  });
+}
+
+// Race-flow year rounds are scored in one pass at the end: exact answers pay
+// the most, points fall off per year of distance, and the closest player(s)
+// take a winner bonus on top. With `raceWinnerOnly`, only the closest
+// guess(es) score at all — everyone else gets zero, same as winner-only does
+// for title races.
 export function finalizeYearRound(game: Game): YearResult[] {
   const round = game.currentRound!;
   const actual = Math.floor(round.song.year ?? 0);
   const mult = roundMultiplier(round);
   const preRoundScores = currentScores(game);
 
-  const entries = Array.from(game.players.entries()).map(([id, player]) => {
-    const raw = round.guesses.get(id);
-    const parsed = raw ? Number.parseInt(raw.replace(/\D/g, ''), 10) : Number.NaN;
-    const valid = Number.isFinite(parsed) && parsed >= 1000 && parsed <= 3000;
-    return {
-      id, player,
-      guess: valid ? parsed : null,
-      diff: valid ? Math.abs(parsed - actual) : null,
-    };
+  const entries = yearGuessEntries(game, round, actual);
+  const diffs = entries.filter(e => e.diff !== null).map(e => e.diff!);
+  const best = diffs.length > 0 ? Math.min(...diffs) : null;
+  const winners = best === null ? 0 : entries.filter(e => e.diff === best).length;
+
+  const results: YearResult[] = entries.map(e => {
+    let points = 0;
+    if (e.diff !== null && (!game.raceWinnerOnly || e.diff === best)) {
+      points = Math.max(0, YEAR_MAX_POINTS - YEAR_POINTS_SLOPE * e.diff);
+      if (e.diff === best) points += Math.round(YEAR_WINNER_BONUS / winners);
+      points *= mult;
+    }
+    if (points > 0) {
+      points += pityBonus(preRoundScores, e.id);
+      e.player.score += points;
+      e.player.streak += 1;
+      round.scoredSocketIds.add(e.id);
+    }
+    return { name: e.player.name, guess: e.guess, diff: e.diff, points };
   });
 
+  results.sort((a, b) => (a.diff ?? 9999) - (b.diff ?? 9999));
+  round.yearResults = results;
+  return round.yearResults;
+}
+
+// Classic-flow year round that ended early on an exact guess — scored like
+// any other classic round (bid + rank), not the distance formula above. The
+// year reveal UI reads only `yearResults`, so this still builds one: every
+// other player's guess is shown for context on the timeline, but only the
+// winner scores.
+function finalizeClassicYearWin(game: Game, round: Round, winnerId: string, winnerPoints: number): YearResult[] {
+  const actual = Math.floor(round.song.year ?? 0);
+  const entries = yearGuessEntries(game, round, actual);
+  const results: YearResult[] = entries.map(e => ({
+    name: e.player.name, guess: e.guess, diff: e.diff, points: e.id === winnerId ? winnerPoints : 0,
+  }));
+  results.sort((a, b) => (a.diff ?? 9999) - (b.diff ?? 9999));
+  round.yearResults = results;
+  return round.yearResults;
+}
+
+// Classic-flow year round where every tier had its turn and nobody guessed
+// exactly right — falls back to closest-guess-wins across everyone who did
+// guess, same distance formula as the race-flow version. `raceWinnerOnly`
+// doesn't apply here (Classic has no such toggle).
+export function finalizeClassicYearRound(game: Game): YearResult[] {
+  const round = game.currentRound!;
+  const actual = Math.floor(round.song.year ?? 0);
+  const preRoundScores = currentScores(game);
+
+  const entries = yearGuessEntries(game, round, actual);
   const diffs = entries.filter(e => e.diff !== null).map(e => e.diff!);
   const best = diffs.length > 0 ? Math.min(...diffs) : null;
   const winners = best === null ? 0 : entries.filter(e => e.diff === best).length;
@@ -865,7 +950,6 @@ export function finalizeYearRound(game: Game): YearResult[] {
     if (e.diff !== null) {
       points = Math.max(0, YEAR_MAX_POINTS - YEAR_POINTS_SLOPE * e.diff);
       if (e.diff === best) points += Math.round(YEAR_WINNER_BONUS / winners);
-      points *= mult;
     }
     if (points > 0) {
       points += pityBonus(preRoundScores, e.id);

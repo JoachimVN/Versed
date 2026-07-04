@@ -528,12 +528,14 @@ function SettingsPanel({ game, open }: Readonly<{ game: HostState; open: boolean
     mode, bettingTimeSetting, guessingTimeSetting, roundsSetting, raceTimeSetting, raceWinnerOnly, artistOnly, yearOnly,
     setBettingTimeSetting, setGuessingTimeSetting, setRoundsSetting, setRaceTimeSetting, setRaceWinnerOnly, setArtistOnly, setYearOnly,
   } = game;
-  // "Guess the year" has no single title/artist answer and no mid-round
-  // winner, so it can't run alongside either toggle — picking it clears them.
+  // "Guess the year" has no single title/artist answer, so it can't run
+  // alongside "Artist only" — picking it clears that. It can still run
+  // alongside "Winner only" in Race mode (that just restricts year scoring
+  // to the closest guess).
   const toggleYearOnly = () => {
     const next = !yearOnly;
     setYearOnly(next);
-    if (next) { setArtistOnly(false); setRaceWinnerOnly(false); }
+    if (next) setArtistOnly(false);
   };
   const toggleArtistOnly = () => {
     const next = !artistOnly;
@@ -569,26 +571,21 @@ function SettingsPanel({ game, open }: Readonly<{ game: HostState; open: boolean
 
         <div className="px-5 py-4 space-y-4">
           {/* Party mixes classic and race rounds, so it needs all three timers.
-              "Guess the year" rides the race flow even in Classic mode, so bet
-              time doesn't apply there — but keep it visible-and-disabled
-              rather than yanking it, same as the mode toggles below. */}
+              Classic's "Guess the year" still runs the normal bid/tier flow
+              (bet time picks the clip, guess time is the per-tier window), so
+              it always uses Bet/Guess time, never Round time. */}
           {mode !== 'race' && (
             <>
-              <SettingRow label="Bet time" value={bettingTimeSetting} unit="s" disabled={mode === 'classic' && yearOnly}
+              <SettingRow label="Bet time" value={bettingTimeSetting} unit="s"
                 onDec={() => setBettingTimeSetting(Math.max(5, bettingTimeSetting - 5))}
                 onInc={() => setBettingTimeSetting(Math.min(60, bettingTimeSetting + 5))} />
-              <SettingRow label="Guess time" value={guessingTimeSetting} unit="s" disabled={mode === 'classic' && yearOnly}
+              <SettingRow label="Guess time" value={guessingTimeSetting} unit="s"
                 onDec={() => setGuessingTimeSetting(Math.max(5, guessingTimeSetting - 5))}
                 onInc={() => setGuessingTimeSetting(Math.min(60, guessingTimeSetting + 5))} />
             </>
           )}
           {mode !== 'classic' && (
             <SettingRow label={mode === 'party' ? 'Race time' : 'Round time'} value={raceTimeSetting} unit="s"
-              onDec={() => setRaceTimeSetting(Math.max(10, raceTimeSetting - 5))}
-              onInc={() => setRaceTimeSetting(Math.min(60, raceTimeSetting + 5))} />
-          )}
-          {mode === 'classic' && (
-            <SettingRow label="Round time" value={raceTimeSetting} unit="s" disabled={!yearOnly}
               onDec={() => setRaceTimeSetting(Math.max(10, raceTimeSetting - 5))}
               onInc={() => setRaceTimeSetting(Math.min(60, raceTimeSetting + 5))} />
           )}
@@ -601,14 +598,12 @@ function SettingsPanel({ game, open }: Readonly<{ game: HostState; open: boolean
             apply to classic and race. */}
         {mode !== 'party' && (
           <div className="px-5 pb-4 space-y-4" style={{ borderTop: '1px solid rgba(255,255,255,0.07)', paddingTop: '16px' }}>
-            {/* "Guess the year" is mutually exclusive with these — rather than
-                hiding/clearing them, keep them visible but disabled so the
-                setting isn't a surprise once year mode is turned back off. */}
+            {/* "Winner only" (Race) works fine alongside "Guess the year" —
+                it just restricts scoring to the closest guess. "Artist only"
+                is a genuine conflict (year isn't a title/artist target), so
+                it's kept visible-but-disabled rather than hidden/cleared. */}
             {mode === 'race' && (
-              <ToggleRow
-                label="Winner only" value={raceWinnerOnly} disabled={yearOnly}
-                onToggle={() => setRaceWinnerOnly(!raceWinnerOnly)}
-              />
+              <ToggleRow label="Winner only" value={raceWinnerOnly} onToggle={() => setRaceWinnerOnly(!raceWinnerOnly)} />
             )}
             <ToggleRow label="Artist only" value={artistOnly} disabled={yearOnly} onToggle={toggleArtistOnly} />
             <ToggleRow label="Guess the year" value={yearOnly} onToggle={toggleYearOnly} />

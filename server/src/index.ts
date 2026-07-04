@@ -148,6 +148,8 @@ io.on('connection', (socket) => {
         bettingTime: game.bettingTime,
         endsAt: game.phaseEndsAt,
         mode: 'classic',
+        artistOnly: game.artistOnly,
+        yearOnly: game.yearOnly,
         party: gm.partyView(round),
         bidOptions: gm.BID_OPTIONS,
         bidScores: gm.bidScoreTable(),
@@ -394,10 +396,11 @@ io.on('connection', (socket) => {
     // leak a stale 'year' accent/target into party rounds client-side.
     const isParty = game.mode === 'party';
     game.yearOnly = !isParty && s?.yearOnly === true;
-    // Year-guessing has no single "winner" mid-round (every guess is
-    // compared once the round ends) and isn't a title/artist target, so it
-    // can't coexist with either toggle.
-    game.raceWinnerOnly = !game.yearOnly && s?.raceWinnerOnly === true;
+    // "Winner only" is meaningful for year rounds too (restricts scoring to
+    // the closest guess) — it's inert outside Race mode either way, so no
+    // need to gate it on yearOnly here.
+    game.raceWinnerOnly = s?.raceWinnerOnly === true;
+    // Year isn't a title/artist target, so it can't coexist with artist-only.
     game.artistOnly = !isParty && !game.yearOnly && s?.artistOnly === true;
     game.roundIndex = 0;
     beginRound(game);
@@ -474,6 +477,7 @@ io.on('connection', (socket) => {
         ...songFields(game, round),
         points: result.points,
         playerGuesses: gm.getRoundGuesses(game),
+        yearResults: round.yearResults,
         stealPending: stealPendingName(game, round),
       });
       emitScoreUpdate(game);
@@ -732,6 +736,7 @@ io.on('connection', (socket) => {
       endsAt: bettingEndsAt,
       mode: 'classic',
       artistOnly: game.artistOnly,
+      yearOnly: game.yearOnly,
       party,
       // Source of truth for the client's bid picker and its score preview —
       // keeps the UI from drifting out of sync with server-side scoring.
@@ -747,6 +752,7 @@ io.on('connection', (socket) => {
       endsAt: bettingEndsAt,
       mode: 'classic',
       artistOnly: game.artistOnly,
+      yearOnly: game.yearOnly,
       party,
       song: {
         title: round.song.title,
@@ -865,17 +871,20 @@ io.on('connection', (socket) => {
   }
 
   // A tier ran out of guesses (all wrong, or time expired). Hand off to the
-  // next-lowest bidders if there are any; otherwise reveal that nobody got it.
+  // next-lowest bidders if there are any; otherwise reveal that nobody got it
+  // — for a year round, that's when the closest guess across every tier wins.
   function revealRound(game: GameObj) {
     const round = game.currentRound!;
     if (game.phaseTimer) clearTimeout(game.phaseTimer);
     game.phase = 'reveal';
+    if (gm.effectiveTarget(game, round) === 'year') gm.finalizeClassicYearRound(game);
     io.to(game.pin).emit('round_result', {
       correct: false,
       guesserName: null,
       ...songFields(game, round),
       points: 0,
       playerGuesses: gm.getRoundGuesses(game),
+      yearResults: round.yearResults,
     });
     gm.settleStreaks(game, round);
     emitScoreUpdate(game);
@@ -924,6 +933,7 @@ io.on('connection', (socket) => {
           ...songFields(game, round),
           points: auto.points,
           playerGuesses: gm.getRoundGuesses(game),
+          yearResults: round.yearResults,
           stealPending: stealPendingName(game, round),
         });
         emitScoreUpdate(game);
