@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect, useRef, useMemo } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Check, Loader2, Copy, Settings, Flame, Coins, Clock, PartyPopper } from 'lucide-react';
 import LiquidGlass from 'liquid-glass-react';
@@ -6,6 +6,7 @@ import QRCodeLib from 'react-qr-code';
 const QRCode = QRCodeLib as unknown as React.FC<{ value: string; size?: number }>;
 import { socket } from '../socket';
 import { useSpotify } from '../hooks/useSpotify';
+import { useEscapeKey } from '../hooks/useEscapeKey';
 import { RankBadge } from '../components/RankBadge';
 import { useAnimatedScore } from '../hooks/useAnimatedScore';
 import { ConfettiBackground } from '../components/ConfettiBackground';
@@ -26,6 +27,35 @@ interface SongInfo { title: string; artist: string; trackId: string; tempo?: num
 const wait = (ms: number) => new Promise<void>(resolve => setTimeout(resolve, ms));
 
 type Spotify = ReturnType<typeof useSpotify>;
+
+// Remembers the host's last-used lobby settings across page reloads and new
+// games (New Game already leaves these untouched within a session — this
+// just survives a full reload/revisit too). Never blocks game creation on a
+// bad/missing value, so a corrupt or stale entry just falls back to defaults.
+interface SavedHostSettings {
+  bettingTime: number; guessingTime: number; rounds: number; mode: Mode;
+  raceTime: number; raceWinnerOnly: boolean; artistOnly: boolean; yearOnly: boolean; difficulty: Difficulty;
+}
+const HOST_SETTINGS_KEY = 'versed_host_settings';
+const MODES: Mode[] = ['classic', 'race', 'party'];
+const DIFFICULTIES: Difficulty[] = ['easy', 'medium', 'hard'];
+
+function loadSavedHostSettings(): Partial<SavedHostSettings> {
+  try {
+    const raw = JSON.parse(localStorage.getItem(HOST_SETTINGS_KEY) ?? '{}');
+    return {
+      bettingTime: typeof raw.bettingTime === 'number' ? raw.bettingTime : undefined,
+      guessingTime: typeof raw.guessingTime === 'number' ? raw.guessingTime : undefined,
+      rounds: typeof raw.rounds === 'number' ? raw.rounds : undefined,
+      mode: MODES.includes(raw.mode) ? raw.mode : undefined,
+      raceTime: typeof raw.raceTime === 'number' ? raw.raceTime : undefined,
+      raceWinnerOnly: typeof raw.raceWinnerOnly === 'boolean' ? raw.raceWinnerOnly : undefined,
+      artistOnly: typeof raw.artistOnly === 'boolean' ? raw.artistOnly : undefined,
+      yearOnly: typeof raw.yearOnly === 'boolean' ? raw.yearOnly : undefined,
+      difficulty: DIFFICULTIES.includes(raw.difficulty) ? raw.difficulty : undefined,
+    };
+  } catch { return {}; }
+}
 
 export interface HostState {
   spotify: Spotify;
@@ -88,6 +118,7 @@ export interface HostState {
 
 function useHostGame(): HostState {
   const spotify = useSpotify();
+  const savedSettings = useMemo(loadSavedHostSettings, []);
   const [phase, setPhase] = useState<Phase>('connect');
   // The PIN survives page reloads via sessionStorage so an accidental reload
   // doesn't orphan a running game. freshLoadRef marks that this pin came from
@@ -115,15 +146,23 @@ function useHostGame(): HostState {
   const [copied, setCopied] = useState(false);
   const [playProgress, setPlayProgress] = useState(0);
   const [settingsOpen, setSettingsOpen] = useState(false);
-  const [bettingTimeSetting, setBettingTimeSetting] = useState(15);
-  const [guessingTimeSetting, setGuessingTimeSetting] = useState(15);
-  const [roundsSetting, setRoundsSetting] = useState(10);
-  const [mode, setMode] = useState<Mode>('classic');
-  const [raceTimeSetting, setRaceTimeSetting] = useState(RACE_TIME);
-  const [raceWinnerOnly, setRaceWinnerOnly] = useState(false);
-  const [artistOnly, setArtistOnly] = useState(false);
-  const [yearOnly, setYearOnly] = useState(false);
-  const [difficulty, setDifficulty] = useState<Difficulty>('hard');
+  const [bettingTimeSetting, setBettingTimeSetting] = useState(savedSettings.bettingTime ?? 15);
+  const [guessingTimeSetting, setGuessingTimeSetting] = useState(savedSettings.guessingTime ?? 15);
+  const [roundsSetting, setRoundsSetting] = useState(savedSettings.rounds ?? 10);
+  const [mode, setMode] = useState<Mode>(savedSettings.mode ?? 'classic');
+  const [raceTimeSetting, setRaceTimeSetting] = useState(savedSettings.raceTime ?? RACE_TIME);
+  const [raceWinnerOnly, setRaceWinnerOnly] = useState(savedSettings.raceWinnerOnly ?? false);
+  const [artistOnly, setArtistOnly] = useState(savedSettings.artistOnly ?? false);
+  const [yearOnly, setYearOnly] = useState(savedSettings.yearOnly ?? false);
+  const [difficulty, setDifficulty] = useState<Difficulty>(savedSettings.difficulty ?? 'hard');
+
+  useEffect(() => {
+    const toSave: SavedHostSettings = {
+      bettingTime: bettingTimeSetting, guessingTime: guessingTimeSetting, rounds: roundsSetting, mode,
+      raceTime: raceTimeSetting, raceWinnerOnly, artistOnly, yearOnly, difficulty,
+    };
+    localStorage.setItem(HOST_SETTINGS_KEY, JSON.stringify(toSave));
+  }, [bettingTimeSetting, guessingTimeSetting, roundsSetting, mode, raceTimeSetting, raceWinnerOnly, artistOnly, yearOnly, difficulty]);
   const [party, setParty] = useState<PartyInfo | null>(null);
   const [stealResult, setStealResult] = useState<{ thief: string; victim: string; amount: number; skipped?: boolean } | null>(null);
   const [answeredCount, setAnsweredCount] = useState(0);
@@ -532,7 +571,9 @@ function SettingsPanel({ game, open }: Readonly<{ game: HostState; open: boolean
   const {
     mode, bettingTimeSetting, guessingTimeSetting, roundsSetting, raceTimeSetting, raceWinnerOnly, artistOnly, yearOnly, difficulty,
     setBettingTimeSetting, setGuessingTimeSetting, setRoundsSetting, setRaceTimeSetting, setRaceWinnerOnly, setArtistOnly, setYearOnly, setDifficulty,
+    toggleSettings,
   } = game;
+  useEscapeKey(toggleSettings, open);
   // "Guess the year" has no single title/artist answer, so it can't run
   // alongside "Artist only" — picking it clears that. It can still run
   // alongside "Winner only" in Race mode (that just restricts year scoring
@@ -847,7 +888,7 @@ function ConnectView({ game }: Readonly<{ game: HostState }>) {
             Connect Spotify
           </a>
           {errorMsg && (
-            <p className="text-red-400 text-sm text-center">{errorMsg} <a href={globalThis.location.pathname} className="underline">Try again</a></p>
+            <p className="text-red-400 text-sm text-center" aria-live="assertive">{errorMsg} <a href={globalThis.location.pathname} className="underline">Try again</a></p>
           )}
         </>
       )}
@@ -1602,13 +1643,31 @@ function LeaderboardView({ game }: Readonly<{ game: HostState }>) {
 
 // ─── Component ────────────────────────────────────────────────────────────────
 
+// Screen-reader narration of major phase changes — the screen itself swaps
+// components wholesale on each transition, which gives sighted players a
+// visual cue but nothing a screen reader announces on its own.
+function phaseAnnouncement(phase: Phase, result: RoundResultEvent | null): string {
+  switch (phase) {
+    case 'lobby': return 'Lobby ready. Players can join.';
+    case 'betting': return 'Betting is open.';
+    case 'playing': return 'Song is playing.';
+    case 'guessing': return 'Guessing has started.';
+    case 'reveal': return result?.correct ? 'Round result: someone got it.' : 'Round result: no one got it.';
+    case 'leaderboard': return 'Leaderboard updated.';
+    case 'finished': return 'Final scores are in.';
+    default: return '';
+  }
+}
+
 export default function Host() {
   const game = useHostGame();
   const navigate = useNavigate();
   const { phase, result, reconnecting, reconnectingCount, gameExpired } = game;
+  useEscapeKey(() => navigate('/'), gameExpired);
 
   return (
     <div className="relative">
+      <div aria-live="polite" className="sr-only">{phaseAnnouncement(phase, result)}</div>
       <RoundIntro party={game.party} roundKey={game.roundIndex} />
       {phase === 'connect' && <ConnectView game={game} />}
       {phase === 'lobby' && <LobbyView game={game} />}

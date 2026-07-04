@@ -6,6 +6,7 @@ import { socket } from '../socket';
 import { RankBadge } from '../components/RankBadge';
 import { useAnimatedScore } from '../hooks/useAnimatedScore';
 import { useKeyboardOpen } from '../hooks/useViewportHeight';
+import { useEscapeKey } from '../hooks/useEscapeKey';
 import { NoOneGotItCardContent, GotItCardContent, YearTimelineContent } from '../components/RevealShared';
 import { RoundIntro, PartyBadge, PartyRevealExtras } from '../components/RoundIntro';
 import { BackButton } from '../components/BackButton';
@@ -763,6 +764,7 @@ function JoinView({ game }: Readonly<{ game: PlayState }>) {
         <div style={{ overflow: 'hidden' }}>
           <p
             className="text-sm text-center"
+            aria-live="assertive"
             style={{
               width: '310px',
               paddingTop: '2px',
@@ -878,7 +880,7 @@ function WaitingView({ game }: Readonly<{ game: PlayState }>) {
                         padding: '2px 0 4px', fontFamily: 'inherit',
                       }}
                     />
-                    {game.error && <p style={{ color: '#f87171', fontSize: '0.7rem' }}>{game.error}</p>}
+                    {game.error && <p style={{ color: '#f87171', fontSize: '0.7rem' }} aria-live="assertive">{game.error}</p>}
                   </>
                 ) : (
                   <button onClick={startEdit} style={{ display: 'flex', alignItems: 'center', gap: '7px', background: 'none', border: 'none', cursor: 'pointer', color: 'white', fontSize: '1.5rem', fontWeight: 800, letterSpacing: '-0.01em' }}>
@@ -1003,7 +1005,7 @@ export function BettingView({ game }: Readonly<{ game: PlayState }>) {
         </div>
       </div>
 
-      {error && <p className="text-red-400 text-sm text-center px-5 pb-2" style={{ position: 'relative', zIndex: 2 }}>{error}</p>}
+      {error && <p className="text-red-400 text-sm text-center px-5 pb-2" style={{ position: 'relative', zIndex: 2 }} aria-live="assertive">{error}</p>}
 
       {/* Lock In */}
       <div className="px-5 pb-8 flex justify-center" style={{ position: 'relative', zIndex: 2 }}>
@@ -1507,6 +1509,7 @@ function StealPicker({ victims, onPick, onSkip }: Readonly<{
   onPick: (name: string) => void;
   onSkip: () => void;
 }>) {
+  useEscapeKey(onSkip, true);
   return (
     <div
       className="fixed inset-0 flex flex-col items-center justify-center gap-6 p-6"
@@ -1857,6 +1860,23 @@ function LeaderboardView({ game }: Readonly<{ game: PlayState }>) {
 
 // ─── Component ────────────────────────────────────────────────────────────────
 
+// Screen-reader narration of major phase changes — see the matching function
+// in Host.tsx for why this exists.
+function phaseAnnouncement(phase: Phase, result: RoundResultEvent | null): string {
+  switch (phase) {
+    case 'waiting': return 'Waiting for the host to start.';
+    case 'betting': return 'Place your bid.';
+    case 'bid_submitted': return 'Bid submitted. Waiting for others.';
+    case 'watching': return 'Get ready — listen closely.';
+    case 'guessing': return 'Your turn to guess.';
+    case 'passed': return 'Answer submitted.';
+    case 'reveal': return result?.correct ? 'Round result: someone got it.' : 'Round result: no one got it.';
+    case 'leaderboard': return 'Leaderboard updated.';
+    case 'finished': return 'Final scores are in.';
+    default: return '';
+  }
+}
+
 export default function Play() {
   const { pin: pinParam } = useParams<{ pin?: string }>();
   const game = usePlayGame(pinParam);
@@ -1891,6 +1911,7 @@ export default function Play() {
           zIndex: 0,
         }}
       />
+      <div aria-live="polite" className="sr-only">{phaseAnnouncement(phase, result)}</div>
       {phase === 'join' && <JoinView game={game} />}
       {phase === 'waiting' && <WaitingView game={game} />}
       {phase === 'betting' && <BettingView game={game} />}

@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react';
 import type { PartyInfo, RoundResultEvent } from '../types';
+import { useEscapeKey } from '../hooks/useEscapeKey';
 
 // How long the announcement stays up. Betting/countdown timers run underneath,
 // so this must stay comfortably shorter than the shortest phase (5s minimum).
@@ -20,9 +21,10 @@ export function RoundIntro({ party, roundKey, dismissible = true }: Readonly<{ p
     return () => clearTimeout(t);
   }, [party, roundKey]);
 
-  if (!party) return null;
-
   const dismiss = () => setVisible(false);
+  useEscapeKey(dismiss, dismissible && visible && !!party);
+
+  if (!party) return null;
 
   // Event/target titles ("Double Points", "Who Sings It?", "The Finale", …)
   // don't say whether this is a bid-and-guess or everyone-at-once round, so
