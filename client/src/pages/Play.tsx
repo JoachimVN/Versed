@@ -1304,6 +1304,7 @@ export function GuessingView({ game }: Readonly<{ game: PlayState }>) {
 
       {/* Input area */}
       <div className="flex-1 flex flex-col items-center justify-center gap-5 px-5">
+        {party && <PartyBadge party={party} />}
         <p style={{
           color: isListening ? 'rgba(255,255,255,0.2)' : 'rgba(255,255,255,0.6)',
           fontSize: '0.9rem', fontWeight: 600, letterSpacing: '0.03em',

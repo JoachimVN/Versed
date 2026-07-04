@@ -178,8 +178,14 @@ export function PartyBadge({ party }: Readonly<{ party: PartyInfo | null }>) {
   if (party.format === 'year') bits.push('GUESS THE YEAR');
   else bits.push(party.format === 'race' ? 'RACE ROUND' : 'CLASSIC ROUND');
   if (party.finale) bits.push(`FINALE · ${party.duelists.join(' vs ')}`);
-  if (party.target === 'artist') bits.push('NAME THE ARTIST');
-  else if (party.target === 'both') bits.push('TITLE + ARTIST');
+  // Target always gets an explicit bit (title included) — leaving the plain
+  // title case silent made its absence read as ambiguous rather than as
+  // "title," especially once the badge also shows during actual guessing.
+  if (party.format !== 'year') {
+    if (party.target === 'artist') bits.push('NAME THE ARTIST');
+    else if (party.target === 'both') bits.push('TITLE + ARTIST');
+    else bits.push('NAME THE SONG');
+  }
   if (party.event === 'mystery') bits.push(party.multiplier === null ? 'MYSTERY ×?' : `MYSTERY ×${party.multiplier}`);
   else if (party.event) {
     const label = EVENT_BITS[party.event];
