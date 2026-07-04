@@ -72,7 +72,15 @@ app.get('/api/health', (_req, res) => res.json({ ok: true }));
 
 if (process.env.NODE_ENV === 'production') {
   const clientDist = path.join(__dirname, '../../client/dist');
-  app.use(express.static(clientDist));
+  app.use(express.static(clientDist, {
+    // index.html references content-hashed bundle filenames, so it must be
+    // revalidated on every load; everything else (JS/CSS bundles, theme.mp3,
+    // images) is safe to cache for a day instead of round-tripping to Railway
+    // to revalidate on every single page load.
+    setHeaders: (res, filePath) => {
+      res.setHeader('Cache-Control', filePath.endsWith('.html') ? 'no-cache' : 'public, max-age=86400');
+    },
+  }));
   app.get('*', (_req, res) => res.sendFile(path.join(clientDist, 'index.html')));
 }
 
