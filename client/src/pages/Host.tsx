@@ -7,6 +7,7 @@ const QRCode = QRCodeLib as unknown as React.FC<{ value: string; size?: number }
 import { socket } from '../socket';
 import { useSpotify } from '../hooks/useSpotify';
 import { useEscapeKey } from '../hooks/useEscapeKey';
+import { useFocusTrap } from '../hooks/useFocusTrap';
 import { RankBadge } from '../components/RankBadge';
 import { useAnimatedScore } from '../hooks/useAnimatedScore';
 import { ConfettiBackground } from '../components/ConfettiBackground';
@@ -573,7 +574,9 @@ function SettingsPanel({ game, open }: Readonly<{ game: HostState; open: boolean
     setBettingTimeSetting, setGuessingTimeSetting, setRoundsSetting, setRaceTimeSetting, setRaceWinnerOnly, setArtistOnly, setYearOnly, setDifficulty,
     toggleSettings,
   } = game;
+  const panelRef = useRef<HTMLDivElement>(null);
   useEscapeKey(toggleSettings, open);
+  useFocusTrap(panelRef, open);
   // "Guess the year" has no single title/artist answer, so it can't run
   // alongside "Artist only" — picking it clears that. It can still run
   // alongside "Winner only" in Race mode (that just restricts year scoring
@@ -590,6 +593,10 @@ function SettingsPanel({ game, open }: Readonly<{ game: HostState; open: boolean
   };
   return (
     <div
+      ref={panelRef}
+      role="dialog"
+      aria-modal="true"
+      aria-label="Game settings"
       className="absolute right-5 z-20"
       style={{
         top: '68px',
@@ -706,6 +713,7 @@ function SettingRow({ label, value, unit, onDec, onInc, disabled }: Readonly<{
         <button
           onClick={disabled ? undefined : onDec}
           disabled={disabled}
+          aria-label={`Decrease ${label}`}
           className="flex items-center justify-center active:scale-90 transition-transform"
           style={{
             width: '28px', height: '28px', borderRadius: '50%',
@@ -726,6 +734,7 @@ function SettingRow({ label, value, unit, onDec, onInc, disabled }: Readonly<{
         <button
           onClick={disabled ? undefined : onInc}
           disabled={disabled}
+          aria-label={`Increase ${label}`}
           className="flex items-center justify-center active:scale-90 transition-transform"
           style={{
             width: '28px', height: '28px', borderRadius: '50%',
@@ -1608,7 +1617,7 @@ function LeaderboardView({ game }: Readonly<{ game: HostState }>) {
         {isFinished ? 'Final Scores' : 'Leaderboard'}
       </h2>
 
-      <div className="flex-1 space-y-3 relative z-10">
+      <div className="flex-1 min-h-0 overflow-y-auto space-y-3 relative z-10">
         {leaderboard.map((e, i) => (
           <LeaderboardRow
             key={e.name}
@@ -1663,7 +1672,9 @@ export default function Host() {
   const game = useHostGame();
   const navigate = useNavigate();
   const { phase, result, reconnecting, reconnectingCount, gameExpired } = game;
+  const gameExpiredRef = useRef<HTMLDivElement>(null);
   useEscapeKey(() => navigate('/'), gameExpired);
+  useFocusTrap(gameExpiredRef, gameExpired);
 
   return (
     <div className="relative">
@@ -1685,7 +1696,14 @@ export default function Host() {
         </div>
       )}
       {gameExpired && (
-        <div className="fixed inset-0 flex items-center justify-center z-50" style={{ background: 'rgba(8,8,18,0.92)', backdropFilter: 'blur(12px)' }}>
+        <div
+          ref={gameExpiredRef}
+          role="dialog"
+          aria-modal="true"
+          aria-label="Game expired"
+          className="fixed inset-0 flex items-center justify-center z-50"
+          style={{ background: 'rgba(8,8,18,0.92)', backdropFilter: 'blur(12px)' }}
+        >
           <div style={{ position: 'absolute', inset: 0, pointerEvents: 'none', background: 'radial-gradient(ellipse 60% 40% at 50% 50%, rgba(86,20,140,0.22) 0%, transparent 65%)' }} />
           <div className="liquid-btn relative" style={{ width: '310px', height: '230px' }}>
             <LiquidGlass

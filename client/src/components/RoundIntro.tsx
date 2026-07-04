@@ -1,6 +1,7 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import type { PartyInfo, RoundResultEvent } from '../types';
 import { useEscapeKey } from '../hooks/useEscapeKey';
+import { useFocusTrap } from '../hooks/useFocusTrap';
 
 // How long the announcement stays up. Betting/countdown timers run underneath,
 // so this must stay comfortably shorter than the shortest phase (5s minimum).
@@ -22,7 +23,10 @@ export function RoundIntro({ party, roundKey, dismissible = true }: Readonly<{ p
   }, [party, roundKey]);
 
   const dismiss = () => setVisible(false);
-  useEscapeKey(dismiss, dismissible && visible && !!party);
+  const overlayRef = useRef<HTMLButtonElement>(null);
+  const trapActive = dismissible && visible && !!party;
+  useEscapeKey(dismiss, trapActive);
+  useFocusTrap(overlayRef, trapActive);
 
   if (!party) return null;
 
@@ -94,8 +98,12 @@ export function RoundIntro({ party, roundKey, dismissible = true }: Readonly<{ p
   if (dismissible) {
     return (
       <button
+        ref={overlayRef}
         type="button"
         onClick={dismiss}
+        aria-label="Dismiss round announcement"
+        tabIndex={visible ? 0 : -1}
+        aria-hidden={!visible}
         style={{ ...overlayStyle, border: 'none', padding: 0, margin: 0, font: 'inherit', color: 'inherit', cursor: 'pointer' }}
       >
         {content}

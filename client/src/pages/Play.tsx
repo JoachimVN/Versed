@@ -7,6 +7,7 @@ import { RankBadge } from '../components/RankBadge';
 import { useAnimatedScore } from '../hooks/useAnimatedScore';
 import { useKeyboardOpen } from '../hooks/useViewportHeight';
 import { useEscapeKey } from '../hooks/useEscapeKey';
+import { useFocusTrap } from '../hooks/useFocusTrap';
 import { NoOneGotItCardContent, GotItCardContent, YearTimelineContent } from '../components/RevealShared';
 import { RoundIntro, PartyBadge, PartyRevealExtras } from '../components/RoundIntro';
 import { BackButton } from '../components/BackButton';
@@ -620,6 +621,8 @@ function BidArrow({ direction, enabled, onClick }: Readonly<{ direction: 'left' 
       onMouseLeave={() => { setHovered(false); setPressed(false); }}
       onMouseDown={() => enabled && setPressed(true)}
       onMouseUp={() => setPressed(false)}
+      aria-label={direction === 'left' ? 'Decrease bid time' : 'Increase bid time'}
+      disabled={!enabled}
       style={{
         width: 52, height: 52, borderRadius: '50%', border,
         cursor: enabled ? 'pointer' : 'default',
@@ -1509,9 +1512,15 @@ function StealPicker({ victims, onPick, onSkip }: Readonly<{
   onPick: (name: string) => void;
   onSkip: () => void;
 }>) {
+  const pickerRef = useRef<HTMLDivElement>(null);
   useEscapeKey(onSkip, true);
+  useFocusTrap(pickerRef, true);
   return (
     <div
+      ref={pickerRef}
+      role="dialog"
+      aria-modal="true"
+      aria-label="Pick a steal victim"
       className="fixed inset-0 flex flex-col items-center justify-center gap-6 p-6"
       style={{ zIndex: 70, background: 'rgba(5,5,14,0.93)', backdropFilter: 'blur(24px)' }}
     >
@@ -1789,7 +1798,7 @@ function LeaderboardView({ game }: Readonly<{ game: PlayState }>) {
         </div>
       )}
 
-      <div className="flex-1 space-y-3 relative z-10">
+      <div className="flex-1 min-h-0 overflow-y-auto space-y-3 relative z-10">
         {leaderboard.slice(0, 10).map((e, i) => (
           <PlayerLeaderboardRow
             key={e.name}
