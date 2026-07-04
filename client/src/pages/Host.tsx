@@ -1030,9 +1030,47 @@ function StartButton({ players, mode, startGame }: Readonly<{ players: PlayerInf
   );
 }
 
+// Waiting-room music: starts as soon as the PIN/QR is up, loops, and fades
+// out (rather than cutting) the moment the host starts the game — no fade-in,
+// it should just already be playing by the time anyone looks at the screen.
+function useLobbyMusic(pin: string) {
+  const audioRef = useRef<HTMLAudioElement | null>(null);
+  const fadeRef = useRef<ReturnType<typeof setInterval> | null>(null);
+
+  useEffect(() => {
+    if (!pin) return;
+    const audio = audioRef.current;
+    if (!audio) return;
+    audio.volume = 1;
+    audio.currentTime = 0;
+    audio.play().catch(() => { /* autoplay may be blocked until a user gesture */ });
+    return () => { audio.pause(); };
+  }, [pin]);
+
+  const fadeOut = () => {
+    const audio = audioRef.current;
+    if (!audio || audio.paused) return;
+    if (fadeRef.current) clearInterval(fadeRef.current);
+    const steps = 20;
+    let i = 0;
+    fadeRef.current = setInterval(() => {
+      i++;
+      audio.volume = Math.max(0, 1 - i / steps);
+      if (i >= steps) {
+        clearInterval(fadeRef.current!);
+        fadeRef.current = null;
+        audio.pause();
+      }
+    }, 40);
+  };
+
+  return { audioRef, fadeOut };
+}
+
 function LobbyView({ game }: Readonly<{ game: HostState }>) {
   const { spotify, pin, players, createGame, startGame, mode, settingsOpen, toggleSettings, setMode, removePlayer } = game;
   const [lobbyVisible, setLobbyVisible] = useState(false);
+  const { audioRef, fadeOut } = useLobbyMusic(pin);
 
   useEffect(() => {
     if (!pin) { setLobbyVisible(false); return; }
@@ -1044,8 +1082,14 @@ function LobbyView({ game }: Readonly<{ game: HostState }>) {
     if (spotify.playerReady && !pin) createGame();
   }, [spotify.playerReady, pin]); // eslint-disable-line react-hooks/exhaustive-deps
 
+  const handleStart = () => {
+    fadeOut();
+    startGame();
+  };
+
   return (
     <div className="min-h-screen relative flex flex-col overflow-hidden">
+      <audio ref={audioRef} src={`${import.meta.env.BASE_URL}theme.mp3`} loop />
       <BackButton zIndex={10} />
       <SettingsButton settingsOpen={settingsOpen} toggleSettings={toggleSettings} />
 
@@ -1085,7 +1129,7 @@ function LobbyView({ game }: Readonly<{ game: HostState }>) {
               ))}
             </div>
           </div>
-          <StartButton players={players} mode={mode} startGame={startGame} />
+          <StartButton players={players} mode={mode} startGame={handleStart} />
         </div>
       ) : null}
     </div>
