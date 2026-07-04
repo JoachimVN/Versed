@@ -380,7 +380,7 @@ io.on('connection', (socket) => {
   });
 
   // ── Host: start game → first round ────────────────────────────────────────
-  socket.on('start_game', (payload?: { settings?: { bettingTime?: number; guessingTime?: number; totalRounds?: number; mode?: string; raceTime?: number; raceWinnerOnly?: boolean; artistOnly?: boolean; yearOnly?: boolean } }) => {
+  socket.on('start_game', (payload?: { settings?: { bettingTime?: number; guessingTime?: number; totalRounds?: number; mode?: string; raceTime?: number; raceWinnerOnly?: boolean; artistOnly?: boolean; yearOnly?: boolean; difficulty?: string } }) => {
     const game = gm.getGameBySocket(socket.id);
     if (game?.hostSocketId !== socket.id || game.phase !== 'lobby') return;
     const s = payload?.settings;
@@ -403,6 +403,7 @@ io.on('connection', (socket) => {
     game.raceWinnerOnly = game.mode === 'race' && s?.raceWinnerOnly === true;
     // Year isn't a title/artist target, so it can't coexist with artist-only.
     game.artistOnly = !isParty && !game.yearOnly && s?.artistOnly === true;
+    game.difficulty = s?.difficulty === 'easy' || s?.difficulty === 'medium' ? s.difficulty : 'hard';
     game.roundIndex = 0;
     beginRound(game);
   });

@@ -20,6 +20,7 @@ import type { Hint, LeaderboardEntry, PartyInfo, PlayerInfo, RoundResultEvent } 
 
 type Phase = 'connect' | 'lobby' | 'betting' | 'playing' | 'guessing' | 'reveal' | 'leaderboard' | 'finished';
 type Mode = 'classic' | 'race' | 'party';
+type Difficulty = 'easy' | 'medium' | 'hard';
 interface SongInfo { title: string; artist: string; trackId: string; tempo?: number | null }
 
 const wait = (ms: number) => new Promise<void>(resolve => setTimeout(resolve, ms));
@@ -57,6 +58,7 @@ export interface HostState {
   raceWinnerOnly: boolean;
   artistOnly: boolean;
   yearOnly: boolean;
+  difficulty: Difficulty;
   party: PartyInfo | null;
   stealResult: { thief: string; victim: string; amount: number; skipped?: boolean } | null;
   answeredCount: number;
@@ -74,6 +76,7 @@ export interface HostState {
   setRaceWinnerOnly: (v: boolean) => void;
   setArtistOnly: (v: boolean) => void;
   setYearOnly: (v: boolean) => void;
+  setDifficulty: (v: Difficulty) => void;
   createGame: () => void;
   startGame: () => void;
   skipTurn: () => void;
@@ -120,6 +123,7 @@ function useHostGame(): HostState {
   const [raceWinnerOnly, setRaceWinnerOnly] = useState(false);
   const [artistOnly, setArtistOnly] = useState(false);
   const [yearOnly, setYearOnly] = useState(false);
+  const [difficulty, setDifficulty] = useState<Difficulty>('hard');
   const [party, setParty] = useState<PartyInfo | null>(null);
   const [stealResult, setStealResult] = useState<{ thief: string; victim: string; amount: number; skipped?: boolean } | null>(null);
   const [answeredCount, setAnsweredCount] = useState(0);
@@ -394,6 +398,7 @@ function useHostGame(): HostState {
       settings: {
         bettingTime: bettingTimeSetting, guessingTime: guessingTimeSetting,
         totalRounds: roundsSetting, mode, raceTime: raceTimeSetting, raceWinnerOnly, artistOnly, yearOnly,
+        difficulty,
       },
     });
   };
@@ -440,11 +445,11 @@ function useHostGame(): HostState {
     bettingTime, timeLeft, timerTotal, bidCount, countdown, guesserNames, lowestBid, playerBids,
     result, roundDeltas, leaderboard, copied, playProgress, inviteUrl,
     settingsOpen, bettingTimeSetting, guessingTimeSetting, roundsSetting,
-    mode, raceTimeSetting, raceWinnerOnly, artistOnly, yearOnly, party, stealResult, answeredCount,
+    mode, raceTimeSetting, raceWinnerOnly, artistOnly, yearOnly, difficulty, party, stealResult, answeredCount,
     reconnecting, reconnectingCount: reconnectingNames.size, gameExpired, songPlaying, songTempo,
     toggleSettings: () => setSettingsOpen(o => !o),
     setBettingTimeSetting, setGuessingTimeSetting, setRoundsSetting,
-    setMode, setRaceTimeSetting, setRaceWinnerOnly, setArtistOnly, setYearOnly,
+    setMode, setRaceTimeSetting, setRaceWinnerOnly, setArtistOnly, setYearOnly, setDifficulty,
     createGame, startGame, copyInvite, newGame,
     skipTurn: () => socket.emit('host_skip_turn'),
     endGame: () => socket.emit('end_game'),
@@ -525,8 +530,8 @@ function BidTimeline({ bids, lowestBid }: Readonly<{ bids: { name: string; bid: 
 
 function SettingsPanel({ game, open }: Readonly<{ game: HostState; open: boolean }>) {
   const {
-    mode, bettingTimeSetting, guessingTimeSetting, roundsSetting, raceTimeSetting, raceWinnerOnly, artistOnly, yearOnly,
-    setBettingTimeSetting, setGuessingTimeSetting, setRoundsSetting, setRaceTimeSetting, setRaceWinnerOnly, setArtistOnly, setYearOnly,
+    mode, bettingTimeSetting, guessingTimeSetting, roundsSetting, raceTimeSetting, raceWinnerOnly, artistOnly, yearOnly, difficulty,
+    setBettingTimeSetting, setGuessingTimeSetting, setRoundsSetting, setRaceTimeSetting, setRaceWinnerOnly, setArtistOnly, setYearOnly, setDifficulty,
   } = game;
   // "Guess the year" has no single title/artist answer, so it can't run
   // alongside "Artist only" — picking it clears that. It can still run
@@ -592,6 +597,7 @@ function SettingsPanel({ game, open }: Readonly<{ game: HostState; open: boolean
           <SettingRow label="Rounds" value={roundsSetting} unit=""
             onDec={() => setRoundsSetting(Math.max(1, roundsSetting - 1))}
             onInc={() => setRoundsSetting(Math.min(30, roundsSetting + 1))} />
+          <DifficultyRow value={difficulty} onChange={setDifficulty} />
         </div>
 
         {/* Party picks guess targets per round, so the game-wide toggles only
@@ -690,6 +696,60 @@ function SettingRow({ label, value, unit, onDec, onInc, disabled }: Readonly<{
             opacity: disabled ? 0.4 : 1,
           }}
         >+</button>
+      </div>
+    </div>
+  );
+}
+
+const DIFFICULTY_OPTIONS: { key: Difficulty; label: string }[] = [
+  { key: 'easy', label: 'Easy' },
+  { key: 'medium', label: 'Medium' },
+  { key: 'hard', label: 'Hard' },
+];
+
+const DIFFICULTY_STYLE: Record<Difficulty, { bg: string; border: string; text: string }> = {
+  easy: { bg: 'rgba(16, 185, 129, 0.25)', border: '1px solid rgba(52, 211, 153, 0.45)', text: '#6ee7b7' },
+  medium: { bg: 'rgba(217, 119, 6, 0.25)', border: '1px solid rgba(251, 191, 36, 0.45)', text: '#fcd34d' },
+  hard: { bg: 'rgba(220, 38, 38, 0.25)', border: '1px solid rgba(248, 113, 113, 0.45)', text: '#fca5a5' },
+};
+
+// Restricts the song pool to the most well-known top 20%/50%/100% of tracks —
+// see DIFFICULTY_PCT server-side. Sliding highlight mirrors ModeToggle above.
+function DifficultyRow({ value, onChange }: Readonly<{ value: Difficulty; onChange: (v: Difficulty) => void }>) {
+  const index = DIFFICULTY_OPTIONS.findIndex(d => d.key === value);
+  const active = DIFFICULTY_STYLE[value];
+  return (
+    <div className="space-y-2">
+      <span style={{ color: 'rgba(255,255,255,0.5)', fontSize: '0.875rem' }}>Difficulty</span>
+      <div
+        className="relative flex rounded-xl"
+        style={{ background: 'rgba(255,255,255,0.05)', border: '1px solid rgba(255,255,255,0.08)', padding: '3px' }}
+      >
+        <div
+          className="absolute rounded-lg"
+          style={{
+            top: '3px', bottom: '3px', left: '3px',
+            width: 'calc((100% - 6px) / 3)',
+            background: active.bg,
+            border: active.border,
+            transform: `translateX(${index * 100}%)`,
+            transition: 'transform 0.25s cubic-bezier(0.4, 0, 0.2, 1), background 0.25s ease, border-color 0.25s ease',
+            pointerEvents: 'none',
+          }}
+        />
+        {DIFFICULTY_OPTIONS.map(({ key, label }) => (
+          <button
+            key={key}
+            onClick={() => onChange(key)}
+            className="relative flex-1 py-1.5 rounded-lg text-xs font-semibold z-10 transition-colors duration-200"
+            style={{
+              color: value === key ? DIFFICULTY_STYLE[key].text : 'rgba(255,255,255,0.38)',
+              background: 'transparent', border: 'none', cursor: 'pointer',
+            }}
+          >
+            {label}
+          </button>
+        ))}
       </div>
     </div>
   );

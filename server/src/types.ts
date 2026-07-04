@@ -107,6 +107,10 @@ export interface Player {
 
 export type GameMode = 'classic' | 'race' | 'party';
 
+// What slice of the song pool is in play, ranked by popularity (song.rank).
+// 'easy' draws only from the most well-known top 20%, 'hard' opens the whole list.
+export type Difficulty = 'easy' | 'medium' | 'hard';
+
 export type GamePhase =
   | 'lobby'
   | 'betting'
@@ -131,6 +135,7 @@ export interface Game {
   raceWinnerOnly: boolean;
   artistOnly: boolean;
   yearOnly: boolean;
+  difficulty: Difficulty;
   currentRound: Round | null;
   usedSongIds: Set<string>;
   phaseTimer: ReturnType<typeof setTimeout> | null;
