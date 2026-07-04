@@ -515,7 +515,7 @@ function BidTimeline({ bids, lowestBid }: Readonly<{ bids: { name: string; bid: 
         {groups.map(group => (
           <span
             key={group.bid}
-            className={`absolute text-xs -translate-x-1/2 ${group.bid === lowestBid ? 'text-purple-400' : 'text-white/30'}`}
+            className={`absolute text-xs -translate-x-1/2 ${group.bid === lowestBid ? 'text-purple-400' : 'text-white/45'}`}
             style={{ left: `${pos(group.bid)}%` }}
           >
             {group.bid}s
@@ -626,18 +626,18 @@ function JoinCard({ pin, copied, copyInvite }: Readonly<{ pin: string; copied: b
       <div className="flex items-center gap-5">
         <div className="flex-1 min-w-0 flex flex-col gap-3">
           <div>
-            <p className="text-white/40 text-xs uppercase tracking-widest mb-0.5">Join at</p>
+            <p className="text-white/45 text-xs uppercase tracking-widest mb-0.5">Join at</p>
             <p className="text-white font-semibold text-base">
               {`${globalThis.location.origin}${import.meta.env.BASE_URL}`.replace(/\/$/, '')}
             </p>
           </div>
           <div>
-            <p className="text-white/40 text-xs uppercase tracking-widest mb-0.5">PIN</p>
+            <p className="text-white/45 text-xs uppercase tracking-widest mb-0.5">PIN</p>
             <p className="text-6xl font-black text-white tracking-widest leading-none select-text">{pin}</p>
           </div>
           <button
             onClick={copyInvite}
-            className="flex items-center gap-2 text-white/40 text-xs hover:text-white/70 transition-colors"
+            className="flex items-center gap-2 text-white/45 text-xs hover:text-white/70 transition-colors"
           >
             {copied ? <Check className="w-3.5 h-3.5 text-green-400" /> : <Copy className="w-3.5 h-3.5" />}
             {copied ? 'Copied!' : 'Copy invite link'}
@@ -658,7 +658,7 @@ function SettingRow({ label, value, unit, onDec, onInc, disabled }: Readonly<{
 }>) {
   return (
     <div className="flex items-center justify-between">
-      <span style={{ color: disabled ? 'rgba(255,255,255,0.25)' : 'rgba(255,255,255,0.5)', fontSize: '0.875rem' }}>
+      <span style={{ color: disabled ? 'rgba(255,255,255,0.45)' : 'rgba(255,255,255,0.5)', fontSize: '0.875rem' }}>
         {label}
       </span>
       <div className="flex items-center gap-2.5">
@@ -677,7 +677,7 @@ function SettingRow({ label, value, unit, onDec, onInc, disabled }: Readonly<{
           }}
         >−</button>
         <span style={{
-          color: disabled ? 'rgba(255,255,255,0.4)' : 'white',
+          color: disabled ? 'rgba(255,255,255,0.45)' : 'white',
           fontWeight: 700, minWidth: '42px', textAlign: 'center', fontSize: '0.9375rem',
         }}>
           {value}{unit}
@@ -743,7 +743,7 @@ function DifficultyRow({ value, onChange }: Readonly<{ value: Difficulty; onChan
             onClick={() => onChange(key)}
             className="relative flex-1 py-1.5 rounded-lg text-xs font-semibold z-10 transition-colors duration-200"
             style={{
-              color: value === key ? DIFFICULTY_STYLE[key].text : 'rgba(255,255,255,0.38)',
+              color: value === key ? DIFFICULTY_STYLE[key].text : 'rgba(255,255,255,0.45)',
               background: 'transparent', border: 'none', cursor: 'pointer',
             }}
           >
@@ -760,7 +760,7 @@ function ToggleRow({ label, value, onToggle, disabled }: Readonly<{
 }>) {
   return (
     <div className="flex items-center justify-between">
-      <span style={{ color: disabled ? 'rgba(255,255,255,0.25)' : 'rgba(255,255,255,0.5)', fontSize: '0.875rem' }}>
+      <span style={{ color: disabled ? 'rgba(255,255,255,0.45)' : 'rgba(255,255,255,0.5)', fontSize: '0.875rem' }}>
         {label}
       </span>
       <button
@@ -808,10 +808,10 @@ function EndGameButton({ endGame }: Readonly<{ endGame: () => void }>) {
       className="text-xs transition-colors"
       style={{
         background: 'none', border: 'none', cursor: 'pointer',
-        color: confirming ? 'rgba(248,113,113,0.9)' : 'rgba(255,255,255,0.15)',
+        color: confirming ? 'rgba(248,113,113,0.9)' : 'rgba(255,255,255,0.28)',
       }}
       onMouseEnter={e => { if (!confirming) (e.currentTarget as HTMLElement).style.color = 'rgba(255,255,255,0.4)'; }}
-      onMouseLeave={e => { if (!confirming) (e.currentTarget as HTMLElement).style.color = 'rgba(255,255,255,0.15)'; }}
+      onMouseLeave={e => { if (!confirming) (e.currentTarget as HTMLElement).style.color = 'rgba(255,255,255,0.28)'; }}
     >
       {confirming ? 'Tap again to end the game' : 'End game'}
     </button>
@@ -851,7 +851,7 @@ function ConnectView({ game }: Readonly<{ game: HostState }>) {
           )}
         </>
       )}
-      <p className="text-white/30 text-sm">Requires Spotify Premium</p>
+      <p className="text-white/45 text-sm">Requires Spotify Premium</p>
     </div>
   );
 }
@@ -924,9 +924,9 @@ function ModeToggle({ mode, setMode }: Readonly<{ mode: Mode; setMode: (m: Mode)
           key={key}
           onClick={() => setMode(key)}
           className="relative flex-1 py-2.5 rounded-xl text-sm font-semibold z-10 transition-colors duration-200 flex items-center justify-center gap-1.5"
-          style={{ color: mode === key ? MODE_STYLE[key].text : 'rgba(255,255,255,0.38)', background: 'transparent', border: 'none', cursor: 'pointer' }}
+          style={{ color: mode === key ? MODE_STYLE[key].text : 'rgba(255,255,255,0.45)', background: 'transparent', border: 'none', cursor: 'pointer' }}
         >
-          <Icon className="w-3.5 h-3.5 transition-colors duration-200" style={{ color: mode === key ? MODE_STYLE[key].icon : 'rgba(255,255,255,0.38)' }} />
+          <Icon className="w-3.5 h-3.5 transition-colors duration-200" style={{ color: mode === key ? MODE_STYLE[key].icon : 'rgba(255,255,255,0.45)' }} />
           {label}
         </button>
       ))}
@@ -1006,7 +1006,7 @@ function LobbyView({ game }: Readonly<{ game: HostState }>) {
         style={{ transform: pin ? 'translateY(0)' : 'translateY(30vh)' }}
       >
         <img src={`${import.meta.env.BASE_URL}logo.png`} alt={APP_NAME} className="h-48 w-auto" />
-        <span className="text-white/40 text-sm flex items-center gap-2">
+        <span className="text-white/45 text-sm flex items-center gap-2">
           {spotify.playerReady ? (
             <><span className="w-2 h-2 rounded-full bg-green-500" />Spotify ready</>
           ) : (
@@ -1020,7 +1020,7 @@ function LobbyView({ game }: Readonly<{ game: HostState }>) {
           <JoinCard pin={game.pin} copied={game.copied} copyInvite={game.copyInvite} />
           <ModeToggle mode={mode} setMode={setMode} />
           <div className="w-full max-w-md">
-            <p className="text-white/40 text-sm mb-2">{players.length} player{players.length === 1 ? '' : 's'}</p>
+            <p className="text-white/45 text-sm mb-2">{players.length} player{players.length === 1 ? '' : 's'}</p>
             <div className="flex flex-wrap gap-2">
               {players.map(p => (
                 <button
@@ -1061,12 +1061,12 @@ function BettingView({ game }: Readonly<{ game: HostState }>) {
 
       {/* Top bar */}
       <div className="relative flex items-center justify-between px-9 pt-7" style={{ zIndex: 2 }}>
-        <span style={{ color: 'rgba(255,255,255,0.35)', fontWeight: 600, fontSize: '1rem' }}>
+        <span style={{ color: 'rgba(255,255,255,0.45)', fontWeight: 600, fontSize: '1rem' }}>
           Round{' '}
           <span style={{ color: 'rgba(255,255,255,0.72)', fontWeight: 800 }}>{roundIndex + 1}</span>
-          <span style={{ color: 'rgba(255,255,255,0.18)' }}>/{totalRounds}</span>
+          <span style={{ color: 'rgba(255,255,255,0.45)' }}>/{totalRounds}</span>
         </span>
-        <span style={{ color: 'rgba(255,255,255,0.2)', fontFamily: 'monospace', letterSpacing: '0.12em', fontSize: '0.9rem' }}>
+        <span style={{ color: 'rgba(255,255,255,0.45)', fontFamily: 'monospace', letterSpacing: '0.12em', fontSize: '0.9rem' }}>
           PIN {pin}
         </span>
       </div>
@@ -1109,7 +1109,7 @@ function BettingView({ game }: Readonly<{ game: HostState }>) {
                   <div style={{ width: 1, alignSelf: 'stretch', background: 'rgba(255,255,255,0.08)', margin: '0 40px' }} />
                 )}
                 <div className="flex flex-col items-center gap-2">
-                  <span style={{ color: 'rgba(255,255,255,0.32)', fontSize: '0.65rem', textTransform: 'uppercase', letterSpacing: '0.2em' }}>
+                  <span style={{ color: 'rgba(255,255,255,0.45)', fontSize: '0.65rem', textTransform: 'uppercase', letterSpacing: '0.2em' }}>
                     {h.label}
                   </span>
                   <span style={{ color: 'white', fontWeight: 900, fontSize: '2.75rem', lineHeight: 1, letterSpacing: '-0.02em' }}>
@@ -1144,9 +1144,9 @@ function BettingView({ game }: Readonly<{ game: HostState }>) {
       <div className="relative flex flex-col justify-center items-center gap-2 pb-7" style={{ zIndex: 2 }}>
         <button
           onClick={skipTurn}
-          style={{ background: 'none', border: 'none', color: 'rgba(255,255,255,0.12)', fontSize: '0.75rem', cursor: 'pointer', transition: 'color 0.2s ease' }}
+          style={{ background: 'none', border: 'none', color: 'rgba(255,255,255,0.28)', fontSize: '0.75rem', cursor: 'pointer', transition: 'color 0.2s ease' }}
           onMouseEnter={e => { (e.currentTarget as HTMLElement).style.color = 'rgba(255,255,255,0.4)'; }}
-          onMouseLeave={e => { (e.currentTarget as HTMLElement).style.color = 'rgba(255,255,255,0.12)'; }}
+          onMouseLeave={e => { (e.currentTarget as HTMLElement).style.color = 'rgba(255,255,255,0.28)'; }}
         >
           Skip round
         </button>
@@ -1185,7 +1185,7 @@ function RaceHintBar({ hints }: Readonly<{ hints: Hint[] }>) {
             <div style={{ width: 1, alignSelf: 'stretch', background: 'rgba(255,255,255,0.08)' }} />
           )}
           <div className="flex flex-col items-center gap-1">
-            <span style={{ color: 'rgba(255,255,255,0.32)', fontSize: '0.6rem', textTransform: 'uppercase', letterSpacing: '0.18em' }}>
+            <span style={{ color: 'rgba(255,255,255,0.45)', fontSize: '0.6rem', textTransform: 'uppercase', letterSpacing: '0.18em' }}>
               {h.label}
             </span>
             <span style={{ color: 'white', fontWeight: 800, fontSize: '1.2rem', lineHeight: 1 }}>
@@ -1215,7 +1215,7 @@ export function PlayingView({ game }: Readonly<{ game: HostState }>) {
       <img src={`${import.meta.env.BASE_URL}background4.svg`} alt="" aria-hidden="true" style={{ position: 'fixed', inset: 0, width: '100%', height: '100%', objectFit: 'cover', zIndex: 0 }} />
       <div style={{ position: 'fixed', inset: 0, zIndex: 1, background: 'rgba(5,5,14,0.82)', backdropFilter: 'blur(28px)' }} />
       <div className="flex flex-col items-center gap-5 text-center w-full" style={{ position: 'relative', zIndex: 2 }}>
-        <p className="text-white/40 text-sm">Round {roundIndex + 1}/{totalRounds}</p>
+        <p className="text-white/45 text-sm">Round {roundIndex + 1}/{totalRounds}</p>
         <PartyBadge party={party} />
         <RaceHintBar hints={hints} />
 
@@ -1242,7 +1242,7 @@ export function PlayingView({ game }: Readonly<{ game: HostState }>) {
                 </>
               ) : (
                 <>
-                  <span style={{ color: 'rgba(255,255,255,0.32)', fontSize: '0.6rem', letterSpacing: '0.2em', textTransform: 'uppercase' }}>
+                  <span style={{ color: 'rgba(255,255,255,0.45)', fontSize: '0.6rem', letterSpacing: '0.2em', textTransform: 'uppercase' }}>
                     Get ready
                   </span>
                   <div className="text-8xl font-black text-white" style={{ animation: 'badgeBreathe 1s ease-in-out infinite' }}>{countdown}</div>
@@ -1268,7 +1268,7 @@ export function PlayingView({ game }: Readonly<{ game: HostState }>) {
         </div>
 
         <div className="flex flex-col items-center gap-2 mt-2">
-          <button onClick={skipTurn} className="text-white/20 text-xs hover:text-white/50 transition-colors">
+          <button onClick={skipTurn} className="text-white/28 text-xs hover:text-white/50 transition-colors">
             Skip round
           </button>
           <EndGameButton endGame={endGame} />
@@ -1292,7 +1292,7 @@ function GuessingView({ game }: Readonly<{ game: HostState }>) {
       <img src={`${import.meta.env.BASE_URL}background4.svg`} alt="" aria-hidden="true" style={{ position: 'fixed', inset: 0, width: '100%', height: '100%', objectFit: 'cover', zIndex: 0 }} />
       <div style={{ position: 'fixed', inset: 0, zIndex: 1, background: 'rgba(5,5,14,0.82)', backdropFilter: 'blur(28px)' }} />
       <div className="flex flex-col items-center gap-5 text-center w-full" style={{ position: 'relative', zIndex: 2 }}>
-        <p className="text-white/40 text-sm">Round {roundIndex + 1}/{totalRounds}</p>
+        <p className="text-white/45 text-sm">Round {roundIndex + 1}/{totalRounds}</p>
         <PartyBadge party={party} />
         <RaceHintBar hints={hints} />
 
@@ -1305,7 +1305,7 @@ function GuessingView({ game }: Readonly<{ game: HostState }>) {
             <div style={{ width: '254px', display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '16px' }}>
               {/* Audio is always paused by the time this view mounts (guessing_start pauses it). */}
               <AudioBars playing={false} accent={accent} height={32} />
-              <span style={{ color: 'rgba(255,255,255,0.32)', fontSize: '0.6rem', letterSpacing: '0.2em', textTransform: 'uppercase' }}>
+              <span style={{ color: 'rgba(255,255,255,0.45)', fontSize: '0.6rem', letterSpacing: '0.2em', textTransform: 'uppercase' }}>
                 Guessing
               </span>
               <span style={{ color: 'white', fontWeight: 900, fontSize: '1.4rem', lineHeight: 1.3, display: 'inline-block', minWidth: '210px', textAlign: 'center' }}>
@@ -1320,9 +1320,9 @@ function GuessingView({ game }: Readonly<{ game: HostState }>) {
           </LiquidGlass>
         </div>
 
-        {othersWaiting && <p className="text-white/25 text-sm">Other players are waiting...</p>}
+        {othersWaiting && <p className="text-white/45 text-sm">Other players are waiting...</p>}
         <div className="flex flex-col items-center gap-2 mt-2">
-          <button onClick={skipTurn} className="text-white/20 text-xs hover:text-white/50 transition-colors">
+          <button onClick={skipTurn} className="text-white/28 text-xs hover:text-white/50 transition-colors">
             Skip turn
           </button>
           <EndGameButton endGame={endGame} />
@@ -1351,7 +1351,7 @@ function RevealPlayerRow({
     const ellipsis = entry.live ? '…' : '';
     guessText = skipped ? 'skipped' : `"${entry.guess}${ellipsis}"`;
   }
-  const guessCls = (!skipped && correct) ? 'text-green-400 text-xs truncate min-w-0' : 'text-white/20 italic text-xs truncate min-w-0';
+  const guessCls = (!skipped && correct) ? 'text-green-400 text-xs truncate min-w-0' : 'text-white/28 italic text-xs truncate min-w-0';
   if (!entry) {
     return (
       <button onClick={() => removePlayer(player.name)} aria-label={`Remove ${player.name}`} className="relative group w-full text-left py-1">
@@ -1362,7 +1362,7 @@ function RevealPlayerRow({
                 <Flame className="w-3 h-3" />{streak}
               </span>
             )}
-            <span className="text-xs truncate text-white/30">{player.name}</span>
+            <span className="text-xs truncate text-white/45">{player.name}</span>
           </div>
           <p className="text-white/60 text-xs tabular-nums shrink-0">{displayScore.toLocaleString()}</p>
         </div>
@@ -1381,7 +1381,7 @@ function RevealPlayerRow({
               <Flame className="w-3 h-3" />{streak}
             </span>
           )}
-          <span className={`text-xs truncate ${correct ? 'text-white font-semibold' : 'text-white/30'}`}>{player.name}</span>
+          <span className={`text-xs truncate ${correct ? 'text-white font-semibold' : 'text-white/45'}`}>{player.name}</span>
         </div>
         {delta > 0 && (
           <p className={`text-sky-400 text-xs tabular-nums shrink-0 transition-opacity duration-500 ${deltaFading ? 'opacity-0' : 'opacity-100'}`}>
@@ -1395,7 +1395,7 @@ function RevealPlayerRow({
           <p className={guessCls}>
             {guessText}
             {correct && entry?.timeMs != null && (
-              <span className="ml-1 text-white/25 text-xs">{(entry.timeMs / 1000).toFixed(1)}s</span>
+              <span className="ml-1 text-white/45 text-xs">{(entry.timeMs / 1000).toFixed(1)}s</span>
             )}
           </p>
         ) : <span />}
@@ -1427,7 +1427,7 @@ function RevealShell({
         style={{ position: 'fixed', inset: 0, width: '100%', height: '100%', objectFit: 'cover', zIndex: 0, transform: 'rotate(180deg)' }}
       />
       <div style={{ position: 'fixed', inset: 0, zIndex: 1, background: 'rgba(5,5,14,0.82)', backdropFilter: 'blur(28px)' }} />
-      <p className="text-white/40 text-sm self-start" style={{ position: 'relative', zIndex: 2 }}>{roundIndex + 1} / {totalRounds}</p>
+      <p className="text-white/45 text-sm self-start" style={{ position: 'relative', zIndex: 2 }}>{roundIndex + 1} / {totalRounds}</p>
 
       <div className="liquid-btn relative" style={{ width: wide ? 'min(88vw, 366px)' : '310px', height: `${cardHeight}px`, zIndex: 2 }}>
         <LiquidGlass
@@ -1622,7 +1622,7 @@ export default function Host() {
         <div className="fixed inset-0 bg-black/70 backdrop-blur-sm flex flex-col items-center justify-center z-50 gap-3">
           <div className="w-10 h-10 border-2 border-white/30 border-t-white rounded-full animate-spin" />
           <p className="text-white/70 text-sm font-medium">Reconnecting...</p>
-          <p className="text-white/30 text-xs">Game is still running</p>
+          <p className="text-white/45 text-xs">Game is still running</p>
         </div>
       )}
       {gameExpired && (
@@ -1635,10 +1635,10 @@ export default function Host() {
               padding="32px 28px"
             >
               <div style={{ width: '254px', display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '12px' }}>
-                <Clock style={{ width: '30px', height: '30px', color: 'rgba(255,255,255,0.22)' }} strokeWidth={1.5} />
+                <Clock style={{ width: '30px', height: '30px', color: 'rgba(255,255,255,0.45)' }} strokeWidth={1.5} />
                 <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '6px' }}>
                   <p style={{ color: 'white', fontWeight: 800, fontSize: '1.2rem', letterSpacing: '-0.01em' }}>Game expired</p>
-                  <p style={{ color: 'rgba(255,255,255,0.38)', fontSize: '0.8rem', textAlign: 'center', lineHeight: 1.5 }}>You were away too long and the game was closed.</p>
+                  <p style={{ color: 'rgba(255,255,255,0.45)', fontSize: '0.8rem', textAlign: 'center', lineHeight: 1.5 }}>You were away too long and the game was closed.</p>
                 </div>
                 <button
                   onClick={() => navigate('/')}

@@ -49,7 +49,7 @@ export function CircularTimer({ timeLeft, total, size = 128 }: Readonly<{ timeLe
       </svg>
       <div className="absolute inset-0 flex flex-col items-center justify-center">
         <span className="text-white font-black" style={{ fontSize: `${size * 0.148}px`, lineHeight: 1 }}>{timeLeft}</span>
-        <span style={{ color: 'rgba(255,255,255,0.3)', fontSize: `${size * 0.047}px`, textTransform: 'uppercase', letterSpacing: '0.14em' }}>sec</span>
+        <span style={{ color: 'rgba(255,255,255,0.45)', fontSize: `${size * 0.047}px`, textTransform: 'uppercase', letterSpacing: '0.14em' }}>sec</span>
       </div>
     </div>
   );

@@ -53,7 +53,7 @@ export function RoundIntro({ party, roundKey, dismissible = true }: Readonly<{ p
         transition: 'transform 0.4s ease',
       }}
     >
-      <p style={{ color: 'rgba(255,255,255,0.32)', fontSize: '0.68rem', letterSpacing: '0.32em', textTransform: 'uppercase', marginBottom: '12px' }}>
+      <p style={{ color: 'rgba(255,255,255,0.45)', fontSize: '0.68rem', letterSpacing: '0.32em', textTransform: 'uppercase', marginBottom: '12px' }}>
         {party.finale ? 'Last round' : 'Next up'}
       </p>
       {flowBadge && (
@@ -82,7 +82,7 @@ export function RoundIntro({ party, roundKey, dismissible = true }: Readonly<{ p
         {party.intro.tagline}
       </p>
       {dismissible && (
-        <p style={{ color: 'rgba(255,255,255,0.22)', fontSize: '0.68rem', letterSpacing: '0.1em', textTransform: 'uppercase', marginTop: '22px' }}>
+        <p style={{ color: 'rgba(255,255,255,0.45)', fontSize: '0.68rem', letterSpacing: '0.1em', textTransform: 'uppercase', marginTop: '22px' }}>
           Tap to skip
         </p>
       )}
@@ -149,7 +149,7 @@ export function PartyRevealExtras({ result, stealResult }: Readonly<{
         </span>
       )}
       {showPending && (
-        <span style={{ color: 'rgba(255,255,255,0.35)', fontSize: '0.75rem' }}>
+        <span style={{ color: 'rgba(255,255,255,0.45)', fontSize: '0.75rem' }}>
           {result.stealPending} is choosing who to rob…
         </span>
       )}
