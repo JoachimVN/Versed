@@ -1,11 +1,20 @@
 import { ChevronLeft } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 
-export function BackButton({ zIndex = 2 }: Readonly<{ zIndex?: number }>) {
+export function BackButton({ zIndex = 2, beforeNavigate }: Readonly<{ zIndex?: number; beforeNavigate?: () => void | Promise<void> }>) {
   const navigate = useNavigate();
+  const handleClick = async () => {
+    await beforeNavigate?.();
+    navigate('/');
+  };
   return (
     <button
-      onClick={() => navigate('/')}
+      onClick={handleClick}
+      // Explicit (not just the implicit default 0): Safari only includes
+      // plain <button>s in native Tab order when "Full Keyboard Access" is
+      // on; an author-specified tabindex opts back in regardless of that
+      // system setting.
+      tabIndex={0}
       className="absolute top-5 left-5 flex items-center gap-1.5 transition-all duration-200"
       style={{ background: 'none', border: 'none', padding: '6px 2px', zIndex, color: 'rgba(255,255,255,0.6)' }}
       onMouseEnter={e => { (e.currentTarget as HTMLElement).style.color = 'rgba(255,255,255,0.95)'; }}

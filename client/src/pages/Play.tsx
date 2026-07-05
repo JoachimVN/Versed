@@ -6,6 +6,8 @@ import { socket } from '../socket';
 import { RankBadge } from '../components/RankBadge';
 import { useAnimatedScore } from '../hooks/useAnimatedScore';
 import { useKeyboardOpen } from '../hooks/useViewportHeight';
+import { useEscapeKey } from '../hooks/useEscapeKey';
+import { useFocusTrap } from '../hooks/useFocusTrap';
 import { NoOneGotItCardContent, GotItCardContent, YearTimelineContent } from '../components/RevealShared';
 import { RoundIntro, PartyBadge, PartyRevealExtras } from '../components/RoundIntro';
 import { BackButton } from '../components/BackButton';
@@ -597,8 +599,8 @@ function usePlayGame(pinParam?: string): PlayState {
 }
 
 function guessTextClass(guess: string | null, correct: boolean): string {
-  if (guess === null) return 'text-white/15 italic';
-  return correct ? 'text-green-400' : 'text-white/20 italic';
+  if (guess === null) return 'text-white/28 italic';
+  return correct ? 'text-green-400' : 'text-white/28 italic';
 }
 
 function bidArrowStyle(enabled: boolean, pressed: boolean, hovered: boolean): { bg: string; border: string } {
@@ -619,6 +621,8 @@ function BidArrow({ direction, enabled, onClick }: Readonly<{ direction: 'left' 
       onMouseLeave={() => { setHovered(false); setPressed(false); }}
       onMouseDown={() => enabled && setPressed(true)}
       onMouseUp={() => setPressed(false)}
+      aria-label={direction === 'left' ? 'Decrease bid time' : 'Increase bid time'}
+      disabled={!enabled}
       style={{
         width: 52, height: 52, borderRadius: '50%', border,
         cursor: enabled ? 'pointer' : 'default',
@@ -688,14 +692,14 @@ function JoinView({ game }: Readonly<{ game: PlayState }>) {
               padding="13px 48px"
             >
               <div style={{ textAlign: 'center', whiteSpace: 'nowrap', minWidth: '214px' }}>
-                <p style={{ color: 'rgba(255,255,255,0.38)', fontSize: '0.6rem', letterSpacing: '0.18em', textTransform: 'uppercase', lineHeight: 1, marginBottom: '5px' }}>
+                <p style={{ color: 'rgba(255,255,255,0.45)', fontSize: '0.6rem', letterSpacing: '0.18em', textTransform: 'uppercase', lineHeight: 1, marginBottom: '5px' }}>
                   Continue as · {savedSession.pin}
                 </p>
                 <p className="text-white font-black text-xl" style={{ lineHeight: 1.2 }}>{savedSession.name}</p>
               </div>
             </LiquidGlass>
           </button>
-          <p className="text-white/20 text-xs tracking-wider">or join a different game</p>
+          <p className="text-white/45 text-xs tracking-wider">or join a different game</p>
         </div>
       )}
 
@@ -711,7 +715,7 @@ function JoinView({ game }: Readonly<{ game: PlayState }>) {
             <div style={{ marginBottom: '14px' }}>
               <span style={{
                 display: 'block',
-                color: pinFocused ? 'rgba(255,255,255,0.6)' : 'rgba(255,255,255,0.28)',
+                color: pinFocused ? 'rgba(255,255,255,0.6)' : 'rgba(255,255,255,0.45)',
                 fontSize: '0.6rem', letterSpacing: '0.18em', textTransform: 'uppercase',
                 marginBottom: '6px', transition: 'color 0.2s ease',
               }}>Game PIN</span>
@@ -734,7 +738,7 @@ function JoinView({ game }: Readonly<{ game: PlayState }>) {
             <div>
               <span style={{
                 display: 'block',
-                color: nameFocused ? 'rgba(255,255,255,0.6)' : 'rgba(255,255,255,0.28)',
+                color: nameFocused ? 'rgba(255,255,255,0.6)' : 'rgba(255,255,255,0.45)',
                 fontSize: '0.6rem', letterSpacing: '0.18em', textTransform: 'uppercase',
                 marginBottom: '6px', transition: 'color 0.2s ease',
               }}>Your name</span>
@@ -763,6 +767,7 @@ function JoinView({ game }: Readonly<{ game: PlayState }>) {
         <div style={{ overflow: 'hidden' }}>
           <p
             className="text-sm text-center"
+            aria-live="assertive"
             style={{
               width: '310px',
               paddingTop: '2px',
@@ -858,7 +863,7 @@ function WaitingView({ game }: Readonly<{ game: PlayState }>) {
                 You're in!
               </span>
               <div style={{ flex: 1, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', gap: '10px', width: '100%' }}>
-                <span style={{ color: 'rgba(255,255,255,0.28)', fontSize: '0.6rem', letterSpacing: '0.14em', textTransform: 'uppercase' }}>
+                <span style={{ color: 'rgba(255,255,255,0.45)', fontSize: '0.6rem', letterSpacing: '0.14em', textTransform: 'uppercase' }}>
                   Playing as
                 </span>
                 {editing ? (
@@ -878,12 +883,12 @@ function WaitingView({ game }: Readonly<{ game: PlayState }>) {
                         padding: '2px 0 4px', fontFamily: 'inherit',
                       }}
                     />
-                    {game.error && <p style={{ color: '#f87171', fontSize: '0.7rem' }}>{game.error}</p>}
+                    {game.error && <p style={{ color: '#f87171', fontSize: '0.7rem' }} aria-live="assertive">{game.error}</p>}
                   </>
                 ) : (
                   <button onClick={startEdit} style={{ display: 'flex', alignItems: 'center', gap: '7px', background: 'none', border: 'none', cursor: 'pointer', color: 'white', fontSize: '1.5rem', fontWeight: 800, letterSpacing: '-0.01em' }}>
                     {game.myName}
-                    <Pencil style={{ width: '14px', height: '14px', color: 'rgba(255,255,255,0.28)', flexShrink: 0 }} />
+                    <Pencil style={{ width: '14px', height: '14px', color: 'rgba(255,255,255,0.45)', flexShrink: 0 }} />
                   </button>
                 )}
               </div>
@@ -894,7 +899,7 @@ function WaitingView({ game }: Readonly<{ game: PlayState }>) {
                     <div key={i} style={{ width: '6px', height: '6px', borderRadius: '50%', background: 'rgba(0,128,126,0.8)', animation: 'dotBounce 1.4s ease-in-out infinite', animationDelay: `${i * 0.18}s` }} />
                   ))}
                 </div>
-                <span style={{ color: 'rgba(255,255,255,0.28)', fontSize: '0.72rem', letterSpacing: '0.03em' }}>
+                <span style={{ color: 'rgba(255,255,255,0.45)', fontSize: '0.72rem', letterSpacing: '0.03em' }}>
                   Waiting for host to start…
                 </span>
               </div>
@@ -931,8 +936,8 @@ export function BettingView({ game }: Readonly<{ game: PlayState }>) {
 
       {/* Top bar */}
       <div className="flex items-center justify-between px-5 pt-5 pb-3" style={{ position: 'relative', zIndex: 2 }}>
-        <span style={{ color: 'rgba(255,255,255,0.35)', fontSize: '0.85rem', fontWeight: 600 }}>
-          Round {roundIndex + 1}<span style={{ color: 'rgba(255,255,255,0.18)' }}>/{totalRounds}</span>
+        <span style={{ color: 'rgba(255,255,255,0.45)', fontSize: '0.85rem', fontWeight: 600 }}>
+          Round {roundIndex + 1}<span style={{ color: 'rgba(255,255,255,0.45)' }}>/{totalRounds}</span>
         </span>
         <span
           className="font-black text-2xl tabular-nums"
@@ -957,7 +962,7 @@ export function BettingView({ game }: Readonly<{ game: PlayState }>) {
       {/* Bid picker */}
       <div className="flex-1 flex flex-col items-center justify-center gap-6 px-5" style={{ position: 'relative', zIndex: 2 }}>
         <PartyBadge party={party} />
-        <p style={{ color: 'rgba(255,255,255,0.32)', fontSize: '0.75rem', textTransform: 'uppercase', letterSpacing: '0.14em' }}>
+        <p style={{ color: 'rgba(255,255,255,0.45)', fontSize: '0.75rem', textTransform: 'uppercase', letterSpacing: '0.14em' }}>
           How many seconds do you need?
         </p>
 
@@ -980,7 +985,7 @@ export function BettingView({ game }: Readonly<{ game: PlayState }>) {
                 <span style={{ display: 'inline-block', minWidth: '60px', textAlign: 'center', color: 'white', fontWeight: 900, fontSize: '2.8rem', lineHeight: 1 }}>
                   {currentBid}
                 </span>
-                <span style={{ display: 'inline-block', color: 'rgba(255,255,255,0.35)', fontSize: '0.65rem', letterSpacing: '0.14em', textTransform: 'uppercase' }}>
+                <span style={{ display: 'inline-block', color: 'rgba(255,255,255,0.45)', fontSize: '0.65rem', letterSpacing: '0.14em', textTransform: 'uppercase' }}>
                   seconds
                 </span>
               </div>
@@ -999,11 +1004,11 @@ export function BettingView({ game }: Readonly<{ game: PlayState }>) {
             ~{estPoints.toLocaleString()}
             {mysteryHidden && <span style={{ color: 'rgba(94,234,212,0.8)', fontSize: '1rem', marginLeft: '6px' }}>×?</span>}
           </span>
-          <p style={{ color: 'rgba(255,255,255,0.22)', fontSize: '0.68rem' }}>pts + difficulty bonus</p>
+          <p style={{ color: 'rgba(255,255,255,0.45)', fontSize: '0.68rem' }}>pts + difficulty bonus</p>
         </div>
       </div>
 
-      {error && <p className="text-red-400 text-sm text-center px-5 pb-2" style={{ position: 'relative', zIndex: 2 }}>{error}</p>}
+      {error && <p className="text-red-400 text-sm text-center px-5 pb-2" style={{ position: 'relative', zIndex: 2 }} aria-live="assertive">{error}</p>}
 
       {/* Lock In */}
       <div className="px-5 pb-8 flex justify-center" style={{ position: 'relative', zIndex: 2 }}>
@@ -1035,7 +1040,7 @@ function BidSubmittedView({ game }: Readonly<{ game: PlayState }>) {
     <div className="min-h-screen flex flex-col items-center justify-center gap-4 p-6 text-center">
       <p className="text-white/50">Your bid</p>
       <p className="text-white font-black text-6xl">{game.myBid}s</p>
-      <p className="text-white/40">Waiting for others...</p>
+      <p className="text-white/45">Waiting for others...</p>
     </div>
   );
 }
@@ -1073,8 +1078,8 @@ export function WatchingView({ game }: Readonly<{ game: PlayState }>) {
         }}
       >
         <div className="flex flex-col items-center gap-2">
-          <p style={{ color: 'rgba(255,255,255,0.4)', fontSize: '0.85rem' }}>
-            Round {roundIndex + 1}<span style={{ color: 'rgba(255,255,255,0.2)' }}>/{totalRounds}</span>
+          <p style={{ color: 'rgba(255,255,255,0.45)', fontSize: '0.85rem' }}>
+            Round {roundIndex + 1}<span style={{ color: 'rgba(255,255,255,0.45)' }}>/{totalRounds}</span>
           </p>
           <PartyBadge party={party} />
         </div>
@@ -1105,7 +1110,7 @@ export function WatchingView({ game }: Readonly<{ game: PlayState }>) {
 
         <div style={{ background: 'rgba(255,255,255,0.05)', border: '1px solid rgba(255,255,255,0.08)', borderRadius: '16px', padding: '10px 30px', textAlign: 'center' }}>
           <p className="text-white font-black text-2xl tabular-nums">{myScore.toLocaleString()}</p>
-          <p className="text-white/35 text-xs">your score</p>
+          <p className="text-white/45 text-xs">your score</p>
           {myStreak >= 2 && (
             <p className="flex items-center justify-center gap-1 text-orange-400 text-xs font-bold mt-1">
               <Flame className="w-3 h-3" />{myStreak} in a row
@@ -1123,13 +1128,13 @@ function GetReadyBody({ isDuel, isRace, party, lowestBid, guesserNames, songPlay
   if (isDuel) {
     return (
       <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '10px' }}>
-        <span style={{ color: 'rgba(255,255,255,0.32)', fontSize: '0.65rem', letterSpacing: '0.2em', textTransform: 'uppercase' }}>
+        <span style={{ color: 'rgba(255,255,255,0.45)', fontSize: '0.65rem', letterSpacing: '0.2em', textTransform: 'uppercase' }}>
           The finale
         </span>
         <span style={{ display: 'inline-block', minWidth: '220px', color: 'white', fontWeight: 900, fontSize: '1.65rem', lineHeight: 1.3, textAlign: 'center' }}>
           {party!.duelists.join(' vs ')}
         </span>
-        <span style={{ display: 'inline-block', minWidth: '170px', color: 'rgba(255,255,255,0.3)', fontSize: '0.88rem', textAlign: 'center' }}>
+        <span style={{ display: 'inline-block', minWidth: '170px', color: 'rgba(255,255,255,0.45)', fontSize: '0.88rem', textAlign: 'center' }}>
           First correct wins
         </span>
       </div>
@@ -1138,7 +1143,7 @@ function GetReadyBody({ isDuel, isRace, party, lowestBid, guesserNames, songPlay
   if (isRace) {
     return (
       <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '10px' }}>
-        <span style={{ color: 'rgba(255,255,255,0.32)', fontSize: '0.65rem', letterSpacing: '0.2em', textTransform: 'uppercase' }}>
+        <span style={{ color: 'rgba(255,255,255,0.45)', fontSize: '0.65rem', letterSpacing: '0.2em', textTransform: 'uppercase' }}>
           Get ready
         </span>
         <span style={{ display: 'inline-block', minWidth: '220px', color: 'white', fontWeight: 900, fontSize: '1.65rem', lineHeight: 1.3, textAlign: 'center' }}>
@@ -1149,7 +1154,7 @@ function GetReadyBody({ isDuel, isRace, party, lowestBid, guesserNames, songPlay
   }
   return (
     <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '10px' }}>
-      <span style={{ color: 'rgba(255,255,255,0.32)', fontSize: '0.65rem', letterSpacing: '0.2em', textTransform: 'uppercase' }}>
+      <span style={{ color: 'rgba(255,255,255,0.45)', fontSize: '0.65rem', letterSpacing: '0.2em', textTransform: 'uppercase' }}>
         {songPlaying ? 'Listen closely' : 'Get ready'}
       </span>
       <span style={{
@@ -1169,7 +1174,7 @@ function GetReadyBody({ isDuel, isRace, party, lowestBid, guesserNames, songPlay
             }} />
           ))}
         </div>
-        <span style={{ display: 'inline-block', color: 'rgba(255,255,255,0.3)', fontSize: '0.88rem', textAlign: 'center' }}>
+        <span style={{ display: 'inline-block', color: 'rgba(255,255,255,0.45)', fontSize: '0.88rem', textAlign: 'center' }}>
           guesses after {lowestBid}s
         </span>
       </div>
@@ -1186,7 +1191,7 @@ function ListeningHeader({ songPlaying, songTempo, isYear }: Readonly<{ songPlay
   return (
     <div className="flex flex-col items-center gap-2.5 pt-10 pb-4">
       <AudioBars playing={songPlaying} accent={accent} height={28} bpm={songTempo} />
-      <span style={{ color: 'rgba(255,255,255,0.28)', fontSize: '0.72rem', letterSpacing: '0.08em' }}>
+      <span style={{ color: 'rgba(255,255,255,0.45)', fontSize: '0.72rem', letterSpacing: '0.08em' }}>
         {songPlaying ? 'Your song is playing…' : 'Get ready…'}
       </span>
     </div>
@@ -1201,8 +1206,8 @@ function ActiveHeader({ timeLeft, timerTotal, myScore, isRace, isYear, songPlayi
   return (
     <div className="flex flex-col items-center gap-2 pt-4 pb-3">
       <div className="flex items-center justify-between w-full px-5">
-        <span style={{ color: 'rgba(255,255,255,0.32)', fontSize: '0.85rem', fontWeight: 600 }}>Your turn</span>
-        <span style={{ color: 'rgba(255,255,255,0.28)', fontSize: '0.8rem', fontWeight: 500 }}>
+        <span style={{ color: 'rgba(255,255,255,0.45)', fontSize: '0.85rem', fontWeight: 600 }}>Your turn</span>
+        <span style={{ color: 'rgba(255,255,255,0.45)', fontSize: '0.8rem', fontWeight: 500 }}>
           {myScore.toLocaleString()} pts
         </span>
       </div>
@@ -1306,7 +1311,7 @@ export function GuessingView({ game }: Readonly<{ game: PlayState }>) {
       <div className="flex-1 flex flex-col items-center justify-center gap-5 px-5">
         {party && <PartyBadge party={party} />}
         <p style={{
-          color: isListening ? 'rgba(255,255,255,0.2)' : 'rgba(255,255,255,0.6)',
+          color: isListening ? 'rgba(255,255,255,0.45)' : 'rgba(255,255,255,0.6)',
           fontSize: '0.9rem', fontWeight: 600, letterSpacing: '0.03em',
           transition: 'color 0.5s ease',
         }}>
@@ -1414,9 +1419,9 @@ export function GuessingView({ game }: Readonly<{ game: PlayState }>) {
 
         <button
           onClick={skipGuess}
-          style={{ background: 'none', border: 'none', color: 'rgba(255,255,255,0.2)', fontSize: '0.82rem', cursor: 'pointer', transition: 'color 0.2s ease' }}
+          style={{ background: 'none', border: 'none', color: 'rgba(255,255,255,0.28)', fontSize: '0.82rem', cursor: 'pointer', transition: 'color 0.2s ease' }}
           onMouseEnter={e => { (e.currentTarget as HTMLElement).style.color = 'rgba(255,255,255,0.5)'; }}
-          onMouseLeave={e => { (e.currentTarget as HTMLElement).style.color = 'rgba(255,255,255,0.2)'; }}
+          onMouseLeave={e => { (e.currentTarget as HTMLElement).style.color = 'rgba(255,255,255,0.28)'; }}
         >
           Skip, I don't know
         </button>
@@ -1488,7 +1493,7 @@ function PassedView({ game }: Readonly<{ game: PlayState }>) {
                       }} />
                     ))}
                   </div>
-                  <span style={{ display: 'inline-block', minWidth: '180px', color: 'rgba(255,255,255,0.38)', fontSize: '0.9rem', textAlign: 'center' }}>
+                  <span style={{ display: 'inline-block', minWidth: '180px', color: 'rgba(255,255,255,0.45)', fontSize: '0.9rem', textAlign: 'center' }}>
                     Waiting for others…
                   </span>
                 </>
@@ -1507,8 +1512,15 @@ function StealPicker({ victims, onPick, onSkip }: Readonly<{
   onPick: (name: string) => void;
   onSkip: () => void;
 }>) {
+  const pickerRef = useRef<HTMLDivElement>(null);
+  useEscapeKey(onSkip, true);
+  useFocusTrap(pickerRef, true);
   return (
     <div
+      ref={pickerRef}
+      role="dialog"
+      aria-modal="true"
+      aria-label="Pick a steal victim"
       className="fixed inset-0 flex flex-col items-center justify-center gap-6 p-6"
       style={{ zIndex: 70, background: 'rgba(5,5,14,0.93)', backdropFilter: 'blur(24px)' }}
     >
@@ -1538,15 +1550,15 @@ function StealPicker({ victims, onPick, onSkip }: Readonly<{
             onMouseLeave={e => { const el = e.currentTarget as HTMLElement; el.style.background = 'rgba(255,255,255,0.06)'; el.style.borderColor = 'rgba(255,255,255,0.12)'; }}
           >
             <span className="text-white font-bold">{v.name}</span>
-            <span className="text-white/40 text-sm tabular-nums">{v.score.toLocaleString()} pts</span>
+            <span className="text-white/45 text-sm tabular-nums">{v.score.toLocaleString()} pts</span>
           </button>
         ))}
       </div>
       <button
         onClick={onSkip}
-        style={{ background: 'none', border: 'none', color: 'rgba(255,255,255,0.2)', fontSize: '0.82rem', cursor: 'pointer', transition: 'color 0.2s ease' }}
+        style={{ background: 'none', border: 'none', color: 'rgba(255,255,255,0.28)', fontSize: '0.82rem', cursor: 'pointer', transition: 'color 0.2s ease' }}
         onMouseEnter={e => { (e.currentTarget as HTMLElement).style.color = 'rgba(255,255,255,0.5)'; }}
-        onMouseLeave={e => { (e.currentTarget as HTMLElement).style.color = 'rgba(255,255,255,0.2)'; }}
+        onMouseLeave={e => { (e.currentTarget as HTMLElement).style.color = 'rgba(255,255,255,0.28)'; }}
       >
         Skip, don't steal
       </button>
@@ -1600,7 +1612,7 @@ function PlayRevealShell({
             <p className="text-sky-400 text-sm font-bold tabular-nums">+{myScoreDelta.toLocaleString()} pts</p>
           )}
           <p className="text-3xl font-black text-white">{myScore.toLocaleString()}</p>
-          <p className="text-white/40 text-sm">your score</p>
+          <p className="text-white/45 text-sm">your score</p>
           {scoreExtra}
           {myStreak >= 2 && (
             <p className="flex items-center justify-center gap-1 text-orange-400 text-xs font-bold mt-1">
@@ -1622,7 +1634,7 @@ function YearRevealView({ game, result }: Readonly<{ game: PlayState; result: Ro
     <div style={{ background: 'rgba(255,255,255,0.05)', border: '1px solid rgba(255,255,255,0.08)', borderRadius: '16px', padding: '8px 12px', width: '310px', maxWidth: '92vw' }} className="space-y-1">
       {scorers.map(r => (
         <div key={r.name} className="flex justify-between items-center gap-2">
-          <span className={`text-xs min-w-0 truncate ${r.name === myName ? 'text-white font-semibold' : 'text-white/40'}`}>{r.name}</span>
+          <span className={`text-xs min-w-0 truncate ${r.name === myName ? 'text-white font-semibold' : 'text-white/45'}`}>{r.name}</span>
           <span className="ml-1.5 text-xs text-sky-400 font-semibold tabular-nums shrink-0">+{r.points.toLocaleString()}</span>
         </div>
       ))}
@@ -1652,8 +1664,8 @@ export function RevealView({ game, result }: Readonly<{ game: PlayState; result:
           const ellipsis = g.live ? '…' : '';
           return (
             <div key={g.name} className="flex justify-between items-center gap-2">
-              <span className="text-white/40 text-xs min-w-0 truncate">{g.name}</span>
-              <span className={`text-xs text-right min-w-0 truncate italic ${g.guess === null ? 'text-white/15' : 'text-white/20'}`}>
+              <span className="text-white/45 text-xs min-w-0 truncate">{g.name}</span>
+              <span className="text-xs text-right min-w-0 truncate italic text-white/28">
                 {g.guess === null ? 'skipped' : `"${g.guess}${ellipsis}"`}
               </span>
             </div>
@@ -1680,11 +1692,11 @@ export function RevealView({ game, result }: Readonly<{ game: PlayState; result:
         const ellipsis = g.live ? '…' : '';
         return (
           <div key={g.name} className="flex justify-between items-center gap-2">
-            <span className={`text-xs min-w-0 truncate ${correct ? 'text-white font-semibold' : 'text-white/30'}`}>{g.name}</span>
+            <span className={`text-xs min-w-0 truncate ${correct ? 'text-white font-semibold' : 'text-white/45'}`}>{g.name}</span>
             <span className={`text-xs text-right min-w-0 truncate ${guessClass}`}>
               {g.guess === null ? 'skipped' : `"${g.guess}${ellipsis}"`}
               {correct && g.timeMs != null && (
-                <span className="ml-1 text-white/25 text-xs">{(g.timeMs / 1000).toFixed(1)}s</span>
+                <span className="ml-1 text-white/45 text-xs">{(g.timeMs / 1000).toFixed(1)}s</span>
               )}
             </span>
           </div>
@@ -1786,7 +1798,7 @@ function LeaderboardView({ game }: Readonly<{ game: PlayState }>) {
         </div>
       )}
 
-      <div className="flex-1 space-y-3 relative z-10">
+      <div className="flex-1 min-h-0 overflow-y-auto space-y-3 relative z-10">
         {leaderboard.slice(0, 10).map((e, i) => (
           <PlayerLeaderboardRow
             key={e.name}
@@ -1797,7 +1809,7 @@ function LeaderboardView({ game }: Readonly<{ game: PlayState }>) {
         ))}
       </div>
 
-      {phase === 'leaderboard' && <p className="text-center text-white/30 text-sm relative z-10">Waiting for the host to start the next round…</p>}
+      {phase === 'leaderboard' && <p className="text-center text-white/45 text-sm relative z-10">Waiting for the host to start the next round…</p>}
 
       {isFinished && (
         <div className="relative z-10 flex flex-col items-center gap-3">
@@ -1857,6 +1869,23 @@ function LeaderboardView({ game }: Readonly<{ game: PlayState }>) {
 
 // ─── Component ────────────────────────────────────────────────────────────────
 
+// Screen-reader narration of major phase changes — see the matching function
+// in Host.tsx for why this exists.
+function phaseAnnouncement(phase: Phase, result: RoundResultEvent | null): string {
+  switch (phase) {
+    case 'waiting': return 'Waiting for the host to start.';
+    case 'betting': return 'Place your bid.';
+    case 'bid_submitted': return 'Bid submitted. Waiting for others.';
+    case 'watching': return 'Get ready — listen closely.';
+    case 'guessing': return 'Your turn to guess.';
+    case 'passed': return 'Answer submitted.';
+    case 'reveal': return result?.correct ? 'Round result: someone got it.' : 'Round result: no one got it.';
+    case 'leaderboard': return 'Leaderboard updated.';
+    case 'finished': return 'Final scores are in.';
+    default: return '';
+  }
+}
+
 export default function Play() {
   const { pin: pinParam } = useParams<{ pin?: string }>();
   const game = usePlayGame(pinParam);
@@ -1891,6 +1920,7 @@ export default function Play() {
           zIndex: 0,
         }}
       />
+      <div aria-live="polite" className="sr-only">{phaseAnnouncement(phase, result)}</div>
       {phase === 'join' && <JoinView game={game} />}
       {phase === 'waiting' && <WaitingView game={game} />}
       {phase === 'betting' && <BettingView game={game} />}

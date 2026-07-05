@@ -1,11 +1,14 @@
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect, useRef, useMemo } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { Check, Loader2, Copy, Settings, Flame, Coins, Clock, PartyPopper } from 'lucide-react';
+import { Check, Loader2, Copy, Settings, Flame, Coins, Clock, PartyPopper, Volume2, VolumeX } from 'lucide-react';
 import LiquidGlass from 'liquid-glass-react';
 import QRCodeLib from 'react-qr-code';
 const QRCode = QRCodeLib as unknown as React.FC<{ value: string; size?: number }>;
 import { socket } from '../socket';
 import { useSpotify } from '../hooks/useSpotify';
+import { useEscapeKey } from '../hooks/useEscapeKey';
+import { useFocusTrap } from '../hooks/useFocusTrap';
+import { useSoundEffect } from '../hooks/useSoundEffect';
 import { RankBadge } from '../components/RankBadge';
 import { useAnimatedScore } from '../hooks/useAnimatedScore';
 import { ConfettiBackground } from '../components/ConfettiBackground';
@@ -20,11 +23,41 @@ import type { Hint, LeaderboardEntry, PartyInfo, PlayerInfo, RoundResultEvent } 
 
 type Phase = 'connect' | 'lobby' | 'betting' | 'playing' | 'guessing' | 'reveal' | 'leaderboard' | 'finished';
 type Mode = 'classic' | 'race' | 'party';
+type Difficulty = 'easy' | 'medium' | 'hard';
 interface SongInfo { title: string; artist: string; trackId: string; tempo?: number | null }
 
 const wait = (ms: number) => new Promise<void>(resolve => setTimeout(resolve, ms));
 
 type Spotify = ReturnType<typeof useSpotify>;
+
+// Remembers the host's last-used lobby settings across page reloads and new
+// games (New Game already leaves these untouched within a session — this
+// just survives a full reload/revisit too). Never blocks game creation on a
+// bad/missing value, so a corrupt or stale entry just falls back to defaults.
+interface SavedHostSettings {
+  bettingTime: number; guessingTime: number; rounds: number; mode: Mode;
+  raceTime: number; raceWinnerOnly: boolean; artistOnly: boolean; yearOnly: boolean; difficulty: Difficulty;
+}
+const HOST_SETTINGS_KEY = 'versed_host_settings';
+const MODES: Set<Mode> = new Set(['classic', 'race', 'party']);
+const DIFFICULTIES: Set<Difficulty> = new Set(['easy', 'medium', 'hard']);
+
+function loadSavedHostSettings(): Partial<SavedHostSettings> {
+  try {
+    const raw = JSON.parse(localStorage.getItem(HOST_SETTINGS_KEY) ?? '{}');
+    return {
+      bettingTime: typeof raw.bettingTime === 'number' ? raw.bettingTime : undefined,
+      guessingTime: typeof raw.guessingTime === 'number' ? raw.guessingTime : undefined,
+      rounds: typeof raw.rounds === 'number' ? raw.rounds : undefined,
+      mode: MODES.has(raw.mode) ? raw.mode : undefined,
+      raceTime: typeof raw.raceTime === 'number' ? raw.raceTime : undefined,
+      raceWinnerOnly: typeof raw.raceWinnerOnly === 'boolean' ? raw.raceWinnerOnly : undefined,
+      artistOnly: typeof raw.artistOnly === 'boolean' ? raw.artistOnly : undefined,
+      yearOnly: typeof raw.yearOnly === 'boolean' ? raw.yearOnly : undefined,
+      difficulty: DIFFICULTIES.has(raw.difficulty) ? raw.difficulty : undefined,
+    };
+  } catch { return {}; }
+}
 
 export interface HostState {
   spotify: Spotify;
@@ -57,6 +90,7 @@ export interface HostState {
   raceWinnerOnly: boolean;
   artistOnly: boolean;
   yearOnly: boolean;
+  difficulty: Difficulty;
   party: PartyInfo | null;
   stealResult: { thief: string; victim: string; amount: number; skipped?: boolean } | null;
   answeredCount: number;
@@ -74,6 +108,7 @@ export interface HostState {
   setRaceWinnerOnly: (v: boolean) => void;
   setArtistOnly: (v: boolean) => void;
   setYearOnly: (v: boolean) => void;
+  setDifficulty: (v: Difficulty) => void;
   createGame: () => void;
   startGame: () => void;
   skipTurn: () => void;
@@ -85,6 +120,8 @@ export interface HostState {
 
 function useHostGame(): HostState {
   const spotify = useSpotify();
+  const playBeat = useSoundEffect(`${import.meta.env.BASE_URL}timer_beat.wav`);
+  const savedSettings = useMemo(loadSavedHostSettings, []);
   const [phase, setPhase] = useState<Phase>('connect');
   // The PIN survives page reloads via sessionStorage so an accidental reload
   // doesn't orphan a running game. freshLoadRef marks that this pin came from
@@ -112,14 +149,23 @@ function useHostGame(): HostState {
   const [copied, setCopied] = useState(false);
   const [playProgress, setPlayProgress] = useState(0);
   const [settingsOpen, setSettingsOpen] = useState(false);
-  const [bettingTimeSetting, setBettingTimeSetting] = useState(15);
-  const [guessingTimeSetting, setGuessingTimeSetting] = useState(15);
-  const [roundsSetting, setRoundsSetting] = useState(10);
-  const [mode, setMode] = useState<Mode>('classic');
-  const [raceTimeSetting, setRaceTimeSetting] = useState(RACE_TIME);
-  const [raceWinnerOnly, setRaceWinnerOnly] = useState(false);
-  const [artistOnly, setArtistOnly] = useState(false);
-  const [yearOnly, setYearOnly] = useState(false);
+  const [bettingTimeSetting, setBettingTimeSetting] = useState(savedSettings.bettingTime ?? 15);
+  const [guessingTimeSetting, setGuessingTimeSetting] = useState(savedSettings.guessingTime ?? 15);
+  const [roundsSetting, setRoundsSetting] = useState(savedSettings.rounds ?? 10);
+  const [mode, setMode] = useState<Mode>(savedSettings.mode ?? 'classic');
+  const [raceTimeSetting, setRaceTimeSetting] = useState(savedSettings.raceTime ?? RACE_TIME);
+  const [raceWinnerOnly, setRaceWinnerOnly] = useState(savedSettings.raceWinnerOnly ?? false);
+  const [artistOnly, setArtistOnly] = useState(savedSettings.artistOnly ?? false);
+  const [yearOnly, setYearOnly] = useState(savedSettings.yearOnly ?? false);
+  const [difficulty, setDifficulty] = useState<Difficulty>(savedSettings.difficulty ?? 'hard');
+
+  useEffect(() => {
+    const toSave: SavedHostSettings = {
+      bettingTime: bettingTimeSetting, guessingTime: guessingTimeSetting, rounds: roundsSetting, mode,
+      raceTime: raceTimeSetting, raceWinnerOnly, artistOnly, yearOnly, difficulty,
+    };
+    localStorage.setItem(HOST_SETTINGS_KEY, JSON.stringify(toSave));
+  }, [bettingTimeSetting, guessingTimeSetting, roundsSetting, mode, raceTimeSetting, raceWinnerOnly, artistOnly, yearOnly, difficulty]);
   const [party, setParty] = useState<PartyInfo | null>(null);
   const [stealResult, setStealResult] = useState<{ thief: string; victim: string; amount: number; skipped?: boolean } | null>(null);
   const [answeredCount, setAnsweredCount] = useState(0);
@@ -285,6 +331,7 @@ function useHostGame(): HostState {
       for (let n = ticks; n > 0; n--) {
         if (playGenRef.current !== myGen) return;
         setCountdown(n);
+        playBeat();
         await wait(1000);
       }
       if (playGenRef.current !== myGen) return;
@@ -394,6 +441,7 @@ function useHostGame(): HostState {
       settings: {
         bettingTime: bettingTimeSetting, guessingTime: guessingTimeSetting,
         totalRounds: roundsSetting, mode, raceTime: raceTimeSetting, raceWinnerOnly, artistOnly, yearOnly,
+        difficulty,
       },
     });
   };
@@ -440,11 +488,11 @@ function useHostGame(): HostState {
     bettingTime, timeLeft, timerTotal, bidCount, countdown, guesserNames, lowestBid, playerBids,
     result, roundDeltas, leaderboard, copied, playProgress, inviteUrl,
     settingsOpen, bettingTimeSetting, guessingTimeSetting, roundsSetting,
-    mode, raceTimeSetting, raceWinnerOnly, artistOnly, yearOnly, party, stealResult, answeredCount,
+    mode, raceTimeSetting, raceWinnerOnly, artistOnly, yearOnly, difficulty, party, stealResult, answeredCount,
     reconnecting, reconnectingCount: reconnectingNames.size, gameExpired, songPlaying, songTempo,
     toggleSettings: () => setSettingsOpen(o => !o),
     setBettingTimeSetting, setGuessingTimeSetting, setRoundsSetting,
-    setMode, setRaceTimeSetting, setRaceWinnerOnly, setArtistOnly, setYearOnly,
+    setMode, setRaceTimeSetting, setRaceWinnerOnly, setArtistOnly, setYearOnly, setDifficulty,
     createGame, startGame, copyInvite, newGame,
     skipTurn: () => socket.emit('host_skip_turn'),
     endGame: () => socket.emit('end_game'),
@@ -510,7 +558,7 @@ function BidTimeline({ bids, lowestBid }: Readonly<{ bids: { name: string; bid: 
         {groups.map(group => (
           <span
             key={group.bid}
-            className={`absolute text-xs -translate-x-1/2 ${group.bid === lowestBid ? 'text-purple-400' : 'text-white/30'}`}
+            className={`absolute text-xs -translate-x-1/2 ${group.bid === lowestBid ? 'text-purple-400' : 'text-white/45'}`}
             style={{ left: `${pos(group.bid)}%` }}
           >
             {group.bid}s
@@ -525,9 +573,13 @@ function BidTimeline({ bids, lowestBid }: Readonly<{ bids: { name: string; bid: 
 
 function SettingsPanel({ game, open }: Readonly<{ game: HostState; open: boolean }>) {
   const {
-    mode, bettingTimeSetting, guessingTimeSetting, roundsSetting, raceTimeSetting, raceWinnerOnly, artistOnly, yearOnly,
-    setBettingTimeSetting, setGuessingTimeSetting, setRoundsSetting, setRaceTimeSetting, setRaceWinnerOnly, setArtistOnly, setYearOnly,
+    mode, bettingTimeSetting, guessingTimeSetting, roundsSetting, raceTimeSetting, raceWinnerOnly, artistOnly, yearOnly, difficulty,
+    setBettingTimeSetting, setGuessingTimeSetting, setRoundsSetting, setRaceTimeSetting, setRaceWinnerOnly, setArtistOnly, setYearOnly, setDifficulty,
+    toggleSettings,
   } = game;
+  const panelRef = useRef<HTMLDialogElement>(null);
+  useEscapeKey(toggleSettings, open);
+  useFocusTrap(panelRef, open);
   // "Guess the year" has no single title/artist answer, so it can't run
   // alongside "Artist only" — picking it clears that. It can still run
   // alongside "Winner only" in Race mode (that just restricts year scoring
@@ -543,10 +595,21 @@ function SettingsPanel({ game, open }: Readonly<{ game: HostState; open: boolean
     if (next) setYearOnly(false);
   };
   return (
-    <div
+    <dialog
+      ref={panelRef}
+      open
+      aria-modal="true"
+      aria-label="Game settings"
       className="absolute right-5 z-20"
       style={{
         top: '68px',
+        left: 'auto',
+        bottom: 'auto',
+        margin: 0,
+        border: 'none',
+        padding: 0,
+        background: 'transparent',
+        color: 'inherit',
         opacity: open ? 1 : 0,
         transform: open ? 'translateY(0) scale(1)' : 'translateY(-10px) scale(0.96)',
         pointerEvents: open ? 'auto' : 'none',
@@ -592,6 +655,7 @@ function SettingsPanel({ game, open }: Readonly<{ game: HostState; open: boolean
           <SettingRow label="Rounds" value={roundsSetting} unit=""
             onDec={() => setRoundsSetting(Math.max(1, roundsSetting - 1))}
             onInc={() => setRoundsSetting(Math.min(30, roundsSetting + 1))} />
+          <DifficultyRow value={difficulty} onChange={setDifficulty} />
         </div>
 
         {/* Party picks guess targets per round, so the game-wide toggles only
@@ -610,7 +674,7 @@ function SettingsPanel({ game, open }: Readonly<{ game: HostState; open: boolean
           </div>
         )}
       </div>
-    </div>
+    </dialog>
   );
 }
 
@@ -620,18 +684,18 @@ function JoinCard({ pin, copied, copyInvite }: Readonly<{ pin: string; copied: b
       <div className="flex items-center gap-5">
         <div className="flex-1 min-w-0 flex flex-col gap-3">
           <div>
-            <p className="text-white/40 text-xs uppercase tracking-widest mb-0.5">Join at</p>
+            <p className="text-white/45 text-xs uppercase tracking-widest mb-0.5">Join at</p>
             <p className="text-white font-semibold text-base">
               {`${globalThis.location.origin}${import.meta.env.BASE_URL}`.replace(/\/$/, '')}
             </p>
           </div>
           <div>
-            <p className="text-white/40 text-xs uppercase tracking-widest mb-0.5">PIN</p>
+            <p className="text-white/45 text-xs uppercase tracking-widest mb-0.5">PIN</p>
             <p className="text-6xl font-black text-white tracking-widest leading-none select-text">{pin}</p>
           </div>
           <button
             onClick={copyInvite}
-            className="flex items-center gap-2 text-white/40 text-xs hover:text-white/70 transition-colors"
+            className="flex items-center gap-2 text-white/45 text-xs hover:text-white/70 transition-colors"
           >
             {copied ? <Check className="w-3.5 h-3.5 text-green-400" /> : <Copy className="w-3.5 h-3.5" />}
             {copied ? 'Copied!' : 'Copy invite link'}
@@ -652,13 +716,14 @@ function SettingRow({ label, value, unit, onDec, onInc, disabled }: Readonly<{
 }>) {
   return (
     <div className="flex items-center justify-between">
-      <span style={{ color: disabled ? 'rgba(255,255,255,0.25)' : 'rgba(255,255,255,0.5)', fontSize: '0.875rem' }}>
+      <span style={{ color: disabled ? 'rgba(255,255,255,0.45)' : 'rgba(255,255,255,0.5)', fontSize: '0.875rem' }}>
         {label}
       </span>
       <div className="flex items-center gap-2.5">
         <button
           onClick={disabled ? undefined : onDec}
           disabled={disabled}
+          aria-label={`Decrease ${label}`}
           className="flex items-center justify-center active:scale-90 transition-transform"
           style={{
             width: '28px', height: '28px', borderRadius: '50%',
@@ -671,7 +736,7 @@ function SettingRow({ label, value, unit, onDec, onInc, disabled }: Readonly<{
           }}
         >−</button>
         <span style={{
-          color: disabled ? 'rgba(255,255,255,0.4)' : 'white',
+          color: disabled ? 'rgba(255,255,255,0.45)' : 'white',
           fontWeight: 700, minWidth: '42px', textAlign: 'center', fontSize: '0.9375rem',
         }}>
           {value}{unit}
@@ -679,6 +744,7 @@ function SettingRow({ label, value, unit, onDec, onInc, disabled }: Readonly<{
         <button
           onClick={disabled ? undefined : onInc}
           disabled={disabled}
+          aria-label={`Increase ${label}`}
           className="flex items-center justify-center active:scale-90 transition-transform"
           style={{
             width: '28px', height: '28px', borderRadius: '50%',
@@ -695,12 +761,66 @@ function SettingRow({ label, value, unit, onDec, onInc, disabled }: Readonly<{
   );
 }
 
+const DIFFICULTY_OPTIONS: { key: Difficulty; label: string }[] = [
+  { key: 'easy', label: 'Easy' },
+  { key: 'medium', label: 'Medium' },
+  { key: 'hard', label: 'Hard' },
+];
+
+const DIFFICULTY_STYLE: Record<Difficulty, { bg: string; border: string; text: string }> = {
+  easy: { bg: 'rgba(16, 185, 129, 0.25)', border: '1px solid rgba(52, 211, 153, 0.45)', text: '#6ee7b7' },
+  medium: { bg: 'rgba(217, 119, 6, 0.25)', border: '1px solid rgba(251, 191, 36, 0.45)', text: '#fcd34d' },
+  hard: { bg: 'rgba(220, 38, 38, 0.25)', border: '1px solid rgba(248, 113, 113, 0.45)', text: '#fca5a5' },
+};
+
+// Restricts the song pool to the most well-known top 20%/50%/100% of tracks —
+// see DIFFICULTY_PCT server-side. Sliding highlight mirrors ModeToggle above.
+function DifficultyRow({ value, onChange }: Readonly<{ value: Difficulty; onChange: (v: Difficulty) => void }>) {
+  const index = DIFFICULTY_OPTIONS.findIndex(d => d.key === value);
+  const active = DIFFICULTY_STYLE[value];
+  return (
+    <div className="space-y-2">
+      <span style={{ color: 'rgba(255,255,255,0.5)', fontSize: '0.875rem' }}>Difficulty</span>
+      <div
+        className="relative flex rounded-xl"
+        style={{ background: 'rgba(255,255,255,0.05)', border: '1px solid rgba(255,255,255,0.08)', padding: '3px' }}
+      >
+        <div
+          className="absolute rounded-lg"
+          style={{
+            top: '3px', bottom: '3px', left: '3px',
+            width: 'calc((100% - 6px) / 3)',
+            background: active.bg,
+            border: active.border,
+            transform: `translateX(${index * 100}%)`,
+            transition: 'transform 0.25s cubic-bezier(0.4, 0, 0.2, 1), background 0.25s ease, border-color 0.25s ease',
+            pointerEvents: 'none',
+          }}
+        />
+        {DIFFICULTY_OPTIONS.map(({ key, label }) => (
+          <button
+            key={key}
+            onClick={() => onChange(key)}
+            className="relative flex-1 py-1.5 rounded-lg text-xs font-semibold z-10 transition-colors duration-200"
+            style={{
+              color: value === key ? DIFFICULTY_STYLE[key].text : 'rgba(255,255,255,0.45)',
+              background: 'transparent', border: 'none', cursor: 'pointer',
+            }}
+          >
+            {label}
+          </button>
+        ))}
+      </div>
+    </div>
+  );
+}
+
 function ToggleRow({ label, value, onToggle, disabled }: Readonly<{
   label: string; value: boolean; onToggle: () => void; disabled?: boolean;
 }>) {
   return (
     <div className="flex items-center justify-between">
-      <span style={{ color: disabled ? 'rgba(255,255,255,0.25)' : 'rgba(255,255,255,0.5)', fontSize: '0.875rem' }}>
+      <span style={{ color: disabled ? 'rgba(255,255,255,0.45)' : 'rgba(255,255,255,0.5)', fontSize: '0.875rem' }}>
         {label}
       </span>
       <button
@@ -748,10 +868,10 @@ function EndGameButton({ endGame }: Readonly<{ endGame: () => void }>) {
       className="text-xs transition-colors"
       style={{
         background: 'none', border: 'none', cursor: 'pointer',
-        color: confirming ? 'rgba(248,113,113,0.9)' : 'rgba(255,255,255,0.15)',
+        color: confirming ? 'rgba(248,113,113,0.9)' : 'rgba(255,255,255,0.28)',
       }}
       onMouseEnter={e => { if (!confirming) (e.currentTarget as HTMLElement).style.color = 'rgba(255,255,255,0.4)'; }}
-      onMouseLeave={e => { if (!confirming) (e.currentTarget as HTMLElement).style.color = 'rgba(255,255,255,0.15)'; }}
+      onMouseLeave={e => { if (!confirming) (e.currentTarget as HTMLElement).style.color = 'rgba(255,255,255,0.28)'; }}
     >
       {confirming ? 'Tap again to end the game' : 'End game'}
     </button>
@@ -787,11 +907,11 @@ function ConnectView({ game }: Readonly<{ game: HostState }>) {
             Connect Spotify
           </a>
           {errorMsg && (
-            <p className="text-red-400 text-sm text-center">{errorMsg} <a href={globalThis.location.pathname} className="underline">Try again</a></p>
+            <p className="text-red-400 text-sm text-center" aria-live="assertive">{errorMsg} <a href={globalThis.location.pathname} className="underline">Try again</a></p>
           )}
         </>
       )}
-      <p className="text-white/30 text-sm">Requires Spotify Premium</p>
+      <p className="text-white/45 text-sm">Requires Spotify Premium</p>
     </div>
   );
 }
@@ -809,6 +929,7 @@ function SettingsButton({ settingsOpen, toggleSettings }: Readonly<{ settingsOpe
       onClick={toggleSettings}
       onMouseEnter={() => setHovered(true)}
       onMouseLeave={() => setHovered(false)}
+      tabIndex={0}
       className="absolute top-5 right-5 flex items-center gap-2 rounded-full transition-all duration-200 z-10"
       style={{
         background: bg,
@@ -863,10 +984,11 @@ function ModeToggle({ mode, setMode }: Readonly<{ mode: Mode; setMode: (m: Mode)
         <button
           key={key}
           onClick={() => setMode(key)}
+          tabIndex={0}
           className="relative flex-1 py-2.5 rounded-xl text-sm font-semibold z-10 transition-colors duration-200 flex items-center justify-center gap-1.5"
-          style={{ color: mode === key ? MODE_STYLE[key].text : 'rgba(255,255,255,0.38)', background: 'transparent', border: 'none', cursor: 'pointer' }}
+          style={{ color: mode === key ? MODE_STYLE[key].text : 'rgba(255,255,255,0.45)', background: 'transparent', border: 'none', cursor: 'pointer' }}
         >
-          <Icon className="w-3.5 h-3.5 transition-colors duration-200" style={{ color: mode === key ? MODE_STYLE[key].icon : 'rgba(255,255,255,0.38)' }} />
+          <Icon className="w-3.5 h-3.5 transition-colors duration-200" style={{ color: mode === key ? MODE_STYLE[key].icon : 'rgba(255,255,255,0.45)' }} />
           {label}
         </button>
       ))}
@@ -885,6 +1007,7 @@ function StartButton({ players, mode, startGame }: Readonly<{ players: PlayerInf
   return (
     <button
       type="button"
+      tabIndex={0}
       className="liquid-btn relative cursor-pointer border-0 bg-transparent p-0 mt-auto"
       style={{
         width: '310px', height: '64px', borderRadius: '100px',
@@ -920,9 +1043,171 @@ function StartButton({ players, mode, startGame }: Readonly<{ players: PlayerInf
   );
 }
 
+// Waiting-room music: starts the instant LobbyView mounts (right after the
+// Spotify OAuth redirect — deliberately not gated on `pin`, since that isn't
+// set until the create_game round trip and Spotify device registration both
+// finish, several seconds later) and fades out (rather than cutting) when the
+// host leaves the lobby, by starting the game or backing out.
+//
+// Uses the Web Audio API instead of <audio loop>: Chromium doesn't honor an
+// MP3's LAME gapless-encoding metadata when it restarts a looping <audio>
+// element, leaving an audible click/gap at the loop boundary. decodeAudioData
+// does honor it, and looping the decoded AudioBuffer via AudioBufferSourceNode
+// is sample-accurate.
+function useLobbyMusic(muffled: boolean) {
+  const ctxRef = useRef<AudioContext | null>(null);
+  const sourceRef = useRef<AudioBufferSourceNode | null>(null);
+  const gainRef = useRef<GainNode | null>(null);
+  const filterRef = useRef<BiquadFilterNode | null>(null);
+  const fadeIntervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
+  const mutedRef = useRef(false);
+  const [muted, setMuted] = useState(false);
+
+  useEffect(() => {
+    let cancelled = false;
+    const ctx = new AudioContext();
+    ctxRef.current = ctx;
+
+    (async () => {
+      try {
+        const res = await fetch(`${import.meta.env.BASE_URL}theme.mp3`);
+        const arrayBuffer = await res.arrayBuffer();
+        const buffer = await ctx.decodeAudioData(arrayBuffer);
+        if (cancelled) return;
+        const filter = ctx.createBiquadFilter();
+        filter.type = 'lowpass';
+        filter.frequency.value = 22050; // fully open — no audible filtering
+        const gain = ctx.createGain();
+        gain.gain.value = mutedRef.current ? 0 : 1;
+        const source = ctx.createBufferSource();
+        source.buffer = buffer;
+        source.loop = true;
+        source.connect(filter).connect(gain).connect(ctx.destination);
+        source.start(0);
+        sourceRef.current = source;
+        gainRef.current = gain;
+        filterRef.current = filter;
+      } catch { /* fetch/decode failed; lobby just stays silent */ }
+    })();
+
+    // A fresh AudioContext starts suspended until a user gesture. Right after
+    // the OAuth redirect there hasn't been one yet, so resume on the first
+    // interaction (a harmless no-op once it's already running).
+    const resume = () => { ctx.resume().catch(() => {}); };
+    document.addEventListener('pointerdown', resume);
+    document.addEventListener('keydown', resume);
+    // Backgrounding the tab suspends the context; resume the instant it's
+    // foregrounded again instead of silently waiting for a click on the page.
+    const onVisibility = () => { if (document.visibilityState === 'visible') resume(); };
+    document.addEventListener('visibilitychange', onVisibility);
+
+    return () => {
+      cancelled = true;
+      document.removeEventListener('pointerdown', resume);
+      document.removeEventListener('keydown', resume);
+      document.removeEventListener('visibilitychange', onVisibility);
+      if (fadeIntervalRef.current) { clearInterval(fadeIntervalRef.current); fadeIntervalRef.current = null; }
+      sourceRef.current?.stop();
+      ctx.close().catch(() => {});
+    };
+  }, []);
+
+  // Smoothly filters out the high end when the game-expired dialog pops up,
+  // so the music reads as muffled behind the popup instead of playing on
+  // as if nothing happened.
+  useEffect(() => {
+    const ctx = ctxRef.current;
+    const filter = filterRef.current;
+    if (!ctx || !filter) return;
+    filter.frequency.cancelScheduledValues(ctx.currentTime);
+    filter.frequency.setValueAtTime(filter.frequency.value, ctx.currentTime);
+    filter.frequency.exponentialRampToValueAtTime(muffled ? 400 : 22050, ctx.currentTime + 1.2);
+  }, [muffled]);
+
+  const rampGain = (target: number, durationMs: number) => new Promise<void>(resolve => {
+    const gain = gainRef.current;
+    if (!gain) { resolve(); return; }
+    if (fadeIntervalRef.current) clearInterval(fadeIntervalRef.current);
+    const steps = 20;
+    const start = gain.gain.value;
+    let i = 0;
+    fadeIntervalRef.current = setInterval(() => {
+      i++;
+      gain.gain.value = start + (target - start) * (i / steps);
+      if (i >= steps) {
+        clearInterval(fadeIntervalRef.current!);
+        fadeIntervalRef.current = null;
+        gain.gain.value = target;
+        resolve();
+      }
+    }, durationMs / steps);
+  });
+
+  // Fades out and stops playback entirely, so callers that navigate away can
+  // wait for it first instead of cutting the music off mid-fade.
+  const fadeOut = async () => {
+    await rampGain(0, 800);
+    sourceRef.current?.stop();
+  };
+
+  const toggleMute = () => {
+    const next = !mutedRef.current;
+    mutedRef.current = next;
+    setMuted(next);
+    rampGain(next ? 0 : 1, 250);
+  };
+
+  return { fadeOut, muted, toggleMute };
+}
+
+function MuteButton({ muted, toggleMute }: Readonly<{ muted: boolean; toggleMute: () => void }>) {
+  const [hovered, setHovered] = useState(false);
+  return (
+    <button
+      onClick={toggleMute}
+      onMouseEnter={() => setHovered(true)}
+      onMouseLeave={() => setHovered(false)}
+      tabIndex={0}
+      aria-label={muted ? 'Unmute lobby music' : 'Mute lobby music'}
+      aria-pressed={muted}
+      className="absolute bottom-5 right-5 flex items-center justify-center rounded-full transition-all duration-200 z-10"
+      style={{
+        width: '38px', height: '38px',
+        background: hovered ? 'rgba(255,255,255,0.11)' : 'rgba(255,255,255,0.06)',
+        border: '1px solid rgba(255,255,255,0.10)',
+        backdropFilter: 'blur(12px)',
+        color: muted ? 'rgba(255,255,255,0.4)' : 'rgba(255,255,255,0.7)',
+        cursor: 'pointer',
+      }}
+    >
+      <span style={{ position: 'relative', width: '16px', height: '16px', display: 'inline-block' }}>
+        <Volume2
+          className="w-4 h-4"
+          style={{
+            position: 'absolute', inset: 0,
+            opacity: muted ? 0 : 1,
+            transform: muted ? 'scale(0.6) rotate(-15deg)' : 'scale(1) rotate(0deg)',
+            transition: 'opacity 0.25s ease, transform 0.25s ease',
+          }}
+        />
+        <VolumeX
+          className="w-4 h-4"
+          style={{
+            position: 'absolute', inset: 0,
+            opacity: muted ? 1 : 0,
+            transform: muted ? 'scale(1) rotate(0deg)' : 'scale(0.6) rotate(15deg)',
+            transition: 'opacity 0.25s ease, transform 0.25s ease',
+          }}
+        />
+      </span>
+    </button>
+  );
+}
+
 function LobbyView({ game }: Readonly<{ game: HostState }>) {
-  const { spotify, pin, players, createGame, startGame, mode, settingsOpen, toggleSettings, setMode, removePlayer } = game;
+  const { spotify, pin, players, createGame, startGame, mode, settingsOpen, toggleSettings, setMode, removePlayer, gameExpired } = game;
   const [lobbyVisible, setLobbyVisible] = useState(false);
+  const { fadeOut, muted, toggleMute } = useLobbyMusic(gameExpired);
 
   useEffect(() => {
     if (!pin) { setLobbyVisible(false); return; }
@@ -934,10 +1219,16 @@ function LobbyView({ game }: Readonly<{ game: HostState }>) {
     if (spotify.playerReady && !pin) createGame();
   }, [spotify.playerReady, pin]); // eslint-disable-line react-hooks/exhaustive-deps
 
+  const handleStart = () => {
+    fadeOut();
+    startGame();
+  };
+
   return (
     <div className="min-h-screen relative flex flex-col overflow-hidden">
-      <BackButton zIndex={10} />
+      <BackButton zIndex={10} beforeNavigate={fadeOut} />
       <SettingsButton settingsOpen={settingsOpen} toggleSettings={toggleSettings} />
+      <MuteButton muted={muted} toggleMute={toggleMute} />
 
       <SettingsPanel game={game} open={settingsOpen} />
 
@@ -946,7 +1237,7 @@ function LobbyView({ game }: Readonly<{ game: HostState }>) {
         style={{ transform: pin ? 'translateY(0)' : 'translateY(30vh)' }}
       >
         <img src={`${import.meta.env.BASE_URL}logo.png`} alt={APP_NAME} className="h-48 w-auto" />
-        <span className="text-white/40 text-sm flex items-center gap-2">
+        <span className="text-white/45 text-sm flex items-center gap-2">
           {spotify.playerReady ? (
             <><span className="w-2 h-2 rounded-full bg-green-500" />Spotify ready</>
           ) : (
@@ -960,12 +1251,13 @@ function LobbyView({ game }: Readonly<{ game: HostState }>) {
           <JoinCard pin={game.pin} copied={game.copied} copyInvite={game.copyInvite} />
           <ModeToggle mode={mode} setMode={setMode} />
           <div className="w-full max-w-md">
-            <p className="text-white/40 text-sm mb-2">{players.length} player{players.length === 1 ? '' : 's'}</p>
+            <p className="text-white/45 text-sm mb-2">{players.length} player{players.length === 1 ? '' : 's'}</p>
             <div className="flex flex-wrap gap-2">
               {players.map(p => (
                 <button
                   key={p.name}
                   onClick={() => removePlayer(p.name)}
+                  tabIndex={0}
                   className="relative group px-3 py-1.5 rounded-full bg-white/10 text-white text-sm font-semibold"
                   aria-label={`Remove ${p.name}`}
                 >
@@ -975,7 +1267,7 @@ function LobbyView({ game }: Readonly<{ game: HostState }>) {
               ))}
             </div>
           </div>
-          <StartButton players={players} mode={mode} startGame={startGame} />
+          <StartButton players={players} mode={mode} startGame={handleStart} />
         </div>
       ) : null}
     </div>
@@ -1001,12 +1293,12 @@ function BettingView({ game }: Readonly<{ game: HostState }>) {
 
       {/* Top bar */}
       <div className="relative flex items-center justify-between px-9 pt-7" style={{ zIndex: 2 }}>
-        <span style={{ color: 'rgba(255,255,255,0.35)', fontWeight: 600, fontSize: '1rem' }}>
+        <span style={{ color: 'rgba(255,255,255,0.45)', fontWeight: 600, fontSize: '1rem' }}>
           Round{' '}
           <span style={{ color: 'rgba(255,255,255,0.72)', fontWeight: 800 }}>{roundIndex + 1}</span>
-          <span style={{ color: 'rgba(255,255,255,0.18)' }}>/{totalRounds}</span>
+          <span style={{ color: 'rgba(255,255,255,0.45)' }}>/{totalRounds}</span>
         </span>
-        <span style={{ color: 'rgba(255,255,255,0.2)', fontFamily: 'monospace', letterSpacing: '0.12em', fontSize: '0.9rem' }}>
+        <span style={{ color: 'rgba(255,255,255,0.45)', fontFamily: 'monospace', letterSpacing: '0.12em', fontSize: '0.9rem' }}>
           PIN {pin}
         </span>
       </div>
@@ -1049,7 +1341,7 @@ function BettingView({ game }: Readonly<{ game: HostState }>) {
                   <div style={{ width: 1, alignSelf: 'stretch', background: 'rgba(255,255,255,0.08)', margin: '0 40px' }} />
                 )}
                 <div className="flex flex-col items-center gap-2">
-                  <span style={{ color: 'rgba(255,255,255,0.32)', fontSize: '0.65rem', textTransform: 'uppercase', letterSpacing: '0.2em' }}>
+                  <span style={{ color: 'rgba(255,255,255,0.45)', fontSize: '0.65rem', textTransform: 'uppercase', letterSpacing: '0.2em' }}>
                     {h.label}
                   </span>
                   <span style={{ color: 'white', fontWeight: 900, fontSize: '2.75rem', lineHeight: 1, letterSpacing: '-0.02em' }}>
@@ -1084,9 +1376,9 @@ function BettingView({ game }: Readonly<{ game: HostState }>) {
       <div className="relative flex flex-col justify-center items-center gap-2 pb-7" style={{ zIndex: 2 }}>
         <button
           onClick={skipTurn}
-          style={{ background: 'none', border: 'none', color: 'rgba(255,255,255,0.12)', fontSize: '0.75rem', cursor: 'pointer', transition: 'color 0.2s ease' }}
+          style={{ background: 'none', border: 'none', color: 'rgba(255,255,255,0.28)', fontSize: '0.75rem', cursor: 'pointer', transition: 'color 0.2s ease' }}
           onMouseEnter={e => { (e.currentTarget as HTMLElement).style.color = 'rgba(255,255,255,0.4)'; }}
-          onMouseLeave={e => { (e.currentTarget as HTMLElement).style.color = 'rgba(255,255,255,0.12)'; }}
+          onMouseLeave={e => { (e.currentTarget as HTMLElement).style.color = 'rgba(255,255,255,0.28)'; }}
         >
           Skip round
         </button>
@@ -1125,7 +1417,7 @@ function RaceHintBar({ hints }: Readonly<{ hints: Hint[] }>) {
             <div style={{ width: 1, alignSelf: 'stretch', background: 'rgba(255,255,255,0.08)' }} />
           )}
           <div className="flex flex-col items-center gap-1">
-            <span style={{ color: 'rgba(255,255,255,0.32)', fontSize: '0.6rem', textTransform: 'uppercase', letterSpacing: '0.18em' }}>
+            <span style={{ color: 'rgba(255,255,255,0.45)', fontSize: '0.6rem', textTransform: 'uppercase', letterSpacing: '0.18em' }}>
               {h.label}
             </span>
             <span style={{ color: 'white', fontWeight: 800, fontSize: '1.2rem', lineHeight: 1 }}>
@@ -1155,7 +1447,7 @@ export function PlayingView({ game }: Readonly<{ game: HostState }>) {
       <img src={`${import.meta.env.BASE_URL}background4.svg`} alt="" aria-hidden="true" style={{ position: 'fixed', inset: 0, width: '100%', height: '100%', objectFit: 'cover', zIndex: 0 }} />
       <div style={{ position: 'fixed', inset: 0, zIndex: 1, background: 'rgba(5,5,14,0.82)', backdropFilter: 'blur(28px)' }} />
       <div className="flex flex-col items-center gap-5 text-center w-full" style={{ position: 'relative', zIndex: 2 }}>
-        <p className="text-white/40 text-sm">Round {roundIndex + 1}/{totalRounds}</p>
+        <p className="text-white/45 text-sm">Round {roundIndex + 1}/{totalRounds}</p>
         <PartyBadge party={party} />
         <RaceHintBar hints={hints} />
 
@@ -1182,7 +1474,7 @@ export function PlayingView({ game }: Readonly<{ game: HostState }>) {
                 </>
               ) : (
                 <>
-                  <span style={{ color: 'rgba(255,255,255,0.32)', fontSize: '0.6rem', letterSpacing: '0.2em', textTransform: 'uppercase' }}>
+                  <span style={{ color: 'rgba(255,255,255,0.45)', fontSize: '0.6rem', letterSpacing: '0.2em', textTransform: 'uppercase' }}>
                     Get ready
                   </span>
                   <div className="text-8xl font-black text-white" style={{ animation: 'badgeBreathe 1s ease-in-out infinite' }}>{countdown}</div>
@@ -1208,7 +1500,7 @@ export function PlayingView({ game }: Readonly<{ game: HostState }>) {
         </div>
 
         <div className="flex flex-col items-center gap-2 mt-2">
-          <button onClick={skipTurn} className="text-white/20 text-xs hover:text-white/50 transition-colors">
+          <button onClick={skipTurn} className="text-white/28 text-xs hover:text-white/50 transition-colors">
             Skip round
           </button>
           <EndGameButton endGame={endGame} />
@@ -1232,7 +1524,7 @@ function GuessingView({ game }: Readonly<{ game: HostState }>) {
       <img src={`${import.meta.env.BASE_URL}background4.svg`} alt="" aria-hidden="true" style={{ position: 'fixed', inset: 0, width: '100%', height: '100%', objectFit: 'cover', zIndex: 0 }} />
       <div style={{ position: 'fixed', inset: 0, zIndex: 1, background: 'rgba(5,5,14,0.82)', backdropFilter: 'blur(28px)' }} />
       <div className="flex flex-col items-center gap-5 text-center w-full" style={{ position: 'relative', zIndex: 2 }}>
-        <p className="text-white/40 text-sm">Round {roundIndex + 1}/{totalRounds}</p>
+        <p className="text-white/45 text-sm">Round {roundIndex + 1}/{totalRounds}</p>
         <PartyBadge party={party} />
         <RaceHintBar hints={hints} />
 
@@ -1245,7 +1537,7 @@ function GuessingView({ game }: Readonly<{ game: HostState }>) {
             <div style={{ width: '254px', display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '16px' }}>
               {/* Audio is always paused by the time this view mounts (guessing_start pauses it). */}
               <AudioBars playing={false} accent={accent} height={32} />
-              <span style={{ color: 'rgba(255,255,255,0.32)', fontSize: '0.6rem', letterSpacing: '0.2em', textTransform: 'uppercase' }}>
+              <span style={{ color: 'rgba(255,255,255,0.45)', fontSize: '0.6rem', letterSpacing: '0.2em', textTransform: 'uppercase' }}>
                 Guessing
               </span>
               <span style={{ color: 'white', fontWeight: 900, fontSize: '1.4rem', lineHeight: 1.3, display: 'inline-block', minWidth: '210px', textAlign: 'center' }}>
@@ -1260,9 +1552,9 @@ function GuessingView({ game }: Readonly<{ game: HostState }>) {
           </LiquidGlass>
         </div>
 
-        {othersWaiting && <p className="text-white/25 text-sm">Other players are waiting...</p>}
+        {othersWaiting && <p className="text-white/45 text-sm">Other players are waiting...</p>}
         <div className="flex flex-col items-center gap-2 mt-2">
-          <button onClick={skipTurn} className="text-white/20 text-xs hover:text-white/50 transition-colors">
+          <button onClick={skipTurn} className="text-white/28 text-xs hover:text-white/50 transition-colors">
             Skip turn
           </button>
           <EndGameButton endGame={endGame} />
@@ -1291,7 +1583,7 @@ function RevealPlayerRow({
     const ellipsis = entry.live ? '…' : '';
     guessText = skipped ? 'skipped' : `"${entry.guess}${ellipsis}"`;
   }
-  const guessCls = (!skipped && correct) ? 'text-green-400 text-xs truncate min-w-0' : 'text-white/20 italic text-xs truncate min-w-0';
+  const guessCls = (!skipped && correct) ? 'text-green-400 text-xs truncate min-w-0' : 'text-white/28 italic text-xs truncate min-w-0';
   if (!entry) {
     return (
       <button onClick={() => removePlayer(player.name)} aria-label={`Remove ${player.name}`} className="relative group w-full text-left py-1">
@@ -1302,7 +1594,7 @@ function RevealPlayerRow({
                 <Flame className="w-3 h-3" />{streak}
               </span>
             )}
-            <span className="text-xs truncate text-white/30">{player.name}</span>
+            <span className="text-xs truncate text-white/45">{player.name}</span>
           </div>
           <p className="text-white/60 text-xs tabular-nums shrink-0">{displayScore.toLocaleString()}</p>
         </div>
@@ -1321,7 +1613,7 @@ function RevealPlayerRow({
               <Flame className="w-3 h-3" />{streak}
             </span>
           )}
-          <span className={`text-xs truncate ${correct ? 'text-white font-semibold' : 'text-white/30'}`}>{player.name}</span>
+          <span className={`text-xs truncate ${correct ? 'text-white font-semibold' : 'text-white/45'}`}>{player.name}</span>
         </div>
         {delta > 0 && (
           <p className={`text-sky-400 text-xs tabular-nums shrink-0 transition-opacity duration-500 ${deltaFading ? 'opacity-0' : 'opacity-100'}`}>
@@ -1335,7 +1627,7 @@ function RevealPlayerRow({
           <p className={guessCls}>
             {guessText}
             {correct && entry?.timeMs != null && (
-              <span className="ml-1 text-white/25 text-xs">{(entry.timeMs / 1000).toFixed(1)}s</span>
+              <span className="ml-1 text-white/45 text-xs">{(entry.timeMs / 1000).toFixed(1)}s</span>
             )}
           </p>
         ) : <span />}
@@ -1367,7 +1659,7 @@ function RevealShell({
         style={{ position: 'fixed', inset: 0, width: '100%', height: '100%', objectFit: 'cover', zIndex: 0, transform: 'rotate(180deg)' }}
       />
       <div style={{ position: 'fixed', inset: 0, zIndex: 1, background: 'rgba(5,5,14,0.82)', backdropFilter: 'blur(28px)' }} />
-      <p className="text-white/40 text-sm self-start" style={{ position: 'relative', zIndex: 2 }}>{roundIndex + 1} / {totalRounds}</p>
+      <p className="text-white/45 text-sm self-start" style={{ position: 'relative', zIndex: 2 }}>{roundIndex + 1} / {totalRounds}</p>
 
       <div className="liquid-btn relative" style={{ width: wide ? 'min(88vw, 366px)' : '310px', height: `${cardHeight}px`, zIndex: 2 }}>
         <LiquidGlass
@@ -1507,7 +1799,7 @@ function LeaderboardView({ game }: Readonly<{ game: HostState }>) {
         {isFinished ? 'Final Scores' : 'Leaderboard'}
       </h2>
 
-      <div className="flex-1 space-y-3 relative z-10">
+      <div className="flex-1 min-h-0 overflow-y-auto space-y-3 relative z-10">
         {leaderboard.map((e, i) => (
           <LeaderboardRow
             key={e.name}
@@ -1542,13 +1834,33 @@ function LeaderboardView({ game }: Readonly<{ game: HostState }>) {
 
 // ─── Component ────────────────────────────────────────────────────────────────
 
+// Screen-reader narration of major phase changes — the screen itself swaps
+// components wholesale on each transition, which gives sighted players a
+// visual cue but nothing a screen reader announces on its own.
+function phaseAnnouncement(phase: Phase, result: RoundResultEvent | null): string {
+  switch (phase) {
+    case 'lobby': return 'Lobby ready. Players can join.';
+    case 'betting': return 'Betting is open.';
+    case 'playing': return 'Song is playing.';
+    case 'guessing': return 'Guessing has started.';
+    case 'reveal': return result?.correct ? 'Round result: someone got it.' : 'Round result: no one got it.';
+    case 'leaderboard': return 'Leaderboard updated.';
+    case 'finished': return 'Final scores are in.';
+    default: return '';
+  }
+}
+
 export default function Host() {
   const game = useHostGame();
   const navigate = useNavigate();
   const { phase, result, reconnecting, reconnectingCount, gameExpired } = game;
+  const gameExpiredRef = useRef<HTMLDialogElement>(null);
+  useEscapeKey(() => navigate('/'), gameExpired);
+  useFocusTrap(gameExpiredRef, gameExpired);
 
   return (
     <div className="relative">
+      <div aria-live="polite" className="sr-only">{phaseAnnouncement(phase, result)}</div>
       <RoundIntro party={game.party} roundKey={game.roundIndex} />
       {phase === 'connect' && <ConnectView game={game} />}
       {phase === 'lobby' && <LobbyView game={game} />}
@@ -1562,11 +1874,27 @@ export default function Host() {
         <div className="fixed inset-0 bg-black/70 backdrop-blur-sm flex flex-col items-center justify-center z-50 gap-3">
           <div className="w-10 h-10 border-2 border-white/30 border-t-white rounded-full animate-spin" />
           <p className="text-white/70 text-sm font-medium">Reconnecting...</p>
-          <p className="text-white/30 text-xs">Game is still running</p>
+          <p className="text-white/45 text-xs">Game is still running</p>
         </div>
       )}
       {gameExpired && (
-        <div className="fixed inset-0 flex items-center justify-center z-50" style={{ background: 'rgba(8,8,18,0.92)', backdropFilter: 'blur(12px)' }}>
+        <dialog
+          ref={gameExpiredRef}
+          open
+          aria-modal="true"
+          aria-label="Game expired"
+          className="fixed inset-0 flex items-center justify-center z-50"
+          style={{
+            width: '100%',
+            height: '100%',
+            margin: 0,
+            border: 'none',
+            padding: 0,
+            color: 'inherit',
+            background: 'rgba(8,8,18,0.92)',
+            backdropFilter: 'blur(12px)',
+          }}
+        >
           <div style={{ position: 'absolute', inset: 0, pointerEvents: 'none', background: 'radial-gradient(ellipse 60% 40% at 50% 50%, rgba(86,20,140,0.22) 0%, transparent 65%)' }} />
           <div className="liquid-btn relative" style={{ width: '310px', height: '230px' }}>
             <LiquidGlass
@@ -1575,10 +1903,10 @@ export default function Host() {
               padding="32px 28px"
             >
               <div style={{ width: '254px', display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '12px' }}>
-                <Clock style={{ width: '30px', height: '30px', color: 'rgba(255,255,255,0.22)' }} strokeWidth={1.5} />
+                <Clock style={{ width: '30px', height: '30px', color: 'rgba(255,255,255,0.45)' }} strokeWidth={1.5} />
                 <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '6px' }}>
                   <p style={{ color: 'white', fontWeight: 800, fontSize: '1.2rem', letterSpacing: '-0.01em' }}>Game expired</p>
-                  <p style={{ color: 'rgba(255,255,255,0.38)', fontSize: '0.8rem', textAlign: 'center', lineHeight: 1.5 }}>You were away too long and the game was closed.</p>
+                  <p style={{ color: 'rgba(255,255,255,0.45)', fontSize: '0.8rem', textAlign: 'center', lineHeight: 1.5 }}>You were away too long and the game was closed.</p>
                 </div>
                 <button
                   onClick={() => navigate('/')}
@@ -1591,7 +1919,7 @@ export default function Host() {
               </div>
             </LiquidGlass>
           </div>
-        </div>
+        </dialog>
       )}
       {reconnectingCount > 0 && !reconnecting && (
         <div className="fixed bottom-5 right-5 flex items-center gap-2 bg-white/8 backdrop-blur-sm rounded-full px-3 py-1.5 z-40">

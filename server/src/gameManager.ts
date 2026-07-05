@@ -1,6 +1,6 @@
 import { randomInt } from 'node:crypto';
 import {
-  Game, GuessTarget, Hint, PartyClientView, PartyConfig, PartyEvent, PartyFormat,
+  Difficulty, Game, GuessTarget, Hint, PartyClientView, PartyConfig, PartyEvent, PartyFormat,
   Player, Round, Song, YearResult,
 } from './types';
 import { loadSongs } from './songLoader';
@@ -43,6 +43,10 @@ export function playMsFor(bid: number): number {
   return Math.max(bid * 1000, MIN_PLAY_MS);
 }
 
+// Fraction of the song pool in play per difficulty, taken from the top of the
+// rank-sorted list — i.e. the most well-known songs first.
+const DIFFICULTY_PCT: Record<Difficulty, number> = { easy: 0.2, medium: 0.5, hard: 1 };
+
 let songs: Song[] = [];
 const games = new Map<string, Game>();
 const socketToPin = new Map<string, string>();
@@ -50,6 +54,13 @@ const socketToPin = new Map<string, string>();
 export function initSongs() {
   songs = loadSongs();
   console.log(`Loaded ${songs.length} playable songs`);
+}
+
+// `songs` is sorted ascending by rank (loadSongs), so the top slice is the
+// most well-known songs — that's what makes 'easy' actually easy.
+function difficultyPool(difficulty: Difficulty): Song[] {
+  const count = Math.max(1, Math.ceil(songs.length * DIFFICULTY_PCT[difficulty]));
+  return songs.slice(0, count);
 }
 
 function generatePin(): string {
@@ -439,9 +450,13 @@ function buildRoundHints(song: Song, party: PartyConfig | undefined, guessKind: 
   return hints;
 }
 
-function buildRound(usedSongIds: Set<string>, artistOnly = false, yearOnly = false, party?: PartyConfig, raceTimeSec = 15): Round {
-  let pool = songs.filter(s => !usedSongIds.has(s.spotifyTrackId));
-  if (pool.length === 0) pool = songs;
+function buildRound(
+  usedSongIds: Set<string>, artistOnly = false, yearOnly = false, party?: PartyConfig,
+  raceTimeSec = 15, difficulty: Difficulty = 'hard',
+): Round {
+  const basePool = difficultyPool(difficulty);
+  let pool = basePool.filter(s => !usedSongIds.has(s.spotifyTrackId));
+  if (pool.length === 0) pool = basePool;
   const isYearRound = party ? party.format === 'year' : yearOnly;
   // A year round is unplayable without a known year.
   if (isYearRound) {
@@ -503,6 +518,7 @@ export function createGame(hostSocketId: string, preferredPin?: string): Game {
     raceWinnerOnly: false,
     artistOnly: false,
     yearOnly: false,
+    difficulty: 'hard',
     currentRound: null,
     usedSongIds: new Set(),
     phaseTimer: null,
@@ -604,7 +620,7 @@ export function startRound(game: Game): Round {
   // Build the party recipe before replacing currentRound — it reads the
   // previous round's format/event to avoid repeats.
   const party = game.mode === 'party' ? buildPartyConfig(game) : undefined;
-  const round = buildRound(game.usedSongIds, game.artistOnly, game.yearOnly, party, game.raceTime);
+  const round = buildRound(game.usedSongIds, game.artistOnly, game.yearOnly, party, game.raceTime, game.difficulty);
   game.usedSongIds.add(round.song.spotifyTrackId);
   game.currentRound = round;
   game.phase = 'betting';

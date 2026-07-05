@@ -1,5 +1,7 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import type { PartyInfo, RoundResultEvent } from '../types';
+import { useEscapeKey } from '../hooks/useEscapeKey';
+import { useFocusTrap } from '../hooks/useFocusTrap';
 
 // How long the announcement stays up. Betting/countdown timers run underneath,
 // so this must stay comfortably shorter than the shortest phase (5s minimum).
@@ -20,9 +22,13 @@ export function RoundIntro({ party, roundKey, dismissible = true }: Readonly<{ p
     return () => clearTimeout(t);
   }, [party, roundKey]);
 
-  if (!party) return null;
-
   const dismiss = () => setVisible(false);
+  const overlayRef = useRef<HTMLButtonElement>(null);
+  const trapActive = dismissible && visible && !!party;
+  useEscapeKey(dismiss, trapActive);
+  useFocusTrap(overlayRef, trapActive);
+
+  if (!party) return null;
 
   // Event/target titles ("Double Points", "Who Sings It?", "The Finale", …)
   // don't say whether this is a bid-and-guess or everyone-at-once round, so
@@ -53,7 +59,7 @@ export function RoundIntro({ party, roundKey, dismissible = true }: Readonly<{ p
         transition: 'transform 0.4s ease',
       }}
     >
-      <p style={{ color: 'rgba(255,255,255,0.32)', fontSize: '0.68rem', letterSpacing: '0.32em', textTransform: 'uppercase', marginBottom: '12px' }}>
+      <p style={{ color: 'rgba(255,255,255,0.45)', fontSize: '0.68rem', letterSpacing: '0.32em', textTransform: 'uppercase', marginBottom: '12px' }}>
         {party.finale ? 'Last round' : 'Next up'}
       </p>
       {flowBadge && (
@@ -82,7 +88,7 @@ export function RoundIntro({ party, roundKey, dismissible = true }: Readonly<{ p
         {party.intro.tagline}
       </p>
       {dismissible && (
-        <p style={{ color: 'rgba(255,255,255,0.22)', fontSize: '0.68rem', letterSpacing: '0.1em', textTransform: 'uppercase', marginTop: '22px' }}>
+        <p style={{ color: 'rgba(255,255,255,0.45)', fontSize: '0.68rem', letterSpacing: '0.1em', textTransform: 'uppercase', marginTop: '22px' }}>
           Tap to skip
         </p>
       )}
@@ -92,8 +98,12 @@ export function RoundIntro({ party, roundKey, dismissible = true }: Readonly<{ p
   if (dismissible) {
     return (
       <button
+        ref={overlayRef}
         type="button"
         onClick={dismiss}
+        aria-label="Dismiss round announcement"
+        tabIndex={visible ? 0 : -1}
+        aria-hidden={!visible}
         style={{ ...overlayStyle, border: 'none', padding: 0, margin: 0, font: 'inherit', color: 'inherit', cursor: 'pointer' }}
       >
         {content}
@@ -149,7 +159,7 @@ export function PartyRevealExtras({ result, stealResult }: Readonly<{
         </span>
       )}
       {showPending && (
-        <span style={{ color: 'rgba(255,255,255,0.35)', fontSize: '0.75rem' }}>
+        <span style={{ color: 'rgba(255,255,255,0.45)', fontSize: '0.75rem' }}>
           {result.stealPending} is choosing who to rob…
         </span>
       )}

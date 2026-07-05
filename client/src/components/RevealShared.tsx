@@ -34,7 +34,7 @@ export function NoOneGotItCardContent({ result }: Readonly<{ result: RoundResult
         display: 'flex', alignItems: 'center', justifyContent: 'center',
         marginBottom: '10px',
       }}>
-        <X style={{ width: '22px', height: '22px', color: 'rgba(255,255,255,0.25)' }} />
+        <X style={{ width: '22px', height: '22px', color: 'rgba(255,255,255,0.45)' }} />
       </div>
       <span style={{
         fontSize: '1.4rem', fontWeight: 900, letterSpacing: '0.01em',
@@ -46,7 +46,7 @@ export function NoOneGotItCardContent({ result }: Readonly<{ result: RoundResult
       </span>
       <div style={{ width: '100%', height: '1px', background: 'rgba(255,255,255,0.08)', marginBottom: '14px' }} />
       <span style={{
-        color: 'rgba(255,255,255,0.28)', fontSize: '0.6rem', letterSpacing: '0.18em', textTransform: 'uppercase',
+        color: 'rgba(255,255,255,0.45)', fontSize: '0.6rem', letterSpacing: '0.18em', textTransform: 'uppercase',
         marginBottom: '10px', display: 'inline-block',
       }}>
         {artistOnly ? 'The artist was' : 'The song was'}
@@ -70,7 +70,7 @@ function SongInfo({ result }: Readonly<{ result: RoundResultEvent }>) {
         <>
           <span style={{ color: 'white', fontWeight: 900, fontSize: '1.1rem', lineHeight: 1.3, display: 'inline-block', minWidth: '220px' }}>
             {result.artist}
-            {result.featuredArtists && <span style={{ color: 'rgba(255,255,255,0.38)', fontWeight: 400, fontSize: '0.875rem' }}> feat. {result.featuredArtists}</span>}
+            {result.featuredArtists && <span style={{ color: 'rgba(255,255,255,0.45)', fontWeight: 400, fontSize: '0.875rem' }}> feat. {result.featuredArtists}</span>}
           </span>
           <span style={{ color: 'rgba(255,255,255,0.45)', fontSize: '0.875rem', marginTop: '3px', display: 'inline-block', minWidth: '220px' }}>
             {result.songTitle}
@@ -82,12 +82,12 @@ function SongInfo({ result }: Readonly<{ result: RoundResultEvent }>) {
             {result.songTitle}
           </span>
           <span style={{ color: 'rgba(255,255,255,0.45)', fontSize: '0.875rem', marginTop: '3px', display: 'inline-block', minWidth: '220px' }}>
-            {result.artist}{result.featuredArtists ? <span style={{ color: 'rgba(255,255,255,0.22)' }}> feat. {result.featuredArtists}</span> : null}
+            {result.artist}{result.featuredArtists ? <span style={{ color: 'rgba(255,255,255,0.45)' }}> feat. {result.featuredArtists}</span> : null}
           </span>
         </>
       )}
       {result.year && (
-        <span style={{ color: 'rgba(255,255,255,0.22)', fontSize: '0.75rem', marginTop: '4px', display: 'inline-block' }}>
+        <span style={{ color: 'rgba(255,255,255,0.45)', fontSize: '0.75rem', marginTop: '4px', display: 'inline-block' }}>
           {result.year}
         </span>
       )}
@@ -102,7 +102,7 @@ function YearHeading({ year, compact }: Readonly<{ year: number | string; compac
   return (
     <>
       <span style={{
-        color: 'rgba(255,255,255,0.28)', fontSize: '0.6rem', letterSpacing: '0.18em', textTransform: 'uppercase',
+        color: 'rgba(255,255,255,0.45)', fontSize: '0.6rem', letterSpacing: '0.18em', textTransform: 'uppercase',
         marginBottom: compact ? '6px' : '4px', display: 'inline-block',
       }}>
         The year was
@@ -290,7 +290,7 @@ export function YearTimelineContent({ result, showGuessValues = true }: Readonly
                   position: 'absolute', left: '50%', transform: 'translateX(-50%)',
                   top: `${yearOffset}px`,
                   fontSize: '0.6rem', whiteSpace: 'nowrap',
-                  color: isBest ? winnerColorSoft : 'rgba(255,255,255,0.35)',
+                  color: isBest ? winnerColorSoft : 'rgba(255,255,255,0.45)',
                   fontWeight: isBest ? 700 : 500,
                 }}>
                   {group.guess}
@@ -302,7 +302,7 @@ export function YearTimelineContent({ result, showGuessValues = true }: Readonly
       </div>
 
       {passCount > 0 && (
-        <span style={{ color: 'rgba(255,255,255,0.25)', fontSize: '0.68rem', marginBottom: '4px' }}>
+        <span style={{ color: 'rgba(255,255,255,0.45)', fontSize: '0.68rem', marginBottom: '4px' }}>
           {passCount} didn't guess
         </span>
       )}
@@ -371,7 +371,7 @@ export function GotItCardContent({ result, myName }: Readonly<{ result: RoundRes
       </span>
       <div style={{ width: '100%', height: '1px', background: 'rgba(255,255,255,0.08)', marginBottom: '14px' }} />
       <span style={{
-        color: 'rgba(255,255,255,0.28)', fontSize: '0.6rem', letterSpacing: '0.18em', textTransform: 'uppercase',
+        color: 'rgba(255,255,255,0.45)', fontSize: '0.6rem', letterSpacing: '0.18em', textTransform: 'uppercase',
         marginBottom: '10px', display: 'inline-block',
       }}>
         {artistOnly ? 'The artist was' : 'The song was'}

@@ -72,7 +72,15 @@ app.get('/api/health', (_req, res) => res.json({ ok: true }));
 
 if (process.env.NODE_ENV === 'production') {
   const clientDist = path.join(__dirname, '../../client/dist');
-  app.use(express.static(clientDist));
+  app.use(express.static(clientDist, {
+    // index.html references content-hashed bundle filenames, so it must be
+    // revalidated on every load; everything else (JS/CSS bundles, theme.mp3,
+    // images) is safe to cache for a day instead of round-tripping to Railway
+    // to revalidate on every single page load.
+    setHeaders: (res, filePath) => {
+      res.setHeader('Cache-Control', filePath.endsWith('.html') ? 'no-cache' : 'public, max-age=86400');
+    },
+  }));
   app.get('*', (_req, res) => res.sendFile(path.join(clientDist, 'index.html')));
 }
 
@@ -380,7 +388,7 @@ io.on('connection', (socket) => {
   });
 
   // ── Host: start game → first round ────────────────────────────────────────
-  socket.on('start_game', (payload?: { settings?: { bettingTime?: number; guessingTime?: number; totalRounds?: number; mode?: string; raceTime?: number; raceWinnerOnly?: boolean; artistOnly?: boolean; yearOnly?: boolean } }) => {
+  socket.on('start_game', (payload?: { settings?: { bettingTime?: number; guessingTime?: number; totalRounds?: number; mode?: string; raceTime?: number; raceWinnerOnly?: boolean; artistOnly?: boolean; yearOnly?: boolean; difficulty?: string } }) => {
     const game = gm.getGameBySocket(socket.id);
     if (game?.hostSocketId !== socket.id || game.phase !== 'lobby') return;
     const s = payload?.settings;
@@ -403,6 +411,7 @@ io.on('connection', (socket) => {
     game.raceWinnerOnly = game.mode === 'race' && s?.raceWinnerOnly === true;
     // Year isn't a title/artist target, so it can't coexist with artist-only.
     game.artistOnly = !isParty && !game.yearOnly && s?.artistOnly === true;
+    game.difficulty = s?.difficulty === 'easy' || s?.difficulty === 'medium' ? s.difficulty : 'hard';
     game.roundIndex = 0;
     beginRound(game);
   });
