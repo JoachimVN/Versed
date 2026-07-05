@@ -50,6 +50,17 @@ body {
   outline-offset: 3px;
 }
 
+/* Text-entry elements match :focus-visible even on mouse click (per spec —
+   unlike buttons), so the global ring above would flash on every tap into a
+   field. The caret + our own focused-label styling already mark focus, so
+   drop the ring for these everywhere. */
+input:focus-visible,
+textarea:focus-visible,
+select:focus-visible,
+[contenteditable]:focus-visible {
+  outline: none;
+}
+
 /* useFocusTrap's initial focus() runs in an effect, so Chromium can't tell
    it apart from real keyboard nav and shows a ring even after a mouse click
    opened the overlay. That hook adds/removes this class around the ring. */

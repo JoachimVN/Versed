@@ -8,6 +8,7 @@ import { socket } from '../socket';
 import { useSpotify } from '../hooks/useSpotify';
 import { useEscapeKey } from '../hooks/useEscapeKey';
 import { useFocusTrap } from '../hooks/useFocusTrap';
+import { useSoundEffect } from '../hooks/useSoundEffect';
 import { RankBadge } from '../components/RankBadge';
 import { useAnimatedScore } from '../hooks/useAnimatedScore';
 import { ConfettiBackground } from '../components/ConfettiBackground';
@@ -119,6 +120,7 @@ export interface HostState {
 
 function useHostGame(): HostState {
   const spotify = useSpotify();
+  const playBeat = useSoundEffect(`${import.meta.env.BASE_URL}timer_beat.wav`);
   const savedSettings = useMemo(loadSavedHostSettings, []);
   const [phase, setPhase] = useState<Phase>('connect');
   // The PIN survives page reloads via sessionStorage so an accidental reload
@@ -329,6 +331,7 @@ function useHostGame(): HostState {
       for (let n = ticks; n > 0; n--) {
         if (playGenRef.current !== myGen) return;
         setCountdown(n);
+        playBeat();
         await wait(1000);
       }
       if (playGenRef.current !== myGen) return;
