@@ -1044,6 +1044,25 @@ function StartButton({ players, mode, startGame }: Readonly<{ players: PlayerInf
   );
 }
 
+// Kicked off the moment this module loads — i.e. as soon as the /host route
+// renders ConnectView, well before the Spotify OAuth round trip (several
+// seconds of redirect + login) completes and LobbyView mounts. That gives the
+// fetch a head start so the bytes are already local by the time they're
+// needed; decodeAudioData is called fresh each time since it neuters
+// (transfers) the ArrayBuffer it's given, so the cached bytes are sliced
+// before each decode to stay reusable.
+let themeArrayBufferPromise: Promise<ArrayBuffer> | null = null;
+function preloadThemeAudio(): Promise<ArrayBuffer> {
+  themeArrayBufferPromise ??= fetch(`${import.meta.env.BASE_URL}theme.mp3`).then(res => res.arrayBuffer());
+  return themeArrayBufferPromise;
+}
+// Routes aren't code-split, so every page (including /play joiners who never
+// see the lobby) loads this module — gate on the real URL so only genuine
+// /host visits pay for the download. /host is only ever reached via a full
+// navigation (OAuth redirect callback, or a direct/bookmarked hit), never
+// client-side `navigate()`, so location.pathname reflects the actual visit.
+if (globalThis.location.pathname.includes('/host')) preloadThemeAudio();
+
 // Waiting-room music: starts the instant LobbyView mounts (right after the
 // Spotify OAuth redirect — deliberately not gated on `pin`, since that isn't
 // set until the create_game round trip and Spotify device registration both
@@ -1071,8 +1090,7 @@ function useLobbyMusic(muffled: boolean) {
 
     (async () => {
       try {
-        const res = await fetch(`${import.meta.env.BASE_URL}theme.mp3`);
-        const arrayBuffer = await res.arrayBuffer();
+        const arrayBuffer = (await preloadThemeAudio()).slice(0);
         const buffer = await ctx.decodeAudioData(arrayBuffer);
         if (cancelled) return;
         const filter = ctx.createBiquadFilter();
