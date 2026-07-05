@@ -19,6 +19,7 @@ import { CircularTimer } from '../components/CircularTimer';
 import { AudioBars } from '../components/AudioBars';
 import { LIQUID_CARD_PROPS, LIQUID_PILL_PROPS } from '../components/liquidGlassPresets';
 import { APP_NAME, BACKEND_URL, RACE_TIME } from '../config';
+import { commonPhaseAnnouncement } from '../utils/phaseAnnouncement';
 import type { Hint, LeaderboardEntry, PartyInfo, PlayerInfo, RoundResultEvent } from '../types';
 
 type Phase = 'connect' | 'lobby' | 'betting' | 'playing' | 'guessing' | 'reveal' | 'leaderboard' | 'finished';
@@ -1564,6 +1565,8 @@ function GuessingView({ game }: Readonly<{ game: HostState }>) {
   );
 }
 
+type GuessCorrectness = 'none' | 'correct' | 'exact';
+
 function RevealPlayerRow({
   player, entry, delta, delay, correct, instant, removePlayer,
 }: Readonly<{
@@ -1571,7 +1574,7 @@ function RevealPlayerRow({
   entry?: { guess: string | null; timeMs?: number | null; live?: boolean };
   delta: number;
   delay: number;
-  correct: boolean;
+  correct: GuessCorrectness;
   instant: boolean;
   removePlayer: (name: string) => void;
 }>) {
@@ -1583,7 +1586,8 @@ function RevealPlayerRow({
     const ellipsis = entry.live ? '…' : '';
     guessText = skipped ? 'skipped' : `"${entry.guess}${ellipsis}"`;
   }
-  const guessCls = (!skipped && correct) ? 'text-green-400 text-xs truncate min-w-0' : 'text-white/28 italic text-xs truncate min-w-0';
+  const correctCls = correct === 'exact' ? 'text-amber-400' : 'text-green-400';
+  const guessCls = (!skipped && correct !== 'none') ? `${correctCls} text-xs truncate min-w-0` : 'text-white/28 italic text-xs truncate min-w-0';
   if (!entry) {
     return (
       <button onClick={() => removePlayer(player.name)} aria-label={`Remove ${player.name}`} className="relative group w-full text-left py-1">
@@ -1613,7 +1617,7 @@ function RevealPlayerRow({
               <Flame className="w-3 h-3" />{streak}
             </span>
           )}
-          <span className={`text-xs truncate ${correct ? 'text-white font-semibold' : 'text-white/45'}`}>{player.name}</span>
+          <span className={`text-xs truncate ${correct === 'none' ? 'text-white/45' : 'text-white font-semibold'}`}>{player.name}</span>
         </div>
         {delta > 0 && (
           <p className={`text-sky-400 text-xs tabular-nums shrink-0 transition-opacity duration-500 ${deltaFading ? 'opacity-0' : 'opacity-100'}`}>
@@ -1626,7 +1630,7 @@ function RevealPlayerRow({
         {guessText ? (
           <p className={guessCls}>
             {guessText}
-            {correct && entry?.timeMs != null && (
+            {correct !== 'none' && entry?.timeMs != null && (
               <span className="ml-1 text-white/45 text-xs">{(entry.timeMs / 1000).toFixed(1)}s</span>
             )}
           </p>
@@ -1646,7 +1650,7 @@ function RevealShell({
   instant: boolean;
   cardHeight: number;
   cardContent: React.ReactNode;
-  isCorrectFor: (player: PlayerInfo) => boolean;
+  isCorrectFor: (player: PlayerInfo) => GuessCorrectness;
   wide?: boolean;
 }>) {
   const { roundIndex, totalRounds, players, roundDeltas, removePlayer, endGame, stealResult } = game;
@@ -1719,7 +1723,12 @@ export function RevealView({ game, result, instant = false }: Readonly<{ game: H
         cardHeight={result.coverUrl ? 500 : 380}
         cardContent={<YearTimelineContent result={result} />}
         wide
-        isCorrectFor={(p) => !!result.yearResults?.some(r => r.name === p.name && r.diff === 0)}
+        isCorrectFor={(p) => {
+          const bestDiff = result.yearResults?.find(r => r.diff !== null)?.diff ?? null;
+          const diff = result.yearResults?.find(r => r.name === p.name)?.diff ?? null;
+          if (diff === null || bestDiff === null || diff !== bestDiff) return 'none';
+          return diff === 0 ? 'exact' : 'correct';
+        }}
       />
     );
   }
@@ -1732,7 +1741,7 @@ export function RevealView({ game, result, instant = false }: Readonly<{ game: H
         instant={instant}
         cardHeight={result.coverUrl ? 480 : 240}
         cardContent={<NoOneGotItCardContent result={result} />}
-        isCorrectFor={() => false}
+        isCorrectFor={() => 'none'}
       />
     );
   }
@@ -1744,7 +1753,10 @@ export function RevealView({ game, result, instant = false }: Readonly<{ game: H
       instant={instant}
       cardHeight={result.coverUrl ? 480 : 240}
       cardContent={<GotItCardContent result={result} />}
-      isCorrectFor={(p) => isRace ? !!result.correctGuessers?.includes(p.name) : (p.name === result.guesserName)}
+      isCorrectFor={(p) => {
+        const correct = isRace ? !!result.correctGuessers?.includes(p.name) : (p.name === result.guesserName);
+        return correct ? 'correct' : 'none';
+      }}
     />
   );
 }
@@ -1838,14 +1850,13 @@ function LeaderboardView({ game }: Readonly<{ game: HostState }>) {
 // components wholesale on each transition, which gives sighted players a
 // visual cue but nothing a screen reader announces on its own.
 function phaseAnnouncement(phase: Phase, result: RoundResultEvent | null): string {
+  const common = commonPhaseAnnouncement(phase, result);
+  if (common !== null) return common;
   switch (phase) {
     case 'lobby': return 'Lobby ready. Players can join.';
     case 'betting': return 'Betting is open.';
     case 'playing': return 'Song is playing.';
     case 'guessing': return 'Guessing has started.';
-    case 'reveal': return result?.correct ? 'Round result: someone got it.' : 'Round result: no one got it.';
-    case 'leaderboard': return 'Leaderboard updated.';
-    case 'finished': return 'Final scores are in.';
     default: return '';
   }
 }

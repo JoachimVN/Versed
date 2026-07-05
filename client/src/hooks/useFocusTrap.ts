@@ -38,9 +38,12 @@ export function useFocusTrap<T extends HTMLElement>(containerRef: React.RefObjec
       if (items.length === 0) { e.preventDefault(); return; }
       const currentIndex = items.indexOf(document.activeElement as HTMLElement);
       const lastIndex = items.length - 1;
-      const nextIndex = e.shiftKey
-        ? (currentIndex <= 0 ? lastIndex : currentIndex - 1)
-        : (currentIndex === lastIndex ? 0 : currentIndex + 1);
+      let nextIndex: number;
+      if (e.shiftKey) {
+        nextIndex = currentIndex <= 0 ? lastIndex : currentIndex - 1;
+      } else {
+        nextIndex = currentIndex === lastIndex ? 0 : currentIndex + 1;
+      }
       e.preventDefault();
       items[nextIndex].focus();
     };
