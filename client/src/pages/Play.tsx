@@ -15,6 +15,7 @@ import { CircularTimer, timerColor } from '../components/CircularTimer';
 import { AudioBars } from '../components/AudioBars';
 import { LIQUID_CARD_PROPS, LIQUID_PILL_PROPS } from '../components/liquidGlassPresets';
 import { APP_NAME, BID_OPTIONS } from '../config';
+import { commonPhaseAnnouncement } from '../utils/phaseAnnouncement';
 import type { Hint, LeaderboardEntry, PartyInfo, RoundResultEvent } from '../types';
 
 type Phase =
@@ -1512,17 +1513,17 @@ function StealPicker({ victims, onPick, onSkip }: Readonly<{
   onPick: (name: string) => void;
   onSkip: () => void;
 }>) {
-  const pickerRef = useRef<HTMLDivElement>(null);
+  const pickerRef = useRef<HTMLDialogElement>(null);
   useEscapeKey(onSkip, true);
   useFocusTrap(pickerRef, true);
   return (
-    <div
+    <dialog
       ref={pickerRef}
-      role="dialog"
+      open
       aria-modal="true"
       aria-label="Pick a steal victim"
       className="fixed inset-0 flex flex-col items-center justify-center gap-6 p-6"
-      style={{ zIndex: 70, background: 'rgba(5,5,14,0.93)', backdropFilter: 'blur(24px)' }}
+      style={{ zIndex: 70, margin: 0, border: 'none', color: 'inherit', width: '100%', height: '100%', background: 'rgba(5,5,14,0.93)', backdropFilter: 'blur(24px)' }}
     >
       <div style={{ textAlign: 'center' }}>
         <p style={{
@@ -1562,7 +1563,7 @@ function StealPicker({ victims, onPick, onSkip }: Readonly<{
       >
         Skip, don't steal
       </button>
-    </div>
+    </dialog>
   );
 }
 
@@ -1872,6 +1873,8 @@ function LeaderboardView({ game }: Readonly<{ game: PlayState }>) {
 // Screen-reader narration of major phase changes — see the matching function
 // in Host.tsx for why this exists.
 function phaseAnnouncement(phase: Phase, result: RoundResultEvent | null): string {
+  const common = commonPhaseAnnouncement(phase, result);
+  if (common !== null) return common;
   switch (phase) {
     case 'waiting': return 'Waiting for the host to start.';
     case 'betting': return 'Place your bid.';
@@ -1879,9 +1882,6 @@ function phaseAnnouncement(phase: Phase, result: RoundResultEvent | null): strin
     case 'watching': return 'Get ready — listen closely.';
     case 'guessing': return 'Your turn to guess.';
     case 'passed': return 'Answer submitted.';
-    case 'reveal': return result?.correct ? 'Round result: someone got it.' : 'Round result: no one got it.';
-    case 'leaderboard': return 'Leaderboard updated.';
-    case 'finished': return 'Final scores are in.';
     default: return '';
   }
 }

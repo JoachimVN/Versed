@@ -136,7 +136,7 @@ function artistHint(song: Song): Hint {
     : { label: 'Artist(s)', value: fullArtist };
 }
 
-function generateHints(song: Song, suppressArtist = false, suppressYear = false): Hint[] {
+function generateHints(song: Song, suppressArtist = false, suppressYear = false, includeTitle = false): Hint[] {
   const pool: Hint[] = [];
 
   // Suppressed entirely when the year itself is the answer.
@@ -153,6 +153,8 @@ function generateHints(song: Song, suppressArtist = false, suppressYear = false)
 
   // Artist hints are suppressed in artist-only mode since the artist IS the answer.
   if (!suppressArtist) pool.push(artistHint(song));
+
+  if (includeTitle) pool.push({ label: 'Song title', value: song.title });
 
   const count = randomInt(1, 4); // 1–3, always at least one hint
   const shuffled = shuffle(pool);
@@ -433,7 +435,7 @@ function roundGuessKind(party: PartyConfig | undefined, artistOnly: boolean, yea
 }
 
 // Honours 'blind' (no hints) and 'fullhints' (every hint) party events, then
-// appends a guaranteed title hint whenever the title itself isn't the
+// includes the song title in the hint pool when the title itself isn't the
 // answer — guessing the artist or the year doesn't give the title away.
 function buildRoundHints(song: Song, party: PartyConfig | undefined, guessKind: GuessTarget | 'year'): Hint[] {
   if (party?.format === 'classic' && party.event === 'blind') return [];
@@ -442,11 +444,11 @@ function buildRoundHints(song: Song, party: PartyConfig | undefined, guessKind: 
   // answer, so artist hints would give it away.
   const suppressArtist = guessKind === 'artist' || guessKind === 'both';
   const suppressYear = guessKind === 'year';
+  const includeTitle = guessKind === 'artist' || guessKind === 'year';
   const hints = party?.format === 'classic' && party.event === 'fullhints'
     ? generateAllHints(song, suppressArtist, suppressYear)
-    : generateHints(song, suppressArtist, suppressYear);
+    : generateHints(song, suppressArtist, suppressYear, includeTitle);
 
-  if (guessKind === 'artist' || guessKind === 'year') hints.push({ label: 'Song title', value: song.title });
   return hints;
 }
 
