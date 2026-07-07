@@ -49,7 +49,7 @@ interface SpotifyPlaylistItem {
 }
 interface SpotifyPlaylistsResponse {
   items: SpotifyPlaylistItem[];
-  next: string | null;
+  total: number;
 }
 interface SpotifyArtist { name: string }
 interface SpotifyAlbum { images: SpotifyImage[] | null; release_date?: string }
@@ -70,7 +70,7 @@ interface SpotifyPlaylistTracksResponse {
   // (a track/episode union) when the endpoint itself moved from /tracks to
   // /items.
   items: { item: SpotifyTrack | null }[];
-  next: string | null;
+  total: number;
 }
 
 function parseYear(releaseDate: string | undefined): number | null {
@@ -81,8 +81,8 @@ function parseYear(releaseDate: string | undefined): number | null {
 // Spotify playlist IDs are base62 (alphanumeric). Both resolvePlaylistInput
 // below and the playlist grid (Spotify's own API response) should already
 // only ever produce IDs matching this, but every ID is re-checked again
-// immediately before it's used to build a request URL — never trust that
-// validation done elsewhere still holds by the time it reaches a fetch call.
+// immediately before it's sent to the backend — never trust that validation
+// done elsewhere still holds by the time it reaches a fetch call.
 const PLAYLIST_ID_PATTERN = /^[A-Za-z0-9]{1,50}$/;
 
 // Accepts a full share URL (open.spotify.com/playlist/<id>), a URI
@@ -115,11 +115,23 @@ function backoffMs(attempt: number): number {
   return 500 * 2 ** attempt;
 }
 
+// What to fetch, described as data rather than a URL — the backend owns
+// turning this into an actual Spotify API request, so no URL/path ever
+// crosses the wire from here (see server/src/spotifyAuth.ts's SSRF note).
+type PlaylistFetchRequest =
+  | { kind: 'me_playlists'; offset: number }
+  | { kind: 'playlist_meta'; playlistId: string }
+  | { kind: 'playlist_items'; playlistId: string; offset: number };
+
+function requestLabel(request: PlaylistFetchRequest): string {
+  return 'playlistId' in request ? `${request.kind}:${request.playlistId}` : request.kind;
+}
+
 // Wraps fetch with a timeout, surfacing a thrown error (network failure or
 // abort) as data instead of a rejection, so the retry loop in fetchSpotify
 // doesn't need its own try/catch.
 async function fetchWithTimeout(
-  url: string, accessToken: string,
+  request: PlaylistFetchRequest, accessToken: string,
 ): Promise<{ res: Response } | { err: unknown }> {
   const controller = new AbortController();
   const timeoutId = setTimeout(() => controller.abort(), REQUEST_TIMEOUT_MS);
@@ -128,7 +140,12 @@ async function fetchWithTimeout(
     const res = await fetch(`${BACKEND_URL}/api/auth/fetch-playlist`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ access_token: accessToken, url }),
+      body: JSON.stringify({
+        access_token: accessToken,
+        kind: request.kind,
+        playlist_id: 'playlistId' in request ? request.playlistId : undefined,
+        offset: 'offset' in request ? request.offset : undefined,
+      }),
       signal: controller.signal,
     });
     return { res };
@@ -168,15 +185,12 @@ type ResponseOutcome<T> =
 // this long" signal, so the retry loop in fetchSpotify only has to act on
 // that decision instead of branching on status codes itself.
 async function classifyResponse<T>(
-  res: Response, url: string, notFoundIsPlaylist: boolean, attempt: number, canRetry: boolean,
+  res: Response, label: string, notFoundIsPlaylist: boolean, attempt: number, canRetry: boolean,
 ): Promise<ResponseOutcome<T>> {
   if (isAuthError(res.status)) return { retry: false, result: { ok: false, error: 'unauthorized' } };
   if (res.status === 403) {
     const body = await res.text();
-    console.error('[Spotify] 403 forbidden', {
-      url: url.replace(/[\r\n]/g, ''),
-      body: body.replace(/[\r\n]/g, ''),
-    });
+    console.error('[Spotify] 403 forbidden', { request: label, body: body.replace(/[\r\n]/g, '') });
     return { retry: false, result: { ok: false, error: 'forbidden' } };
   }
   if (isPlaylistNotFound(notFoundIsPlaylist, res.status)) {
@@ -185,11 +199,7 @@ async function classifyResponse<T>(
   if (isTransientStatus(res.status) && canRetry) return { retry: true, delayMs: retryDelayMs(res, attempt) };
   if (!res.ok) {
     const body = await res.text();
-    console.error('[Spotify] request failed', {
-      url: url.replace(/[\r\n]/g, ''),
-      status: res.status,
-      body: body.replace(/[\r\n]/g, ''),
-    });
+    console.error('[Spotify] request failed', { request: label, status: res.status, body: body.replace(/[\r\n]/g, '') });
     return { retry: false, result: { ok: false, error: 'error' } };
   }
   return { retry: false, result: { ok: true, data: await res.json() as T } };
@@ -201,18 +211,19 @@ async function classifyResponse<T>(
 // with backoff; 401/403/404/other 4xx fail immediately since retrying won't
 // help.
 async function fetchSpotify<T>(
-  url: string, accessToken: string, notFoundIsPlaylist = false,
+  request: PlaylistFetchRequest, accessToken: string, notFoundIsPlaylist = false,
 ): Promise<SpotifyFetchResult<T>> {
+  const label = requestLabel(request);
   for (let attempt = 0; attempt <= MAX_RETRIES; attempt++) {
     const canRetry = attempt < MAX_RETRIES;
-    const attemptResult = await fetchWithTimeout(url, accessToken);
+    const attemptResult = await fetchWithTimeout(request, accessToken);
     if ('err' in attemptResult) {
       if (canRetry) { await delay(backoffMs(attempt)); continue; }
-      console.error('[Spotify] request threw after retries', { url: url.replace(/[\r\n]/g, ''), err: attemptResult.err });
+      console.error('[Spotify] request threw after retries', { request: label, err: attemptResult.err });
       return { ok: false, error: 'error' };
     }
 
-    const outcome = await classifyResponse<T>(attemptResult.res, url, notFoundIsPlaylist, attempt, canRetry);
+    const outcome = await classifyResponse<T>(attemptResult.res, label, notFoundIsPlaylist, attempt, canRetry);
     if (outcome.retry) { await delay(outcome.delayMs); continue; }
     return outcome.result;
   }
@@ -299,24 +310,27 @@ async function collectPlaylistTracks(
   const tracks: PlaylistTrackInput[] = [];
   // Spotify's Feb 2026 API migration removed `/tracks` — `/items` is its
   // replacement, with each entry's `track` field renamed to `item`.
-  let url: string | null = `https://api.spotify.com/v1/playlists/${playlistId}/items?limit=100&fields=`
-    + encodeURIComponent('next,items(item(type,id,name,duration_ms,is_local,artists(name),album(images,release_date)))');
-  while (url && tracks.length < MAX_PLAYLIST_TRACKS) {
-    const result: SpotifyFetchResult<SpotifyPlaylistTracksResponse> = await fetchSpotify(url, token);
+  let offset = 0;
+  let total = Infinity;
+  while (offset < total && tracks.length < MAX_PLAYLIST_TRACKS) {
+    const result: SpotifyFetchResult<SpotifyPlaylistTracksResponse> =
+      await fetchSpotify({ kind: 'playlist_items', playlistId, offset }, token);
     if (!result.ok) return result;
+    total = result.data.total;
     for (const item of result.data.items) {
       const track = toPlaylistTrackInput(item.item);
       if (!track || seen.has(track.spotifyTrackId)) continue;
       seen.add(track.spotifyTrackId);
       tracks.push(track);
     }
-    url = result.data.next;
+    offset += result.data.items.length;
     onProgress?.(tracks.length);
+    if (result.data.items.length === 0) break; // guards against an infinite loop on an unexpected empty page
   }
-  // `url` still non-null here means the loop stopped because it hit the
-  // cap, not because it ran out of pages — i.e. the playlist has more
-  // tracks than we imported.
-  const truncated = tracks.length >= MAX_PLAYLIST_TRACKS && url !== null;
+  // offset < total here means the loop stopped because it hit the cap, not
+  // because it ran out of pages — i.e. the playlist has more tracks than we
+  // imported.
+  const truncated = tracks.length >= MAX_PLAYLIST_TRACKS && offset < total;
   return { ok: true, tracks, truncated };
 }
 
@@ -359,10 +373,13 @@ export function usePlaylistPicker(accessToken: string | null) {
       if (freshToken) token = freshToken;
 
       const all: Array<Omit<PlaylistSummary, 'importable'>> = [];
-      let url: string | null = 'https://api.spotify.com/v1/me/playlists?limit=50';
-      while (url) {
-        const result: SpotifyFetchResult<SpotifyPlaylistsResponse> = await fetchSpotify(url, token);
+      let offset = 0;
+      let total = Infinity;
+      while (offset < total) {
+        const result: SpotifyFetchResult<SpotifyPlaylistsResponse> =
+          await fetchSpotify({ kind: 'me_playlists', offset }, token);
         if (!result.ok) { setPlaylistsError(result.error); return; }
+        total = result.data.total;
         for (const item of result.data.items) {
           const trackCount = item?.tracks?.total ?? item?.items?.total;
           // Playlist folders (and the occasional null/unavailable entry) show up
@@ -370,7 +387,8 @@ export function usePlaylistPicker(accessToken: string | null) {
           if (trackCount === undefined) continue;
           all.push({ id: item.id, name: item.name, imageUrl: item.images?.[0]?.url ?? null, trackCount });
         }
-        url = result.data.next;
+        offset += result.data.items.length;
+        if (result.data.items.length === 0) break; // guards against an infinite loop on an unexpected empty page
       }
       const importableById = await probeImportability(all.map(p => p.id), token);
       setPlaylists(all.map(p => ({ ...p, importable: importableById.get(p.id) ?? true })));
@@ -399,7 +417,7 @@ export function usePlaylistPicker(accessToken: string | null) {
     if (freshToken) token = freshToken;
 
     // Re-validated here (not just trusted from the caller) immediately before
-    // it's used to build a request URL — see PLAYLIST_ID_PATTERN.
+    // it's sent to the backend — see PLAYLIST_ID_PATTERN.
     if (!PLAYLIST_ID_PATTERN.test(playlistId)) return { ok: false, error: 'not_found' };
 
     // Probed first (same 200-always endpoint the grid uses) so the common
@@ -411,7 +429,7 @@ export function usePlaylistPicker(accessToken: string | null) {
 
     try {
       const metaResult = await fetchSpotify<{ name: string }>(
-        `https://api.spotify.com/v1/playlists/${playlistId}?fields=name`, token, true,
+        { kind: 'playlist_meta', playlistId }, token, true,
       );
       if (!metaResult.ok) return metaResult;
 
