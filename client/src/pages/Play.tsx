@@ -1879,7 +1879,7 @@ function phaseAnnouncement(phase: Phase, result: RoundResultEvent | null): strin
     case 'waiting': return 'Waiting for the host to start.';
     case 'betting': return 'Place your bid.';
     case 'bid_submitted': return 'Bid submitted. Waiting for others.';
-    case 'watching': return 'Get ready — listen closely.';
+    case 'watching': return 'Get ready. Listen closely.';
     case 'guessing': return 'Your turn to guess.';
     case 'passed': return 'Answer submitted.';
     default: return '';

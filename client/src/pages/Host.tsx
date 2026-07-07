@@ -1037,9 +1037,9 @@ function FullScreenDialog({ ariaLabel, dialogRef, children }: Readonly<{
 function playlistErrorMessage(error: PlaylistFetchError, count?: number): string {
   switch (error) {
     case 'unauthorized': return 'Reconnect Spotify to allow playlist access.';
-    case 'not_found': return "Couldn't find that playlist — check the link and try again.";
-    case 'too_few': return `Only ${count ?? 0} playable track${count === 1 ? '' : 's'} — pick a playlist with at least 10.`;
-    default: return "Couldn't load that playlist — try again.";
+    case 'not_found': return "Couldn't find that playlist. Check the link and try again.";
+    case 'too_few': return `Only ${count ?? 0} playable track${count === 1 ? '' : 's'}. Pick a playlist with at least 10.`;
+    default: return "Couldn't load that playlist. Try again.";
   }
 }
 
@@ -1071,6 +1071,19 @@ function PlaylistPickerDialog({ game }: Readonly<{ game: HostState }>) {
 
   useEffect(() => { fetchPlaylists(); }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
+  // LiquidGlass only measures its own size once on mount (and on window
+  // resize) — it has no ResizeObserver, so it never notices the card growing
+  // as content changes (spinner -> grid, or an error/loading line appearing
+  // below it). Remount it whenever the visible content shape changes so it
+  // re-measures against the new layout.
+  const glassContentKey = [
+    loadingPlaylists ? 'loading' : 'idle',
+    playlistsError ?? 'none',
+    playlists.length > 0 ? 'has-playlists' : 'no-playlists',
+    resolving ? 'resolving' : 'idle',
+    resolveError ? 'resolve-error' : 'ok',
+  ].join('|');
+
   const choosePlaylist = async (id: string, fallbackImageUrl: string | null = null) => {
     setResolving(true);
     setResolveError(null);
@@ -1093,7 +1106,7 @@ function PlaylistPickerDialog({ game }: Readonly<{ game: HostState }>) {
   return (
     <FullScreenDialog ariaLabel="Choose a playlist">
       <div className="liquid-btn relative" style={{ width: 'min(560px, 92vw)' }}>
-        <LiquidGlass style={{ position: 'absolute', top: '50%', left: '50%' }} {...LIQUID_CARD_PROPS} padding="28px 24px">
+        <LiquidGlass key={glassContentKey} style={{ position: 'absolute', top: '50%', left: '50%' }} {...LIQUID_CARD_PROPS} padding="28px 24px">
           <div style={{ width: 'min(512px, 84vw)', display: 'flex', flexDirection: 'column', gap: '16px' }}>
             <div className="flex items-center justify-between">
               <p style={{ color: 'white', fontWeight: 800, fontSize: '1.1rem' }}>Choose a playlist</p>
@@ -1132,7 +1145,7 @@ function PlaylistPickerDialog({ game }: Readonly<{ game: HostState }>) {
             ) : loadingPlaylists ? (
               <p style={{ color: 'rgba(255,255,255,0.45)', fontSize: '0.8125rem' }}>Loading your playlists…</p>
             ) : playlistsError ? (
-              <p style={{ color: '#fca5a5', fontSize: '0.8125rem' }}>Couldn't load your playlists — try again.</p>
+              <p style={{ color: '#fca5a5', fontSize: '0.8125rem' }}>Couldn't load your playlists. Try again.</p>
             ) : (
               <div className="grid grid-cols-3 gap-2.5 overflow-y-auto" style={{ maxHeight: '48vh' }}>
                 {playlists.map(p => (
@@ -1211,7 +1224,7 @@ function ConnectView({ game }: Readonly<{ game: HostState }>) {
                 <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '6px' }}>
                   <p style={{ color: 'white', fontWeight: 800, fontSize: '1.2rem', letterSpacing: '-0.01em', textAlign: 'center' }}>Account not authorized</p>
                   <p style={{ color: 'rgba(255,255,255,0.45)', fontSize: '0.8rem', textAlign: 'center', lineHeight: 1.5 }}>
-                    Versed is in limited testing — only a few Spotify accounts can host. Ask Joachim to add yours, then try again.
+                    Versed is in limited testing. Only a few Spotify accounts can host. Ask Joachim to add yours, then try again.
                   </p>
                 </div>
                 <button

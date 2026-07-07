@@ -25,7 +25,10 @@ interface SpotifyPlaylistItem {
   id: string;
   name: string;
   images: SpotifyImage[] | null;
-  tracks: { total: number };
+  // Documented as `tracks`, but Spotify now sends this same {href,total} shape
+  // under `items` for at least some accounts — accept either.
+  tracks?: { total: number } | null;
+  items?: { total: number } | null;
 }
 interface SpotifyPlaylistsResponse {
   items: SpotifyPlaylistItem[];
@@ -77,15 +80,24 @@ export function usePlaylistPicker(accessToken: string | null) {
       while (url) {
         const res: Response = await fetch(url, { headers: { Authorization: `Bearer ${accessToken}` } });
         if (res.status === 401 || res.status === 403) { setPlaylistsError('unauthorized'); return; }
-        if (!res.ok) { setPlaylistsError('error'); return; }
+        if (!res.ok) {
+          console.error(`[Spotify] fetch playlists failed ${res.status}:`, await res.text());
+          setPlaylistsError('error');
+          return;
+        }
         const data = await res.json() as SpotifyPlaylistsResponse;
         for (const item of data.items) {
-          all.push({ id: item.id, name: item.name, imageUrl: item.images?.[0]?.url ?? null, trackCount: item.tracks.total });
+          const trackCount = item?.tracks?.total ?? item?.items?.total;
+          // Playlist folders (and the occasional null/unavailable entry) show up
+          // here too but have neither field — they aren't real playlists.
+          if (trackCount === undefined) continue;
+          all.push({ id: item.id, name: item.name, imageUrl: item.images?.[0]?.url ?? null, trackCount });
         }
         url = data.next;
       }
       setPlaylists(all);
-    } catch {
+    } catch (err) {
+      console.error('[Spotify] fetch playlists threw:', err);
       setPlaylistsError('error');
     } finally {
       setLoadingPlaylists(false);
@@ -105,7 +117,10 @@ export function usePlaylistPicker(accessToken: string | null) {
       );
       if (metaRes.status === 401 || metaRes.status === 403) return { ok: false, error: 'unauthorized' };
       if (metaRes.status === 404) return { ok: false, error: 'not_found' };
-      if (!metaRes.ok) return { ok: false, error: 'error' };
+      if (!metaRes.ok) {
+        console.error(`[Spotify] fetch playlist meta failed ${metaRes.status}:`, await metaRes.text());
+        return { ok: false, error: 'error' };
+      }
       const meta = await metaRes.json() as { name: string };
 
       const seen = new Set<string>();
@@ -115,7 +130,10 @@ export function usePlaylistPicker(accessToken: string | null) {
       while (url && tracks.length < MAX_PLAYLIST_TRACKS) {
         const res: Response = await fetch(url, { headers: { Authorization: `Bearer ${accessToken}` } });
         if (res.status === 401 || res.status === 403) return { ok: false, error: 'unauthorized' };
-        if (!res.ok) return { ok: false, error: 'error' };
+        if (!res.ok) {
+          console.error(`[Spotify] fetch playlist tracks failed ${res.status}:`, await res.text());
+          return { ok: false, error: 'error' };
+        }
         const data = await res.json() as SpotifyPlaylistTracksResponse;
         for (const item of data.items) {
           const t = item.track;
@@ -141,7 +159,8 @@ export function usePlaylistPicker(accessToken: string | null) {
 
       if (tracks.length < MIN_PLAYLIST_TRACKS) return { ok: false, error: 'too_few', count: tracks.length };
       return { ok: true, name: meta.name, tracks };
-    } catch {
+    } catch (err) {
+      console.error('[Spotify] fetch playlist tracks threw:', err);
       return { ok: false, error: 'error' };
     }
   }, [accessToken]);
