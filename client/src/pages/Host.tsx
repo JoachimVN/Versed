@@ -1108,6 +1108,7 @@ function PlaylistPickerDialog({ game }: Readonly<{ game: HostState }>) {
   const [linkInput, setLinkInput] = useState('');
   const [resolving, setResolving] = useState(false);
   const [resolveError, setResolveError] = useState<string | null>(null);
+  const [resolvedCount, setResolvedCount] = useState(0);
 
   useEffect(() => { fetchPlaylists(); }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
@@ -1127,7 +1128,8 @@ function PlaylistPickerDialog({ game }: Readonly<{ game: HostState }>) {
   const choosePlaylist = async (id: string, fallbackImageUrl: string | null = null) => {
     setResolving(true);
     setResolveError(null);
-    const result = await fetchPlaylistTracks(id);
+    setResolvedCount(0);
+    const result = await fetchPlaylistTracks(id, setResolvedCount);
     setResolving(false);
     if (!result.ok) {
       setResolveError(playlistErrorMessage(result.error, result.count));
@@ -1189,7 +1191,11 @@ function PlaylistPickerDialog({ game }: Readonly<{ game: HostState }>) {
             />
 
             {resolveError && <p style={{ color: '#fca5a5', fontSize: '0.75rem' }}>{resolveError}</p>}
-            {resolving && <p style={{ color: 'rgba(255,255,255,0.45)', fontSize: '0.8125rem' }}>Loading tracks…</p>}
+            {resolving && (
+              <p style={{ color: 'rgba(255,255,255,0.45)', fontSize: '0.8125rem' }}>
+                {resolvedCount > 0 ? `Loading tracks… ${resolvedCount} so far` : 'Loading tracks…'}
+              </p>
+            )}
           </div>
         </LiquidGlass>
       </div>

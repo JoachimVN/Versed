@@ -76,24 +76,63 @@ type SpotifyFetchResult<T> =
   | { ok: true; data: T }
   | { ok: false; error: PlaylistFetchError };
 
+// A playlist import can walk many pages; without a per-request cap a single
+// hung connection would stall the whole import indefinitely.
+const REQUEST_TIMEOUT_MS = 12000;
+// Total attempts = MAX_RETRIES + 1. Covers a transient 429/5xx/network blip
+// without turning a real outage into a long hang.
+const MAX_RETRIES = 3;
+
+function delay(ms: number): Promise<void> {
+  return new Promise(resolve => setTimeout(resolve, ms));
+}
+
 // Centralizes the status-code handling shared by every Spotify Web API call
-// below, so each call site is just one branch instead of three.
+// below, so each call site is just one branch instead of three. Retries
+// transient failures (429 with Retry-After, 5xx, timeouts, network errors)
+// with backoff; 401/403/404/other 4xx fail immediately since retrying won't
+// help.
 async function fetchSpotify<T>(
   url: string, accessToken: string, notFoundIsPlaylist = false,
 ): Promise<SpotifyFetchResult<T>> {
-  const res = await fetch(url, { headers: { Authorization: `Bearer ${accessToken}` } });
-  if (res.status === 401 || res.status === 403) return { ok: false, error: 'unauthorized' };
-  if (notFoundIsPlaylist && res.status === 404) return { ok: false, error: 'not_found' };
-  if (!res.ok) {
-    const body = await res.text();
-    console.error('[Spotify] request failed', {
-      url: url.replace(/[\r\n]/g, ''),
-      status: res.status,
-      body: body.replace(/[\r\n]/g, ''),
-    });
-    return { ok: false, error: 'error' };
+  for (let attempt = 0; attempt <= MAX_RETRIES; attempt++) {
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), REQUEST_TIMEOUT_MS);
+    let res: Response;
+    try {
+      res = await fetch(url, { headers: { Authorization: `Bearer ${accessToken}` }, signal: controller.signal });
+    } catch (err) {
+      if (attempt < MAX_RETRIES) { await delay(500 * 2 ** attempt); continue; }
+      console.error('[Spotify] request threw after retries', { url: url.replace(/[\r\n]/g, ''), err });
+      return { ok: false, error: 'error' };
+    } finally {
+      clearTimeout(timeoutId);
+    }
+
+    if (res.status === 401 || res.status === 403) return { ok: false, error: 'unauthorized' };
+    if (notFoundIsPlaylist && res.status === 404) return { ok: false, error: 'not_found' };
+
+    if ((res.status === 429 || res.status >= 500) && attempt < MAX_RETRIES) {
+      const retryAfterSec = Number(res.headers.get('Retry-After'));
+      const waitMs = Number.isFinite(retryAfterSec) && retryAfterSec > 0
+        ? Math.min(retryAfterSec * 1000, 8000)
+        : 500 * 2 ** attempt;
+      await delay(waitMs);
+      continue;
+    }
+
+    if (!res.ok) {
+      const body = await res.text();
+      console.error('[Spotify] request failed', {
+        url: url.replace(/[\r\n]/g, ''),
+        status: res.status,
+        body: body.replace(/[\r\n]/g, ''),
+      });
+      return { ok: false, error: 'error' };
+    }
+    return { ok: true, data: await res.json() as T };
   }
-  return { ok: true, data: await res.json() as T };
+  return { ok: false, error: 'error' };
 }
 
 // Filters out removed tracks, local files (unplayable via the Web Playback
@@ -148,6 +187,9 @@ export function usePlaylistPicker(accessToken: string | null) {
 
   const fetchPlaylistTracks = useCallback(async (
     playlistId: string,
+    // Called after each page lands so the caller can render live progress —
+    // pagination on a large playlist can take several round-trips.
+    onProgress?: (count: number) => void,
   ): Promise<
     { ok: true; name: string; tracks: PlaylistTrackInput[] } | { ok: false; error: PlaylistFetchError; count?: number }
   > => {
@@ -175,6 +217,7 @@ export function usePlaylistPicker(accessToken: string | null) {
           tracks.push(track);
         }
         url = result.data.next;
+        onProgress?.(tracks.length);
       }
 
       if (tracks.length < MIN_PLAYLIST_TRACKS) return { ok: false, error: 'too_few', count: tracks.length };
