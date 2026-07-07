@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useRef, useMemo } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { Check, Loader2, Copy, Settings, Flame, Coins, Clock, PartyPopper, Volume2, VolumeX } from 'lucide-react';
+import { Check, Loader2, Copy, Settings, Flame, Coins, Clock, PartyPopper, Volume2, VolumeX, ShieldAlert } from 'lucide-react';
 import LiquidGlass from 'liquid-glass-react';
 import QRCodeLib from 'react-qr-code';
 const QRCode = QRCodeLib as unknown as React.FC<{ value: string; size?: number }>;
@@ -180,8 +180,8 @@ function useHostGame(): HostState {
   const playGenRef = useRef(0);
 
   useEffect(() => {
-    if (spotify.isConnected && phase === 'connect') setPhase('lobby');
-  }, [spotify.isConnected, phase]);
+    if (spotify.isConnected && !spotify.unauthorized && phase === 'connect') setPhase('lobby');
+  }, [spotify.isConnected, spotify.unauthorized, phase]);
 
   function startCountdown(seconds: number) {
     stopCountdown();
@@ -913,6 +913,51 @@ function ConnectView({ game }: Readonly<{ game: HostState }>) {
         </>
       )}
       <p className="text-white/45 text-sm">Requires Spotify Premium</p>
+      {spotify.unauthorized && (
+        <dialog
+          open
+          aria-modal="true"
+          aria-label="Spotify account not authorized"
+          className="fixed inset-0 flex items-center justify-center z-50"
+          style={{
+            width: '100%',
+            height: '100%',
+            margin: 0,
+            border: 'none',
+            padding: 0,
+            color: 'inherit',
+            background: 'rgba(8,8,18,0.92)',
+            backdropFilter: 'blur(12px)',
+          }}
+        >
+          <div style={{ position: 'absolute', inset: 0, pointerEvents: 'none', background: 'radial-gradient(ellipse 60% 40% at 50% 50%, rgba(86,20,140,0.22) 0%, transparent 65%)' }} />
+          <div className="liquid-btn relative" style={{ width: '320px', height: '260px' }}>
+            <LiquidGlass
+              style={{ position: 'absolute', top: '50%', left: '50%' }}
+              {...LIQUID_CARD_PROPS}
+              padding="32px 28px"
+            >
+              <div style={{ width: '264px', display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '12px' }}>
+                <ShieldAlert style={{ width: '30px', height: '30px', color: 'rgba(255,255,255,0.45)' }} strokeWidth={1.5} />
+                <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '6px' }}>
+                  <p style={{ color: 'white', fontWeight: 800, fontSize: '1.2rem', letterSpacing: '-0.01em', textAlign: 'center' }}>Account not authorized</p>
+                  <p style={{ color: 'rgba(255,255,255,0.45)', fontSize: '0.8rem', textAlign: 'center', lineHeight: 1.5 }}>
+                    Versed is in limited testing — only a few Spotify accounts can host. Ask Joachim to add yours, then try again.
+                  </p>
+                </div>
+                <button
+                  onClick={() => spotify.disconnect()}
+                  style={{ marginTop: '6px', width: '100%', padding: '10px', borderRadius: '12px', border: '1px solid rgba(255,255,255,0.12)', cursor: 'pointer', background: 'rgba(255,255,255,0.07)', color: 'rgba(255,255,255,0.72)', fontWeight: 600, fontSize: '0.875rem', transition: 'background 0.2s ease, border-color 0.2s ease, color 0.2s ease' }}
+                  onMouseEnter={e => { const el = e.currentTarget as HTMLElement; el.style.background = 'rgba(255,255,255,0.13)'; el.style.borderColor = 'rgba(255,255,255,0.22)'; el.style.color = 'white'; }}
+                  onMouseLeave={e => { const el = e.currentTarget as HTMLElement; el.style.background = 'rgba(255,255,255,0.07)'; el.style.borderColor = 'rgba(255,255,255,0.12)'; el.style.color = 'rgba(255,255,255,0.72)'; }}
+                >
+                  Try a different account
+                </button>
+              </div>
+            </LiquidGlass>
+          </div>
+        </dialog>
+      )}
     </div>
   );
 }
