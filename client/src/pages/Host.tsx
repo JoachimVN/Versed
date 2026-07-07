@@ -972,7 +972,8 @@ function PlaylistList({ customPlaylists, onOpen, onRemove }: Readonly<{
           <button
             onClick={() => onRemove(p.id)}
             aria-label={`Remove ${p.name}`}
-            style={{ background: 'none', border: 'none', color: 'rgba(255,255,255,0.35)', cursor: 'pointer', fontSize: '1.1rem', lineHeight: 1, padding: '4px' }}
+            className="text-white/35 hover:text-white/80 transition-colors"
+            style={{ background: 'none', border: 'none', cursor: 'pointer', fontSize: '1.1rem', lineHeight: 1, padding: '4px' }}
           >
             ×
           </button>
