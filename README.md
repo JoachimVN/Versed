@@ -3,7 +3,7 @@
 </p>
 
 <p align="center">
-  <strong>Real-time multiplayer music quiz where you bid how few seconds you need to name a song.</strong>
+  <strong>Real-time multiplayer music quiz where being quick, and well-versed matters.</strong>
 </p>
 
 <p align="center">
