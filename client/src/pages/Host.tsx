@@ -1129,7 +1129,7 @@ function FullScreenDialog({ ariaLabel, dialogRef, children }: Readonly<{
 function playlistErrorMessage(error: PlaylistFetchError): string {
   switch (error) {
     case 'unauthorized': return 'Reconnect Spotify to allow playlist access.';
-    case 'forbidden': return "Spotify only lets you import playlists you own or collaborate on. Duplicate it into your own library from the Spotify app, or ask the owner to make it collaborative and add you.";
+    case 'forbidden': return "Spotify only lets you import playlists you own or collaborate on. In the Spotify app, open the playlist, tap ⋯, then \"Add to other playlist\" → \"New playlist\" to copy it into one of your own. Or ask the owner to make it collaborative and add you.";
     case 'not_found': return "Couldn't find that playlist. Check the link and try again.";
     case 'empty': return 'That playlist has no playable tracks.';
     default: return "Couldn't load that playlist. Try again.";
@@ -1172,53 +1172,55 @@ function PlaylistsPanel({ playlistsError, loadingPlaylists, playlists, resolving
   }
   const anyBlocked = playlists.some(p => !p.importable);
   return (
-    <div className="overflow-y-auto" style={{ maxHeight: '48vh' }}>
-      <div className="grid grid-cols-3 gap-2.5">
-        {playlists.map(p => {
-          const selected = selectedIds.has(p.id);
-          const blocked = !p.importable;
-          return (
-            <button
-              key={p.id}
-              onClick={() => { if (!blocked) onChoose(p.id, p.imageUrl); }}
-              disabled={resolving || blocked}
-              title={blocked ? "You don't own or collaborate on this playlist, so Spotify won't let it be imported." : undefined}
-              className="relative flex flex-col items-start gap-1.5 rounded-xl text-left"
-              style={{
-                padding: '8px',
-                background: selected ? 'rgba(29, 185, 84, 0.12)' : 'rgba(255,255,255,0.04)',
-                border: selected ? '1px solid rgba(29, 185, 84, 0.45)' : '1px solid rgba(255,255,255,0.07)',
-                cursor: resolving || blocked ? 'not-allowed' : 'pointer',
-                opacity: blocked ? 0.35 : 1,
-              }}
-            >
-              <div className="relative w-full">
-                {p.imageUrl ? (
-                  <img src={p.imageUrl} alt="" className="w-full aspect-square rounded-lg object-cover" />
-                ) : (
-                  <div className="w-full aspect-square rounded-lg" style={{ background: 'rgba(255,255,255,0.06)' }} />
-                )}
-                {selected && (
-                  <div
-                    className="absolute top-1 right-1 flex items-center justify-center rounded-full"
-                    style={{ width: '20px', height: '20px', background: '#1DB954' }}
-                  >
-                    <Check style={{ width: '13px', height: '13px', color: 'white' }} strokeWidth={3} />
-                  </div>
-                )}
-              </div>
-              <p className="truncate w-full" style={{ color: 'white', fontWeight: 600, fontSize: '0.75rem' }}>{p.name}</p>
-              <p style={{ color: 'rgba(255,255,255,0.4)', fontSize: '0.6875rem' }}>{p.trackCount} tracks</p>
-            </button>
-          );
-        })}
+    <>
+      <div className="overflow-y-auto" style={{ maxHeight: '48vh' }}>
+        <div className="grid grid-cols-3 gap-2.5">
+          {playlists.map(p => {
+            const selected = selectedIds.has(p.id);
+            const blocked = !p.importable;
+            return (
+              <button
+                key={p.id}
+                onClick={() => { if (!blocked) onChoose(p.id, p.imageUrl); }}
+                disabled={resolving || blocked}
+                title={blocked ? "You don't own or collaborate on this playlist, so Spotify won't let it be imported. See the tip below the grid." : undefined}
+                className="relative flex flex-col items-start gap-1.5 rounded-xl text-left"
+                style={{
+                  padding: '8px',
+                  background: selected ? 'rgba(29, 185, 84, 0.12)' : 'rgba(255,255,255,0.04)',
+                  border: selected ? '1px solid rgba(29, 185, 84, 0.45)' : '1px solid rgba(255,255,255,0.07)',
+                  cursor: resolving || blocked ? 'not-allowed' : 'pointer',
+                  opacity: blocked ? 0.35 : 1,
+                }}
+              >
+                <div className="relative w-full">
+                  {p.imageUrl ? (
+                    <img src={p.imageUrl} alt="" className="w-full aspect-square rounded-lg object-cover" />
+                  ) : (
+                    <div className="w-full aspect-square rounded-lg" style={{ background: 'rgba(255,255,255,0.06)' }} />
+                  )}
+                  {selected && (
+                    <div
+                      className="absolute top-1 right-1 flex items-center justify-center rounded-full"
+                      style={{ width: '20px', height: '20px', background: '#1DB954' }}
+                    >
+                      <Check style={{ width: '13px', height: '13px', color: 'white' }} strokeWidth={3} />
+                    </div>
+                  )}
+                </div>
+                <p className="truncate w-full" style={{ color: 'white', fontWeight: 600, fontSize: '0.75rem' }}>{p.name}</p>
+                <p style={{ color: 'rgba(255,255,255,0.4)', fontSize: '0.6875rem' }}>{p.trackCount} tracks</p>
+              </button>
+            );
+          })}
+        </div>
       </div>
       {anyBlocked && (
         <p style={{ color: 'rgba(255,255,255,0.4)', fontSize: '0.6875rem', marginTop: '10px' }}>
-          Greyed-out playlists aren't yours to import. Duplicate one into your own library from the Spotify app, or ask the owner to make it collaborative and add you.
+          Greyed-out playlists aren't yours to import. In the Spotify app, open one, tap ⋯, then "Add to other playlist" → "New playlist" to copy it into your own library. Or ask the owner to make it collaborative and add you.
         </p>
       )}
-    </div>
+    </>
   );
 }
 

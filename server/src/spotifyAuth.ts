@@ -112,4 +112,40 @@ router.post('/fetch-playlist', async (req: Request, res: Response) => {
   }
 });
 
+// Spotify playlist IDs are base62 — re-validated here (not just trusted from
+// the client) immediately before being used to build a request URL.
+const PLAYLIST_ID_PATTERN = /^[A-Za-z0-9]{1,50}$/;
+
+// Used by the playlist picker to probe real per-playlist access (Spotify's
+// `collaborative` flag on /me/playlists only reports true to the owner, so
+// metadata alone can't tell a collaborator apart from someone who merely
+// follows a public playlist). Always replies 200 — the forbidden/importable
+// result lives in the body instead of the HTTP status, so a normal "you
+// can't import this" outcome doesn't show up as a failed request in the
+// browser's network console.
+router.post('/check-playlist-access', async (req: Request, res: Response) => {
+  const { access_token, playlist_id } = req.body as { access_token?: string; playlist_id?: string };
+  if (!access_token || !playlist_id || !PLAYLIST_ID_PATTERN.test(playlist_id)) {
+    return res.status(400).json({ error: 'Missing or invalid access_token or playlist_id' });
+  }
+
+  try {
+    await axios.get(`https://api.spotify.com/v1/playlists/${playlist_id}/items?limit=1&fields=next`, {
+      headers: { Authorization: `Bearer ${access_token}` },
+      timeout: 12000,
+    });
+    res.json({ importable: true });
+  } catch (err) {
+    if (axios.isAxiosError(err) && err.response?.status === 403) {
+      res.json({ importable: false });
+    } else {
+      // Anything else (network blip, rate limit, expired token) fails open —
+      // a flaky probe shouldn't grey out a playlist that might be fine. The
+      // real fetch when the user actually picks it will surface a genuine
+      // problem properly.
+      res.json({ importable: true });
+    }
+  }
+});
+
 export default router;

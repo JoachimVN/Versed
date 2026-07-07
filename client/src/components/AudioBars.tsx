@@ -65,7 +65,10 @@ export function AudioBars({ playing, accent, height, bpm }: Readonly<{ playing: 
             style={{
               width: '3px', height: '100%', borderRadius: '2px',
               background: barColor,
-              animation: playing ? `${bar.anim} ${dur}s ease-in-out infinite` : 'none',
+              animationName: playing ? bar.anim : 'none',
+              animationDuration: `${dur}s`,
+              animationTimingFunction: 'ease-in-out',
+              animationIterationCount: 'infinite',
               animationDelay: `${delay}s`,
               animationFillMode: playing ? 'backwards' : undefined,
               transformOrigin: 'center',

@@ -45,8 +45,6 @@ interface SpotifyPlaylistItem {
   // under `items` for at least some accounts — accept either.
   tracks?: { total: number } | null;
   items?: { total: number } | null;
-  owner: { id: string } | null;
-  collaborative: boolean;
 }
 interface SpotifyPlaylistsResponse {
   items: SpotifyPlaylistItem[];
@@ -226,6 +224,56 @@ function toPlaylistTrackInput(t: SpotifyTrack | null): PlaylistTrackInput | null
   };
 }
 
+// Spotify's `collaborative` flag on /me/playlists only reports true to the
+// playlist's *owner* — a collaborator gets back the same `false` a person
+// who merely follows a public playlist would, so metadata alone can't tell
+// them apart. The only reliable signal is a live probe against the same
+// endpoint the real import uses: a 403 there is the authoritative "can't
+// import this", whatever the list metadata claims.
+async function probeImportable(playlistId: string, accessToken: string): Promise<boolean> {
+  // Goes through a dedicated backend route (rather than fetchWithTimeout's
+  // generic proxy) that always replies 200 with the result in the body —
+  // a real, expected-forbidden outcome here would otherwise show up as a
+  // failed request in the browser's network console for every playlist the
+  // user doesn't have access to, which reads as the app being broken.
+  const controller = new AbortController();
+  const timeoutId = setTimeout(() => controller.abort(), REQUEST_TIMEOUT_MS);
+  try {
+    const res = await fetch(`${BACKEND_URL}/api/auth/check-playlist-access`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ access_token: accessToken, playlist_id: playlistId }),
+      signal: controller.signal,
+    });
+    if (!res.ok) return true; // fail open
+    const data = await res.json() as { importable?: boolean };
+    return data.importable ?? true;
+  } catch {
+    return true; // fail open on timeout/network error
+  } finally {
+    clearTimeout(timeoutId);
+  }
+}
+
+// Runs the per-playlist probes with bounded parallelism instead of one big
+// Promise.all — a large library (hundreds of playlists) firing all at once
+// would trip Spotify's rate limit and make every probe look forbidden.
+const IMPORTABILITY_PROBE_CONCURRENCY = 8;
+
+async function probeImportability(ids: string[], accessToken: string): Promise<Map<string, boolean>> {
+  const importableById = new Map<string, boolean>();
+  let next = 0;
+  async function worker() {
+    while (next < ids.length) {
+      const id = ids[next++];
+      importableById.set(id, await probeImportable(id, accessToken));
+    }
+  }
+  const workerCount = Math.min(IMPORTABILITY_PROBE_CONCURRENCY, ids.length);
+  await Promise.all(Array.from({ length: workerCount }, worker));
+  return importableById;
+}
+
 async function refreshAccessToken(): Promise<string | null> {
   const refreshToken = sessionStorage.getItem('spotify_rt');
   if (!refreshToken) return null;
@@ -261,14 +309,7 @@ export function usePlaylistPicker(accessToken: string | null) {
       const freshToken = await refreshAccessToken();
       if (freshToken) token = freshToken;
 
-      // Needed to tell owned/collaborative playlists (importable) apart from
-      // merely-saved ones (will 403 — see 'forbidden'). If this lookup fails
-      // we fail open (treat everything as importable) rather than block the
-      // whole picker on a secondary call.
-      const meResult = await fetchSpotify<{ id: string }>('https://api.spotify.com/v1/me', token);
-      const meId = meResult.ok ? meResult.data.id : null;
-
-      const all: PlaylistSummary[] = [];
+      const all: Array<Omit<PlaylistSummary, 'importable'>> = [];
       let url: string | null = 'https://api.spotify.com/v1/me/playlists?limit=50';
       while (url) {
         const result: SpotifyFetchResult<SpotifyPlaylistsResponse> = await fetchSpotify(url, token);
@@ -278,12 +319,12 @@ export function usePlaylistPicker(accessToken: string | null) {
           // Playlist folders (and the occasional null/unavailable entry) show up
           // here too but have neither field — they aren't real playlists.
           if (trackCount === undefined) continue;
-          const importable = meId === null || item.collaborative || item.owner?.id === meId;
-          all.push({ id: item.id, name: item.name, imageUrl: item.images?.[0]?.url ?? null, trackCount, importable });
+          all.push({ id: item.id, name: item.name, imageUrl: item.images?.[0]?.url ?? null, trackCount });
         }
         url = result.data.next;
       }
-      setPlaylists(all);
+      const importableById = await probeImportability(all.map(p => p.id), token);
+      setPlaylists(all.map(p => ({ ...p, importable: importableById.get(p.id) ?? true })));
     } catch (err) {
       console.error('[Spotify] fetch playlists threw:', err);
       setPlaylistsError('error');

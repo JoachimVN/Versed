@@ -266,7 +266,10 @@ export function YearTimelineContent({ result, showGuessValues = true }: Readonly
               style={{
                 position: 'absolute', left: `${pos(group.guess)}%`, top: '43px',
                 transform: 'translate(-50%, -50%)',
-                animation: 'markerCelebrate 0.5s ease-out both',
+                animationName: 'markerCelebrate',
+                animationDuration: '0.5s',
+                animationTimingFunction: 'ease-out',
+                animationFillMode: 'both',
                 animationDelay: `${0.1 + i * 0.09}s`,
               }}
             >

@@ -905,7 +905,7 @@ function WaitingView({ game }: Readonly<{ game: PlayState }>) {
                 <div style={{ width: '100%', height: '1px', background: 'rgba(255,255,255,0.07)', marginBottom: '4px' }} />
                 <div style={{ display: 'flex', gap: '6px' }}>
                   {[0, 1, 2].map(i => (
-                    <div key={i} style={{ width: '6px', height: '6px', borderRadius: '50%', background: 'rgba(0,166,163,0.8)', animation: 'dotBounce 1.4s ease-in-out infinite', animationDelay: `${i * 0.18}s` }} />
+                    <div key={i} style={{ width: '6px', height: '6px', borderRadius: '50%', background: 'rgba(0,166,163,0.8)', animationName: 'dotBounce', animationDuration: '1.4s', animationTimingFunction: 'ease-in-out', animationIterationCount: 'infinite', animationDelay: `${i * 0.18}s` }} />
                   ))}
                 </div>
                 <span style={{ color: 'rgba(255,255,255,0.45)', fontSize: '0.72rem', letterSpacing: '0.03em' }}>
@@ -1179,7 +1179,8 @@ function GetReadyBody({ isDuel, isRace, party, lowestBid, guesserNames, songPlay
           {[0, 1, 2].map(i => (
             <div key={i} style={{
               width: '4px', height: '4px', borderRadius: '50%', background: 'rgba(158,18,204,0.8)',
-              animation: 'dotBounce 1.4s ease-in-out infinite', animationDelay: `${i * 0.18}s`,
+              animationName: 'dotBounce', animationDuration: '1.4s', animationTimingFunction: 'ease-in-out', animationIterationCount: 'infinite',
+              animationDelay: `${i * 0.18}s`,
             }} />
           ))}
         </div>
@@ -1497,7 +1498,7 @@ function PassedView({ game }: Readonly<{ game: PlayState }>) {
                       <div key={i} style={{
                         width: '6px', height: '6px', borderRadius: '50%',
                         background: 'rgba(0,166,163,0.8)',
-                        animation: 'dotBounce 1.4s ease-in-out infinite',
+                        animationName: 'dotBounce', animationDuration: '1.4s', animationTimingFunction: 'ease-in-out', animationIterationCount: 'infinite',
                         animationDelay: `${i * 0.18}s`,
                       }} />
                     ))}
