@@ -533,63 +533,70 @@ function buildRoundHints(song: Song, party: PartyConfig | undefined, guessKind: 
   return hints;
 }
 
+// A year round is unplayable without a known year — this is a hard mechanical
+// requirement, not a variety nicety, so it's applied before any of the
+// avoid-repetition stages below.
+function restrictToYearPlayable(pool: Song[], isYearRound: boolean): Song[] {
+  if (!isYearRound) return pool;
+  const withYear = pool.filter(s => s.year !== null);
+  return withYear.length > 0 ? withYear : pool;
+}
+
+// Never literally repeat the song that just played, even across a
+// used-pool reshuffle in avoidUsedSongs below.
+function avoidImmediateRepeat(pool: Song[], prevSong: Song | undefined): Song[] {
+  if (!prevSong) return pool;
+  const filtered = pool.filter(s => s.spotifyTrackId !== prevSong.spotifyTrackId);
+  return filtered.length > 0 ? filtered : pool;
+}
+
+// Not used yet this game. On exhaustion, reshuffle — but reseed with just the
+// previous song so the reshuffle itself can't reintroduce a back-to-back
+// repeat.
+function avoidUsedSongs(game: Game, pool: Song[], prevSong: Song | undefined): Song[] {
+  const unused = pool.filter(s => !game.usedSongIds.has(s.spotifyTrackId));
+  if (unused.length > 0) return unused;
+
+  game.usedSongIds.clear();
+  if (prevSong) game.usedSongIds.add(prevSong.spotifyTrackId);
+  const reshuffled = pool.filter(s => !game.usedSongIds.has(s.spotifyTrackId));
+  return reshuffled.length > 0 ? reshuffled : pool;
+}
+
+// Not recently played in a previous game from this same song pool.
+function avoidRecentlyPlayedInPool(game: Game, pool: Song[]): Song[] {
+  const recentIds = recentlyPlayedByPool.get(poolKey(game));
+  if (!recentIds || recentIds.length === 0) return pool;
+  const recentSet = new Set(recentIds);
+  const fresh = pool.filter(s => !recentSet.has(s.spotifyTrackId));
+  return fresh.length > 0 ? fresh : pool;
+}
+
+// Not the same artist as any of the last few rounds — the softest
+// constraint, so it's applied last (first to be dropped if the pool is
+// dominated by one act). Window size scales with pool size.
+function avoidRecentArtists(game: Game, pool: Song[], rawPoolSize: number): Song[] {
+  if (game.artistWindow.length === 0) return pool;
+  const windowSize = artistWindowSize(rawPoolSize);
+  const recentForArtistCheck = game.artistWindow.slice(-windowSize);
+  const notRecentArtist = pool.filter(s => !recentForArtistCheck.some(recent => sameArtist(s, recent)));
+  return notRecentArtist.length > 0 ? notRecentArtist : pool;
+}
+
 // Round selection applies these constraints strictest/most-essential first,
 // softest/most-skippable last — and each stage reverts to its input pool if
 // applying it would leave nothing, so the last-applied (softest) filter is
-// always the first one sacrificed once a small pool runs out of room:
-//   1. year-round playability (a hard mechanical requirement)
-//   2. never the literal immediately-preceding song
-//   3. not used yet this game (usedSongIds)
-//   4. not recently played in a previous game from this same pool
-//   5. not the same artist as the last few rounds (window scales with pool size)
+// always the first one sacrificed once a small pool runs out of room.
 function buildRound(game: Game, party?: PartyConfig): Round {
   const rawPool = difficultyPool(game);
   const prevSong = game.currentRound?.song;
-
-  // A year round is unplayable without a known year — checked first since,
-  // unlike the constraints below, this one isn't a variety nicety.
   const isYearRound = party ? party.format === 'year' : game.yearOnly;
-  let base = rawPool;
-  if (isYearRound) {
-    const withYear = rawPool.filter(s => s.year !== null);
-    if (withYear.length > 0) base = withYear;
-  }
 
-  // Never literally repeat the song that just played, even across a
-  // used-pool reshuffle below.
-  const noImmediateRepeat = prevSong
-    ? base.filter(s => s.spotifyTrackId !== prevSong.spotifyTrackId)
-    : base;
-  const guardedBase = noImmediateRepeat.length > 0 ? noImmediateRepeat : base;
-
-  // Not used yet this game. On exhaustion, reshuffle — but reseed with just
-  // the previous song so the reshuffle itself can't reintroduce a
-  // back-to-back repeat.
-  let pool = guardedBase.filter(s => !game.usedSongIds.has(s.spotifyTrackId));
-  if (pool.length === 0) {
-    game.usedSongIds.clear();
-    if (prevSong) game.usedSongIds.add(prevSong.spotifyTrackId);
-    pool = guardedBase.filter(s => !game.usedSongIds.has(s.spotifyTrackId));
-    if (pool.length === 0) pool = guardedBase;
-  }
-
-  // Not recently played in a previous game from this same song pool.
-  const recentIds = recentlyPlayedByPool.get(poolKey(game));
-  if (recentIds && recentIds.length > 0) {
-    const recentSet = new Set(recentIds);
-    const fresh = pool.filter(s => !recentSet.has(s.spotifyTrackId));
-    if (fresh.length > 0) pool = fresh;
-  }
-
-  // Not the same artist as any of the last few rounds — softest constraint,
-  // so it's applied last (first to be dropped if the pool is dominated by
-  // one act). Window size scales with pool size (see artistWindowSize).
-  if (game.artistWindow.length > 0) {
-    const windowSize = artistWindowSize(rawPool.length);
-    const recentForArtistCheck = game.artistWindow.slice(-windowSize);
-    const notRecentArtist = pool.filter(s => !recentForArtistCheck.some(recent => sameArtist(s, recent)));
-    if (notRecentArtist.length > 0) pool = notRecentArtist;
-  }
+  let pool = restrictToYearPlayable(rawPool, isYearRound);
+  pool = avoidImmediateRepeat(pool, prevSong);
+  pool = avoidUsedSongs(game, pool, prevSong);
+  pool = avoidRecentlyPlayedInPool(game, pool);
+  pool = avoidRecentArtists(game, pool, rawPool.length);
 
   const song = pickRandom(pool);
 
@@ -669,7 +676,7 @@ export function setCustomSongPool(
 ): { ok: true } | { ok: false; error: string } {
   const pool = adaptPlaylistTracks(tracks);
   if (pool.length < MIN_PLAYLIST_TRACKS) {
-    return { ok: false, error: `Only ${pool.length} playable track${pool.length === 1 ? '' : 's'} — need at least ${MIN_PLAYLIST_TRACKS}` };
+    return { ok: false, error: `Only ${pool.length} playable track${pool.length === 1 ? '' : 's'}. Need at least ${MIN_PLAYLIST_TRACKS}` };
   }
   game.songSource = 'playlist';
   game.songPool = pool;

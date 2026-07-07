@@ -6,7 +6,7 @@ import QRCodeLib from 'react-qr-code';
 const QRCode = QRCodeLib as unknown as React.FC<{ value: string; size?: number }>;
 import { socket } from '../socket';
 import { useSpotify } from '../hooks/useSpotify';
-import { usePlaylistPicker, resolvePlaylistInput, PlaylistFetchError, MIN_PLAYLIST_TRACKS } from '../hooks/usePlaylistPicker';
+import { usePlaylistPicker, resolvePlaylistInput, PlaylistFetchError, PlaylistSummary, MIN_PLAYLIST_TRACKS } from '../hooks/usePlaylistPicker';
 import { useEscapeKey } from '../hooks/useEscapeKey';
 import { useFocusTrap } from '../hooks/useFocusTrap';
 import { useSoundEffect } from '../hooks/useSoundEffect';
@@ -1059,6 +1059,46 @@ function ReconnectBanner() {
   );
 }
 
+// The playlist picker's main panel has four mutually-exclusive states; kept
+// as its own component (rather than a nested ternary) so each is a plain,
+// independently-readable branch.
+function PlaylistsPanel({ playlistsError, loadingPlaylists, playlists, resolving, onChoose }: Readonly<{
+  playlistsError: PlaylistFetchError | null;
+  loadingPlaylists: boolean;
+  playlists: PlaylistSummary[];
+  resolving: boolean;
+  onChoose: (id: string, imageUrl: string | null) => void;
+}>) {
+  if (playlistsError === 'unauthorized') return <ReconnectBanner />;
+  if (loadingPlaylists) {
+    return <p style={{ color: 'rgba(255,255,255,0.45)', fontSize: '0.8125rem' }}>Loading your playlists…</p>;
+  }
+  if (playlistsError) {
+    return <p style={{ color: '#fca5a5', fontSize: '0.8125rem' }}>Couldn't load your playlists. Try again.</p>;
+  }
+  return (
+    <div className="grid grid-cols-3 gap-2.5 overflow-y-auto" style={{ maxHeight: '48vh' }}>
+      {playlists.map(p => (
+        <button
+          key={p.id}
+          onClick={() => onChoose(p.id, p.imageUrl)}
+          disabled={resolving}
+          className="flex flex-col items-start gap-1.5 rounded-xl text-left"
+          style={{ padding: '8px', background: 'rgba(255,255,255,0.04)', border: '1px solid rgba(255,255,255,0.07)', cursor: resolving ? 'not-allowed' : 'pointer' }}
+        >
+          {p.imageUrl ? (
+            <img src={p.imageUrl} alt="" className="w-full aspect-square rounded-lg object-cover" />
+          ) : (
+            <div className="w-full aspect-square rounded-lg" style={{ background: 'rgba(255,255,255,0.06)' }} />
+          )}
+          <p className="truncate w-full" style={{ color: 'white', fontWeight: 600, fontSize: '0.75rem' }}>{p.name}</p>
+          <p style={{ color: 'rgba(255,255,255,0.4)', fontSize: '0.6875rem' }}>{p.trackCount} tracks</p>
+        </button>
+      ))}
+    </div>
+  );
+}
+
 // Full-screen playlist browser + paste-a-link fallback. Kept out of the
 // small settings popover entirely — this is the "heavy" UI (grid, loading/
 // error states) that the popover's chip just launches.
@@ -1140,33 +1180,13 @@ function PlaylistPickerDialog({ game }: Readonly<{ game: HostState }>) {
               </button>
             </div>
 
-            {playlistsError === 'unauthorized' ? (
-              <ReconnectBanner />
-            ) : loadingPlaylists ? (
-              <p style={{ color: 'rgba(255,255,255,0.45)', fontSize: '0.8125rem' }}>Loading your playlists…</p>
-            ) : playlistsError ? (
-              <p style={{ color: '#fca5a5', fontSize: '0.8125rem' }}>Couldn't load your playlists. Try again.</p>
-            ) : (
-              <div className="grid grid-cols-3 gap-2.5 overflow-y-auto" style={{ maxHeight: '48vh' }}>
-                {playlists.map(p => (
-                  <button
-                    key={p.id}
-                    onClick={() => choosePlaylist(p.id, p.imageUrl)}
-                    disabled={resolving}
-                    className="flex flex-col items-start gap-1.5 rounded-xl text-left"
-                    style={{ padding: '8px', background: 'rgba(255,255,255,0.04)', border: '1px solid rgba(255,255,255,0.07)', cursor: resolving ? 'not-allowed' : 'pointer' }}
-                  >
-                    {p.imageUrl ? (
-                      <img src={p.imageUrl} alt="" className="w-full aspect-square rounded-lg object-cover" />
-                    ) : (
-                      <div className="w-full aspect-square rounded-lg" style={{ background: 'rgba(255,255,255,0.06)' }} />
-                    )}
-                    <p className="truncate w-full" style={{ color: 'white', fontWeight: 600, fontSize: '0.75rem' }}>{p.name}</p>
-                    <p style={{ color: 'rgba(255,255,255,0.4)', fontSize: '0.6875rem' }}>{p.trackCount} tracks</p>
-                  </button>
-                ))}
-              </div>
-            )}
+            <PlaylistsPanel
+              playlistsError={playlistsError}
+              loadingPlaylists={loadingPlaylists}
+              playlists={playlists}
+              resolving={resolving}
+              onChoose={choosePlaylist}
+            />
 
             {resolveError && <p style={{ color: '#fca5a5', fontSize: '0.75rem' }}>{resolveError}</p>}
             {resolving && <p style={{ color: 'rgba(255,255,255,0.45)', fontSize: '0.8125rem' }}>Loading tracks…</p>}

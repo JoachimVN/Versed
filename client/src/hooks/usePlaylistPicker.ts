@@ -54,6 +54,13 @@ function parseYear(releaseDate: string | undefined): number | null {
   return match ? Number(match[1]) : null;
 }
 
+// Spotify playlist IDs are base62 (alphanumeric). Both resolvePlaylistInput
+// below and the playlist grid (Spotify's own API response) should already
+// only ever produce IDs matching this, but every ID is re-checked again
+// immediately before it's used to build a request URL — never trust that
+// validation done elsewhere still holds by the time it reaches a fetch call.
+const PLAYLIST_ID_PATTERN = /^[A-Za-z0-9]{1,50}$/;
+
 // Accepts a full share URL (open.spotify.com/playlist/<id>), a URI
 // (spotify:playlist:<id>), or a bare ID pasted directly.
 export function resolvePlaylistInput(raw: string): string | null {
@@ -62,7 +69,43 @@ export function resolvePlaylistInput(raw: string): string | null {
   if (urlMatch) return urlMatch[1];
   const uriMatch = /^spotify:playlist:([A-Za-z0-9]+)$/.exec(trimmed);
   if (uriMatch) return uriMatch[1];
-  return /^[A-Za-z0-9]{15,30}$/.test(trimmed) ? trimmed : null;
+  return PLAYLIST_ID_PATTERN.test(trimmed) ? trimmed : null;
+}
+
+type SpotifyFetchResult<T> =
+  | { ok: true; data: T }
+  | { ok: false; error: PlaylistFetchError };
+
+// Centralizes the status-code handling shared by every Spotify Web API call
+// below, so each call site is just one branch instead of three.
+async function fetchSpotify<T>(
+  url: string, accessToken: string, notFoundIsPlaylist = false,
+): Promise<SpotifyFetchResult<T>> {
+  const res = await fetch(url, { headers: { Authorization: `Bearer ${accessToken}` } });
+  if (res.status === 401 || res.status === 403) return { ok: false, error: 'unauthorized' };
+  if (notFoundIsPlaylist && res.status === 404) return { ok: false, error: 'not_found' };
+  if (!res.ok) {
+    console.error(`[Spotify] request to ${url} failed ${res.status}:`, await res.text());
+    return { ok: false, error: 'error' };
+  }
+  return { ok: true, data: await res.json() as T };
+}
+
+// Filters out removed tracks, local files (unplayable via the Web Playback
+// SDK), and episodes/non-track items (no artists array).
+function toPlaylistTrackInput(t: SpotifyTrack | null): PlaylistTrackInput | null {
+  if (!t || t.is_local || !t.id || !t.artists?.length) return null;
+  return {
+    spotifyTrackId: t.id,
+    title: t.name,
+    artist: t.artists[0].name,
+    featuredArtists: t.artists.length > 1
+      ? t.artists.slice(1).map(a => a.name).join(', ')
+      : undefined,
+    durationMs: t.duration_ms ?? null,
+    year: parseYear(t.album?.release_date),
+    albumArtUrl: t.album?.images?.[0]?.url ?? null,
+  };
 }
 
 export function usePlaylistPicker(accessToken: string | null) {
@@ -78,22 +121,16 @@ export function usePlaylistPicker(accessToken: string | null) {
       const all: PlaylistSummary[] = [];
       let url: string | null = 'https://api.spotify.com/v1/me/playlists?limit=50';
       while (url) {
-        const res: Response = await fetch(url, { headers: { Authorization: `Bearer ${accessToken}` } });
-        if (res.status === 401 || res.status === 403) { setPlaylistsError('unauthorized'); return; }
-        if (!res.ok) {
-          console.error(`[Spotify] fetch playlists failed ${res.status}:`, await res.text());
-          setPlaylistsError('error');
-          return;
-        }
-        const data = await res.json() as SpotifyPlaylistsResponse;
-        for (const item of data.items) {
+        const result: SpotifyFetchResult<SpotifyPlaylistsResponse> = await fetchSpotify(url, accessToken);
+        if (!result.ok) { setPlaylistsError(result.error); return; }
+        for (const item of result.data.items) {
           const trackCount = item?.tracks?.total ?? item?.items?.total;
           // Playlist folders (and the occasional null/unavailable entry) show up
           // here too but have neither field — they aren't real playlists.
           if (trackCount === undefined) continue;
           all.push({ id: item.id, name: item.name, imageUrl: item.images?.[0]?.url ?? null, trackCount });
         }
-        url = data.next;
+        url = result.data.next;
       }
       setPlaylists(all);
     } catch (err) {
@@ -110,55 +147,33 @@ export function usePlaylistPicker(accessToken: string | null) {
     { ok: true; name: string; tracks: PlaylistTrackInput[] } | { ok: false; error: PlaylistFetchError; count?: number }
   > => {
     if (!accessToken) return { ok: false, error: 'error' };
+    // Re-validated here (not just trusted from the caller) immediately before
+    // it's used to build a request URL — see PLAYLIST_ID_PATTERN.
+    if (!PLAYLIST_ID_PATTERN.test(playlistId)) return { ok: false, error: 'not_found' };
     try {
-      const metaRes = await fetch(
-        `https://api.spotify.com/v1/playlists/${playlistId}?fields=name`,
-        { headers: { Authorization: `Bearer ${accessToken}` } },
+      const metaResult = await fetchSpotify<{ name: string }>(
+        `https://api.spotify.com/v1/playlists/${playlistId}?fields=name`, accessToken, true,
       );
-      if (metaRes.status === 401 || metaRes.status === 403) return { ok: false, error: 'unauthorized' };
-      if (metaRes.status === 404) return { ok: false, error: 'not_found' };
-      if (!metaRes.ok) {
-        console.error(`[Spotify] fetch playlist meta failed ${metaRes.status}:`, await metaRes.text());
-        return { ok: false, error: 'error' };
-      }
-      const meta = await metaRes.json() as { name: string };
+      if (!metaResult.ok) return metaResult;
 
       const seen = new Set<string>();
       const tracks: PlaylistTrackInput[] = [];
       let url: string | null = `https://api.spotify.com/v1/playlists/${playlistId}/tracks?limit=100&fields=`
         + encodeURIComponent('next,items(track(id,name,duration_ms,is_local,artists(name),album(images,release_date)))');
       while (url && tracks.length < MAX_PLAYLIST_TRACKS) {
-        const res: Response = await fetch(url, { headers: { Authorization: `Bearer ${accessToken}` } });
-        if (res.status === 401 || res.status === 403) return { ok: false, error: 'unauthorized' };
-        if (!res.ok) {
-          console.error(`[Spotify] fetch playlist tracks failed ${res.status}:`, await res.text());
-          return { ok: false, error: 'error' };
+        const result: SpotifyFetchResult<SpotifyPlaylistTracksResponse> = await fetchSpotify(url, accessToken);
+        if (!result.ok) return result;
+        for (const item of result.data.items) {
+          const track = toPlaylistTrackInput(item.track);
+          if (!track || seen.has(track.spotifyTrackId)) continue;
+          seen.add(track.spotifyTrackId);
+          tracks.push(track);
         }
-        const data = await res.json() as SpotifyPlaylistTracksResponse;
-        for (const item of data.items) {
-          const t = item.track;
-          // Skip removed tracks, local files (unplayable via the Web Playback
-          // SDK), and episodes/non-track items (no artists array).
-          if (!t || t.is_local || !t.id || !t.artists?.length) continue;
-          if (seen.has(t.id)) continue;
-          seen.add(t.id);
-          tracks.push({
-            spotifyTrackId: t.id,
-            title: t.name,
-            artist: t.artists[0].name,
-            featuredArtists: t.artists.length > 1
-              ? t.artists.slice(1).map(a => a.name).join(', ')
-              : undefined,
-            durationMs: t.duration_ms ?? null,
-            year: parseYear(t.album?.release_date),
-            albumArtUrl: t.album?.images?.[0]?.url ?? null,
-          });
-        }
-        url = data.next;
+        url = result.data.next;
       }
 
       if (tracks.length < MIN_PLAYLIST_TRACKS) return { ok: false, error: 'too_few', count: tracks.length };
-      return { ok: true, name: meta.name, tracks };
+      return { ok: true, name: metaResult.data.name, tracks };
     } catch (err) {
       console.error('[Spotify] fetch playlist tracks threw:', err);
       return { ok: false, error: 'error' };
