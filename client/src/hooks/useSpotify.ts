@@ -15,6 +15,11 @@ export function useSpotify() {
   const [accessToken, setAccessToken] = useState<string | null>(null);
   const [refreshToken, setRefreshToken] = useState<string | null>(null);
   const [playerReady, setPlayerReady] = useState(false);
+  // Spotify apps in Development Mode let ANY account complete the OAuth login
+  // itself, then silently 403 every API call for accounts the developer hasn't
+  // allowlisted. So "unauthorized" can only be detected after the fact, by
+  // probing the Web API once we have a token.
+  const [unauthorized, setUnauthorized] = useState(false);
   const playerRef = useRef<import('../types').SpotifyPlayer | null>(null);
   const deviceIdRef = useRef<string | null>(null);
   const accessTokenRef = useRef<string | null>(null);
@@ -86,6 +91,15 @@ export function useSpotify() {
     const id = setInterval(refresh, 50 * 60 * 1000);
     return () => clearInterval(id);
   }, [refreshToken]);
+
+  useEffect(() => {
+    if (!accessToken) return;
+    let cancelled = false;
+    fetch('https://api.spotify.com/v1/me', { headers: { Authorization: `Bearer ${accessToken}` } })
+      .then(res => { if (!cancelled && res.status === 403) setUnauthorized(true); })
+      .catch(() => { /* transient network error, not an authorization signal */ });
+    return () => { cancelled = true; };
+  }, [accessToken]);
 
   useEffect(() => {
     if (!accessToken) return;
@@ -231,5 +245,15 @@ export function useSpotify() {
     await playerRef.current?.pause();
   }
 
-  return { isConnected: !!accessToken, playerReady, prepareTrack, startPrepared, pauseTrack, activatePlayer };
+  function disconnect() {
+    sessionStorage.removeItem('spotify_at');
+    sessionStorage.removeItem('spotify_rt');
+    accessTokenRef.current = null;
+    setAccessToken(null);
+    setRefreshToken(null);
+    setPlayerReady(false);
+    setUnauthorized(false);
+  }
+
+  return { isConnected: !!accessToken, playerReady, unauthorized, prepareTrack, startPrepared, pauseTrack, activatePlayer, disconnect };
 }

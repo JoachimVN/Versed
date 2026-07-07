@@ -178,29 +178,36 @@ const EVENT_BITS: Partial<Record<NonNullable<PartyInfo['event']>, string>> = {
   outro: 'DOWN TO THE WIRE',
 };
 
+// Whether this is a bid-and-guess or everyone-at-once round isn't implied by
+// the target/event bits below, so it always leads — otherwise a plain round
+// with no special target or event shows no badge at all mid-round.
+function formatBit(party: PartyInfo): string {
+  if (party.format === 'year') return 'GUESS THE YEAR';
+  return party.format === 'race' ? 'RACE ROUND' : 'CLASSIC ROUND';
+}
+
+// Target always gets an explicit bit (title included) — leaving the plain
+// title case silent made its absence read as ambiguous rather than as
+// "title," especially once the badge also shows during actual guessing.
+function targetBit(party: PartyInfo): string {
+  if (party.target === 'artist') return 'NAME THE ARTIST';
+  if (party.target === 'both') return 'TITLE + ARTIST';
+  return 'NAME THE SONG';
+}
+
+function eventBit(party: PartyInfo): string | null {
+  if (party.event === 'mystery') return party.multiplier === null ? 'MYSTERY ×?' : `MYSTERY ×${party.multiplier}`;
+  return party.event ? (EVENT_BITS[party.event] ?? null) : null;
+}
+
 // Small chip summarising the active round's recipe, shown on in-round screens.
 export function PartyBadge({ party }: Readonly<{ party: PartyInfo | null }>) {
   if (!party) return null;
-  const bits: string[] = [];
-  // Whether this is a bid-and-guess or everyone-at-once round isn't implied
-  // by the target/event bits below, so it always leads — otherwise a plain
-  // round with no special target or event shows no badge at all mid-round.
-  if (party.format === 'year') bits.push('GUESS THE YEAR');
-  else bits.push(party.format === 'race' ? 'RACE ROUND' : 'CLASSIC ROUND');
+  const bits: string[] = [formatBit(party)];
   if (party.finale) bits.push(`FINALE · ${party.duelists.join(' vs ')}`);
-  // Target always gets an explicit bit (title included) — leaving the plain
-  // title case silent made its absence read as ambiguous rather than as
-  // "title," especially once the badge also shows during actual guessing.
-  if (party.format !== 'year') {
-    if (party.target === 'artist') bits.push('NAME THE ARTIST');
-    else if (party.target === 'both') bits.push('TITLE + ARTIST');
-    else bits.push('NAME THE SONG');
-  }
-  if (party.event === 'mystery') bits.push(party.multiplier === null ? 'MYSTERY ×?' : `MYSTERY ×${party.multiplier}`);
-  else if (party.event) {
-    const label = EVENT_BITS[party.event];
-    if (label) bits.push(label);
-  }
+  if (party.format !== 'year') bits.push(targetBit(party));
+  const event = eventBit(party);
+  if (event) bits.push(event);
   return (
     <div style={{ display: 'flex', gap: '6px', justifyContent: 'center', flexWrap: 'wrap' }}>
       {bits.map(b => (
