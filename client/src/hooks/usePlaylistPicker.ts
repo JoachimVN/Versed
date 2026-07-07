@@ -352,6 +352,14 @@ export function usePlaylistPicker(accessToken: string | null) {
     // Re-validated here (not just trusted from the caller) immediately before
     // it's used to build a request URL — see PLAYLIST_ID_PATTERN.
     if (!PLAYLIST_ID_PATTERN.test(playlistId)) return { ok: false, error: 'not_found' };
+
+    // Probed first (same 200-always endpoint the grid uses) so the common
+    // "you don't have access" case never hits Spotify's API directly from
+    // here — that would 403, which both fetchSpotify's own logging and the
+    // browser's network console would report as a failed request even
+    // though it's an expected, well-understood outcome.
+    if (!(await probeImportable(playlistId, token))) return { ok: false, error: 'forbidden' };
+
     try {
       const metaResult = await fetchSpotify<{ name: string }>(
         `https://api.spotify.com/v1/playlists/${playlistId}?fields=name`, token, true,

@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useRef, useMemo } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { Check, Loader2, Copy, Settings, Flame, Coins, Clock, PartyPopper, Volume2, VolumeX, ShieldAlert } from 'lucide-react';
+import { Check, Loader2, Copy, Settings, Flame, Coins, Clock, PartyPopper, Volume2, VolumeX, ShieldAlert, ChevronDown } from 'lucide-react';
 import LiquidGlass from 'liquid-glass-react';
 import QRCodeLib from 'react-qr-code';
 const QRCode = QRCodeLib as unknown as React.FC<{ value: string; size?: number }>;
@@ -1126,10 +1126,22 @@ function FullScreenDialog({ ariaLabel, dialogRef, children }: Readonly<{
   );
 }
 
+// Shared verbatim between the blocked-playlist-card hint and the paste-a-link
+// error, so the two surfaces never drift into different wording for the same
+// Spotify restriction.
+const PLAYLIST_ACCESS_WORKAROUND =
+  "You can't import playlists you don't own or collaborate on due to Spotify API restrictions.\n\n"
+  + 'To work around this:\n'
+  + '1. Open the playlist\n'
+  + '2. Tap ⋯\n'
+  + '3. "Add to other playlist"\n'
+  + '4. "New playlist" to copy it into your own library.\n\n'
+  + 'You may need to refresh the page for it to show up here.';
+
 function playlistErrorMessage(error: PlaylistFetchError): string {
   switch (error) {
     case 'unauthorized': return 'Reconnect Spotify to allow playlist access.';
-    case 'forbidden': return "Spotify only lets you import playlists you own or collaborate on. In the Spotify app, open the playlist, tap ⋯, then \"Add to other playlist\" → \"New playlist\" to copy it into one of your own. Or ask the owner to make it collaborative and add you.";
+    case 'forbidden': return PLAYLIST_ACCESS_WORKAROUND;
     case 'not_found': return "Couldn't find that playlist. Check the link and try again.";
     case 'empty': return 'That playlist has no playable tracks.';
     default: return "Couldn't load that playlist. Try again.";
@@ -1163,6 +1175,11 @@ function PlaylistsPanel({ playlistsError, loadingPlaylists, playlists, resolving
   selectedIds: Set<string>;
   onChoose: (id: string, imageUrl: string | null) => void;
 }>) {
+  const [workaroundOpen, setWorkaroundOpen] = useState(false);
+  const workaroundRef = useRef<HTMLDivElement>(null);
+  useEffect(() => {
+    if (workaroundOpen) workaroundRef.current?.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+  }, [workaroundOpen]);
   if (playlistsError === 'unauthorized') return <ReconnectBanner />;
   if (loadingPlaylists) {
     return <p style={{ color: 'rgba(255,255,255,0.45)', fontSize: '0.8125rem' }}>Loading your playlists…</p>;
@@ -1182,8 +1199,7 @@ function PlaylistsPanel({ playlistsError, loadingPlaylists, playlists, resolving
               <button
                 key={p.id}
                 onClick={() => { if (!blocked) onChoose(p.id, p.imageUrl); }}
-                disabled={resolving || blocked}
-                title={blocked ? "You don't own or collaborate on this playlist, so Spotify won't let it be imported. See the tip below the grid." : undefined}
+                disabled={resolving}
                 className="relative flex flex-col items-start gap-1.5 rounded-xl text-left"
                 style={{
                   padding: '8px',
@@ -1207,6 +1223,15 @@ function PlaylistsPanel({ playlistsError, loadingPlaylists, playlists, resolving
                       <Check style={{ width: '13px', height: '13px', color: 'white' }} strokeWidth={3} />
                     </div>
                   )}
+                  {blocked && (
+                    <span
+                      onClick={(e) => { e.stopPropagation(); setWorkaroundOpen(true); }}
+                      className="absolute top-1 left-1 flex items-center justify-center rounded-full"
+                      style={{ width: '18px', height: '18px', background: 'rgba(0,0,0,0.6)', border: '1px solid rgba(255,255,255,0.3)', cursor: 'pointer' }}
+                    >
+                      <span style={{ color: 'white', fontSize: '0.6875rem', fontWeight: 700, lineHeight: 1 }}>?</span>
+                    </span>
+                  )}
                 </div>
                 <p className="truncate w-full" style={{ color: 'white', fontWeight: 600, fontSize: '0.75rem' }}>{p.name}</p>
                 <p style={{ color: 'rgba(255,255,255,0.4)', fontSize: '0.6875rem' }}>{p.trackCount} tracks</p>
@@ -1216,9 +1241,24 @@ function PlaylistsPanel({ playlistsError, loadingPlaylists, playlists, resolving
         </div>
       </div>
       {anyBlocked && (
-        <p style={{ color: 'rgba(255,255,255,0.4)', fontSize: '0.6875rem', marginTop: '10px' }}>
-          Greyed-out playlists aren't yours to import. In the Spotify app, open one, tap ⋯, then "Add to other playlist" → "New playlist" to copy it into your own library. Or ask the owner to make it collaborative and add you.
-        </p>
+        <div ref={workaroundRef} style={{ marginTop: '10px' }}>
+          <button
+            type="button"
+            onClick={() => setWorkaroundOpen(o => !o)}
+            className="flex items-center gap-1"
+            style={{ color: 'rgba(255,255,255,0.4)', fontSize: '0.6875rem', background: 'none', border: 'none', padding: 0, cursor: 'pointer' }}
+          >
+            Why are some playlists greyed out?
+            <ChevronDown
+              style={{ width: '12px', height: '12px', transform: workaroundOpen ? 'rotate(180deg)' : undefined, transition: 'transform 150ms' }}
+            />
+          </button>
+          {workaroundOpen && (
+            <p style={{ color: 'rgba(255,255,255,0.4)', fontSize: '0.6875rem', marginTop: '6px', whiteSpace: 'pre-line' }}>
+              {PLAYLIST_ACCESS_WORKAROUND}
+            </p>
+          )}
+        </div>
       )}
     </>
   );
@@ -1349,7 +1389,7 @@ function PlaylistPickerDialog({ game }: Readonly<{ game: HostState }>) {
               onChoose={choosePlaylist}
             />
 
-            {resolveError && <p style={{ color: '#fca5a5', fontSize: '0.75rem' }}>{resolveError}</p>}
+            {resolveError && <p style={{ color: '#fca5a5', fontSize: '0.75rem', whiteSpace: 'pre-line' }}>{resolveError}</p>}
             {truncationNotice && <p style={{ color: '#fcd34d', fontSize: '0.75rem' }}>{truncationNotice}</p>}
             {resolving && (
               <p style={{ color: 'rgba(255,255,255,0.45)', fontSize: '0.8125rem' }}>
