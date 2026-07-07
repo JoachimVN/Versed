@@ -709,10 +709,10 @@ function SettingsPanel({ game, open }: Readonly<{ game: HostState; open: boolean
           <div style={{ paddingBottom: '12px', marginBottom: '12px', borderBottom: '1px solid rgba(255,255,255,0.07)' }}>
             <SongSourceRow value={songSource} onChange={setSongSource} />
             {songSource === 'playlist' && (
-              <>
+              <div className="mt-3 space-y-2">
                 <PlaylistList customPlaylists={customPlaylists} onOpen={openPlaylistPicker} onRemove={removePlaylist} />
                 <p style={{ color: 'rgba(255,255,255,0.35)', fontSize: '0.75rem' }}>All songs play at equal difficulty</p>
-              </>
+              </div>
             )}
           </div>
           {/* Party mixes classic and race rounds, so it needs all three timers.
@@ -1129,6 +1129,7 @@ function FullScreenDialog({ ariaLabel, dialogRef, children }: Readonly<{
 function playlistErrorMessage(error: PlaylistFetchError): string {
   switch (error) {
     case 'unauthorized': return 'Reconnect Spotify to allow playlist access.';
+    case 'forbidden': return "Spotify only lets you import playlists you own or collaborate on. Ask the owner to make it collaborative and add you, or duplicate it to your own library first.";
     case 'not_found': return "Couldn't find that playlist. Check the link and try again.";
     case 'empty': return 'That playlist has no playable tracks.';
     default: return "Couldn't load that playlist. Try again.";
@@ -1167,7 +1168,7 @@ function PlaylistsPanel({ playlistsError, loadingPlaylists, playlists, resolving
     return <p style={{ color: 'rgba(255,255,255,0.45)', fontSize: '0.8125rem' }}>Loading your playlists…</p>;
   }
   if (playlistsError) {
-    return <p style={{ color: '#fca5a5', fontSize: '0.8125rem' }}>Couldn't load your playlists. Try again.</p>;
+    return <p style={{ color: '#fca5a5', fontSize: '0.8125rem' }}>{playlistErrorMessage(playlistsError)}</p>;
   }
   return (
     <div className="grid grid-cols-3 gap-2.5 overflow-y-auto" style={{ maxHeight: '48vh' }}>
@@ -1691,8 +1692,17 @@ function useLobbyMusic(muffled: boolean) {
   });
 
   // Fades out and stops playback entirely, so callers that navigate away can
-  // wait for it first instead of cutting the music off mid-fade.
+  // wait for it first instead of cutting the music off mid-fade. Sweeps the
+  // lowpass filter down in lockstep with the volume so the music seems to
+  // recede into the distance rather than just going quiet in place.
   const fadeOut = async () => {
+    const ctx = ctxRef.current;
+    const filter = filterRef.current;
+    if (ctx && filter) {
+      filter.frequency.cancelScheduledValues(ctx.currentTime);
+      filter.frequency.setValueAtTime(filter.frequency.value, ctx.currentTime);
+      filter.frequency.exponentialRampToValueAtTime(120, ctx.currentTime + 0.8);
+    }
     await rampGain(0, 800);
     sourceRef.current?.stop();
   };
@@ -1751,7 +1761,7 @@ function MuteButton({ muted, toggleMute }: Readonly<{ muted: boolean; toggleMute
   );
 }
 
-export function LobbyView({ game }: Readonly<{ game: HostState }>) {
+export function LobbyView({ game, fadeOutRef }: Readonly<{ game: HostState; fadeOutRef?: React.RefObject<(() => Promise<void>) | null> }>) {
   const {
     spotify, pin, players, createGame, startGame, mode, settingsOpen, toggleSettings, setMode, removePlayer,
     gameExpired, playlistPickerOpen, songSource, customPlaylists, startError,
@@ -1761,6 +1771,11 @@ export function LobbyView({ game }: Readonly<{ game: HostState }>) {
   const playlistLow = songSource === 'playlist' && playlistTrackCount > 0 && playlistTrackCount < MIN_PLAYLIST_TRACKS;
   const [lobbyVisible, setLobbyVisible] = useState(false);
   const { fadeOut, muted, toggleMute } = useLobbyMusic(gameExpired);
+  const startingRef = useRef(false);
+
+  // Exposes fadeOut to the "Go home" button on the game-expired dialog, which
+  // lives outside this component (it overlays every phase, not just lobby).
+  useEffect(() => { if (fadeOutRef) fadeOutRef.current = fadeOut; });
 
   useEffect(() => {
     if (!pin) { setLobbyVisible(false); return; }
@@ -1772,8 +1787,15 @@ export function LobbyView({ game }: Readonly<{ game: HostState }>) {
     if (spotify.playerReady && !pin) createGame();
   }, [spotify.playerReady, pin]); // eslint-disable-line react-hooks/exhaustive-deps
 
-  const handleStart = () => {
-    fadeOut();
+  const handleStart = async () => {
+    if (startingRef.current) return;
+    startingRef.current = true;
+    // Activate the Spotify player synchronously in this click handler (some
+    // browsers require playback to be unlocked within the same gesture),
+    // then let the music fade all the way out before the view switches away
+    // and cuts it off mid-fade.
+    spotify.activatePlayer();
+    await fadeOut();
     startGame();
   };
 
@@ -2425,7 +2447,11 @@ export default function Host() {
   const navigate = useNavigate();
   const { phase, result, reconnecting, reconnectingCount, gameExpired } = game;
   const gameExpiredRef = useRef<HTMLDialogElement>(null);
-  useEscapeKey(() => navigate('/'), gameExpired);
+  const lobbyFadeOutRef = useRef<(() => Promise<void>) | null>(null);
+  // Awaited so the fade actually finishes before navigate() unmounts the
+  // lobby (and its AudioContext) out from under it.
+  const goHome = async () => { await lobbyFadeOutRef.current?.(); navigate('/'); };
+  useEscapeKey(goHome, gameExpired);
   useFocusTrap(gameExpiredRef, gameExpired);
 
   return (
@@ -2433,7 +2459,7 @@ export default function Host() {
       <div aria-live="polite" className="sr-only">{phaseAnnouncement(phase, result)}</div>
       <RoundIntro party={game.party} roundKey={game.roundIndex} />
       {phase === 'connect' && <ConnectView game={game} />}
-      {phase === 'lobby' && <LobbyView game={game} />}
+      {phase === 'lobby' && <LobbyView game={game} fadeOutRef={lobbyFadeOutRef} />}
       {phase === 'betting' && <BettingView game={game} />}
       {phase === 'playing' && <PlayingView game={game} />}
       {phase === 'guessing' && <GuessingView game={game} />}
@@ -2462,7 +2488,7 @@ export default function Host() {
                   <p style={{ color: 'rgba(255,255,255,0.45)', fontSize: '0.8rem', textAlign: 'center', lineHeight: 1.5 }}>You were away too long and the game was closed.</p>
                 </div>
                 <button
-                  onClick={() => navigate('/')}
+                  onClick={goHome}
                   style={{ marginTop: '6px', width: '100%', padding: '10px', borderRadius: '12px', border: '1px solid rgba(255,255,255,0.12)', cursor: 'pointer', background: 'rgba(255,255,255,0.07)', color: 'rgba(255,255,255,0.72)', fontWeight: 600, fontSize: '0.875rem', transition: 'background 0.2s ease, border-color 0.2s ease, color 0.2s ease' }}
                   onMouseEnter={e => { const el = e.currentTarget as HTMLElement; el.style.background = 'rgba(255,255,255,0.13)'; el.style.borderColor = 'rgba(255,255,255,0.22)'; el.style.color = 'white'; }}
                   onMouseLeave={e => { const el = e.currentTarget as HTMLElement; el.style.background = 'rgba(255,255,255,0.07)'; el.style.borderColor = 'rgba(255,255,255,0.12)'; el.style.color = 'rgba(255,255,255,0.72)'; }}
