@@ -38,6 +38,8 @@ body {
   box-sizing: border-box;
   margin: 0;
   padding: 0;
+  scrollbar-width: thin;
+  scrollbar-color: rgba(255, 255, 255, 0.25) transparent;
 }
 
 /* Buttons/inputs here reset border/background inline but never touch
@@ -95,12 +97,8 @@ select:focus-visible,
 
 /* Thin, on-brand scrollbar for every scroll container (playlist picker grid,
    leaderboard, etc.) instead of the OS default. Firefox reads the two
-   scrollbar-* properties; everything else reads the ::-webkit-scrollbar-*
-   pseudo-elements below. */
-* {
-  scrollbar-width: thin;
-  scrollbar-color: rgba(255, 255, 255, 0.25) transparent;
-}
+   scrollbar-* properties on the `*` reset above; everything else reads the
+   ::-webkit-scrollbar-* pseudo-elements below. */
 *::-webkit-scrollbar {
   width: 8px;
   height: 8px;

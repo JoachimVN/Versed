@@ -85,7 +85,12 @@ async function fetchSpotify<T>(
   if (res.status === 401 || res.status === 403) return { ok: false, error: 'unauthorized' };
   if (notFoundIsPlaylist && res.status === 404) return { ok: false, error: 'not_found' };
   if (!res.ok) {
-    console.error(`[Spotify] request to ${url} failed ${res.status}:`, await res.text());
+    const body = await res.text();
+    console.error('[Spotify] request failed', {
+      url: url.replace(/[\r\n]/g, ''),
+      status: res.status,
+      body: body.replace(/[\r\n]/g, ''),
+    });
     return { ok: false, error: 'error' };
   }
   return { ok: true, data: await res.json() as T };
