@@ -1,4 +1,4 @@
-import { Router } from 'express';
+import { Router, Request, Response } from 'express';
 import axios from 'axios';
 
 const router = Router();
@@ -89,6 +89,22 @@ router.post('/refresh', async (req, res) => {
     res.json({ access_token: data.access_token });
   } catch {
     res.status(500).json({ error: 'Token refresh failed' });
+  }
+});
+
+router.post('/fetch-playlist', async (req: Request, res: Response) => {
+  const { access_token, url } = req.body as { access_token?: string; url?: string };
+  if (!access_token || !url) return res.status(400).json({ error: 'Missing access_token or url' });
+
+  try {
+    const result = await axios.get(url, {
+      headers: { Authorization: `Bearer ${access_token}` },
+      timeout: 12000,
+    });
+    res.json(result.data);
+  } catch (err) {
+    const status = axios.isAxiosError(err) ? err.response?.status : 500;
+    res.status(status || 500).json({ error: 'Failed to fetch playlist' });
   }
 });
 

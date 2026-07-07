@@ -1,5 +1,6 @@
 import { useCallback, useState } from 'react';
 import { PlaylistTrackInput } from '../types';
+import { BACKEND_URL } from '../config';
 
 export interface PlaylistSummary {
   id: string;
@@ -113,7 +114,13 @@ async function fetchWithTimeout(
   const controller = new AbortController();
   const timeoutId = setTimeout(() => controller.abort(), REQUEST_TIMEOUT_MS);
   try {
-    const res = await fetch(url, { headers: { Authorization: `Bearer ${accessToken}` }, signal: controller.signal });
+    // Route through backend to ensure token is always fresh
+    const res = await fetch(`${BACKEND_URL}/api/auth/fetch-playlist`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ access_token: accessToken, url }),
+      signal: controller.signal,
+    });
     return { res };
   } catch (err) {
     return { err };
