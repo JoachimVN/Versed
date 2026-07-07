@@ -28,7 +28,7 @@ const MOCK_RESULT: RoundResultEvent = {
 const MOCK_HOST: HostState = {
   spotify: null as any,
   phase: 'playing',
-  pin: '247',
+  pin: '123',
   players: [
     { name: 'Anna', score: 3100, streak: 3 },
     { name: 'John', score: 2650 },
@@ -176,7 +176,7 @@ const MOCK_PARTY_STEAL: PartyInfo = {
 
 const MOCK_PLAY: PlayState = {
   phase: 'watching',
-  pin: '247',
+  pin: '123',
   name: 'Anna',
   myName: 'Anna',
   error: '',

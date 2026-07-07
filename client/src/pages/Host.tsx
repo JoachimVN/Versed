@@ -759,6 +759,11 @@ function SettingsPanel({ game, open }: Readonly<{ game: HostState; open: boolean
 }
 
 function JoinCard({ pin, copied, copyInvite }: Readonly<{ pin: string; copied: boolean; copyInvite: () => void }>) {
+  const searchParams = new URLSearchParams(globalThis.location.search);
+  const isScreenshot = searchParams.has('v');
+  const baseUrl = isScreenshot ? 'https://joavn.dev/versed' : `${globalThis.location.origin}${import.meta.env.BASE_URL}`.replace(/\/$/, '');
+  const qrUrl = isScreenshot ? `https://joavn.dev/versed/play/${pin}` : `${globalThis.location.origin}${import.meta.env.BASE_URL}play/${pin}`;
+
   return (
     <div className="w-full max-w-md bg-white/5 rounded-2xl p-5">
       <div className="flex items-center gap-5">
@@ -766,7 +771,7 @@ function JoinCard({ pin, copied, copyInvite }: Readonly<{ pin: string; copied: b
           <div>
             <p className="text-white/45 text-xs uppercase tracking-widest mb-0.5">Join at</p>
             <p className="text-white font-semibold text-base">
-              {`${globalThis.location.origin}${import.meta.env.BASE_URL}`.replace(/\/$/, '')}
+              {baseUrl}
             </p>
           </div>
           <div>
@@ -782,7 +787,7 @@ function JoinCard({ pin, copied, copyInvite }: Readonly<{ pin: string; copied: b
           </button>
         </div>
         <div className="p-2 bg-white rounded-xl shrink-0">
-          <QRCode value={`${globalThis.location.origin}${import.meta.env.BASE_URL}play/${pin}`} size={148} />
+          <QRCode value={qrUrl} size={148} />
         </div>
       </div>
     </div>
@@ -1234,7 +1239,7 @@ function PlaylistPickerDialog({ game }: Readonly<{ game: HostState }>) {
     truncationNotice ? 'truncated' : 'ok',
   ].join('|');
   useEffect(() => {
-    window.dispatchEvent(new Event('resize'));
+    globalThis.dispatchEvent(new Event('resize'));
   }, [glassContentShape]);
 
   const choosePlaylist = async (id: string, fallbackImageUrl: string | null = null) => {
