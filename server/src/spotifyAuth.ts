@@ -93,29 +93,37 @@ router.post('/refresh', async (req, res) => {
 });
 
 router.post('/fetch-playlist', async (req: Request, res: Response) => {
-  const { access_token, url } = req.body as { access_token?: string; url?: string };
-  if (!access_token || !url) return res.status(400).json({ error: 'Missing access_token or url' });
+  const { access_token, playlist_id, limit, offset } = req.body as {
+    access_token?: string;
+    playlist_id?: string;
+    limit?: number | string;
+    offset?: number | string;
+  };
 
-  let parsedUrl: URL;
-  try {
-    parsedUrl = new URL(url);
-  } catch {
-    return res.status(400).json({ error: 'Invalid url' });
+  if (!access_token || !playlist_id) {
+    return res.status(400).json({ error: 'Missing access_token or playlist_id' });
   }
 
-  const isSpotifyApi =
-    parsedUrl.protocol === 'https:' &&
-    parsedUrl.hostname === 'api.spotify.com' &&
-    /^\/v1\/(?:me\/playlists|playlists\/[A-Za-z0-9]+(?:\/.*)?)$/.test(parsedUrl.pathname);
-
-  if (!isSpotifyApi) {
-    return res.status(400).json({ error: 'Only Spotify playlist API URLs are allowed' });
+  if (!/^[A-Za-z0-9]{1,64}$/.test(playlist_id)) {
+    return res.status(400).json({ error: 'Invalid playlist_id' });
   }
 
-  // Rebuilt from a hardcoded origin plus only the already-validated path and
-  // query, rather than reusing the parsed client URL directly, so the value
-  // reaching axios is never attacker-controlled even in appearance.
-  const safeUrl = `https://api.spotify.com${parsedUrl.pathname}${parsedUrl.search}`;
+  const parsedLimit = limit === undefined ? undefined : Number(limit);
+  const parsedOffset = offset === undefined ? undefined : Number(offset);
+
+  if (parsedLimit !== undefined && (!Number.isInteger(parsedLimit) || parsedLimit < 1 || parsedLimit > 100)) {
+    return res.status(400).json({ error: 'Invalid limit' });
+  }
+
+  if (parsedOffset !== undefined && (!Number.isInteger(parsedOffset) || parsedOffset < 0)) {
+    return res.status(400).json({ error: 'Invalid offset' });
+  }
+
+  const query = new URLSearchParams();
+  if (parsedLimit !== undefined) query.set('limit', String(parsedLimit));
+  if (parsedOffset !== undefined) query.set('offset', String(parsedOffset));
+
+  const safeUrl = `https://api.spotify.com/v1/playlists/${playlist_id}${query.toString() ? `?${query.toString()}` : ''}`;
 
   try {
     const result = await axios.get(safeUrl, {
