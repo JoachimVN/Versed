@@ -1,6 +1,7 @@
 import { useCallback, useState } from 'react';
 import { PlaylistTrackInput } from '../types';
 import { BACKEND_URL } from '../config';
+import { sanitizeToken } from './useSpotify';
 
 export interface PlaylistSummary {
   id: string;
@@ -159,6 +160,41 @@ function isAuthError(status: number): boolean {
   return status === 401;
 }
 
+type ResponseOutcome<T> =
+  | { retry: false; result: SpotifyFetchResult<T> }
+  | { retry: true; delayMs: number };
+
+// Turns a landed HTTP response into either a final result or a "retry after
+// this long" signal, so the retry loop in fetchSpotify only has to act on
+// that decision instead of branching on status codes itself.
+async function classifyResponse<T>(
+  res: Response, url: string, notFoundIsPlaylist: boolean, attempt: number, canRetry: boolean,
+): Promise<ResponseOutcome<T>> {
+  if (isAuthError(res.status)) return { retry: false, result: { ok: false, error: 'unauthorized' } };
+  if (res.status === 403) {
+    const body = await res.text();
+    console.error('[Spotify] 403 forbidden', {
+      url: url.replace(/[\r\n]/g, ''),
+      body: body.replace(/[\r\n]/g, ''),
+    });
+    return { retry: false, result: { ok: false, error: 'forbidden' } };
+  }
+  if (isPlaylistNotFound(notFoundIsPlaylist, res.status)) {
+    return { retry: false, result: { ok: false, error: 'not_found' } };
+  }
+  if (isTransientStatus(res.status) && canRetry) return { retry: true, delayMs: retryDelayMs(res, attempt) };
+  if (!res.ok) {
+    const body = await res.text();
+    console.error('[Spotify] request failed', {
+      url: url.replace(/[\r\n]/g, ''),
+      status: res.status,
+      body: body.replace(/[\r\n]/g, ''),
+    });
+    return { retry: false, result: { ok: false, error: 'error' } };
+  }
+  return { retry: false, result: { ok: true, data: await res.json() as T } };
+}
+
 // Centralizes the status-code handling shared by every Spotify Web API call
 // below, so each call site is just one branch instead of three. Retries
 // transient failures (429 with Retry-After, 5xx, timeouts, network errors)
@@ -176,33 +212,9 @@ async function fetchSpotify<T>(
       return { ok: false, error: 'error' };
     }
 
-    const { res } = attemptResult;
-    if (isAuthError(res.status)) return { ok: false, error: 'unauthorized' };
-    if (res.status === 403) {
-      const body = await res.text();
-      console.error('[Spotify] 403 forbidden', {
-        url: url.replace(/[\r\n]/g, ''),
-        body: body.replace(/[\r\n]/g, ''),
-      });
-      return { ok: false, error: 'forbidden' };
-    }
-    if (isPlaylistNotFound(notFoundIsPlaylist, res.status)) return { ok: false, error: 'not_found' };
-
-    if (isTransientStatus(res.status) && canRetry) {
-      await delay(retryDelayMs(res, attempt));
-      continue;
-    }
-
-    if (!res.ok) {
-      const body = await res.text();
-      console.error('[Spotify] request failed', {
-        url: url.replace(/[\r\n]/g, ''),
-        status: res.status,
-        body: body.replace(/[\r\n]/g, ''),
-      });
-      return { ok: false, error: 'error' };
-    }
-    return { ok: true, data: await res.json() as T };
+    const outcome = await classifyResponse<T>(attemptResult.res, url, notFoundIsPlaylist, attempt, canRetry);
+    if (outcome.retry) { await delay(outcome.delayMs); continue; }
+    return outcome.result;
   }
   return { ok: false, error: 'error' };
 }
@@ -274,6 +286,40 @@ async function probeImportability(ids: string[], accessToken: string): Promise<M
   return importableById;
 }
 
+// Walks every page of a playlist's tracks, dedupes, and filters out
+// unplayable entries. Split out of fetchPlaylistTracks so the pagination
+// loop's nesting doesn't add to that function's own branching.
+async function collectPlaylistTracks(
+  playlistId: string, token: string, onProgress?: (count: number) => void,
+): Promise<
+  { ok: true; tracks: PlaylistTrackInput[]; truncated: boolean }
+  | { ok: false; error: PlaylistFetchError }
+> {
+  const seen = new Set<string>();
+  const tracks: PlaylistTrackInput[] = [];
+  // Spotify's Feb 2026 API migration removed `/tracks` — `/items` is its
+  // replacement, with each entry's `track` field renamed to `item`.
+  let url: string | null = `https://api.spotify.com/v1/playlists/${playlistId}/items?limit=100&fields=`
+    + encodeURIComponent('next,items(item(type,id,name,duration_ms,is_local,artists(name),album(images,release_date)))');
+  while (url && tracks.length < MAX_PLAYLIST_TRACKS) {
+    const result: SpotifyFetchResult<SpotifyPlaylistTracksResponse> = await fetchSpotify(url, token);
+    if (!result.ok) return result;
+    for (const item of result.data.items) {
+      const track = toPlaylistTrackInput(item.item);
+      if (!track || seen.has(track.spotifyTrackId)) continue;
+      seen.add(track.spotifyTrackId);
+      tracks.push(track);
+    }
+    url = result.data.next;
+    onProgress?.(tracks.length);
+  }
+  // `url` still non-null here means the loop stopped because it hit the
+  // cap, not because it ran out of pages — i.e. the playlist has more
+  // tracks than we imported.
+  const truncated = tracks.length >= MAX_PLAYLIST_TRACKS && url !== null;
+  return { ok: true, tracks, truncated };
+}
+
 async function refreshAccessToken(): Promise<string | null> {
   const refreshToken = sessionStorage.getItem('spotify_rt');
   if (!refreshToken) return null;
@@ -284,9 +330,12 @@ async function refreshAccessToken(): Promise<string | null> {
       body: JSON.stringify({ refresh_token: refreshToken }),
     });
     const data = await res.json() as { access_token?: string };
-    if (data.access_token) {
-      sessionStorage.setItem('spotify_at', data.access_token);
-      return data.access_token;
+    // Server response is attacker-influenceable (tainted) same as the token in
+    // useSpotify's URL-fragment flow — never write it to storage unvalidated.
+    const accessToken = sanitizeToken(data.access_token);
+    if (accessToken) {
+      sessionStorage.setItem('spotify_at', accessToken);
+      return accessToken;
     }
   } catch (err) {
     console.error('[Spotify] Token refresh failed:', err);
@@ -366,31 +415,10 @@ export function usePlaylistPicker(accessToken: string | null) {
       );
       if (!metaResult.ok) return metaResult;
 
-      const seen = new Set<string>();
-      const tracks: PlaylistTrackInput[] = [];
-      // Spotify's Feb 2026 API migration removed `/tracks` — `/items` is its
-      // replacement, with each entry's `track` field renamed to `item`.
-      let url: string | null = `https://api.spotify.com/v1/playlists/${playlistId}/items?limit=100&fields=`
-        + encodeURIComponent('next,items(item(type,id,name,duration_ms,is_local,artists(name),album(images,release_date)))');
-      while (url && tracks.length < MAX_PLAYLIST_TRACKS) {
-        const result: SpotifyFetchResult<SpotifyPlaylistTracksResponse> = await fetchSpotify(url, token);
-        if (!result.ok) return result;
-        for (const item of result.data.items) {
-          const track = toPlaylistTrackInput(item.item);
-          if (!track || seen.has(track.spotifyTrackId)) continue;
-          seen.add(track.spotifyTrackId);
-          tracks.push(track);
-        }
-        url = result.data.next;
-        onProgress?.(tracks.length);
-      }
-
-      if (tracks.length === 0) return { ok: false, error: 'empty', count: 0 };
-      // `url` still non-null here means the loop stopped because it hit the
-      // cap, not because it ran out of pages — i.e. the playlist has more
-      // tracks than we imported.
-      const truncated = tracks.length >= MAX_PLAYLIST_TRACKS && url !== null;
-      return { ok: true, name: metaResult.data.name, tracks, truncated };
+      const collected = await collectPlaylistTracks(playlistId, token, onProgress);
+      if (!collected.ok) return collected;
+      if (collected.tracks.length === 0) return { ok: false, error: 'empty', count: 0 };
+      return { ok: true, name: metaResult.data.name, tracks: collected.tracks, truncated: collected.truncated };
     } catch (err) {
       console.error('[Spotify] fetch playlist tracks threw:', err);
       return { ok: false, error: 'error' };

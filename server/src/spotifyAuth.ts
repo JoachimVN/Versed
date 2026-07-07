@@ -112,8 +112,13 @@ router.post('/fetch-playlist', async (req: Request, res: Response) => {
     return res.status(400).json({ error: 'Only Spotify playlist API URLs are allowed' });
   }
 
+  // Rebuilt from a hardcoded origin plus only the already-validated path and
+  // query, rather than reusing the parsed client URL directly, so the value
+  // reaching axios is never attacker-controlled even in appearance.
+  const safeUrl = `https://api.spotify.com${parsedUrl.pathname}${parsedUrl.search}`;
+
   try {
-    const result = await axios.get(parsedUrl.toString(), {
+    const result = await axios.get(safeUrl, {
       headers: { Authorization: `Bearer ${access_token}` },
       timeout: 12000,
     });
