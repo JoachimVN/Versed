@@ -1191,52 +1191,61 @@ function PlaylistsPanel({ playlistsError, loadingPlaylists, playlists, resolving
           const blocked = !p.importable;
           const guideOpen = openBlockedId === p.id;
           return (
-            <button
-              key={p.id}
-              onClick={() => { if (!blocked) onChoose(p.id, p.imageUrl); }}
-              disabled={resolving}
-              className="relative flex flex-col rounded-xl text-left"
-              style={{
-                padding: '8px',
-                background: selected ? 'rgba(29, 185, 84, 0.12)' : 'rgba(255,255,255,0.04)',
-                border: selected ? '1px solid rgba(29, 185, 84, 0.45)' : '1px solid rgba(255,255,255,0.07)',
-                cursor: resolving || blocked ? 'not-allowed' : 'pointer',
-              }}
-            >
-              {/* Dimmed independently of the guide overlay below, which needs
-                  full opacity of its own regardless of the tile's blocked look. */}
-              <div className="flex flex-col items-start gap-1.5 w-full" style={{ opacity: blocked ? 0.35 : 1 }}>
-                <div className="relative w-full">
-                  {p.imageUrl ? (
-                    <img src={p.imageUrl} alt="" className="w-full aspect-square rounded-lg object-cover" />
-                  ) : (
-                    <div className="w-full aspect-square rounded-lg" style={{ background: 'rgba(255,255,255,0.06)' }} />
-                  )}
-                  {selected && (
-                    <div
-                      className="absolute top-1 right-1 flex items-center justify-center rounded-full"
-                      style={{ width: '20px', height: '20px', background: '#1DB954' }}
-                    >
-                      <Check style={{ width: '13px', height: '13px', color: 'white' }} strokeWidth={3} />
-                    </div>
-                  )}
+            <div key={p.id} className="relative">
+              <button
+                type="button"
+                onClick={() => { if (!blocked) onChoose(p.id, p.imageUrl); }}
+                disabled={resolving}
+                aria-pressed={selected}
+                className="relative flex flex-col w-full rounded-xl text-left"
+                style={{
+                  padding: '8px',
+                  background: selected ? 'rgba(29, 185, 84, 0.12)' : 'rgba(255,255,255,0.04)',
+                  border: selected ? '1px solid rgba(29, 185, 84, 0.45)' : '1px solid rgba(255,255,255,0.07)',
+                  cursor: resolving || blocked ? 'not-allowed' : 'pointer',
+                }}
+              >
+                {/* Dimmed independently of the guide overlay below, which needs
+                    full opacity of its own regardless of the tile's blocked look. */}
+                <div className="flex flex-col items-start gap-1.5 w-full" style={{ opacity: blocked ? 0.35 : 1 }}>
+                  <div className="relative w-full">
+                    {p.imageUrl ? (
+                      <img src={p.imageUrl} alt="" className="w-full aspect-square rounded-lg object-cover" />
+                    ) : (
+                      <div className="w-full aspect-square rounded-lg" style={{ background: 'rgba(255,255,255,0.06)' }} />
+                    )}
+                    {selected && (
+                      <div
+                        className="absolute top-1 right-1 flex items-center justify-center rounded-full"
+                        style={{ width: '20px', height: '20px', background: '#1DB954' }}
+                      >
+                        <Check style={{ width: '13px', height: '13px', color: 'white' }} strokeWidth={3} />
+                      </div>
+                    )}
+                  </div>
+                  <p className="truncate w-full" style={{ color: 'white', fontWeight: 600, fontSize: '0.75rem' }}>{p.name}</p>
+                  <p style={{ color: 'rgba(255,255,255,0.4)', fontSize: '0.6875rem' }}>{p.trackCount} tracks</p>
                 </div>
-                <p className="truncate w-full" style={{ color: 'white', fontWeight: 600, fontSize: '0.75rem' }}>{p.name}</p>
-                <p style={{ color: 'rgba(255,255,255,0.4)', fontSize: '0.6875rem' }}>{p.trackCount} tracks</p>
-              </div>
+              </button>
               {blocked && (
-                <span
-                  onClick={(e) => { e.stopPropagation(); setOpenBlockedId(guideOpen ? null : p.id); }}
+                <button
+                  type="button"
+                  aria-label="Why is this playlist blocked?"
+                  onClick={() => setOpenBlockedId(guideOpen ? null : p.id)}
                   className="absolute top-1 left-1 flex items-center justify-center rounded-full"
                   style={{ width: '18px', height: '18px', background: 'rgba(0,0,0,0.6)', border: '1px solid rgba(255,255,255,0.3)', cursor: 'pointer' }}
                 >
                   <span style={{ color: 'white', fontSize: '0.6875rem', fontWeight: 700, lineHeight: 1 }}>?</span>
-                </span>
+                </button>
               )}
               {blocked && (
-                <div
-                  onClick={(e) => { e.stopPropagation(); setOpenBlockedId(null); }}
-                  className="absolute inset-0 overflow-y-auto rounded-xl"
+                <button
+                  type="button"
+                  aria-label="Close blocked-playlist guide"
+                  onClick={() => setOpenBlockedId(null)}
+                  onKeyDown={(e) => { if (e.key === 'Escape') setOpenBlockedId(null); }}
+                  tabIndex={guideOpen ? 0 : -1}
+                  className="absolute inset-0 overflow-y-auto rounded-xl text-left"
                   style={{
                     padding: '8px',
                     paddingTop: '26px',
@@ -1249,9 +1258,9 @@ function PlaylistsPanel({ playlistsError, loadingPlaylists, playlists, resolving
                   <p style={{ color: 'rgba(255,255,255,0.75)', fontSize: '0.5625rem', lineHeight: 1.4, whiteSpace: 'pre-line' }}>
                     {PLAYLIST_ACCESS_WORKAROUND}
                   </p>
-                </div>
+                </button>
               )}
-            </button>
+            </div>
           );
         })}
       </div>
