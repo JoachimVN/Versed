@@ -1219,6 +1219,8 @@ function PlaylistPickerDialog({ game }: Readonly<{ game: HostState }>) {
   const [resolveError, setResolveError] = useState<string | null>(null);
   const [resolvedCount, setResolvedCount] = useState(0);
   const [truncationNotice, setTruncationNotice] = useState<string | null>(null);
+  const [loadHovered, setLoadHovered] = useState(false);
+  const [doneHovered, setDoneHovered] = useState(false);
   const selectedIds = new Set(customPlaylists.map(p => p.id));
 
   useEffect(() => { fetchPlaylists(); }, []); // eslint-disable-line react-hooks/exhaustive-deps
@@ -1296,30 +1298,23 @@ function PlaylistPickerDialog({ game }: Readonly<{ game: HostState }>) {
               <button
                 onClick={submitLink}
                 disabled={resolving || !linkInput.trim()}
-                className="transition-all duration-200"
+                className="transition-all duration-150"
                 style={{
                   padding: '9px 14px', borderRadius: '10px',
-                  background: resolving || !linkInput.trim() ? 'rgba(178,16,224,0.2)' : 'rgba(178,16,224,0.45)',
-                  border: `1px solid ${resolving || !linkInput.trim() ? 'rgba(208,46,249,0.25)' : 'rgba(208,46,249,0.6)'}`,
+                  background: (() => {
+                    if (resolving || !linkInput.trim()) return 'rgba(178,16,224,0.15)';
+                    return loadHovered ? 'rgba(178,16,224,0.7)' : 'rgba(178,16,224,0.4)';
+                  })(),
+                  border: `1px solid ${(() => {
+                    if (resolving || !linkInput.trim()) return 'rgba(208,46,249,0.2)';
+                    return loadHovered ? 'rgba(208,46,249,1)' : 'rgba(208,46,249,0.5)';
+                  })()}`,
                   color: 'white', fontWeight: 600, fontSize: '0.8125rem',
                   cursor: resolving || !linkInput.trim() ? 'not-allowed' : 'pointer',
+                  boxShadow: loadHovered && !resolving && linkInput.trim() ? '0 0 24px rgba(178,16,224,0.6), inset 0 0 12px rgba(178,16,224,0.2)' : 'none',
                 }}
-                onMouseEnter={e => {
-                  const el = e.currentTarget as HTMLElement;
-                  if (!resolving && linkInput.trim()) {
-                    el.style.background = 'rgba(178,16,224,0.6)';
-                    el.style.borderColor = 'rgba(208,46,249,0.8)';
-                    el.style.boxShadow = '0 0 20px rgba(178,16,224,0.4)';
-                  }
-                }}
-                onMouseLeave={e => {
-                  const el = e.currentTarget as HTMLElement;
-                  if (!resolving && linkInput.trim()) {
-                    el.style.background = 'rgba(178,16,224,0.45)';
-                    el.style.borderColor = 'rgba(208,46,249,0.6)';
-                    el.style.boxShadow = 'none';
-                  }
-                }}
+                onMouseEnter={() => !resolving && linkInput.trim() && setLoadHovered(true)}
+                onMouseLeave={() => setLoadHovered(false)}
               >
                 {resolving ? <Loader2 className="w-3.5 h-3.5 animate-spin inline mr-1.5" /> : null}
                 Load
@@ -1355,11 +1350,16 @@ function PlaylistPickerDialog({ game }: Readonly<{ game: HostState }>) {
                   </p>
                   <button
                     onClick={closePlaylistPicker}
+                    className="transition-all duration-150"
                     style={{
                       padding: '9px 16px', borderRadius: '10px',
-                      background: 'rgba(29, 185, 84, 0.25)', border: '1px solid rgba(29, 185, 84, 0.45)',
+                      background: doneHovered ? 'rgba(29, 185, 84, 0.5)' : 'rgba(29, 185, 84, 0.35)',
+                      border: `1px solid ${doneHovered ? 'rgba(29, 185, 84, 0.9)' : 'rgba(29, 185, 84, 0.6)'}`,
                       color: 'white', fontWeight: 600, fontSize: '0.8125rem', cursor: 'pointer',
+                      boxShadow: doneHovered ? '0 0 24px rgba(29, 185, 84, 0.5), inset 0 0 12px rgba(29, 185, 84, 0.15)' : 'none',
                     }}
+                    onMouseEnter={() => setDoneHovered(true)}
+                    onMouseLeave={() => setDoneHovered(false)}
                   >
                     Done
                   </button>
