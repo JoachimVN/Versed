@@ -29,6 +29,22 @@ type Difficulty = 'easy' | 'medium' | 'hard';
 interface SongInfo { title: string; artist: string; trackId: string; tempo?: number | null }
 interface CustomPlaylist { id: string; name: string; imageUrl: string | null; tracks: PlaylistTrackInput[] }
 
+// Dedupes by Spotify track ID across all selected playlists — first
+// occurrence wins, so a song present in two playlists is only sent (and
+// counted) once.
+function mergePlaylistTracks(playlists: CustomPlaylist[]): PlaylistTrackInput[] {
+  const seen = new Set<string>();
+  const merged: PlaylistTrackInput[] = [];
+  for (const p of playlists) {
+    for (const t of p.tracks) {
+      if (seen.has(t.spotifyTrackId)) continue;
+      seen.add(t.spotifyTrackId);
+      merged.push(t);
+    }
+  }
+  return merged;
+}
+
 const wait = (ms: number) => new Promise<void>(resolve => setTimeout(resolve, ms));
 
 type Spotify = ReturnType<typeof useSpotify>;
@@ -96,7 +112,7 @@ export interface HostState {
   yearOnly: boolean;
   difficulty: Difficulty;
   songSource: SongSource;
-  customPlaylist: CustomPlaylist | null;
+  customPlaylists: CustomPlaylist[];
   playlistPicker: PlaylistPicker;
   playlistPickerOpen: boolean;
   startError: string | null;
@@ -119,8 +135,8 @@ export interface HostState {
   setYearOnly: (v: boolean) => void;
   setDifficulty: (v: Difficulty) => void;
   setSongSource: (v: SongSource) => void;
-  selectPlaylist: (p: CustomPlaylist) => void;
-  clearPlaylist: () => void;
+  addPlaylist: (p: CustomPlaylist) => void;
+  removePlaylist: (id: string) => void;
   openPlaylistPicker: () => void;
   closePlaylistPicker: () => void;
   createGame: () => void;
@@ -176,7 +192,7 @@ function useHostGame(): HostState {
   // the actual fetched track data, so a restored 'playlist' flag with no
   // tracks would leave the host in a confusing half-configured state.
   const [songSource, setSongSource] = useState<SongSource>('library');
-  const [customPlaylist, setCustomPlaylist] = useState<CustomPlaylist | null>(null);
+  const [customPlaylists, setCustomPlaylists] = useState<CustomPlaylist[]>([]);
   const [playlistPickerOpen, setPlaylistPickerOpen] = useState(false);
   const [startError, setStartError] = useState<string | null>(null);
   const playlistPicker = usePlaylistPicker(spotify.accessToken);
@@ -465,8 +481,12 @@ function useHostGame(): HostState {
         bettingTime: bettingTimeSetting, guessingTime: guessingTimeSetting,
         totalRounds: roundsSetting, mode, raceTime: raceTimeSetting, raceWinnerOnly, artistOnly, yearOnly,
         difficulty, songSource,
-        customPlaylist: songSource === 'playlist' && customPlaylist
-          ? { id: customPlaylist.id, name: customPlaylist.name, tracks: customPlaylist.tracks }
+        customPlaylist: songSource === 'playlist' && customPlaylists.length > 0
+          ? {
+            id: customPlaylists.map(p => p.id).join(','),
+            name: customPlaylists.map(p => p.name).join(', '),
+            tracks: mergePlaylistTracks(customPlaylists),
+          }
           : undefined,
       },
     }, (ack?: { error?: string }) => {
@@ -517,15 +537,15 @@ function useHostGame(): HostState {
     result, roundDeltas, leaderboard, copied, playProgress, inviteUrl,
     settingsOpen, bettingTimeSetting, guessingTimeSetting, roundsSetting,
     mode, raceTimeSetting, raceWinnerOnly, artistOnly, yearOnly, difficulty,
-    songSource, customPlaylist, playlistPicker, playlistPickerOpen, startError,
+    songSource, customPlaylists, playlistPicker, playlistPickerOpen, startError,
     party, stealResult, answeredCount,
     reconnecting, reconnectingCount: reconnectingNames.size, gameExpired, songPlaying, songTempo,
     toggleSettings: () => setSettingsOpen(o => !o),
     setBettingTimeSetting, setGuessingTimeSetting, setRoundsSetting,
     setMode, setRaceTimeSetting, setRaceWinnerOnly, setArtistOnly, setYearOnly, setDifficulty,
     setSongSource,
-    selectPlaylist: (p: CustomPlaylist) => { setCustomPlaylist(p); setPlaylistPickerOpen(false); },
-    clearPlaylist: () => setCustomPlaylist(null),
+    addPlaylist: (p: CustomPlaylist) => setCustomPlaylists(list => list.some(x => x.id === p.id) ? list : [...list, p]),
+    removePlaylist: (id: string) => setCustomPlaylists(list => list.filter(p => p.id !== id)),
     openPlaylistPicker: () => setPlaylistPickerOpen(true),
     closePlaylistPicker: () => setPlaylistPickerOpen(false),
     createGame, startGame, copyInvite, newGame,
@@ -609,9 +629,9 @@ function BidTimeline({ bids, lowestBid }: Readonly<{ bids: { name: string; bid: 
 function SettingsPanel({ game, open }: Readonly<{ game: HostState; open: boolean }>) {
   const {
     mode, bettingTimeSetting, guessingTimeSetting, roundsSetting, raceTimeSetting, raceWinnerOnly, artistOnly, yearOnly, difficulty,
-    songSource, customPlaylist,
+    songSource, customPlaylists,
     setBettingTimeSetting, setGuessingTimeSetting, setRoundsSetting, setRaceTimeSetting, setRaceWinnerOnly, setArtistOnly, setYearOnly, setDifficulty,
-    setSongSource, openPlaylistPicker,
+    setSongSource, openPlaylistPicker, removePlaylist,
     toggleSettings,
   } = game;
   const panelRef = useRef<HTMLDialogElement>(null);
@@ -673,7 +693,7 @@ function SettingsPanel({ game, open }: Readonly<{ game: HostState; open: boolean
           <SongSourceRow value={songSource} onChange={setSongSource} />
           {songSource === 'playlist' && (
             <>
-              <PlaylistChip customPlaylist={customPlaylist} onOpen={openPlaylistPicker} />
+              <PlaylistList customPlaylists={customPlaylists} onOpen={openPlaylistPicker} onRemove={removePlaylist} />
               <p style={{ color: 'rgba(255,255,255,0.35)', fontSize: '0.75rem' }}>All songs play at equal difficulty</p>
             </>
           )}
@@ -910,32 +930,52 @@ function SongSourceRow({ value, onChange }: Readonly<{ value: SongSource; onChan
   );
 }
 
-function PlaylistChip({ customPlaylist, onOpen }: Readonly<{
-  customPlaylist: { name: string; imageUrl: string | null; tracks: unknown[] } | null; onOpen: () => void;
+function PlaylistList({ customPlaylists, onOpen, onRemove }: Readonly<{
+  customPlaylists: CustomPlaylist[]; onOpen: () => void; onRemove: (id: string) => void;
 }>) {
+  const totalTracks = mergePlaylistTracks(customPlaylists).length;
   return (
-    <button
-      onClick={onOpen}
-      className="w-full flex items-center gap-2.5 rounded-xl text-left"
-      style={{ padding: '8px 10px', background: 'rgba(255,255,255,0.05)', border: '1px solid rgba(255,255,255,0.08)', cursor: 'pointer' }}
-    >
-      {customPlaylist?.imageUrl ? (
-        <img src={customPlaylist.imageUrl} alt="" className="w-8 h-8 rounded-md object-cover shrink-0" />
-      ) : (
-        <div className="w-8 h-8 rounded-md shrink-0" style={{ background: 'rgba(255,255,255,0.08)' }} />
-      )}
-      <div className="min-w-0 flex-1">
-        {customPlaylist ? (
-          <>
-            <p className="truncate" style={{ color: 'white', fontWeight: 600, fontSize: '0.8125rem' }}>{customPlaylist.name}</p>
-            <p style={{ color: 'rgba(255,255,255,0.4)', fontSize: '0.6875rem' }}>{customPlaylist.tracks.length} tracks</p>
-          </>
-        ) : (
-          <p style={{ color: 'rgba(255,255,255,0.5)', fontSize: '0.8125rem' }}>Choose a playlist</p>
-        )}
-      </div>
-      <span style={{ color: 'rgba(255,255,255,0.35)', fontSize: '0.75rem' }}>{customPlaylist ? 'Change' : '→'}</span>
-    </button>
+    <div className="space-y-2">
+      {customPlaylists.map(p => (
+        <div
+          key={p.id}
+          className="w-full flex items-center gap-2.5 rounded-xl"
+          style={{ padding: '8px 10px', background: 'rgba(255,255,255,0.05)', border: '1px solid rgba(255,255,255,0.08)' }}
+        >
+          {p.imageUrl ? (
+            <img src={p.imageUrl} alt="" className="w-8 h-8 rounded-md object-cover shrink-0" />
+          ) : (
+            <div className="w-8 h-8 rounded-md shrink-0" style={{ background: 'rgba(255,255,255,0.08)' }} />
+          )}
+          <div className="min-w-0 flex-1">
+            <p className="truncate" style={{ color: 'white', fontWeight: 600, fontSize: '0.8125rem' }}>{p.name}</p>
+            <p style={{ color: 'rgba(255,255,255,0.4)', fontSize: '0.6875rem' }}>{p.tracks.length} tracks</p>
+          </div>
+          <button
+            onClick={() => onRemove(p.id)}
+            aria-label={`Remove ${p.name}`}
+            style={{ background: 'none', border: 'none', color: 'rgba(255,255,255,0.35)', cursor: 'pointer', fontSize: '1.1rem', lineHeight: 1, padding: '4px' }}
+          >
+            ×
+          </button>
+        </div>
+      ))}
+      <button
+        onClick={onOpen}
+        className="w-full flex items-center gap-2.5 rounded-xl text-left"
+        style={{ padding: '8px 10px', background: 'rgba(255,255,255,0.05)', border: '1px dashed rgba(255,255,255,0.15)', cursor: 'pointer' }}
+      >
+        <div className="min-w-0 flex-1">
+          <p style={{ color: 'rgba(255,255,255,0.5)', fontSize: '0.8125rem' }}>
+            {customPlaylists.length === 0 ? 'Choose playlists' : '+ Add another playlist'}
+          </p>
+          {customPlaylists.length > 1 && (
+            <p style={{ color: 'rgba(255,255,255,0.35)', fontSize: '0.6875rem' }}>{totalTracks} unique tracks total</p>
+          )}
+        </div>
+        <span style={{ color: 'rgba(255,255,255,0.35)', fontSize: '0.75rem' }}>→</span>
+      </button>
+    </div>
   );
 }
 
@@ -1062,11 +1102,12 @@ function ReconnectBanner() {
 // The playlist picker's main panel has four mutually-exclusive states; kept
 // as its own component (rather than a nested ternary) so each is a plain,
 // independently-readable branch.
-function PlaylistsPanel({ playlistsError, loadingPlaylists, playlists, resolving, onChoose }: Readonly<{
+function PlaylistsPanel({ playlistsError, loadingPlaylists, playlists, resolving, selectedIds, onChoose }: Readonly<{
   playlistsError: PlaylistFetchError | null;
   loadingPlaylists: boolean;
   playlists: PlaylistSummary[];
   resolving: boolean;
+  selectedIds: Set<string>;
   onChoose: (id: string, imageUrl: string | null) => void;
 }>) {
   if (playlistsError === 'unauthorized') return <ReconnectBanner />;
@@ -1078,23 +1119,41 @@ function PlaylistsPanel({ playlistsError, loadingPlaylists, playlists, resolving
   }
   return (
     <div className="grid grid-cols-3 gap-2.5 overflow-y-auto" style={{ maxHeight: '48vh' }}>
-      {playlists.map(p => (
-        <button
-          key={p.id}
-          onClick={() => onChoose(p.id, p.imageUrl)}
-          disabled={resolving}
-          className="flex flex-col items-start gap-1.5 rounded-xl text-left"
-          style={{ padding: '8px', background: 'rgba(255,255,255,0.04)', border: '1px solid rgba(255,255,255,0.07)', cursor: resolving ? 'not-allowed' : 'pointer' }}
-        >
-          {p.imageUrl ? (
-            <img src={p.imageUrl} alt="" className="w-full aspect-square rounded-lg object-cover" />
-          ) : (
-            <div className="w-full aspect-square rounded-lg" style={{ background: 'rgba(255,255,255,0.06)' }} />
-          )}
-          <p className="truncate w-full" style={{ color: 'white', fontWeight: 600, fontSize: '0.75rem' }}>{p.name}</p>
-          <p style={{ color: 'rgba(255,255,255,0.4)', fontSize: '0.6875rem' }}>{p.trackCount} tracks</p>
-        </button>
-      ))}
+      {playlists.map(p => {
+        const selected = selectedIds.has(p.id);
+        return (
+          <button
+            key={p.id}
+            onClick={() => onChoose(p.id, p.imageUrl)}
+            disabled={resolving}
+            className="relative flex flex-col items-start gap-1.5 rounded-xl text-left"
+            style={{
+              padding: '8px',
+              background: selected ? 'rgba(29, 185, 84, 0.12)' : 'rgba(255,255,255,0.04)',
+              border: selected ? '1px solid rgba(29, 185, 84, 0.45)' : '1px solid rgba(255,255,255,0.07)',
+              cursor: resolving ? 'not-allowed' : 'pointer',
+            }}
+          >
+            <div className="relative w-full">
+              {p.imageUrl ? (
+                <img src={p.imageUrl} alt="" className="w-full aspect-square rounded-lg object-cover" />
+              ) : (
+                <div className="w-full aspect-square rounded-lg" style={{ background: 'rgba(255,255,255,0.06)' }} />
+              )}
+              {selected && (
+                <div
+                  className="absolute top-1 right-1 flex items-center justify-center rounded-full"
+                  style={{ width: '20px', height: '20px', background: '#1DB954' }}
+                >
+                  <Check style={{ width: '13px', height: '13px', color: 'white' }} strokeWidth={3} />
+                </div>
+              )}
+            </div>
+            <p className="truncate w-full" style={{ color: 'white', fontWeight: 600, fontSize: '0.75rem' }}>{p.name}</p>
+            <p style={{ color: 'rgba(255,255,255,0.4)', fontSize: '0.6875rem' }}>{p.trackCount} tracks</p>
+          </button>
+        );
+      })}
     </div>
   );
 }
@@ -1103,12 +1162,13 @@ function PlaylistsPanel({ playlistsError, loadingPlaylists, playlists, resolving
 // small settings popover entirely — this is the "heavy" UI (grid, loading/
 // error states) that the popover's chip just launches.
 function PlaylistPickerDialog({ game }: Readonly<{ game: HostState }>) {
-  const { playlistPicker, closePlaylistPicker, selectPlaylist } = game;
+  const { playlistPicker, closePlaylistPicker, customPlaylists, addPlaylist, removePlaylist } = game;
   const { playlists, loadingPlaylists, playlistsError, fetchPlaylists, fetchPlaylistTracks } = playlistPicker;
   const [linkInput, setLinkInput] = useState('');
   const [resolving, setResolving] = useState(false);
   const [resolveError, setResolveError] = useState<string | null>(null);
   const [resolvedCount, setResolvedCount] = useState(0);
+  const selectedIds = new Set(customPlaylists.map(p => p.id));
 
   useEffect(() => { fetchPlaylists(); }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
@@ -1126,6 +1186,9 @@ function PlaylistPickerDialog({ game }: Readonly<{ game: HostState }>) {
   ].join('|');
 
   const choosePlaylist = async (id: string, fallbackImageUrl: string | null = null) => {
+    // Clicking an already-added playlist again toggles it off — no need to
+    // refetch tracks just to remove something already in hand.
+    if (selectedIds.has(id)) { removePlaylist(id); return; }
     setResolving(true);
     setResolveError(null);
     setResolvedCount(0);
@@ -1136,7 +1199,7 @@ function PlaylistPickerDialog({ game }: Readonly<{ game: HostState }>) {
       return;
     }
     const imageUrl = fallbackImageUrl ?? result.tracks[0]?.albumArtUrl ?? null;
-    selectPlaylist({ id, name: result.name, imageUrl, tracks: result.tracks });
+    addPlaylist({ id, name: result.name, imageUrl, tracks: result.tracks });
   };
 
   const submitLink = () => {
@@ -1187,6 +1250,7 @@ function PlaylistPickerDialog({ game }: Readonly<{ game: HostState }>) {
               loadingPlaylists={loadingPlaylists}
               playlists={playlists}
               resolving={resolving}
+              selectedIds={selectedIds}
               onChoose={choosePlaylist}
             />
 
@@ -1196,6 +1260,22 @@ function PlaylistPickerDialog({ game }: Readonly<{ game: HostState }>) {
                 {resolvedCount > 0 ? `Loading tracks… ${resolvedCount} so far` : 'Loading tracks…'}
               </p>
             )}
+
+            <div className="flex items-center justify-between">
+              <p style={{ color: 'rgba(255,255,255,0.4)', fontSize: '0.75rem' }}>
+                {selectedIds.size === 0 ? 'Nothing selected yet' : `${selectedIds.size} playlist${selectedIds.size === 1 ? '' : 's'} selected`}
+              </p>
+              <button
+                onClick={closePlaylistPicker}
+                style={{
+                  padding: '9px 16px', borderRadius: '10px',
+                  background: 'rgba(29, 185, 84, 0.25)', border: '1px solid rgba(29, 185, 84, 0.45)',
+                  color: 'white', fontWeight: 600, fontSize: '0.8125rem', cursor: 'pointer',
+                }}
+              >
+                Done
+              </button>
+            </div>
           </div>
         </LiquidGlass>
       </div>
@@ -1581,9 +1661,9 @@ function MuteButton({ muted, toggleMute }: Readonly<{ muted: boolean; toggleMute
 export function LobbyView({ game }: Readonly<{ game: HostState }>) {
   const {
     spotify, pin, players, createGame, startGame, mode, settingsOpen, toggleSettings, setMode, removePlayer,
-    gameExpired, playlistPickerOpen, songSource, customPlaylist, startError,
+    gameExpired, playlistPickerOpen, songSource, customPlaylists, startError,
   } = game;
-  const playlistNotReady = songSource === 'playlist' && (!customPlaylist || customPlaylist.tracks.length < MIN_PLAYLIST_TRACKS);
+  const playlistNotReady = songSource === 'playlist' && mergePlaylistTracks(customPlaylists).length < MIN_PLAYLIST_TRACKS;
   const [lobbyVisible, setLobbyVisible] = useState(false);
   const { fadeOut, muted, toggleMute } = useLobbyMusic(gameExpired);
 

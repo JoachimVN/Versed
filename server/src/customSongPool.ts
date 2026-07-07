@@ -16,8 +16,11 @@ function sanitizeDurationMs(durationMs: number | null): number | null {
 // gameManager already knows how to play, hint on, and score. `rank` here is
 // only a structural placeholder (Song.rank is non-optional) — playlist songs
 // never go through the CSV pool's popularity-based difficulty math; see
-// FLAT_DIFFICULTY_BONUS in gameManager.ts.
-export function adaptPlaylistTracks(tracks: PlaylistTrackInput[]): Song[] {
+// FLAT_DIFFICULTY_BONUS in gameManager.ts. `csvByTrackId` (keyed by Spotify
+// track ID) is an exact-match lookup only — no fuzzy title/artist matching —
+// so tempo/streams enrich a track when it happens to also be in the CSV
+// catalog, but a miss just leaves those fields null like before.
+export function adaptPlaylistTracks(tracks: PlaylistTrackInput[], csvByTrackId: ReadonlyMap<string, Song> = new Map()): Song[] {
   const seen = new Set<string>();
   const songs: Song[] = [];
 
@@ -30,6 +33,7 @@ export function adaptPlaylistTracks(tracks: PlaylistTrackInput[]): Song[] {
     seen.add(spotifyTrackId);
 
     const year = sanitizeYear(t.year);
+    const csvMatch = csvByTrackId.get(spotifyTrackId);
     songs.push({
       rank: songs.length + 1,
       title,
@@ -40,8 +44,8 @@ export function adaptPlaylistTracks(tracks: PlaylistTrackInput[]): Song[] {
       bbPeak: null,
       bbChartWeeks: null,
       durationMs: sanitizeDurationMs(t.durationMs),
-      tempo: null,
-      spotifyStreams: null,
+      tempo: csvMatch?.tempo ?? null,
+      spotifyStreams: csvMatch?.spotifyStreams ?? null,
       youtubeViews: null,
       spotifyTrackId,
       finalScore: 0,

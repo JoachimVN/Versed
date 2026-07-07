@@ -51,11 +51,16 @@ export function playMsFor(bid: number): number {
 const DIFFICULTY_PCT: Record<Difficulty, number> = { easy: 0.2, medium: 0.5, hard: 1 };
 
 let songs: Song[] = [];
+// Exact Spotify-track-ID lookup into the CSV catalog, used to enrich
+// playlist-imported songs (which have no popularity data of their own) with
+// tempo/stream counts when the same track also happens to be in the CSV.
+let csvByTrackId = new Map<string, Song>();
 const games = new Map<string, Game>();
 const socketToPin = new Map<string, string>();
 
 export function initSongs() {
   songs = loadSongs();
+  csvByTrackId = new Map(songs.map(s => [s.spotifyTrackId, s]));
   console.log(`Loaded ${songs.length} playable songs`);
 }
 
@@ -674,7 +679,7 @@ export function createGame(hostSocketId: string, preferredPin?: string): Game {
 export function setCustomSongPool(
   game: Game, playlistId: string | undefined, tracks: PlaylistTrackInput[],
 ): { ok: true } | { ok: false; error: string } {
-  const pool = adaptPlaylistTracks(tracks);
+  const pool = adaptPlaylistTracks(tracks, csvByTrackId);
   if (pool.length < MIN_PLAYLIST_TRACKS) {
     return { ok: false, error: `Only ${pool.length} playable track${pool.length === 1 ? '' : 's'}. Need at least ${MIN_PLAYLIST_TRACKS}` };
   }
