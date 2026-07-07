@@ -122,6 +122,19 @@ function sameArtist(a: Song, b: Song): boolean {
   return artistNames(a).some(name => bNames.has(name));
 }
 
+// How many recent rounds' artists to avoid repeating, scaled to pool size:
+// small pools (a 10-track playlist) get a short window so the constraint
+// doesn't overreach and get dropped constantly; larger pools cap out at 5 —
+// looking back further than that stops being about "feels repetitive" and
+// just costs more comparisons for no real benefit.
+const ARTIST_WINDOW_MIN = 2;
+const ARTIST_WINDOW_MAX = 5;
+const ARTIST_WINDOW_DIVISOR = 4;
+
+function artistWindowSize(poolSize: number): number {
+  return Math.min(ARTIST_WINDOW_MAX, Math.max(ARTIST_WINDOW_MIN, Math.floor(poolSize / ARTIST_WINDOW_DIVISOR)));
+}
+
 function generatePin(): string {
   let pin: string;
   do { pin = (100 + randomInt(0, 900)).toString(); }
@@ -528,7 +541,7 @@ function buildRoundHints(song: Song, party: PartyConfig | undefined, guessKind: 
 //   2. never the literal immediately-preceding song
 //   3. not used yet this game (usedSongIds)
 //   4. not recently played in a previous game from this same pool
-//   5. not the same artist as the previous round
+//   5. not the same artist as the last few rounds (window scales with pool size)
 function buildRound(game: Game, party?: PartyConfig): Round {
   const rawPool = difficultyPool(game);
   const prevSong = game.currentRound?.song;
@@ -568,11 +581,14 @@ function buildRound(game: Game, party?: PartyConfig): Round {
     if (fresh.length > 0) pool = fresh;
   }
 
-  // Not the same artist as the previous round — softest constraint, so it's
-  // applied last (first to be dropped if the pool is dominated by one act).
-  if (prevSong) {
-    const notSameArtist = pool.filter(s => !sameArtist(s, prevSong));
-    if (notSameArtist.length > 0) pool = notSameArtist;
+  // Not the same artist as any of the last few rounds — softest constraint,
+  // so it's applied last (first to be dropped if the pool is dominated by
+  // one act). Window size scales with pool size (see artistWindowSize).
+  if (game.artistWindow.length > 0) {
+    const windowSize = artistWindowSize(rawPool.length);
+    const recentForArtistCheck = game.artistWindow.slice(-windowSize);
+    const notRecentArtist = pool.filter(s => !recentForArtistCheck.some(recent => sameArtist(s, recent)));
+    if (notRecentArtist.length > 0) pool = notRecentArtist;
   }
 
   const song = pickRandom(pool);
@@ -635,6 +651,7 @@ export function createGame(hostSocketId: string, preferredPin?: string): Game {
     playlistId: undefined,
     currentRound: null,
     usedSongIds: new Set(),
+    artistWindow: [],
     phaseTimer: null,
     phaseEndsAt: null,
   };
@@ -754,6 +771,8 @@ export function startRound(game: Game): Round {
   const round = buildRound(game, party);
   game.usedSongIds.add(round.song.spotifyTrackId);
   rememberRecentlyPlayed(poolKey(game), round.song.spotifyTrackId, poolSizeForCap(game));
+  game.artistWindow.push(round.song);
+  if (game.artistWindow.length > ARTIST_WINDOW_MAX) game.artistWindow.shift();
   game.currentRound = round;
   game.phase = 'betting';
   return round;

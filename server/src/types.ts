@@ -156,6 +156,7 @@ export interface Game {
   playlistId?: string;
   currentRound: Round | null;
   usedSongIds: Set<string>;
+  artistWindow: Song[]; // last few rounds' songs, most recent last — see artistWindowSize
   phaseTimer: ReturnType<typeof setTimeout> | null;
   phaseEndsAt: number | null; // epoch ms when the current countdown expires
 }
