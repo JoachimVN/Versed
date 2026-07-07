@@ -1372,6 +1372,7 @@ function PlaylistPickerDialog({ game }: Readonly<{ game: HostState }>) {
                   color: 'white', fontWeight: 600, fontSize: '0.8125rem',
                   cursor: resolving || !linkInput.trim() ? 'not-allowed' : 'pointer',
                   boxShadow: loadHovered && !resolving && linkInput.trim() ? '0 0 16px rgba(178,16,224,0.35)' : 'none',
+                  opacity: linkInput.trim() ? 1 : 0.3,
                 }}
                 onMouseEnter={() => !resolving && linkInput.trim() && setLoadHovered(true)}
                 onMouseLeave={() => setLoadHovered(false)}
