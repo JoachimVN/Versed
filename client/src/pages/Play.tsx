@@ -795,7 +795,8 @@ function JoinView({ game }: Readonly<{ game: PlayState }>) {
           background: 'rgba(0,0,0,0.001)',
           opacity: canJoin ? 1 : 0.3,
           cursor: canJoin ? 'pointer' : 'not-allowed',
-          transition: 'opacity 0.25s ease',
+          transition: 'opacity 0.25s ease, margin-top 0.25s ease',
+          marginTop: cameFromQR ? '-20px' : '0',
         }}
         onMouseEnter={() => setJoinHovered(true)}
         onMouseLeave={() => setJoinHovered(false)}
