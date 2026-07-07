@@ -128,10 +128,10 @@ router.post('/fetch-playlist', async (req: Request, res: Response) => {
       url = `https://api.spotify.com/v1/me/playlists?limit=50&offset=${parseOffset(offset)}`;
       break;
     case 'playlist_meta':
-      url = `https://api.spotify.com/v1/playlists/${playlist_id}?fields=name`;
+      url = `https://api.spotify.com/v1/playlists/${encodeURIComponent(playlist_id!)}?fields=name`;
       break;
     case 'playlist_items':
-      url = `https://api.spotify.com/v1/playlists/${playlist_id}/items?limit=100&offset=${parseOffset(offset)}`
+      url = `https://api.spotify.com/v1/playlists/${encodeURIComponent(playlist_id!)}/items?limit=100&offset=${parseOffset(offset)}`
         + `&fields=${encodeURIComponent(PLAYLIST_ITEMS_FIELDS)}`;
       break;
     default:
