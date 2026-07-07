@@ -7,6 +7,11 @@ export interface PlaylistSummary {
   name: string;
   imageUrl: string | null;
   trackCount: number;
+  // False when the current user neither owns nor collaborates on this
+  // playlist — Spotify's playlist-items endpoint 403s on those regardless of
+  // visibility (see 'forbidden' below), so the picker greys these out rather
+  // than letting them be picked and fail.
+  importable: boolean;
 }
 
 // 'unauthorized' = token lacks the playlist-read scopes (old session, needs
@@ -14,7 +19,11 @@ export interface PlaylistSummary {
 // allowlisting), which has a different cause and a different fix.
 // 'empty' = zero playable tracks, the only per-playlist count that still
 // blocks — anything else is allowed through with a warning (see Host.tsx).
-export type PlaylistFetchError = 'unauthorized' | 'not_found' | 'empty' | 'error';
+// 'forbidden' = token is valid but Spotify's playlist-items endpoint only
+// serves playlists the current user owns or collaborates on — being public
+// isn't enough (https://developer.spotify.com/documentation/web-api/reference/get-playlists-items).
+// Distinct from 'unauthorized': reconnecting Spotify won't fix this.
+export type PlaylistFetchError = 'unauthorized' | 'forbidden' | 'not_found' | 'empty' | 'error';
 
 // Mirrors gameManager.ts's MIN_PLAYLIST_TRACKS — kept in sync manually, same
 // as every other client/server type mirror in this codebase. Below this the
@@ -36,6 +45,8 @@ interface SpotifyPlaylistItem {
   // under `items` for at least some accounts — accept either.
   tracks?: { total: number } | null;
   items?: { total: number } | null;
+  owner: { id: string } | null;
+  collaborative: boolean;
 }
 interface SpotifyPlaylistsResponse {
   items: SpotifyPlaylistItem[];
@@ -147,7 +158,7 @@ function isPlaylistNotFound(notFoundIsPlaylist: boolean, status: number): boolea
 }
 
 function isAuthError(status: number): boolean {
-  return status === 401 || status === 403;
+  return status === 401;
 }
 
 // Centralizes the status-code handling shared by every Spotify Web API call
@@ -169,6 +180,14 @@ async function fetchSpotify<T>(
 
     const { res } = attemptResult;
     if (isAuthError(res.status)) return { ok: false, error: 'unauthorized' };
+    if (res.status === 403) {
+      const body = await res.text();
+      console.error('[Spotify] 403 forbidden', {
+        url: url.replace(/[\r\n]/g, ''),
+        body: body.replace(/[\r\n]/g, ''),
+      });
+      return { ok: false, error: 'forbidden' };
+    }
     if (isPlaylistNotFound(notFoundIsPlaylist, res.status)) return { ok: false, error: 'not_found' };
 
     if (isTransientStatus(res.status) && canRetry) {
@@ -242,6 +261,13 @@ export function usePlaylistPicker(accessToken: string | null) {
       const freshToken = await refreshAccessToken();
       if (freshToken) token = freshToken;
 
+      // Needed to tell owned/collaborative playlists (importable) apart from
+      // merely-saved ones (will 403 — see 'forbidden'). If this lookup fails
+      // we fail open (treat everything as importable) rather than block the
+      // whole picker on a secondary call.
+      const meResult = await fetchSpotify<{ id: string }>('https://api.spotify.com/v1/me', token);
+      const meId = meResult.ok ? meResult.data.id : null;
+
       const all: PlaylistSummary[] = [];
       let url: string | null = 'https://api.spotify.com/v1/me/playlists?limit=50';
       while (url) {
@@ -252,7 +278,8 @@ export function usePlaylistPicker(accessToken: string | null) {
           // Playlist folders (and the occasional null/unavailable entry) show up
           // here too but have neither field — they aren't real playlists.
           if (trackCount === undefined) continue;
-          all.push({ id: item.id, name: item.name, imageUrl: item.images?.[0]?.url ?? null, trackCount });
+          const importable = meId === null || item.collaborative || item.owner?.id === meId;
+          all.push({ id: item.id, name: item.name, imageUrl: item.images?.[0]?.url ?? null, trackCount, importable });
         }
         url = result.data.next;
       }
