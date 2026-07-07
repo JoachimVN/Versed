@@ -69,6 +69,59 @@ function difficultyPool(game: Game): Song[] {
   return songs.slice(0, count);
 }
 
+// Recently-played memory, keyed per song-pool identity, so a fresh "New
+// Game" doesn't immediately resurface songs from the game just played.
+// Process-lifetime only (no persistence), same as every other piece of
+// in-memory state here. Library plays share one bucket across all
+// difficulties (the slices are prefixes of the same rank-sorted array, and
+// "recently heard" shouldn't depend on which difficulty was active);
+// each distinct playlist gets its own bucket keyed by Spotify playlist ID.
+const recentlyPlayedByPool = new Map<string, string[]>();
+const RECENT_CAP_RATIO = 0.5;
+
+function poolKey(game: Game): string {
+  return game.songSource === 'playlist' ? `playlist:${game.playlistId ?? 'unknown'}` : 'library';
+}
+
+// Sized off the library's full length, not the active difficulty slice, so
+// the cap doesn't shift just because the host changed difficulty.
+function poolSizeForCap(game: Game): number {
+  return game.songSource === 'playlist' ? (game.songPool?.length ?? 0) : songs.length;
+}
+
+// Capped at half the pool so this filter alone can never empty a pool —
+// on top of the soft-filter fallback in buildRound.
+function rememberRecentlyPlayed(key: string, trackId: string, poolSize: number): void {
+  const cap = Math.max(1, Math.floor(poolSize * RECENT_CAP_RATIO));
+  const list = recentlyPlayedByPool.get(key) ?? [];
+  const next = list.filter(id => id !== trackId);
+  next.push(trackId);
+  while (next.length > cap) next.shift();
+  recentlyPlayedByPool.set(key, next);
+}
+
+// Plain literal normalizer for artist-identity comparison — deliberately not
+// fuzzyMatch.ts's normalize(), which strips articles and does homophone
+// substitution for typo-tolerant guessing and would cause false collisions
+// here (e.g. "The Band" vs "Band").
+function normalizeArtistName(name: string): string {
+  return name.trim().toLowerCase().replace(/\s+/g, ' ');
+}
+
+// featuredArtists is already comma-joined by the time it reaches Song, both
+// via songLoader.ts's CSV parse and customSongPool.ts's playlist adapter.
+function artistNames(song: Song): string[] {
+  const names = [song.artist, ...(song.featuredArtists ? song.featuredArtists.split(',') : [])];
+  return names.map(normalizeArtistName).filter(Boolean);
+}
+
+// Checks both songs' primary and featured names, so an artist featured on
+// one track and primary on the next still counts as "same artist."
+function sameArtist(a: Song, b: Song): boolean {
+  const bNames = new Set(artistNames(b));
+  return artistNames(a).some(name => bNames.has(name));
+}
+
 function generatePin(): string {
   let pin: string;
   do { pin = (100 + randomInt(0, 900)).toString(); }
@@ -467,16 +520,61 @@ function buildRoundHints(song: Song, party: PartyConfig | undefined, guessKind: 
   return hints;
 }
 
+// Round selection applies these constraints strictest/most-essential first,
+// softest/most-skippable last — and each stage reverts to its input pool if
+// applying it would leave nothing, so the last-applied (softest) filter is
+// always the first one sacrificed once a small pool runs out of room:
+//   1. year-round playability (a hard mechanical requirement)
+//   2. never the literal immediately-preceding song
+//   3. not used yet this game (usedSongIds)
+//   4. not recently played in a previous game from this same pool
+//   5. not the same artist as the previous round
 function buildRound(game: Game, party?: PartyConfig): Round {
-  const basePool = difficultyPool(game);
-  let pool = basePool.filter(s => !game.usedSongIds.has(s.spotifyTrackId));
-  if (pool.length === 0) pool = basePool;
+  const rawPool = difficultyPool(game);
+  const prevSong = game.currentRound?.song;
+
+  // A year round is unplayable without a known year — checked first since,
+  // unlike the constraints below, this one isn't a variety nicety.
   const isYearRound = party ? party.format === 'year' : game.yearOnly;
-  // A year round is unplayable without a known year.
+  let base = rawPool;
   if (isYearRound) {
-    const withYear = pool.filter(s => s.year !== null);
-    if (withYear.length > 0) pool = withYear;
+    const withYear = rawPool.filter(s => s.year !== null);
+    if (withYear.length > 0) base = withYear;
   }
+
+  // Never literally repeat the song that just played, even across a
+  // used-pool reshuffle below.
+  const noImmediateRepeat = prevSong
+    ? base.filter(s => s.spotifyTrackId !== prevSong.spotifyTrackId)
+    : base;
+  const guardedBase = noImmediateRepeat.length > 0 ? noImmediateRepeat : base;
+
+  // Not used yet this game. On exhaustion, reshuffle — but reseed with just
+  // the previous song so the reshuffle itself can't reintroduce a
+  // back-to-back repeat.
+  let pool = guardedBase.filter(s => !game.usedSongIds.has(s.spotifyTrackId));
+  if (pool.length === 0) {
+    game.usedSongIds.clear();
+    if (prevSong) game.usedSongIds.add(prevSong.spotifyTrackId);
+    pool = guardedBase.filter(s => !game.usedSongIds.has(s.spotifyTrackId));
+    if (pool.length === 0) pool = guardedBase;
+  }
+
+  // Not recently played in a previous game from this same song pool.
+  const recentIds = recentlyPlayedByPool.get(poolKey(game));
+  if (recentIds && recentIds.length > 0) {
+    const recentSet = new Set(recentIds);
+    const fresh = pool.filter(s => !recentSet.has(s.spotifyTrackId));
+    if (fresh.length > 0) pool = fresh;
+  }
+
+  // Not the same artist as the previous round — softest constraint, so it's
+  // applied last (first to be dropped if the pool is dominated by one act).
+  if (prevSong) {
+    const notSameArtist = pool.filter(s => !sameArtist(s, prevSong));
+    if (notSameArtist.length > 0) pool = notSameArtist;
+  }
+
   const song = pickRandom(pool);
 
   const snippetMs = party ? computeSnippetPosition(song, party, game.raceTime) : undefined;
@@ -534,6 +632,7 @@ export function createGame(hostSocketId: string, preferredPin?: string): Game {
     yearOnly: false,
     difficulty: 'hard',
     songSource: 'library',
+    playlistId: undefined,
     currentRound: null,
     usedSongIds: new Set(),
     phaseTimer: null,
@@ -549,7 +648,7 @@ export function createGame(hostSocketId: string, preferredPin?: string): Game {
 // because filtering/dedup happens again here from scratch — a client-side
 // pass and a server-side pass could disagree given a malformed payload.
 export function setCustomSongPool(
-  game: Game, tracks: PlaylistTrackInput[],
+  game: Game, playlistId: string | undefined, tracks: PlaylistTrackInput[],
 ): { ok: true } | { ok: false; error: string } {
   const pool = adaptPlaylistTracks(tracks);
   if (pool.length < MIN_PLAYLIST_TRACKS) {
@@ -557,6 +656,7 @@ export function setCustomSongPool(
   }
   game.songSource = 'playlist';
   game.songPool = pool;
+  game.playlistId = playlistId;
   return { ok: true };
 }
 
@@ -653,6 +753,7 @@ export function startRound(game: Game): Round {
   const party = game.mode === 'party' ? buildPartyConfig(game) : undefined;
   const round = buildRound(game, party);
   game.usedSongIds.add(round.song.spotifyTrackId);
+  rememberRecentlyPlayed(poolKey(game), round.song.spotifyTrackId, poolSizeForCap(game));
   game.currentRound = round;
   game.phase = 'betting';
   return round;

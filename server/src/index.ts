@@ -395,7 +395,7 @@ io.on('connection', (socket) => {
         bettingTime?: number; guessingTime?: number; totalRounds?: number; mode?: string;
         raceTime?: number; raceWinnerOnly?: boolean; artistOnly?: boolean; yearOnly?: boolean;
         difficulty?: string; songSource?: string;
-        customPlaylist?: { tracks?: PlaylistTrackInput[] };
+        customPlaylist?: { id?: string; tracks?: PlaylistTrackInput[] };
       };
     },
     callback?: (r: { error?: string }) => void,
@@ -427,11 +427,12 @@ io.on('connection', (socket) => {
     if (s?.songSource === 'playlist') {
       const tracks = s.customPlaylist?.tracks;
       if (!Array.isArray(tracks)) return callback?.({ error: 'No playlist selected' });
-      const result = gm.setCustomSongPool(game, tracks);
+      const result = gm.setCustomSongPool(game, s.customPlaylist?.id, tracks);
       if (!result.ok) return callback?.({ error: result.error });
     } else {
       game.songSource = 'library';
       game.songPool = undefined;
+      game.playlistId = undefined;
     }
 
     game.roundIndex = 0;

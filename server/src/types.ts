@@ -153,6 +153,7 @@ export interface Game {
   difficulty: Difficulty;
   songSource: SongSource;
   songPool?: Song[];
+  playlistId?: string;
   currentRound: Round | null;
   usedSongIds: Set<string>;
   phaseTimer: ReturnType<typeof setTimeout> | null;

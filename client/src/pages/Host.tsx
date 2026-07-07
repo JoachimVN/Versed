@@ -27,7 +27,7 @@ type Phase = 'connect' | 'lobby' | 'betting' | 'playing' | 'guessing' | 'reveal'
 type Mode = 'classic' | 'race' | 'party';
 type Difficulty = 'easy' | 'medium' | 'hard';
 interface SongInfo { title: string; artist: string; trackId: string; tempo?: number | null }
-interface CustomPlaylist { name: string; imageUrl: string | null; tracks: PlaylistTrackInput[] }
+interface CustomPlaylist { id: string; name: string; imageUrl: string | null; tracks: PlaylistTrackInput[] }
 
 const wait = (ms: number) => new Promise<void>(resolve => setTimeout(resolve, ms));
 
@@ -466,7 +466,7 @@ function useHostGame(): HostState {
         totalRounds: roundsSetting, mode, raceTime: raceTimeSetting, raceWinnerOnly, artistOnly, yearOnly,
         difficulty, songSource,
         customPlaylist: songSource === 'playlist' && customPlaylist
-          ? { name: customPlaylist.name, tracks: customPlaylist.tracks }
+          ? { id: customPlaylist.id, name: customPlaylist.name, tracks: customPlaylist.tracks }
           : undefined,
       },
     }, (ack?: { error?: string }) => {
@@ -1081,7 +1081,7 @@ function PlaylistPickerDialog({ game }: Readonly<{ game: HostState }>) {
       return;
     }
     const imageUrl = fallbackImageUrl ?? result.tracks[0]?.albumArtUrl ?? null;
-    selectPlaylist({ name: result.name, imageUrl, tracks: result.tracks });
+    selectPlaylist({ id, name: result.name, imageUrl, tracks: result.tracks });
   };
 
   const submitLink = () => {
