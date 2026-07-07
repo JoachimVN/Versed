@@ -8,6 +8,7 @@ import dotenv from 'dotenv';
 import authRouter from './spotifyAuth';
 import * as gm from './gameManager';
 import { getAlbumArtUrl } from './albumArt';
+import { PlaylistTrackInput } from './types';
 
 dotenv.config();
 gm.initSongs();
@@ -388,9 +389,19 @@ io.on('connection', (socket) => {
   });
 
   // ── Host: start game → first round ────────────────────────────────────────
-  socket.on('start_game', (payload?: { settings?: { bettingTime?: number; guessingTime?: number; totalRounds?: number; mode?: string; raceTime?: number; raceWinnerOnly?: boolean; artistOnly?: boolean; yearOnly?: boolean; difficulty?: string } }) => {
+  socket.on('start_game', (
+    payload?: {
+      settings?: {
+        bettingTime?: number; guessingTime?: number; totalRounds?: number; mode?: string;
+        raceTime?: number; raceWinnerOnly?: boolean; artistOnly?: boolean; yearOnly?: boolean;
+        difficulty?: string; songSource?: string;
+        customPlaylist?: { tracks?: PlaylistTrackInput[] };
+      };
+    },
+    callback?: (r: { error?: string }) => void,
+  ) => {
     const game = gm.getGameBySocket(socket.id);
-    if (game?.hostSocketId !== socket.id || game.phase !== 'lobby') return;
+    if (game?.hostSocketId !== socket.id || game.phase !== 'lobby') return callback?.({ error: 'Not ready' });
     const s = payload?.settings;
     if (s?.bettingTime) game.bettingTime = Math.max(5, Math.min(60, Math.round(s.bettingTime)));
     if (s?.guessingTime) game.guessingTime = Math.max(5, Math.min(60, Math.round(s.guessingTime)));
@@ -412,8 +423,20 @@ io.on('connection', (socket) => {
     // Year isn't a title/artist target, so it can't coexist with artist-only.
     game.artistOnly = !isParty && !game.yearOnly && s?.artistOnly === true;
     game.difficulty = s?.difficulty === 'easy' || s?.difficulty === 'medium' ? s.difficulty : 'hard';
+
+    if (s?.songSource === 'playlist') {
+      const tracks = s.customPlaylist?.tracks;
+      if (!Array.isArray(tracks)) return callback?.({ error: 'No playlist selected' });
+      const result = gm.setCustomSongPool(game, tracks);
+      if (!result.ok) return callback?.({ error: result.error });
+    } else {
+      game.songSource = 'library';
+      game.songPool = undefined;
+    }
+
     game.roundIndex = 0;
     beginRound(game);
+    callback?.({});
   });
 
   // ── Player: submit bid ─────────────────────────────────────────────────────

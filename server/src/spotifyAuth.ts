@@ -11,6 +11,8 @@ const SCOPES = [
   'user-read-private',
   'user-modify-playback-state',
   'user-read-playback-state',
+  'playlist-read-private',
+  'playlist-read-collaborative',
 ].join(' ');
 
 router.get('/spotify', (_req, res) => {

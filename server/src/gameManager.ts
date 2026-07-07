@@ -1,10 +1,13 @@
 import { randomInt } from 'node:crypto';
 import {
   Difficulty, Game, GuessTarget, Hint, PartyClientView, PartyConfig, PartyEvent, PartyFormat,
-  Player, Round, Song, YearResult,
+  Player, PlaylistTrackInput, Round, Song, YearResult,
 } from './types';
 import { loadSongs } from './songLoader';
+import { adaptPlaylistTracks } from './customSongPool';
 import { isCorrectGuess, isCorrectArtistGuess } from './fuzzyMatch';
+
+export const MIN_PLAYLIST_TRACKS = 10;
 
 export const BID_OPTIONS = [0.1, 0.5, 1, 2, 3, 4, 5, 7, 10, 15, 20, 30, 45, 60];
 export const BETTING_TIME = 15;
@@ -57,9 +60,12 @@ export function initSongs() {
 }
 
 // `songs` is sorted ascending by rank (loadSongs), so the top slice is the
-// most well-known songs — that's what makes 'easy' actually easy.
-function difficultyPool(difficulty: Difficulty): Song[] {
-  const count = Math.max(1, Math.ceil(songs.length * DIFFICULTY_PCT[difficulty]));
+// most well-known songs — that's what makes 'easy' actually easy. A custom
+// playlist pool has no popularity ranking to slice by, so difficulty is
+// skipped entirely and the whole pool is always in play.
+function difficultyPool(game: Game): Song[] {
+  if (game.songSource === 'playlist') return game.songPool ?? [];
+  const count = Math.max(1, Math.ceil(songs.length * DIFFICULTY_PCT[game.difficulty]));
   return songs.slice(0, count);
 }
 
@@ -340,7 +346,16 @@ function raceParticipants(game: Game, round: Round): string[] {
   return Array.from(game.players.keys());
 }
 
-function difficultyBonus(rank: number): number {
+// Playlist songs carry no real popularity ranking (Spotify's per-track
+// popularity is deliberately ignored — see the plan), so every playlist song
+// gets this flat bonus instead of the rank-scaled one below. It's the
+// midpoint of the library formula's 0-500 range, not the max: giving every
+// song the max would make playlist games score noticeably easier than
+// library 'hard' mode, not merely "equal difficulty."
+const FLAT_DIFFICULTY_BONUS = 250;
+
+function difficultyBonus(game: Game, rank: number): number {
+  if (game.songSource === 'playlist') return FLAT_DIFFICULTY_BONUS;
   return Math.round(500 * Math.max(0, 1 - (rank - 1) / Math.max(songs.length - 1, 1)));
 }
 
@@ -379,22 +394,22 @@ export function bidScoreTable(): number[] {
   return BID_OPTIONS.map(b => 500 + bidScore(b));
 }
 
-export function calcPoints(bid: number, rank: number): number {
-  return 500 + bidScore(bid) + difficultyBonus(rank);
+export function calcPoints(game: Game, bid: number, rank: number): number {
+  return 500 + bidScore(bid) + difficultyBonus(game, rank);
 }
 
 export function calcRacePoints(
-  isFirst: boolean, elapsedMs: number, firstElapsedMs: number, rank: number,
+  game: Game, isFirst: boolean, elapsedMs: number, firstElapsedMs: number, rank: number,
 ): number {
-  if (isFirst) return RACE_BASE + difficultyBonus(rank);
+  if (isFirst) return RACE_BASE + difficultyBonus(game, rank);
   const gapSec = Math.max(0, (elapsedMs - firstElapsedMs) / 1000);
   const speed = Math.max(RACE_FLOOR, Math.round(RACE_BASE * (1 - gapSec / RACE_DECAY_WINDOW)));
-  return speed + difficultyBonus(rank);
+  return speed + difficultyBonus(game, rank);
 }
 
-export function calcRaceWinnerPoints(elapsedMs: number, raceTime: number, rank: number): number {
+export function calcRaceWinnerPoints(game: Game, elapsedMs: number, raceTime: number, rank: number): number {
   const speed = Math.max(0, Math.round(RACE_BASE * (1 - elapsedMs / (raceTime * 1000))));
-  return speed + difficultyBonus(rank);
+  return speed + difficultyBonus(game, rank);
 }
 
 // Snippet roulette and 'outro' both need a known, long-enough duration to
@@ -452,14 +467,11 @@ function buildRoundHints(song: Song, party: PartyConfig | undefined, guessKind: 
   return hints;
 }
 
-function buildRound(
-  usedSongIds: Set<string>, artistOnly = false, yearOnly = false, party?: PartyConfig,
-  raceTimeSec = 15, difficulty: Difficulty = 'hard',
-): Round {
-  const basePool = difficultyPool(difficulty);
-  let pool = basePool.filter(s => !usedSongIds.has(s.spotifyTrackId));
+function buildRound(game: Game, party?: PartyConfig): Round {
+  const basePool = difficultyPool(game);
+  let pool = basePool.filter(s => !game.usedSongIds.has(s.spotifyTrackId));
   if (pool.length === 0) pool = basePool;
-  const isYearRound = party ? party.format === 'year' : yearOnly;
+  const isYearRound = party ? party.format === 'year' : game.yearOnly;
   // A year round is unplayable without a known year.
   if (isYearRound) {
     const withYear = pool.filter(s => s.year !== null);
@@ -467,8 +479,8 @@ function buildRound(
   }
   const song = pickRandom(pool);
 
-  const snippetMs = party ? computeSnippetPosition(song, party, raceTimeSec) : undefined;
-  const guessKind = roundGuessKind(party, artistOnly, yearOnly);
+  const snippetMs = party ? computeSnippetPosition(song, party, game.raceTime) : undefined;
+  const guessKind = roundGuessKind(party, game.artistOnly, game.yearOnly);
   const hints = buildRoundHints(song, party, guessKind);
 
   return {
@@ -521,6 +533,7 @@ export function createGame(hostSocketId: string, preferredPin?: string): Game {
     artistOnly: false,
     yearOnly: false,
     difficulty: 'hard',
+    songSource: 'library',
     currentRound: null,
     usedSongIds: new Set(),
     phaseTimer: null,
@@ -529,6 +542,22 @@ export function createGame(hostSocketId: string, preferredPin?: string): Game {
   games.set(pin, game);
   socketToPin.set(hostSocketId, pin);
   return game;
+}
+
+// Re-validates and applies a host-picked playlist as the game's song pool.
+// Re-validation (not just trusting the client's own min-track check) matters
+// because filtering/dedup happens again here from scratch — a client-side
+// pass and a server-side pass could disagree given a malformed payload.
+export function setCustomSongPool(
+  game: Game, tracks: PlaylistTrackInput[],
+): { ok: true } | { ok: false; error: string } {
+  const pool = adaptPlaylistTracks(tracks);
+  if (pool.length < MIN_PLAYLIST_TRACKS) {
+    return { ok: false, error: `Only ${pool.length} playable track${pool.length === 1 ? '' : 's'} — need at least ${MIN_PLAYLIST_TRACKS}` };
+  }
+  game.songSource = 'playlist';
+  game.songPool = pool;
+  return { ok: true };
 }
 
 export function getGame(pin: string): Game | undefined {
@@ -622,7 +651,7 @@ export function startRound(game: Game): Round {
   // Build the party recipe before replacing currentRound — it reads the
   // previous round's format/event to avoid repeats.
   const party = game.mode === 'party' ? buildPartyConfig(game) : undefined;
-  const round = buildRound(game.usedSongIds, game.artistOnly, game.yearOnly, party, game.raceTime, game.difficulty);
+  const round = buildRound(game, party);
   game.usedSongIds.add(round.song.spotifyTrackId);
   game.currentRound = round;
   game.phase = 'betting';
@@ -724,7 +753,7 @@ export function recordGuess(
     const guess = parseYearGuess(text);
     const correct = guess !== null && guess === Math.floor(round.song.year ?? 0);
     if (!correct) return failGuess(round, socketId, guesserName);
-    const points = calcPoints(round.lowestBid, round.song.rank) * roundMultiplier(round)
+    const points = calcPoints(game, round.lowestBid, round.song.rank) * roundMultiplier(round)
       + pityBonus(currentScores(game), socketId);
     const result = applyClassicWin(game, round, socketId, guesserName, points);
     // The year reveal UI reads exclusively from `yearResults` (never from
@@ -738,7 +767,7 @@ export function recordGuess(
   const { correct, artistBonus } = checkGuess(target, text, artistText, round.song);
   if (!correct) return failGuess(round, socketId, guesserName);
 
-  const points = (calcPoints(round.lowestBid, round.song.rank)
+  const points = (calcPoints(game, round.lowestBid, round.song.rank)
     + (artistBonus ? BOTH_ARTIST_BONUS : 0)) * roundMultiplier(round)
     + pityBonus(currentScores(game), socketId);
   return applyClassicWin(game, round, socketId, guesserName, points);
@@ -811,9 +840,9 @@ function applyRaceCorrectGuess(
     // Duel: winner-takes-all, flat stakes.
     base = isFirst ? DUEL_WIN_POINTS : 0;
   } else if (game.raceWinnerOnly) {
-    base = calcRaceWinnerPoints(elapsedMs, game.raceTime, round.song.rank);
+    base = calcRaceWinnerPoints(game, elapsedMs, game.raceTime, round.song.rank);
   } else {
-    base = calcRacePoints(isFirst, elapsedMs, round.firstCorrectAt! - round.playStartAt!, round.song.rank);
+    base = calcRacePoints(game, isFirst, elapsedMs, round.firstCorrectAt! - round.playStartAt!, round.song.rank);
   }
   let points = (base + (artistBonus ? BOTH_ARTIST_BONUS : 0)) * roundMultiplier(round);
   if (points > 0) points += pityBonus(currentScores(game), socketId);
