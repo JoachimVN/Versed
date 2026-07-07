@@ -1100,6 +1100,7 @@ function FullScreenDialog({ ariaLabel, dialogRef, children }: Readonly<{
 function playlistErrorMessage(error: PlaylistFetchError, count?: number): string {
   switch (error) {
     case 'unauthorized': return 'Reconnect Spotify to allow playlist access.';
+    case 'restricted': return "Spotify blocks API access to this playlist. It's likely one of Spotify's own curated playlists (Discover Weekly, Daily Mix, Top 50, etc.). Try a regular playlist instead.";
     case 'not_found': return "Couldn't find that playlist. Check the link and try again.";
     case 'too_few': return `Only ${count ?? 0} playable track${count === 1 ? '' : 's'}. Pick a playlist with at least 10.`;
     default: return "Couldn't load that playlist. Try again.";
@@ -1292,21 +1293,26 @@ function PlaylistPickerDialog({ game }: Readonly<{ game: HostState }>) {
               </p>
             )}
 
-            <div className="flex items-center justify-between">
-              <p style={{ color: 'rgba(255,255,255,0.4)', fontSize: '0.75rem' }}>
-                {selectedIds.size === 0 ? 'Nothing selected yet' : `${selectedIds.size} playlist${selectedIds.size === 1 ? '' : 's'} selected`}
-              </p>
-              <button
-                onClick={closePlaylistPicker}
-                style={{
-                  padding: '9px 16px', borderRadius: '10px',
-                  background: 'rgba(29, 185, 84, 0.25)', border: '1px solid rgba(29, 185, 84, 0.45)',
-                  color: 'white', fontWeight: 600, fontSize: '0.8125rem', cursor: 'pointer',
-                }}
-              >
-                Done
-              </button>
-            </div>
+            {(() => {
+              const pluralS = selectedIds.size === 1 ? '' : 's';
+              return (
+                <div className="flex items-center justify-between">
+                  <p style={{ color: 'rgba(255,255,255,0.4)', fontSize: '0.75rem' }}>
+                    {selectedIds.size === 0 ? 'Nothing selected yet' : `${selectedIds.size} playlist${pluralS} selected`}
+                  </p>
+                  <button
+                    onClick={closePlaylistPicker}
+                    style={{
+                      padding: '9px 16px', borderRadius: '10px',
+                      background: 'rgba(29, 185, 84, 0.25)', border: '1px solid rgba(29, 185, 84, 0.45)',
+                      color: 'white', fontWeight: 600, fontSize: '0.8125rem', cursor: 'pointer',
+                    }}
+                  >
+                    Done
+                  </button>
+                </div>
+              );
+            })()}
           </div>
         </LiquidGlass>
       </div>
