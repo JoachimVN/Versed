@@ -16,15 +16,15 @@ export default {
           green: '#27ae60',
         },
         brand: {
-          teal: '#00807e',
-          navy: '#342758',
-          purple: '#6e209b',
-          accent: '#9611c1',
+          teal: '#00a6a3',
+          navy: '#3c2c66',
+          purple: '#9e12cc',
+          accent: '#9e12cc',
           satin: 'rgba(128,74,146,0.5)',
         },
       },
       backgroundImage: {
-        'brand-gradient': 'linear-gradient(90deg, #00807e 0%, #342758 50%, #6e209b 100%)',
+        'brand-gradient': 'linear-gradient(90deg, #00a6a3 0%, #3c2c66 50%, #9e12cc 100%)',
       },
       fontFamily: {
         sans: ['Nunito', 'sans-serif'],

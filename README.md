@@ -3,7 +3,7 @@
 </p>
 
 <p align="center">
-  <strong>Real-time multiplayer music quiz where you bid how few seconds you need to name a song.</strong>
+  <strong>Real-time multiplayer music quiz where being quick, and well-versed matters.</strong>
 </p>
 
 <p align="center">
@@ -64,7 +64,11 @@ The host's screen is the "board" — everyone else joins from their phone.
 
 1. **Host** connects Spotify, shares a short game PIN.
 2. **Players** join at `/play`, enter the PIN and a name.
-3. Host picks a mode and starts the game.
+3. Host picks a **game mode**, **song pool** (library or custom playlist), and **difficulty**, then starts the game.
+
+### Song Source
+
+Before starting, the host picks a song pool: the **Versed Library** or **custom Spotify playlist(s)**.
 
 ### Classic
 
@@ -77,10 +81,10 @@ Bid how few seconds of the clip you need to hear. Lowest bid gets the first shot
 | **Guessing** | configurable | Winner(s) type the title — fuzzy-matched, so typos count |
 | **Reveal** | — | Song + points shown, running leaderboard updated |
 
-**Scoring** rewards bold bids and rarer songs:
+**Scoring** rewards bold bids:
 
 ```
-points = 500  +  up to 1000 (lower bid → more)  +  up to 500 (rarer song → more)
+points = 500  +  up to 1000 (lower bid → more)  +  up to 500 (difficulty bonus)
 ```
 
 ### Race
@@ -100,13 +104,13 @@ After the configured number of rounds, final scores are tallied.
 ## Features
 
 - **Three game modes** — Classic (bid-based), Race (speed-based), and Party (a random recipe of format + twist each round)
+- **Flexible song pools** — play with the Versed Library or import custom Spotify playlists
 - **Bid-based guessing** — in Classic, the lowest bidder hears the least audio and scores the most
 - **Fuzzy matching** — typos, punctuation, and common substitutions ("4"/"for", "u"/"you") all handled
 - **Server-authoritative timing** — the host confirms the real audible start of each clip so durations stay accurate across network conditions
 - **Mid-game join** — players can join after the game has started and are synced to the current phase
 - **Customizable settings** — host can adjust bet time, guess time, round count, and mode-specific options before starting
 - **Reconnect recovery** — dropped connections snap back to the correct phase on reconnect
-- **3000+ song catalogue** with hints generated from release year, decade, chart stats, and stream counts
 
 ---
 
@@ -217,6 +221,12 @@ Configured for **Railway** via `railway.toml`. The server serves the built clien
 
 ---
 
-## Song catalogue
+## Song pools
 
-Songs load from `server/src/data/music_index_full.csv` at startup. Each row has a Spotify track ID plus metadata (year, decade, Billboard chart stats, stream count) used to generate in-round hints. Swap in your own CSV with the same columns to change the music pool.
+### Versed Library (default)
+
+Songs load from `server/src/data/music_index_full.csv` at startup. Each row has a Spotify track ID plus metadata (year, decade, Billboard chart stats, stream count) used to generate in-round hints. Swap in your own CSV with the same columns to change the default pool.
+
+### Custom Spotify Playlists
+
+Hosts can select one or more of their Spotify playlists before starting. The host picks playlists from their library, and the selected tracks are merged into the game pool.

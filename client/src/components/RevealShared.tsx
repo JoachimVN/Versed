@@ -7,13 +7,13 @@ export function PillButton({ onClick, label, zIndex }: Readonly<{ onClick: () =>
   return (
     <button
       type="button"
-      className="liquid-btn relative cursor-pointer border-0 bg-transparent p-0"
+      className="liquid-btn glass-tint-purple relative cursor-pointer border-0 bg-transparent p-0"
       style={{ width: '310px', height: '64px', borderRadius: '100px', background: 'rgba(0,0,0,0.001)', zIndex }}
       onClick={onClick}
     >
       <LiquidGlass style={{ position: 'absolute', top: '50%', left: '50%' }} {...LIQUID_PILL_PROPS}>
         <div style={{ position: 'relative' }}>
-          <div style={{ position: 'absolute', inset: '-18px -36px', borderRadius: '100px', pointerEvents: 'none', background: 'rgba(110,32,155,0.12)' }} />
+          <div style={{ position: 'absolute', inset: '-18px -36px', borderRadius: '100px', pointerEvents: 'none', background: 'rgba(158,18,204,0.12)' }} />
           <span className="text-white font-bold text-xl" style={{ whiteSpace: 'nowrap', position: 'relative', display: 'inline-block', minWidth: '210px', textAlign: 'center' }}>
             {label}
           </span>
@@ -109,7 +109,7 @@ function YearHeading({ year, compact }: Readonly<{ year: number | string; compac
       </span>
       <span style={{
         fontSize: compact ? '2.6rem' : '2.2rem', fontWeight: 900, lineHeight: 1,
-        background: 'linear-gradient(to bottom left, rgba(0,200,195,0.5) 0%, transparent 55%), linear-gradient(to top right, rgba(150,17,193,0.5) 0%, transparent 55%), #fff',
+        background: 'linear-gradient(to bottom left, rgba(0,238,232,0.5) 0%, transparent 55%), linear-gradient(to top right, rgba(158,18,204,0.5) 0%, transparent 55%), #fff',
         WebkitBackgroundClip: 'text', WebkitTextFillColor: 'transparent', backgroundClip: 'text',
         marginBottom: compact ? '8px' : '22px', display: 'inline-block', minWidth: compact ? '160px' : '140px',
       }}>
@@ -242,7 +242,7 @@ export function YearTimelineContent({ result, showGuessValues = true }: Readonly
         <div style={{
           position: 'absolute', left: `${pos(year)}%`, top: '28px', transform: 'translateX(-50%)',
           width: '2px', height: '30px', borderRadius: '1px',
-          background: exactMatch ? 'rgba(251,191,36,0.7)' : 'rgba(0,200,195,0.5)',
+          background: exactMatch ? 'rgba(251,191,36,0.7)' : 'rgba(0,238,232,0.5)',
         }} />
         <div style={{
           position: 'absolute', left: `${pos(year)}%`, top: `${66 + maxYearLane * 12}px`, transform: 'translateX(-50%)',
@@ -266,7 +266,10 @@ export function YearTimelineContent({ result, showGuessValues = true }: Readonly
               style={{
                 position: 'absolute', left: `${pos(group.guess)}%`, top: '43px',
                 transform: 'translate(-50%, -50%)',
-                animation: 'markerCelebrate 0.5s ease-out both',
+                animationName: 'markerCelebrate',
+                animationDuration: '0.5s',
+                animationTimingFunction: 'ease-out',
+                animationFillMode: 'both',
                 animationDelay: `${0.1 + i * 0.09}s`,
               }}
             >
@@ -338,7 +341,7 @@ export function GotItCardContent({ result, myName }: Readonly<{ result: RoundRes
     iconBg = 'rgba(255,255,255,0.07)';
     iconBorder = 'rgba(255,255,255,0.12)';
     labelText = count === 1 ? `${result.correctGuessers![0]} got it` : `${count} players got it`;
-    labelGradient = 'linear-gradient(to bottom left, rgba(110,32,155,0.4) 0%, transparent 52%), linear-gradient(to top right, rgba(0,200,195,0.3) 0%, transparent 52%), #fff';
+    labelGradient = 'linear-gradient(to bottom left, rgba(158,18,204,0.4) 0%, transparent 52%), linear-gradient(to top right, rgba(0,238,232,0.3) 0%, transparent 52%), #fff';
   } else {
     // String indexing grabs a single UTF-16 code unit, which mangles emoji
     // (most are surrogate pairs) — iterate by code point instead so a name
@@ -348,7 +351,7 @@ export function GotItCardContent({ result, myName }: Readonly<{ result: RoundRes
     iconBg = 'rgba(255,255,255,0.07)';
     iconBorder = 'rgba(255,255,255,0.12)';
     labelText = `${result.guesserName} got it`;
-    labelGradient = 'linear-gradient(to bottom left, rgba(110,32,155,0.4) 0%, transparent 52%), linear-gradient(to top right, rgba(0,200,195,0.3) 0%, transparent 52%), #fff';
+    labelGradient = 'linear-gradient(to bottom left, rgba(158,18,204,0.4) 0%, transparent 52%), linear-gradient(to top right, rgba(0,238,232,0.3) 0%, transparent 52%), #fff';
   }
 
   return (

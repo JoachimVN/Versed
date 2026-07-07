@@ -29,9 +29,9 @@ const AUDIO_BARS = [
 ] as const;
 
 const AUDIO_BAR_COLORS: Record<'classic' | 'race' | 'year', string> = {
-  classic: 'rgba(150,17,193,0.75)',
+  classic: 'rgba(158,18,204,0.75)',
   race: 'rgba(234,88,12,0.75)',
-  year: 'rgba(0,200,195,0.75)',
+  year: 'rgba(0,238,232,0.75)',
 };
 
 // Detected tempo can be wildly wrong (half/double-time, or missing) — clamp
@@ -65,7 +65,10 @@ export function AudioBars({ playing, accent, height, bpm }: Readonly<{ playing: 
             style={{
               width: '3px', height: '100%', borderRadius: '2px',
               background: barColor,
-              animation: playing ? `${bar.anim} ${dur}s ease-in-out infinite` : 'none',
+              animationName: playing ? bar.anim : 'none',
+              animationDuration: `${dur}s`,
+              animationTimingFunction: 'ease-in-out',
+              animationIterationCount: 'infinite',
               animationDelay: `${delay}s`,
               animationFillMode: playing ? 'backwards' : undefined,
               transformOrigin: 'center',

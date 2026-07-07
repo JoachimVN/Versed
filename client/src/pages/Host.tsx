@@ -6,7 +6,7 @@ import QRCodeLib from 'react-qr-code';
 const QRCode = QRCodeLib as unknown as React.FC<{ value: string; size?: number }>;
 import { socket } from '../socket';
 import { useSpotify } from '../hooks/useSpotify';
-import { usePlaylistPicker, resolvePlaylistInput, PlaylistFetchError, PlaylistSummary, MIN_PLAYLIST_TRACKS } from '../hooks/usePlaylistPicker';
+import { usePlaylistPicker, resolvePlaylistInput, PlaylistFetchError, PlaylistSummary, MIN_PLAYLIST_TRACKS, MAX_PLAYLIST_TRACKS } from '../hooks/usePlaylistPicker';
 import { useEscapeKey } from '../hooks/useEscapeKey';
 import { useFocusTrap } from '../hooks/useFocusTrap';
 import { useSoundEffect } from '../hooks/useSoundEffect';
@@ -28,6 +28,38 @@ type Mode = 'classic' | 'race' | 'party';
 type Difficulty = 'easy' | 'medium' | 'hard';
 interface SongInfo { title: string; artist: string; trackId: string; tempo?: number | null }
 interface CustomPlaylist { id: string; name: string; imageUrl: string | null; tracks: PlaylistTrackInput[] }
+
+// Combined-pool cap across all selected playlists — mirrors
+// usePlaylistPicker's MAX_PLAYLIST_TRACKS (the per-playlist import cap) so
+// stacking several large playlists can't quietly build a pool bigger than a
+// single playlist import would ever have been allowed to be on its own.
+const MAX_POOL_TRACKS = 5000;
+
+// Dedupes by Spotify track ID across all selected playlists — first
+// occurrence wins, so a song present in two playlists is only counted once.
+// Uncapped: used to detect (and message) when the combined pool exceeds
+// MAX_POOL_TRACKS, separately from the capped tracks actually sent to the
+// server (mergePlaylistTracks below).
+function mergeUniqueTracks(playlists: CustomPlaylist[]): PlaylistTrackInput[] {
+  const seen = new Set<string>();
+  const merged: PlaylistTrackInput[] = [];
+  for (const p of playlists) {
+    for (const t of p.tracks) {
+      if (seen.has(t.spotifyTrackId)) continue;
+      seen.add(t.spotifyTrackId);
+      merged.push(t);
+    }
+  }
+  return merged;
+}
+
+// What actually gets sent to the server — earlier-added playlists fill the
+// pool first, so if the cap is hit it's always the most recently added
+// playlist(s) that get trimmed, matching what PlaylistList's notice tells
+// the host.
+function mergePlaylistTracks(playlists: CustomPlaylist[]): PlaylistTrackInput[] {
+  return mergeUniqueTracks(playlists).slice(0, MAX_POOL_TRACKS);
+}
 
 const wait = (ms: number) => new Promise<void>(resolve => setTimeout(resolve, ms));
 
@@ -96,7 +128,7 @@ export interface HostState {
   yearOnly: boolean;
   difficulty: Difficulty;
   songSource: SongSource;
-  customPlaylist: CustomPlaylist | null;
+  customPlaylists: CustomPlaylist[];
   playlistPicker: PlaylistPicker;
   playlistPickerOpen: boolean;
   startError: string | null;
@@ -119,8 +151,8 @@ export interface HostState {
   setYearOnly: (v: boolean) => void;
   setDifficulty: (v: Difficulty) => void;
   setSongSource: (v: SongSource) => void;
-  selectPlaylist: (p: CustomPlaylist) => void;
-  clearPlaylist: () => void;
+  addPlaylist: (p: CustomPlaylist) => void;
+  removePlaylist: (id: string) => void;
   openPlaylistPicker: () => void;
   closePlaylistPicker: () => void;
   createGame: () => void;
@@ -176,7 +208,7 @@ function useHostGame(): HostState {
   // the actual fetched track data, so a restored 'playlist' flag with no
   // tracks would leave the host in a confusing half-configured state.
   const [songSource, setSongSource] = useState<SongSource>('library');
-  const [customPlaylist, setCustomPlaylist] = useState<CustomPlaylist | null>(null);
+  const [customPlaylists, setCustomPlaylists] = useState<CustomPlaylist[]>([]);
   const [playlistPickerOpen, setPlaylistPickerOpen] = useState(false);
   const [startError, setStartError] = useState<string | null>(null);
   const playlistPicker = usePlaylistPicker(spotify.accessToken);
@@ -465,8 +497,12 @@ function useHostGame(): HostState {
         bettingTime: bettingTimeSetting, guessingTime: guessingTimeSetting,
         totalRounds: roundsSetting, mode, raceTime: raceTimeSetting, raceWinnerOnly, artistOnly, yearOnly,
         difficulty, songSource,
-        customPlaylist: songSource === 'playlist' && customPlaylist
-          ? { id: customPlaylist.id, name: customPlaylist.name, tracks: customPlaylist.tracks }
+        customPlaylist: songSource === 'playlist' && customPlaylists.length > 0
+          ? {
+            id: customPlaylists.map(p => p.id).join(','),
+            name: customPlaylists.map(p => p.name).join(', '),
+            tracks: mergePlaylistTracks(customPlaylists),
+          }
           : undefined,
       },
     }, (ack?: { error?: string }) => {
@@ -517,15 +553,15 @@ function useHostGame(): HostState {
     result, roundDeltas, leaderboard, copied, playProgress, inviteUrl,
     settingsOpen, bettingTimeSetting, guessingTimeSetting, roundsSetting,
     mode, raceTimeSetting, raceWinnerOnly, artistOnly, yearOnly, difficulty,
-    songSource, customPlaylist, playlistPicker, playlistPickerOpen, startError,
+    songSource, customPlaylists, playlistPicker, playlistPickerOpen, startError,
     party, stealResult, answeredCount,
     reconnecting, reconnectingCount: reconnectingNames.size, gameExpired, songPlaying, songTempo,
     toggleSettings: () => setSettingsOpen(o => !o),
     setBettingTimeSetting, setGuessingTimeSetting, setRoundsSetting,
     setMode, setRaceTimeSetting, setRaceWinnerOnly, setArtistOnly, setYearOnly, setDifficulty,
     setSongSource,
-    selectPlaylist: (p: CustomPlaylist) => { setCustomPlaylist(p); setPlaylistPickerOpen(false); },
-    clearPlaylist: () => setCustomPlaylist(null),
+    addPlaylist: (p: CustomPlaylist) => setCustomPlaylists(list => list.some(x => x.id === p.id) ? list : [...list, p]),
+    removePlaylist: (id: string) => setCustomPlaylists(list => list.filter(p => p.id !== id)),
     openPlaylistPicker: () => setPlaylistPickerOpen(true),
     closePlaylistPicker: () => setPlaylistPickerOpen(false),
     createGame, startGame, copyInvite, newGame,
@@ -609,9 +645,9 @@ function BidTimeline({ bids, lowestBid }: Readonly<{ bids: { name: string; bid: 
 function SettingsPanel({ game, open }: Readonly<{ game: HostState; open: boolean }>) {
   const {
     mode, bettingTimeSetting, guessingTimeSetting, roundsSetting, raceTimeSetting, raceWinnerOnly, artistOnly, yearOnly, difficulty,
-    songSource, customPlaylist,
+    songSource, customPlaylists,
     setBettingTimeSetting, setGuessingTimeSetting, setRoundsSetting, setRaceTimeSetting, setRaceWinnerOnly, setArtistOnly, setYearOnly, setDifficulty,
-    setSongSource, openPlaylistPicker,
+    setSongSource, openPlaylistPicker, removePlaylist,
     toggleSettings,
   } = game;
   const panelRef = useRef<HTMLDialogElement>(null);
@@ -670,13 +706,15 @@ function SettingsPanel({ game, open }: Readonly<{ game: HostState; open: boolean
         </div>
 
         <div className="px-5 py-4 space-y-4">
-          <SongSourceRow value={songSource} onChange={setSongSource} />
-          {songSource === 'playlist' && (
-            <>
-              <PlaylistChip customPlaylist={customPlaylist} onOpen={openPlaylistPicker} />
-              <p style={{ color: 'rgba(255,255,255,0.35)', fontSize: '0.75rem' }}>All songs play at equal difficulty</p>
-            </>
-          )}
+          <div style={{ paddingBottom: '12px', marginBottom: '12px', borderBottom: '1px solid rgba(255,255,255,0.07)' }}>
+            <SongSourceRow value={songSource} onChange={setSongSource} />
+            {songSource === 'playlist' && (
+              <div className="mt-3 space-y-2">
+                <PlaylistList customPlaylists={customPlaylists} onOpen={openPlaylistPicker} onRemove={removePlaylist} />
+                <p style={{ color: 'rgba(255,255,255,0.35)', fontSize: '0.75rem' }}>All songs play at equal difficulty</p>
+              </div>
+            )}
+          </div>
           {/* Party mixes classic and race rounds, so it needs all three timers.
               Classic's "Guess the year" still runs the normal bid/tier flow
               (bet time picks the clip, guess time is the per-tier window), so
@@ -723,6 +761,11 @@ function SettingsPanel({ game, open }: Readonly<{ game: HostState; open: boolean
 }
 
 function JoinCard({ pin, copied, copyInvite }: Readonly<{ pin: string; copied: boolean; copyInvite: () => void }>) {
+  const searchParams = new URLSearchParams(globalThis.location.search);
+  const isScreenshot = searchParams.has('v');
+  const baseUrl = isScreenshot ? 'https://joavn.dev/versed' : `${globalThis.location.origin}${import.meta.env.BASE_URL}`.replace(/\/$/, '');
+  const qrUrl = isScreenshot ? `https://joavn.dev/versed/play/${pin}` : `${globalThis.location.origin}${import.meta.env.BASE_URL}play/${pin}`;
+
   return (
     <div className="w-full max-w-md bg-white/5 rounded-2xl p-5">
       <div className="flex items-center gap-5">
@@ -730,7 +773,7 @@ function JoinCard({ pin, copied, copyInvite }: Readonly<{ pin: string; copied: b
           <div>
             <p className="text-white/45 text-xs uppercase tracking-widest mb-0.5">Join at</p>
             <p className="text-white font-semibold text-base">
-              {`${globalThis.location.origin}${import.meta.env.BASE_URL}`.replace(/\/$/, '')}
+              {baseUrl}
             </p>
           </div>
           <div>
@@ -746,7 +789,7 @@ function JoinCard({ pin, copied, copyInvite }: Readonly<{ pin: string; copied: b
           </button>
         </div>
         <div className="p-2 bg-white rounded-xl shrink-0">
-          <QRCode value={`${globalThis.location.origin}${import.meta.env.BASE_URL}play/${pin}`} size={148} />
+          <QRCode value={qrUrl} size={148} />
         </div>
       </div>
     </div>
@@ -754,6 +797,53 @@ function JoinCard({ pin, copied, copyInvite }: Readonly<{ pin: string; copied: b
 }
 
 // ─── Settings row / toggle ────────────────────────────────────────────────────
+
+const STEPPER_BTN_BG = 'rgba(255,255,255,0.07)';
+const STEPPER_BTN_BORDER = 'rgba(255,255,255,0.09)';
+const STEPPER_BTN_COLOR = 'rgba(255,255,255,0.55)';
+const STEPPER_BTN_BG_HOVER = 'rgba(255,255,255,0.14)';
+const STEPPER_BTN_BORDER_HOVER = 'rgba(255,255,255,0.2)';
+const STEPPER_BTN_COLOR_HOVER = 'rgba(255,255,255,0.85)';
+
+// Plain inline `style` always wins over a stylesheet `:hover` rule (even one
+// from a Tailwind class), so hover here has to be applied via JS instead of
+// a `hover:` className — same pattern as the other inline-styled hover
+// buttons in this file (e.g. the mode/difficulty pills below).
+function SettingStepperButton({ symbol, label, onClick, disabled }: Readonly<{
+  symbol: string; label: string; onClick: () => void; disabled?: boolean;
+}>) {
+  return (
+    <button
+      onClick={disabled ? undefined : onClick}
+      disabled={disabled}
+      aria-label={label}
+      className="flex items-center justify-center active:scale-90 transition-transform"
+      style={{
+        width: '28px', height: '28px', borderRadius: '50%',
+        background: STEPPER_BTN_BG,
+        border: `1px solid ${STEPPER_BTN_BORDER}`,
+        color: STEPPER_BTN_COLOR,
+        fontSize: '1.1rem', lineHeight: 1,
+        cursor: disabled ? 'not-allowed' : 'pointer',
+        opacity: disabled ? 0.4 : 1,
+        transition: 'background 0.15s, border-color 0.15s, color 0.15s',
+      }}
+      onMouseEnter={e => {
+        if (disabled) return;
+        const el = e.currentTarget;
+        el.style.background = STEPPER_BTN_BG_HOVER;
+        el.style.borderColor = STEPPER_BTN_BORDER_HOVER;
+        el.style.color = STEPPER_BTN_COLOR_HOVER;
+      }}
+      onMouseLeave={e => {
+        const el = e.currentTarget;
+        el.style.background = STEPPER_BTN_BG;
+        el.style.borderColor = STEPPER_BTN_BORDER;
+        el.style.color = STEPPER_BTN_COLOR;
+      }}
+    >{symbol}</button>
+  );
+}
 
 function SettingRow({ label, value, unit, onDec, onInc, disabled }: Readonly<{
   label: string; value: number; unit: string; onDec: () => void; onInc: () => void; disabled?: boolean;
@@ -764,42 +854,14 @@ function SettingRow({ label, value, unit, onDec, onInc, disabled }: Readonly<{
         {label}
       </span>
       <div className="flex items-center gap-2.5">
-        <button
-          onClick={disabled ? undefined : onDec}
-          disabled={disabled}
-          aria-label={`Decrease ${label}`}
-          className="flex items-center justify-center active:scale-90 transition-transform"
-          style={{
-            width: '28px', height: '28px', borderRadius: '50%',
-            background: 'rgba(255,255,255,0.07)',
-            border: '1px solid rgba(255,255,255,0.09)',
-            color: 'rgba(255,255,255,0.55)',
-            fontSize: '1.1rem', lineHeight: 1,
-            cursor: disabled ? 'not-allowed' : 'pointer',
-            opacity: disabled ? 0.4 : 1,
-          }}
-        >−</button>
+        <SettingStepperButton symbol="−" label={`Decrease ${label}`} onClick={onDec} disabled={disabled} />
         <span style={{
           color: disabled ? 'rgba(255,255,255,0.45)' : 'white',
           fontWeight: 700, minWidth: '42px', textAlign: 'center', fontSize: '0.9375rem',
         }}>
           {value}{unit}
         </span>
-        <button
-          onClick={disabled ? undefined : onInc}
-          disabled={disabled}
-          aria-label={`Increase ${label}`}
-          className="flex items-center justify-center active:scale-90 transition-transform"
-          style={{
-            width: '28px', height: '28px', borderRadius: '50%',
-            background: 'rgba(255,255,255,0.07)',
-            border: '1px solid rgba(255,255,255,0.09)',
-            color: 'rgba(255,255,255,0.55)',
-            fontSize: '1.1rem', lineHeight: 1,
-            cursor: disabled ? 'not-allowed' : 'pointer',
-            opacity: disabled ? 0.4 : 1,
-          }}
-        >+</button>
+        <SettingStepperButton symbol="+" label={`Increase ${label}`} onClick={onInc} disabled={disabled} />
       </div>
     </div>
   );
@@ -865,7 +927,7 @@ const SONG_SOURCE_OPTIONS: { key: SongSource; label: string }[] = [
 ];
 
 const SONG_SOURCE_STYLE: Record<SongSource, { bg: string; border: string; text: string }> = {
-  library: { bg: 'rgba(130, 30, 175, 0.25)', border: '1px solid rgba(160, 60, 200, 0.45)', text: '#d8b4fe' },
+  library: { bg: 'rgba(178,16,224,0.25)', border: '1px solid rgba(208,46,249,0.45)', text: '#d8b4fe' },
   playlist: { bg: 'rgba(29, 185, 84, 0.25)', border: '1px solid rgba(29, 185, 84, 0.45)', text: '#6ee7a0' },
 };
 
@@ -910,32 +972,62 @@ function SongSourceRow({ value, onChange }: Readonly<{ value: SongSource; onChan
   );
 }
 
-function PlaylistChip({ customPlaylist, onOpen }: Readonly<{
-  customPlaylist: { name: string; imageUrl: string | null; tracks: unknown[] } | null; onOpen: () => void;
+function PlaylistList({ customPlaylists, onOpen, onRemove }: Readonly<{
+  customPlaylists: CustomPlaylist[]; onOpen: () => void; onRemove: (id: string) => void;
 }>) {
+  const uncappedTotal = mergeUniqueTracks(customPlaylists).length;
+  const totalTracks = Math.min(uncappedTotal, MAX_POOL_TRACKS);
+  const overCap = uncappedTotal > MAX_POOL_TRACKS;
   return (
-    <button
-      onClick={onOpen}
-      className="w-full flex items-center gap-2.5 rounded-xl text-left"
-      style={{ padding: '8px 10px', background: 'rgba(255,255,255,0.05)', border: '1px solid rgba(255,255,255,0.08)', cursor: 'pointer' }}
-    >
-      {customPlaylist?.imageUrl ? (
-        <img src={customPlaylist.imageUrl} alt="" className="w-8 h-8 rounded-md object-cover shrink-0" />
-      ) : (
-        <div className="w-8 h-8 rounded-md shrink-0" style={{ background: 'rgba(255,255,255,0.08)' }} />
+    <div className="space-y-2">
+      {customPlaylists.map(p => (
+        <div
+          key={p.id}
+          className="w-full flex items-center gap-2.5 rounded-xl"
+          style={{ padding: '8px 10px', background: 'rgba(255,255,255,0.05)', border: '1px solid rgba(255,255,255,0.08)' }}
+        >
+          {p.imageUrl ? (
+            <img src={p.imageUrl} alt="" className="w-8 h-8 rounded-md object-cover shrink-0" />
+          ) : (
+            <div className="w-8 h-8 rounded-md shrink-0" style={{ background: 'rgba(255,255,255,0.08)' }} />
+          )}
+          <div className="min-w-0 flex-1">
+            <p className="truncate" style={{ color: 'white', fontWeight: 600, fontSize: '0.8125rem' }}>{p.name}</p>
+            <p style={{ color: 'rgba(255,255,255,0.4)', fontSize: '0.6875rem' }}>{p.tracks.length} tracks</p>
+          </div>
+          <button
+            onClick={() => onRemove(p.id)}
+            aria-label={`Remove ${p.name}`}
+            className="text-white/35 hover:text-white/80 transition-colors"
+            style={{ background: 'none', border: 'none', cursor: 'pointer', fontSize: '1.1rem', lineHeight: 1, padding: '4px' }}
+          >
+            ×
+          </button>
+        </div>
+      ))}
+      <button
+        onClick={onOpen}
+        className="w-full flex items-center gap-2.5 rounded-xl text-left"
+        style={{ padding: '8px 10px', background: 'rgba(255,255,255,0.05)', border: '1px dashed rgba(255,255,255,0.15)', cursor: 'pointer', transition: 'background 0.15s, border-color 0.15s' }}
+        onMouseEnter={e => { const el = e.currentTarget; el.style.background = 'rgba(255,255,255,0.09)'; el.style.borderColor = 'rgba(255,255,255,0.3)'; }}
+        onMouseLeave={e => { const el = e.currentTarget; el.style.background = 'rgba(255,255,255,0.05)'; el.style.borderColor = 'rgba(255,255,255,0.15)'; }}
+      >
+        <div className="min-w-0 flex-1">
+          <p style={{ color: 'rgba(255,255,255,0.5)', fontSize: '0.8125rem' }}>
+            {customPlaylists.length === 0 ? 'Choose playlists' : '+ Add another playlist'}
+          </p>
+          {customPlaylists.length > 1 && (
+            <p style={{ color: 'rgba(255,255,255,0.35)', fontSize: '0.6875rem' }}>{totalTracks} unique tracks total</p>
+          )}
+        </div>
+        <span style={{ color: 'rgba(255,255,255,0.35)', fontSize: '0.75rem' }}>→</span>
+      </button>
+      {overCap && (
+        <p style={{ color: '#fcd34d', fontSize: '0.6875rem' }}>
+          Combined pool capped at {MAX_POOL_TRACKS.toLocaleString()} tracks — {(uncappedTotal - MAX_POOL_TRACKS).toLocaleString()} track{uncappedTotal - MAX_POOL_TRACKS === 1 ? '' : 's'} from the most recently added playlist(s) won't be included.
+        </p>
       )}
-      <div className="min-w-0 flex-1">
-        {customPlaylist ? (
-          <>
-            <p className="truncate" style={{ color: 'white', fontWeight: 600, fontSize: '0.8125rem' }}>{customPlaylist.name}</p>
-            <p style={{ color: 'rgba(255,255,255,0.4)', fontSize: '0.6875rem' }}>{customPlaylist.tracks.length} tracks</p>
-          </>
-        ) : (
-          <p style={{ color: 'rgba(255,255,255,0.5)', fontSize: '0.8125rem' }}>Choose a playlist</p>
-        )}
-      </div>
-      <span style={{ color: 'rgba(255,255,255,0.35)', fontSize: '0.75rem' }}>{customPlaylist ? 'Change' : '→'}</span>
-    </button>
+    </div>
   );
 }
 
@@ -953,8 +1045,8 @@ function ToggleRow({ label, value, onToggle, disabled }: Readonly<{
         className="relative shrink-0"
         style={{
           width: '40px', height: '22px', borderRadius: '100px',
-          background: value ? 'rgba(130, 30, 175, 0.7)' : 'rgba(255,255,255,0.10)',
-          border: value ? '1px solid rgba(150, 50, 200, 0.6)' : '1px solid rgba(255,255,255,0.08)',
+          background: value ? 'rgba(178,16,224,0.7)' : 'rgba(255,255,255,0.10)',
+          border: value ? '1px solid rgba(198,36,249,0.6)' : '1px solid rgba(255,255,255,0.08)',
           transition: 'background 0.2s ease, border-color 0.2s ease, opacity 0.2s ease',
           cursor: disabled ? 'not-allowed' : 'pointer',
           opacity: disabled ? 0.4 : 1,
@@ -1028,17 +1120,30 @@ function FullScreenDialog({ ariaLabel, dialogRef, children }: Readonly<{
         backdropFilter: 'blur(12px)',
       }}
     >
-      <div style={{ position: 'absolute', inset: 0, pointerEvents: 'none', background: 'radial-gradient(ellipse 60% 40% at 50% 50%, rgba(86,20,140,0.22) 0%, transparent 65%)' }} />
+      <div style={{ position: 'absolute', inset: 0, pointerEvents: 'none', background: 'radial-gradient(ellipse 60% 40% at 50% 50%, rgba(134,6,189,0.22) 0%, transparent 65%)' }} />
       {children}
     </dialog>
   );
 }
 
-function playlistErrorMessage(error: PlaylistFetchError, count?: number): string {
+// Shared verbatim between the blocked-playlist-card hint and the paste-a-link
+// error, so the two surfaces never drift into different wording for the same
+// Spotify restriction.
+const PLAYLIST_ACCESS_WORKAROUND =
+  "You can't import playlists you don't own or collaborate on due to Spotify API restrictions.\n\n"
+  + 'To work around this:\n'
+  + '1. Open the playlist\n'
+  + '2. Tap ⋯\n'
+  + '3. "Add to other playlist"\n'
+  + '4. "New playlist" to copy it into your own library.\n\n'
+  + 'You may need to refresh the page for it to show up here.';
+
+function playlistErrorMessage(error: PlaylistFetchError): string {
   switch (error) {
     case 'unauthorized': return 'Reconnect Spotify to allow playlist access.';
+    case 'forbidden': return PLAYLIST_ACCESS_WORKAROUND;
     case 'not_found': return "Couldn't find that playlist. Check the link and try again.";
-    case 'too_few': return `Only ${count ?? 0} playable track${count === 1 ? '' : 's'}. Pick a playlist with at least 10.`;
+    case 'empty': return 'That playlist has no playable tracks.';
     default: return "Couldn't load that playlist. Try again.";
   }
 }
@@ -1062,39 +1167,103 @@ function ReconnectBanner() {
 // The playlist picker's main panel has four mutually-exclusive states; kept
 // as its own component (rather than a nested ternary) so each is a plain,
 // independently-readable branch.
-function PlaylistsPanel({ playlistsError, loadingPlaylists, playlists, resolving, onChoose }: Readonly<{
+function PlaylistsPanel({ playlistsError, loadingPlaylists, playlists, resolving, selectedIds, onChoose }: Readonly<{
   playlistsError: PlaylistFetchError | null;
   loadingPlaylists: boolean;
   playlists: PlaylistSummary[];
   resolving: boolean;
+  selectedIds: Set<string>;
   onChoose: (id: string, imageUrl: string | null) => void;
 }>) {
+  const [openBlockedId, setOpenBlockedId] = useState<string | null>(null);
   if (playlistsError === 'unauthorized') return <ReconnectBanner />;
   if (loadingPlaylists) {
     return <p style={{ color: 'rgba(255,255,255,0.45)', fontSize: '0.8125rem' }}>Loading your playlists…</p>;
   }
   if (playlistsError) {
-    return <p style={{ color: '#fca5a5', fontSize: '0.8125rem' }}>Couldn't load your playlists. Try again.</p>;
+    return <p style={{ color: '#fca5a5', fontSize: '0.8125rem' }}>{playlistErrorMessage(playlistsError)}</p>;
   }
   return (
-    <div className="grid grid-cols-3 gap-2.5 overflow-y-auto" style={{ maxHeight: '48vh' }}>
-      {playlists.map(p => (
-        <button
-          key={p.id}
-          onClick={() => onChoose(p.id, p.imageUrl)}
-          disabled={resolving}
-          className="flex flex-col items-start gap-1.5 rounded-xl text-left"
-          style={{ padding: '8px', background: 'rgba(255,255,255,0.04)', border: '1px solid rgba(255,255,255,0.07)', cursor: resolving ? 'not-allowed' : 'pointer' }}
-        >
-          {p.imageUrl ? (
-            <img src={p.imageUrl} alt="" className="w-full aspect-square rounded-lg object-cover" />
-          ) : (
-            <div className="w-full aspect-square rounded-lg" style={{ background: 'rgba(255,255,255,0.06)' }} />
-          )}
-          <p className="truncate w-full" style={{ color: 'white', fontWeight: 600, fontSize: '0.75rem' }}>{p.name}</p>
-          <p style={{ color: 'rgba(255,255,255,0.4)', fontSize: '0.6875rem' }}>{p.trackCount} tracks</p>
-        </button>
-      ))}
+    <div className="overflow-y-auto" style={{ maxHeight: '48vh' }}>
+      <div className="grid grid-cols-3 gap-2.5">
+        {playlists.map(p => {
+          const selected = selectedIds.has(p.id);
+          const blocked = !p.importable;
+          const guideOpen = openBlockedId === p.id;
+          return (
+            <div key={p.id} className="relative">
+              <button
+                type="button"
+                onClick={() => { if (!blocked) onChoose(p.id, p.imageUrl); }}
+                disabled={resolving}
+                aria-pressed={selected}
+                className="relative flex flex-col w-full rounded-xl text-left"
+                style={{
+                  padding: '8px',
+                  background: selected ? 'rgba(29, 185, 84, 0.12)' : 'rgba(255,255,255,0.04)',
+                  border: selected ? '1px solid rgba(29, 185, 84, 0.45)' : '1px solid rgba(255,255,255,0.07)',
+                  cursor: resolving || blocked ? 'not-allowed' : 'pointer',
+                }}
+              >
+                {/* Dimmed independently of the guide overlay below, which needs
+                    full opacity of its own regardless of the tile's blocked look. */}
+                <div className="flex flex-col items-start gap-1.5 w-full" style={{ opacity: blocked ? 0.35 : 1 }}>
+                  <div className="relative w-full">
+                    {p.imageUrl ? (
+                      <img src={p.imageUrl} alt="" className="w-full aspect-square rounded-lg object-cover" />
+                    ) : (
+                      <div className="w-full aspect-square rounded-lg" style={{ background: 'rgba(255,255,255,0.06)' }} />
+                    )}
+                    {selected && (
+                      <div
+                        className="absolute top-1 right-1 flex items-center justify-center rounded-full"
+                        style={{ width: '20px', height: '20px', background: '#1DB954' }}
+                      >
+                        <Check style={{ width: '13px', height: '13px', color: 'white' }} strokeWidth={3} />
+                      </div>
+                    )}
+                  </div>
+                  <p className="truncate w-full" style={{ color: 'white', fontWeight: 600, fontSize: '0.75rem' }}>{p.name}</p>
+                  <p style={{ color: 'rgba(255,255,255,0.4)', fontSize: '0.6875rem' }}>{p.trackCount} tracks</p>
+                </div>
+              </button>
+              {blocked && (
+                <button
+                  type="button"
+                  aria-label="Why is this playlist blocked?"
+                  onClick={() => setOpenBlockedId(guideOpen ? null : p.id)}
+                  className="absolute top-1 left-1 flex items-center justify-center rounded-full"
+                  style={{ width: '18px', height: '18px', background: 'rgba(0,0,0,0.6)', border: '1px solid rgba(255,255,255,0.3)', cursor: 'pointer' }}
+                >
+                  <span style={{ color: 'white', fontSize: '0.6875rem', fontWeight: 700, lineHeight: 1 }}>?</span>
+                </button>
+              )}
+              {blocked && (
+                <button
+                  type="button"
+                  aria-label="Close blocked-playlist guide"
+                  onClick={() => setOpenBlockedId(null)}
+                  onKeyDown={(e) => { if (e.key === 'Escape') setOpenBlockedId(null); }}
+                  tabIndex={guideOpen ? 0 : -1}
+                  className="absolute inset-0 overflow-y-auto rounded-xl text-left"
+                  style={{
+                    padding: '8px',
+                    paddingTop: '26px',
+                    background: 'rgba(10,10,14,0.95)',
+                    opacity: guideOpen ? 1 : 0,
+                    pointerEvents: guideOpen ? 'auto' : 'none',
+                    transition: 'opacity 200ms ease',
+                  }}
+                >
+                  <p style={{ color: 'rgba(255,255,255,0.75)', fontSize: '0.5625rem', lineHeight: 1.4, whiteSpace: 'pre-line' }}>
+                    {PLAYLIST_ACCESS_WORKAROUND}
+                  </p>
+                </button>
+              )}
+            </div>
+          );
+        })}
+      </div>
     </div>
   );
 }
@@ -1103,40 +1272,58 @@ function PlaylistsPanel({ playlistsError, loadingPlaylists, playlists, resolving
 // small settings popover entirely — this is the "heavy" UI (grid, loading/
 // error states) that the popover's chip just launches.
 function PlaylistPickerDialog({ game }: Readonly<{ game: HostState }>) {
-  const { playlistPicker, closePlaylistPicker, selectPlaylist } = game;
+  const { playlistPicker, closePlaylistPicker, customPlaylists, addPlaylist, removePlaylist } = game;
   const { playlists, loadingPlaylists, playlistsError, fetchPlaylists, fetchPlaylistTracks } = playlistPicker;
   const [linkInput, setLinkInput] = useState('');
   const [resolving, setResolving] = useState(false);
   const [resolveError, setResolveError] = useState<string | null>(null);
   const [resolvedCount, setResolvedCount] = useState(0);
+  const [truncationNotice, setTruncationNotice] = useState<string | null>(null);
+  const [loadHovered, setLoadHovered] = useState(false);
+  const [doneHovered, setDoneHovered] = useState(false);
+  const selectedIds = new Set(customPlaylists.map(p => p.id));
 
   useEffect(() => { fetchPlaylists(); }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
   // LiquidGlass only measures its own size once on mount (and on window
   // resize) — it has no ResizeObserver, so it never notices the card growing
   // as content changes (spinner -> grid, or an error/loading line appearing
-  // below it). Remount it whenever the visible content shape changes so it
-  // re-measures against the new layout.
-  const glassContentKey = [
+  // below it). Re-firing its resize listener (rather than remounting the
+  // component) lets it re-measure in place and transition smoothly to the
+  // new size — remounting instead snaps it back to its 270x69 default first,
+  // which is what caused the visible "rescaling" on every state change.
+  const glassContentShape = [
     loadingPlaylists ? 'loading' : 'idle',
     playlistsError ?? 'none',
     playlists.length > 0 ? 'has-playlists' : 'no-playlists',
     resolving ? 'resolving' : 'idle',
     resolveError ? 'resolve-error' : 'ok',
+    truncationNotice ? 'truncated' : 'ok',
   ].join('|');
+  useEffect(() => {
+    globalThis.dispatchEvent(new Event('resize'));
+  }, [glassContentShape]);
 
   const choosePlaylist = async (id: string, fallbackImageUrl: string | null = null) => {
+    // Clicking an already-added playlist again toggles it off — no need to
+    // refetch tracks just to remove something already in hand.
+    if (selectedIds.has(id)) { removePlaylist(id); setTruncationNotice(null); return; }
     setResolving(true);
     setResolveError(null);
+    setTruncationNotice(null);
     setResolvedCount(0);
     const result = await fetchPlaylistTracks(id, setResolvedCount);
     setResolving(false);
     if (!result.ok) {
-      setResolveError(playlistErrorMessage(result.error, result.count));
+      setResolveError(playlistErrorMessage(result.error));
       return;
     }
     const imageUrl = fallbackImageUrl ?? result.tracks[0]?.albumArtUrl ?? null;
-    selectPlaylist({ id, name: result.name, imageUrl, tracks: result.tracks });
+    addPlaylist({ id, name: result.name, imageUrl, tracks: result.tracks });
+    setLinkInput('');
+    if (result.truncated) {
+      setTruncationNotice(`That playlist has more than ${MAX_PLAYLIST_TRACKS.toLocaleString()} tracks — only the first ${MAX_PLAYLIST_TRACKS.toLocaleString()} were imported.`);
+    }
   };
 
   const submitLink = () => {
@@ -1148,7 +1335,7 @@ function PlaylistPickerDialog({ game }: Readonly<{ game: HostState }>) {
   return (
     <FullScreenDialog ariaLabel="Choose a playlist">
       <div className="liquid-btn relative" style={{ width: 'min(560px, 92vw)' }}>
-        <LiquidGlass key={glassContentKey} style={{ position: 'absolute', top: '50%', left: '50%' }} {...LIQUID_CARD_PROPS} padding="28px 24px">
+        <LiquidGlass style={{ position: 'absolute', top: '50%', left: '50%' }} {...LIQUID_CARD_PROPS} elasticity={0.04} padding="28px 24px">
           <div style={{ width: 'min(512px, 84vw)', display: 'flex', flexDirection: 'column', gap: '16px' }}>
             <div className="flex items-center justify-between">
               <p style={{ color: 'white', fontWeight: 800, fontSize: '1.1rem' }}>Choose a playlist</p>
@@ -1171,31 +1358,78 @@ function PlaylistPickerDialog({ game }: Readonly<{ game: HostState }>) {
               <button
                 onClick={submitLink}
                 disabled={resolving || !linkInput.trim()}
+                className="transition-all duration-150"
                 style={{
                   padding: '9px 14px', borderRadius: '10px',
-                  background: 'rgba(130,30,175,0.35)', border: '1px solid rgba(160,60,200,0.5)',
+                  background: (() => {
+                    if (resolving || !linkInput.trim()) return 'rgba(178,16,224,0.15)';
+                    return loadHovered ? 'rgba(178,16,224,0.55)' : 'rgba(178,16,224,0.4)';
+                  })(),
+                  border: `1px solid ${(() => {
+                    if (resolving || !linkInput.trim()) return 'rgba(208,46,249,0.2)';
+                    return loadHovered ? 'rgba(208,46,249,0.8)' : 'rgba(208,46,249,0.5)';
+                  })()}`,
                   color: 'white', fontWeight: 600, fontSize: '0.8125rem',
-                  cursor: resolving ? 'not-allowed' : 'pointer', opacity: resolving || !linkInput.trim() ? 0.5 : 1,
+                  cursor: resolving || !linkInput.trim() ? 'not-allowed' : 'pointer',
+                  boxShadow: loadHovered && !resolving && linkInput.trim() ? '0 0 16px rgba(178,16,224,0.35)' : 'none',
+                  opacity: linkInput.trim() ? 1 : 0.3,
                 }}
+                onMouseEnter={() => !resolving && linkInput.trim() && setLoadHovered(true)}
+                onMouseLeave={() => setLoadHovered(false)}
               >
+                {resolving ? <Loader2 className="w-3.5 h-3.5 animate-spin inline mr-1.5" /> : null}
                 Load
               </button>
             </div>
+            <p style={{ color: 'rgba(255,255,255,0.35)', fontSize: '0.7rem', marginTop: '-8px' }}>
+              Works for playlists you own or collaborate on. Spotify blocks API access to others' playlists.
+            </p>
 
             <PlaylistsPanel
               playlistsError={playlistsError}
               loadingPlaylists={loadingPlaylists}
               playlists={playlists}
               resolving={resolving}
+              selectedIds={selectedIds}
               onChoose={choosePlaylist}
             />
 
-            {resolveError && <p style={{ color: '#fca5a5', fontSize: '0.75rem' }}>{resolveError}</p>}
+            {resolveError && <p style={{ color: '#fca5a5', fontSize: '0.75rem', whiteSpace: 'pre-line' }}>{resolveError}</p>}
+            {truncationNotice && <p style={{ color: '#fcd34d', fontSize: '0.75rem' }}>{truncationNotice}</p>}
             {resolving && (
               <p style={{ color: 'rgba(255,255,255,0.45)', fontSize: '0.8125rem' }}>
                 {resolvedCount > 0 ? `Loading tracks… ${resolvedCount} so far` : 'Loading tracks…'}
               </p>
             )}
+
+            {(() => {
+              const pluralS = selectedIds.size === 1 ? '' : 's';
+              const trackCount = Math.min(mergeUniqueTracks(customPlaylists).length, MAX_POOL_TRACKS);
+              const trackPluralS = trackCount === 1 ? '' : 's';
+              const trackSuffix = trackCount > 0 ? ` (${trackCount.toLocaleString()} song${trackPluralS})` : '';
+              return (
+                <div className="flex items-center justify-between">
+                  <p style={{ color: 'rgba(255,255,255,0.4)', fontSize: '0.75rem' }}>
+                    {selectedIds.size === 0 ? 'Nothing selected yet' : `${selectedIds.size} playlist${pluralS} selected${trackSuffix}`}
+                  </p>
+                  <button
+                    onClick={closePlaylistPicker}
+                    className="transition-all duration-150"
+                    style={{
+                      padding: '9px 16px', borderRadius: '10px',
+                      background: doneHovered ? 'rgba(29, 185, 84, 0.45)' : 'rgba(29, 185, 84, 0.35)',
+                      border: `1px solid ${doneHovered ? 'rgba(29, 185, 84, 0.75)' : 'rgba(29, 185, 84, 0.6)'}`,
+                      color: 'white', fontWeight: 600, fontSize: '0.8125rem', cursor: 'pointer',
+                      boxShadow: doneHovered ? '0 0 16px rgba(29, 185, 84, 0.3)' : 'none',
+                    }}
+                    onMouseEnter={() => setDoneHovered(true)}
+                    onMouseLeave={() => setDoneHovered(false)}
+                  >
+                    Done
+                  </button>
+                </div>
+              );
+            })()}
           </div>
         </LiquidGlass>
       </div>
@@ -1273,7 +1507,7 @@ function ConnectView({ game }: Readonly<{ game: HostState }>) {
 function SettingsButton({ settingsOpen, toggleSettings }: Readonly<{ settingsOpen: boolean; toggleSettings: () => void }>) {
   const [hovered, setHovered] = useState(false);
   let bg = 'rgba(255,255,255,0.06)';
-  if (settingsOpen) bg = 'rgba(120, 25, 170, 0.28)';
+  if (settingsOpen) bg = 'rgba(168,11,219,0.28)';
   else if (hovered) bg = 'rgba(255,255,255,0.11)';
   let color = 'rgba(255,255,255,0.5)';
   if (settingsOpen) color = '#c084fc';
@@ -1287,7 +1521,7 @@ function SettingsButton({ settingsOpen, toggleSettings }: Readonly<{ settingsOpe
       className="absolute top-5 right-5 flex items-center gap-2 rounded-full transition-all duration-200 z-10"
       style={{
         background: bg,
-        border: settingsOpen ? '1px solid rgba(140, 40, 200, 0.45)' : '1px solid rgba(255,255,255,0.10)',
+        border: settingsOpen ? '1px solid rgba(188,26,249,0.45)' : '1px solid rgba(255,255,255,0.10)',
         backdropFilter: 'blur(12px)',
         padding: '6px 14px 6px 10px',
         color,
@@ -1304,9 +1538,9 @@ function SettingsButton({ settingsOpen, toggleSettings }: Readonly<{ settingsOpe
 }
 
 const MODE_STYLE: Record<Mode, { bg: string; border: string; text: string; icon: string }> = {
-  classic: { bg: 'rgba(130, 20, 180, 0.28)', border: '1px solid rgba(140, 30, 200, 0.45)', text: 'white', icon: '#c084fc' },
+  classic: { bg: 'rgba(178,6,229,0.28)', border: '1px solid rgba(188,16,249,0.45)', text: 'white', icon: '#c084fc' },
   race: { bg: 'rgba(220, 80, 10, 0.2)', border: '1px solid rgba(234, 88, 12, 0.4)', text: '#fed7aa', icon: '#fb923c' },
-  party: { bg: 'rgba(0, 160, 155, 0.2)', border: '1px solid rgba(0, 200, 195, 0.4)', text: '#99f6e4', icon: '#2dd4bf' },
+  party: { bg: 'rgba(0,198,192,0.2)', border: '1px solid rgba(0,238,232,0.4)', text: '#99f6e4', icon: '#2dd4bf' },
 };
 
 function ModeToggle({ mode, setMode }: Readonly<{ mode: Mode; setMode: (m: Mode) => void }>) {
@@ -1356,15 +1590,16 @@ function StartButton({ players, mode, startGame, disabled: extraDisabled }: Read
   const [hovered, setHovered] = useState(false);
   const disabled = players.length === 0 || !!extraDisabled;
   const hoverShadow = {
-    classic: 'drop-shadow(0 0 12px rgba(110, 32, 155, 0.7))',
+    classic: 'drop-shadow(0 0 12px rgba(158,18,204,0.7))',
     race: 'drop-shadow(0 0 12px rgba(220, 80, 10, 0.7))',
-    party: 'drop-shadow(0 0 12px rgba(0, 200, 195, 0.6))',
+    party: 'drop-shadow(0 0 12px rgba(0,238,232,0.6))',
   }[mode];
+  const tintClass = { classic: 'glass-tint-purple', race: 'glass-tint-orange', party: 'glass-tint-cyan' }[mode];
   return (
     <button
       type="button"
       tabIndex={0}
-      className="liquid-btn relative cursor-pointer border-0 bg-transparent p-0 mt-auto"
+      className={`liquid-btn ${tintClass} relative cursor-pointer border-0 bg-transparent p-0 mt-auto`}
       style={{
         width: '310px', height: '64px', borderRadius: '100px',
         background: 'rgba(0,0,0,0.001)',
@@ -1387,7 +1622,7 @@ function StartButton({ players, mode, startGame, disabled: extraDisabled }: Read
         <div style={{ position: 'relative' }}>
           <div style={{
             position: 'absolute', inset: '-18px -36px', borderRadius: '100px', pointerEvents: 'none',
-            background: { classic: 'rgba(110,32,155,0.12)', race: 'rgba(220,80,10,0.12)', party: 'rgba(0,200,195,0.1)' }[mode],
+            background: { classic: 'rgba(158,18,204,0.12)', race: 'rgba(220,80,10,0.12)', party: 'rgba(0,238,232,0.1)' }[mode],
             transition: 'background 0.25s ease',
           }} />
           <span className="text-white font-bold text-xl" style={{ whiteSpace: 'nowrap', position: 'relative', display: 'inline-block', minWidth: '210px', textAlign: 'center' }}>
@@ -1518,8 +1753,17 @@ function useLobbyMusic(muffled: boolean) {
   });
 
   // Fades out and stops playback entirely, so callers that navigate away can
-  // wait for it first instead of cutting the music off mid-fade.
+  // wait for it first instead of cutting the music off mid-fade. Sweeps the
+  // lowpass filter down in lockstep with the volume so the music seems to
+  // recede into the distance rather than just going quiet in place.
   const fadeOut = async () => {
+    const ctx = ctxRef.current;
+    const filter = filterRef.current;
+    if (ctx && filter) {
+      filter.frequency.cancelScheduledValues(ctx.currentTime);
+      filter.frequency.setValueAtTime(filter.frequency.value, ctx.currentTime);
+      filter.frequency.exponentialRampToValueAtTime(120, ctx.currentTime + 0.8);
+    }
     await rampGain(0, 800);
     sourceRef.current?.stop();
   };
@@ -1578,14 +1822,21 @@ function MuteButton({ muted, toggleMute }: Readonly<{ muted: boolean; toggleMute
   );
 }
 
-export function LobbyView({ game }: Readonly<{ game: HostState }>) {
+export function LobbyView({ game, fadeOutRef }: Readonly<{ game: HostState; fadeOutRef?: React.RefObject<(() => Promise<void>) | null> }>) {
   const {
     spotify, pin, players, createGame, startGame, mode, settingsOpen, toggleSettings, setMode, removePlayer,
-    gameExpired, playlistPickerOpen, songSource, customPlaylist, startError,
+    gameExpired, playlistPickerOpen, songSource, customPlaylists, startError,
   } = game;
-  const playlistNotReady = songSource === 'playlist' && (!customPlaylist || customPlaylist.tracks.length < MIN_PLAYLIST_TRACKS);
+  const playlistTrackCount = mergePlaylistTracks(customPlaylists).length;
+  const playlistEmpty = songSource === 'playlist' && playlistTrackCount === 0;
+  const playlistLow = songSource === 'playlist' && playlistTrackCount > 0 && playlistTrackCount < MIN_PLAYLIST_TRACKS;
   const [lobbyVisible, setLobbyVisible] = useState(false);
   const { fadeOut, muted, toggleMute } = useLobbyMusic(gameExpired);
+  const startingRef = useRef(false);
+
+  // Exposes fadeOut to the "Go home" button on the game-expired dialog, which
+  // lives outside this component (it overlays every phase, not just lobby).
+  useEffect(() => { if (fadeOutRef) fadeOutRef.current = fadeOut; });
 
   useEffect(() => {
     if (!pin) { setLobbyVisible(false); return; }
@@ -1597,8 +1848,15 @@ export function LobbyView({ game }: Readonly<{ game: HostState }>) {
     if (spotify.playerReady && !pin) createGame();
   }, [spotify.playerReady, pin]); // eslint-disable-line react-hooks/exhaustive-deps
 
-  const handleStart = () => {
-    fadeOut();
+  const handleStart = async () => {
+    if (startingRef.current) return;
+    startingRef.current = true;
+    // Activate the Spotify player synchronously in this click handler (some
+    // browsers require playback to be unlocked within the same gesture),
+    // then let the music fade all the way out before the view switches away
+    // and cuts it off mid-fade.
+    spotify.activatePlayer();
+    await fadeOut();
     startGame();
   };
 
@@ -1646,7 +1904,12 @@ export function LobbyView({ game }: Readonly<{ game: HostState }>) {
               ))}
             </div>
           </div>
-          <StartButton players={players} mode={mode} startGame={handleStart} disabled={playlistNotReady} />
+          <StartButton players={players} mode={mode} startGame={handleStart} disabled={playlistEmpty} />
+          {playlistLow && (
+            <p style={{ color: '#fcd34d', fontSize: '0.8125rem' }}>
+              Only {playlistTrackCount} track{playlistTrackCount === 1 ? '' : 's'} total across your selected playlists. Songs may repeat.
+            </p>
+          )}
           {startError && <p style={{ color: '#fca5a5', fontSize: '0.8125rem' }}>{startError}</p>}
         </div>
       ) : null}
@@ -1742,8 +2005,8 @@ function BettingView({ game }: Readonly<{ game: HostState }>) {
                 className="rounded-full transition-all duration-500"
                 style={{
                   width: 12, height: 12,
-                  background: i < bidCount ? 'rgba(150,17,193,0.9)' : 'rgba(255,255,255,0.12)',
-                  boxShadow: i < bidCount ? '0 0 8px rgba(150,17,193,0.55)' : 'none',
+                  background: i < bidCount ? 'rgba(158,18,204,0.9)' : 'rgba(255,255,255,0.12)',
+                  boxShadow: i < bidCount ? '0 0 8px rgba(158,18,204,0.55)' : 'none',
                   transform: i < bidCount ? 'scale(1)' : 'scale(0.78)',
                 }}
               />
@@ -2245,7 +2508,11 @@ export default function Host() {
   const navigate = useNavigate();
   const { phase, result, reconnecting, reconnectingCount, gameExpired } = game;
   const gameExpiredRef = useRef<HTMLDialogElement>(null);
-  useEscapeKey(() => navigate('/'), gameExpired);
+  const lobbyFadeOutRef = useRef<(() => Promise<void>) | null>(null);
+  // Awaited so the fade actually finishes before navigate() unmounts the
+  // lobby (and its AudioContext) out from under it.
+  const goHome = async () => { await lobbyFadeOutRef.current?.(); navigate('/'); };
+  useEscapeKey(goHome, gameExpired);
   useFocusTrap(gameExpiredRef, gameExpired);
 
   return (
@@ -2253,7 +2520,7 @@ export default function Host() {
       <div aria-live="polite" className="sr-only">{phaseAnnouncement(phase, result)}</div>
       <RoundIntro party={game.party} roundKey={game.roundIndex} />
       {phase === 'connect' && <ConnectView game={game} />}
-      {phase === 'lobby' && <LobbyView game={game} />}
+      {phase === 'lobby' && <LobbyView game={game} fadeOutRef={lobbyFadeOutRef} />}
       {phase === 'betting' && <BettingView game={game} />}
       {phase === 'playing' && <PlayingView game={game} />}
       {phase === 'guessing' && <GuessingView game={game} />}
@@ -2282,7 +2549,7 @@ export default function Host() {
                   <p style={{ color: 'rgba(255,255,255,0.45)', fontSize: '0.8rem', textAlign: 'center', lineHeight: 1.5 }}>You were away too long and the game was closed.</p>
                 </div>
                 <button
-                  onClick={() => navigate('/')}
+                  onClick={goHome}
                   style={{ marginTop: '6px', width: '100%', padding: '10px', borderRadius: '12px', border: '1px solid rgba(255,255,255,0.12)', cursor: 'pointer', background: 'rgba(255,255,255,0.07)', color: 'rgba(255,255,255,0.72)', fontWeight: 600, fontSize: '0.875rem', transition: 'background 0.2s ease, border-color 0.2s ease, color 0.2s ease' }}
                   onMouseEnter={e => { const el = e.currentTarget as HTMLElement; el.style.background = 'rgba(255,255,255,0.13)'; el.style.borderColor = 'rgba(255,255,255,0.22)'; el.style.color = 'white'; }}
                   onMouseLeave={e => { const el = e.currentTarget as HTMLElement; el.style.background = 'rgba(255,255,255,0.07)'; el.style.borderColor = 'rgba(255,255,255,0.12)'; el.style.color = 'rgba(255,255,255,0.72)'; }}

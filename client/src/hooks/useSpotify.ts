@@ -7,7 +7,7 @@ let sdkLoaded = false;
 // match before it touches sessionStorage, since both URL params and the
 // refresh-token API response are attacker-influenceable (tainted) input.
 const TOKEN_PATTERN = /^[A-Za-z0-9_-]{10,512}$/;
-function sanitizeToken(value: string | null | undefined): string | null {
+export function sanitizeToken(value: string | null | undefined): string | null {
   return value && TOKEN_PATTERN.test(value) ? value : null;
 }
 

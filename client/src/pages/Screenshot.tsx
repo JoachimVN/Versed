@@ -28,7 +28,7 @@ const MOCK_RESULT: RoundResultEvent = {
 const MOCK_HOST: HostState = {
   spotify: null as any,
   phase: 'playing',
-  pin: '247',
+  pin: '123',
   players: [
     { name: 'Anna', score: 3100, streak: 3 },
     { name: 'John', score: 2650 },
@@ -66,7 +66,7 @@ const MOCK_HOST: HostState = {
   yearOnly: false,
   difficulty: 'hard',
   songSource: 'library',
-  customPlaylist: null,
+  customPlaylists: [],
   playlistPicker: { playlists: [], loadingPlaylists: false, playlistsError: null, fetchPlaylists: noop, fetchPlaylistTracks: async () => ({ ok: false, error: 'error' }) } as any,
   playlistPickerOpen: false,
   startError: null,
@@ -89,8 +89,8 @@ const MOCK_HOST: HostState = {
   setYearOnly: noop,
   setDifficulty: noop,
   setSongSource: noop,
-  selectPlaylist: noop,
-  clearPlaylist: noop,
+  addPlaylist: noop,
+  removePlaylist: noop,
   openPlaylistPicker: noop,
   closePlaylistPicker: noop,
   createGame: noop,
@@ -176,7 +176,7 @@ const MOCK_PARTY_STEAL: PartyInfo = {
 
 const MOCK_PLAY: PlayState = {
   phase: 'watching',
-  pin: '247',
+  pin: '123',
   name: 'Anna',
   myName: 'Anna',
   error: '',
@@ -214,6 +214,7 @@ const MOCK_PLAY: PlayState = {
   hostReconnecting: false,
   savedSession: null,
   guessInputRef: { current: null },
+  cameFromQR: false,
   setPin: noop, setName: noop, setBidIndex: noop, setGuessText: noop, setArtistGuessText: noop,
   submitStealVictim: noop, skipSteal: noop, join: noop, rejoinSaved: noop, submitBid: noop,
   submitGuess: noop, skipGuess: noop, newGamePin: null, rejoinNewGame: noop, renamePlayer: noop,
