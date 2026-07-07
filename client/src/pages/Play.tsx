@@ -681,24 +681,22 @@ function JoinView({ game }: Readonly<{ game: PlayState }>) {
           <button
             type="button"
             onClick={rejoinSaved}
-            className="liquid-btn relative cursor-pointer border-0 bg-transparent p-0"
+            className="liquid-btn glass-tint-purple relative cursor-pointer border-0 bg-transparent p-0"
             style={{ width: '310px', height: '70px', borderRadius: '100px', background: 'rgba(0,0,0,0.001)' }}
           >
-            <div style={{
-              position: 'absolute', inset: 0, borderRadius: '100px',
-              background: 'rgba(158,18,204,0.05)',
-              pointerEvents: 'none',
-            }} />
             <LiquidGlass
               style={{ position: 'absolute', top: '50%', left: '50%' }}
               {...LIQUID_PILL_PROPS}
               padding="13px 48px"
             >
-              <div style={{ textAlign: 'center', whiteSpace: 'nowrap', minWidth: '214px' }}>
-                <p style={{ color: 'rgba(255,255,255,0.45)', fontSize: '0.6rem', letterSpacing: '0.18em', textTransform: 'uppercase', lineHeight: 1, marginBottom: '5px' }}>
-                  Continue as · {savedSession.pin}
-                </p>
-                <p className="text-white font-black text-xl" style={{ lineHeight: 1.2 }}>{savedSession.name}</p>
+              <div style={{ position: 'relative' }}>
+                <div style={{ position: 'absolute', inset: '-13px -48px', borderRadius: '100px', pointerEvents: 'none', background: 'rgba(158,18,204,0.05)' }} />
+                <div style={{ position: 'relative', textAlign: 'center', whiteSpace: 'nowrap', minWidth: '214px' }}>
+                  <p style={{ color: 'rgba(255,255,255,0.45)', fontSize: '0.6rem', letterSpacing: '0.18em', textTransform: 'uppercase', lineHeight: 1, marginBottom: '5px' }}>
+                    Continue as · {savedSession.pin}
+                  </p>
+                  <p className="text-white font-black text-xl" style={{ lineHeight: 1.2 }}>{savedSession.name}</p>
+                </div>
               </div>
             </LiquidGlass>
           </button>
@@ -1024,7 +1022,7 @@ export function BettingView({ game }: Readonly<{ game: PlayState }>) {
       <div className="px-5 pb-8 flex justify-center" style={{ position: 'relative', zIndex: 2 }}>
         <button
           type="button"
-          className="liquid-btn relative cursor-pointer border-0 bg-transparent p-0"
+          className="liquid-btn glass-tint-purple relative cursor-pointer border-0 bg-transparent p-0"
           style={{ width: '310px', height: '64px', borderRadius: '100px', background: 'rgba(0,0,0,0.001)' }}
           onClick={submitBid}
         >
@@ -1404,7 +1402,7 @@ export function GuessingView({ game }: Readonly<{ game: PlayState }>) {
       <div className="px-5 pb-8 flex flex-col items-center gap-4">
         <button
           type="button"
-          className="liquid-btn relative cursor-pointer border-0 bg-transparent p-0"
+          className="liquid-btn glass-tint-purple relative cursor-pointer border-0 bg-transparent p-0"
           style={{
             width: '310px', height: '64px', borderRadius: '100px',
             background: 'rgba(0,0,0,0.001)',
@@ -1837,7 +1835,7 @@ function LeaderboardView({ game }: Readonly<{ game: PlayState }>) {
               </div>
               <button
                 type="button"
-                className="liquid-btn relative cursor-pointer border-0 bg-transparent p-0"
+                className="liquid-btn glass-tint-teal relative cursor-pointer border-0 bg-transparent p-0"
                 style={{ width: '310px', height: '64px', borderRadius: '100px', background: 'rgba(0,0,0,0.001)' }}
                 onClick={rejoinNewGame}
               >

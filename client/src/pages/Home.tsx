@@ -16,7 +16,8 @@ export default function Home() {
         <img
           src={`${import.meta.env.BASE_URL}logo.png`}
           alt={APP_NAME}
-          className="h-[180px] w-auto drop-shadow-2xl"
+          className="h-[225px] w-auto drop-shadow-2xl"
+          style={{ marginBottom: '50px' }}
         />
         <p className="text-white/60 text-lg tracking-wide"></p>
       </div>

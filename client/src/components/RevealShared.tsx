@@ -7,7 +7,7 @@ export function PillButton({ onClick, label, zIndex }: Readonly<{ onClick: () =>
   return (
     <button
       type="button"
-      className="liquid-btn relative cursor-pointer border-0 bg-transparent p-0"
+      className="liquid-btn glass-tint-purple relative cursor-pointer border-0 bg-transparent p-0"
       style={{ width: '310px', height: '64px', borderRadius: '100px', background: 'rgba(0,0,0,0.001)', zIndex }}
       onClick={onClick}
     >
