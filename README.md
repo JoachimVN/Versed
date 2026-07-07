@@ -68,7 +68,7 @@ The host's screen is the "board" — everyone else joins from their phone.
 
 ### Song Source
 
-Before starting, the host picks a song pool: the **Versed Library** (3000+ curated tracks) or **a custom Spotify playlist**. When using a playlist, hosts can select one or more playlists — all selected playlists are merged into a single pool (deduped by track, capped at 5000 total).
+Before starting, the host picks a song pool: the **Versed Library** or **custom Spotify playlist(s)**.
 
 ### Classic
 
@@ -81,10 +81,10 @@ Bid how few seconds of the clip you need to hear. Lowest bid gets the first shot
 | **Guessing** | configurable | Winner(s) type the title — fuzzy-matched, so typos count |
 | **Reveal** | — | Song + points shown, running leaderboard updated |
 
-**Scoring** rewards bold bids and rarer songs (library mode) or song position in playlist (playlist mode):
+**Scoring** rewards bold bids:
 
 ```
-points = 500  +  up to 1000 (lower bid → more)  +  up to 500 (rarity bonus, library only)
+points = 500  +  up to 1000 (lower bid → more)  +  up to 500 (difficulty bonus)
 ```
 
 ### Race
@@ -111,7 +111,6 @@ After the configured number of rounds, final scores are tallied.
 - **Mid-game join** — players can join after the game has started and are synced to the current phase
 - **Customizable settings** — host can adjust bet time, guess time, round count, and mode-specific options before starting
 - **Reconnect recovery** — dropped connections snap back to the correct phase on reconnect
-- **Smart hints** — library mode generates context hints (era, artist, streams…); playlist mode shows track position
 
 ---
 
