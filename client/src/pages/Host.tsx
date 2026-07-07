@@ -706,13 +706,15 @@ function SettingsPanel({ game, open }: Readonly<{ game: HostState; open: boolean
         </div>
 
         <div className="px-5 py-4 space-y-4">
-          <SongSourceRow value={songSource} onChange={setSongSource} />
-          {songSource === 'playlist' && (
-            <>
-              <PlaylistList customPlaylists={customPlaylists} onOpen={openPlaylistPicker} onRemove={removePlaylist} />
-              <p style={{ color: 'rgba(255,255,255,0.35)', fontSize: '0.75rem' }}>All songs play at equal difficulty</p>
-            </>
-          )}
+          <div style={{ paddingBottom: '12px', marginBottom: '12px', borderBottom: '1px solid rgba(255,255,255,0.07)' }}>
+            <SongSourceRow value={songSource} onChange={setSongSource} />
+            {songSource === 'playlist' && (
+              <>
+                <PlaylistList customPlaylists={customPlaylists} onOpen={openPlaylistPicker} onRemove={removePlaylist} />
+                <p style={{ color: 'rgba(255,255,255,0.35)', fontSize: '0.75rem' }}>All songs play at equal difficulty</p>
+              </>
+            )}
+          </div>
           {/* Party mixes classic and race rounds, so it needs all three timers.
               Classic's "Guess the year" still runs the normal bid/tier flow
               (bet time picks the clip, guess time is the per-tier window), so
