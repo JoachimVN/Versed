@@ -1273,7 +1273,7 @@ function PlaylistPickerDialog({ game }: Readonly<{ game: HostState }>) {
   return (
     <FullScreenDialog ariaLabel="Choose a playlist">
       <div className="liquid-btn relative" style={{ width: 'min(560px, 92vw)' }}>
-        <LiquidGlass style={{ position: 'absolute', top: '50%', left: '50%' }} {...LIQUID_CARD_PROPS} padding="28px 24px">
+        <LiquidGlass style={{ position: 'absolute', top: '50%', left: '50%' }} {...LIQUID_CARD_PROPS} elasticity={0.04} padding="28px 24px">
           <div style={{ width: 'min(512px, 84vw)', display: 'flex', flexDirection: 'column', gap: '16px' }}>
             <div className="flex items-center justify-between">
               <p style={{ color: 'white', fontWeight: 800, fontSize: '1.1rem' }}>Choose a playlist</p>
@@ -1296,13 +1296,32 @@ function PlaylistPickerDialog({ game }: Readonly<{ game: HostState }>) {
               <button
                 onClick={submitLink}
                 disabled={resolving || !linkInput.trim()}
+                className="transition-all duration-200"
                 style={{
                   padding: '9px 14px', borderRadius: '10px',
-                  background: 'rgba(178,16,224,0.35)', border: '1px solid rgba(208,46,249,0.5)',
+                  background: resolving || !linkInput.trim() ? 'rgba(178,16,224,0.2)' : 'rgba(178,16,224,0.45)',
+                  border: `1px solid ${resolving || !linkInput.trim() ? 'rgba(208,46,249,0.25)' : 'rgba(208,46,249,0.6)'}`,
                   color: 'white', fontWeight: 600, fontSize: '0.8125rem',
-                  cursor: resolving ? 'not-allowed' : 'pointer', opacity: resolving || !linkInput.trim() ? 0.5 : 1,
+                  cursor: resolving || !linkInput.trim() ? 'not-allowed' : 'pointer',
+                }}
+                onMouseEnter={e => {
+                  const el = e.currentTarget as HTMLElement;
+                  if (!resolving && linkInput.trim()) {
+                    el.style.background = 'rgba(178,16,224,0.6)';
+                    el.style.borderColor = 'rgba(208,46,249,0.8)';
+                    el.style.boxShadow = '0 0 20px rgba(178,16,224,0.4)';
+                  }
+                }}
+                onMouseLeave={e => {
+                  const el = e.currentTarget as HTMLElement;
+                  if (!resolving && linkInput.trim()) {
+                    el.style.background = 'rgba(178,16,224,0.45)';
+                    el.style.borderColor = 'rgba(208,46,249,0.6)';
+                    el.style.boxShadow = 'none';
+                  }
                 }}
               >
+                {resolving ? <Loader2 className="w-3.5 h-3.5 animate-spin inline mr-1.5" /> : null}
                 Load
               </button>
             </div>
