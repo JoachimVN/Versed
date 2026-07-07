@@ -879,6 +879,38 @@ function EndGameButton({ endGame }: Readonly<{ endGame: () => void }>) {
   );
 }
 
+// Shared full-screen modal shell (opaque backdrop + radial glow) used by
+// every dialog-style overlay — "Game expired," "Spotify account not
+// authorized," etc. Callers supply just the card content.
+function FullScreenDialog({ ariaLabel, dialogRef, children }: Readonly<{
+  ariaLabel: string;
+  dialogRef?: React.RefObject<HTMLDialogElement | null>;
+  children: React.ReactNode;
+}>) {
+  return (
+    <dialog
+      ref={dialogRef}
+      open
+      aria-modal="true"
+      aria-label={ariaLabel}
+      className="fixed inset-0 flex items-center justify-center z-50"
+      style={{
+        width: '100%',
+        height: '100%',
+        margin: 0,
+        border: 'none',
+        padding: 0,
+        color: 'inherit',
+        background: 'rgba(8,8,18,0.92)',
+        backdropFilter: 'blur(12px)',
+      }}
+    >
+      <div style={{ position: 'absolute', inset: 0, pointerEvents: 'none', background: 'radial-gradient(ellipse 60% 40% at 50% 50%, rgba(86,20,140,0.22) 0%, transparent 65%)' }} />
+      {children}
+    </dialog>
+  );
+}
+
 // ─── Phase views ─────────────────────────────────────────────────────────────
 
 function ConnectView({ game }: Readonly<{ game: HostState }>) {
@@ -914,23 +946,7 @@ function ConnectView({ game }: Readonly<{ game: HostState }>) {
       )}
       <p className="text-white/45 text-sm">Requires Spotify Premium</p>
       {spotify.unauthorized && (
-        <dialog
-          open
-          aria-modal="true"
-          aria-label="Spotify account not authorized"
-          className="fixed inset-0 flex items-center justify-center z-50"
-          style={{
-            width: '100%',
-            height: '100%',
-            margin: 0,
-            border: 'none',
-            padding: 0,
-            color: 'inherit',
-            background: 'rgba(8,8,18,0.92)',
-            backdropFilter: 'blur(12px)',
-          }}
-        >
-          <div style={{ position: 'absolute', inset: 0, pointerEvents: 'none', background: 'radial-gradient(ellipse 60% 40% at 50% 50%, rgba(86,20,140,0.22) 0%, transparent 65%)' }} />
+        <FullScreenDialog ariaLabel="Spotify account not authorized">
           <div className="liquid-btn relative" style={{ width: '320px', height: '260px' }}>
             <LiquidGlass
               style={{ position: 'absolute', top: '50%', left: '50%' }}
@@ -956,7 +972,7 @@ function ConnectView({ game }: Readonly<{ game: HostState }>) {
               </div>
             </LiquidGlass>
           </div>
-        </dialog>
+        </FullScreenDialog>
       )}
     </div>
   );
@@ -1952,24 +1968,7 @@ export default function Host() {
         </div>
       )}
       {gameExpired && (
-        <dialog
-          ref={gameExpiredRef}
-          open
-          aria-modal="true"
-          aria-label="Game expired"
-          className="fixed inset-0 flex items-center justify-center z-50"
-          style={{
-            width: '100%',
-            height: '100%',
-            margin: 0,
-            border: 'none',
-            padding: 0,
-            color: 'inherit',
-            background: 'rgba(8,8,18,0.92)',
-            backdropFilter: 'blur(12px)',
-          }}
-        >
-          <div style={{ position: 'absolute', inset: 0, pointerEvents: 'none', background: 'radial-gradient(ellipse 60% 40% at 50% 50%, rgba(86,20,140,0.22) 0%, transparent 65%)' }} />
+        <FullScreenDialog ariaLabel="Game expired" dialogRef={gameExpiredRef}>
           <div className="liquid-btn relative" style={{ width: '310px', height: '230px' }}>
             <LiquidGlass
               style={{ position: 'absolute', top: '50%', left: '50%' }}
@@ -1993,7 +1992,7 @@ export default function Host() {
               </div>
             </LiquidGlass>
           </div>
-        </dialog>
+        </FullScreenDialog>
       )}
       {reconnectingCount > 0 && !reconnecting && (
         <div className="fixed bottom-5 right-5 flex items-center gap-2 bg-white/8 backdrop-blur-sm rounded-full px-3 py-1.5 z-40">
