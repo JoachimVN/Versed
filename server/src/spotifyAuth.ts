@@ -96,8 +96,24 @@ router.post('/fetch-playlist', async (req: Request, res: Response) => {
   const { access_token, url } = req.body as { access_token?: string; url?: string };
   if (!access_token || !url) return res.status(400).json({ error: 'Missing access_token or url' });
 
+  let parsedUrl: URL;
   try {
-    const result = await axios.get(url, {
+    parsedUrl = new URL(url);
+  } catch {
+    return res.status(400).json({ error: 'Invalid url' });
+  }
+
+  const isSpotifyApi =
+    parsedUrl.protocol === 'https:' &&
+    parsedUrl.hostname === 'api.spotify.com' &&
+    /^\/v1\/playlists\/[A-Za-z0-9]+(?:\/.*)?$/.test(parsedUrl.pathname);
+
+  if (!isSpotifyApi) {
+    return res.status(400).json({ error: 'Only Spotify playlist API URLs are allowed' });
+  }
+
+  try {
+    const result = await axios.get(parsedUrl.toString(), {
       headers: { Authorization: `Bearer ${access_token}` },
       timeout: 12000,
     });
