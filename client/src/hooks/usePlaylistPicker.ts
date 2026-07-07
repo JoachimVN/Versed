@@ -207,6 +207,26 @@ function toPlaylistTrackInput(t: SpotifyTrack | null): PlaylistTrackInput | null
   };
 }
 
+async function refreshAccessToken(): Promise<string | null> {
+  const refreshToken = sessionStorage.getItem('spotify_rt');
+  if (!refreshToken) return null;
+  try {
+    const res = await fetch(`${BACKEND_URL}/api/auth/refresh`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ refresh_token: refreshToken }),
+    });
+    const data = await res.json() as { access_token?: string };
+    if (data.access_token) {
+      sessionStorage.setItem('spotify_at', data.access_token);
+      return data.access_token;
+    }
+  } catch (err) {
+    console.error('[Spotify] Token refresh failed:', err);
+  }
+  return null;
+}
+
 export function usePlaylistPicker(accessToken: string | null) {
   const [playlists, setPlaylists] = useState<PlaylistSummary[]>([]);
   const [loadingPlaylists, setLoadingPlaylists] = useState(false);
@@ -217,10 +237,15 @@ export function usePlaylistPicker(accessToken: string | null) {
     setLoadingPlaylists(true);
     setPlaylistsError(null);
     try {
+      // Ensure token is fresh before fetching
+      let token = accessToken;
+      const freshToken = await refreshAccessToken();
+      if (freshToken) token = freshToken;
+
       const all: PlaylistSummary[] = [];
       let url: string | null = 'https://api.spotify.com/v1/me/playlists?limit=50';
       while (url) {
-        const result: SpotifyFetchResult<SpotifyPlaylistsResponse> = await fetchSpotify(url, accessToken);
+        const result: SpotifyFetchResult<SpotifyPlaylistsResponse> = await fetchSpotify(url, token);
         if (!result.ok) { setPlaylistsError(result.error); return; }
         for (const item of result.data.items) {
           const trackCount = item?.tracks?.total ?? item?.items?.total;
@@ -249,13 +274,19 @@ export function usePlaylistPicker(accessToken: string | null) {
     { ok: true; name: string; tracks: PlaylistTrackInput[]; truncated: boolean }
     | { ok: false; error: PlaylistFetchError; count?: number }
   > => {
-    if (!accessToken) return { ok: false, error: 'error' };
+    let token = accessToken;
+    if (!token) return { ok: false, error: 'error' };
+
+    // Ensure token is fresh before fetching
+    const freshToken = await refreshAccessToken();
+    if (freshToken) token = freshToken;
+
     // Re-validated here (not just trusted from the caller) immediately before
     // it's used to build a request URL — see PLAYLIST_ID_PATTERN.
     if (!PLAYLIST_ID_PATTERN.test(playlistId)) return { ok: false, error: 'not_found' };
     try {
       const metaResult = await fetchSpotify<{ name: string }>(
-        `https://api.spotify.com/v1/playlists/${playlistId}?fields=name`, accessToken, true,
+        `https://api.spotify.com/v1/playlists/${playlistId}?fields=name`, token, true,
       );
       if (!metaResult.ok) return metaResult;
 
@@ -266,7 +297,7 @@ export function usePlaylistPicker(accessToken: string | null) {
       let url: string | null = `https://api.spotify.com/v1/playlists/${playlistId}/items?limit=100&fields=`
         + encodeURIComponent('next,items(item(type,id,name,duration_ms,is_local,artists(name),album(images,release_date)))');
       while (url && tracks.length < MAX_PLAYLIST_TRACKS) {
-        const result: SpotifyFetchResult<SpotifyPlaylistTracksResponse> = await fetchSpotify(url, accessToken);
+        const result: SpotifyFetchResult<SpotifyPlaylistTracksResponse> = await fetchSpotify(url, token);
         if (!result.ok) return result;
         for (const item of result.data.items) {
           const track = toPlaylistTrackInput(item.item);

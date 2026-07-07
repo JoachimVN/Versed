@@ -103,8 +103,12 @@ router.post('/fetch-playlist', async (req: Request, res: Response) => {
     });
     res.json(result.data);
   } catch (err) {
-    const status = axios.isAxiosError(err) ? err.response?.status : 500;
-    res.status(status || 500).json({ error: 'Failed to fetch playlist' });
+    if (axios.isAxiosError(err) && err.response) {
+      // Proxy the Spotify API response status and data
+      res.status(err.response.status).json(err.response.data);
+    } else {
+      res.status(500).json({ error: 'Failed to fetch playlist' });
+    }
   }
 });
 
