@@ -676,7 +676,7 @@ function JoinView({ game }: Readonly<{ game: PlayState }>) {
         className="h-32 w-auto drop-shadow-2xl"
       />
 
-      {savedSession && !cameFromQR && (
+      {savedSession && (
         <div className="flex flex-col items-center gap-3">
           <button
             type="button"
@@ -693,7 +693,7 @@ function JoinView({ game }: Readonly<{ game: PlayState }>) {
                 <div style={{ position: 'absolute', inset: '-13px -48px', borderRadius: '100px', pointerEvents: 'none', background: 'rgba(158,18,204,0.05)' }} />
                 <div style={{ position: 'relative', textAlign: 'center', whiteSpace: 'nowrap', minWidth: '214px' }}>
                   <p style={{ color: 'rgba(255,255,255,0.45)', fontSize: '0.6rem', letterSpacing: '0.18em', textTransform: 'uppercase', lineHeight: 1, marginBottom: '5px' }}>
-                    Continue as · {savedSession.pin}
+                    Rejoin as · {savedSession.pin}
                   </p>
                   <p className="text-white font-black text-xl" style={{ lineHeight: 1.2 }}>{savedSession.name}</p>
                 </div>
