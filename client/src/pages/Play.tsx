@@ -673,7 +673,8 @@ function JoinView({ game }: Readonly<{ game: PlayState }>) {
       <img
         src={`${import.meta.env.BASE_URL}logo.png`}
         alt={APP_NAME}
-        className="h-32 w-auto drop-shadow-2xl"
+        className="w-auto drop-shadow-2xl"
+        style={{ maxHeight: '128px', maxWidth: '100%' }}
       />
 
       {savedSession && (
@@ -855,7 +856,7 @@ function WaitingView({ game }: Readonly<{ game: PlayState }>) {
         style={{ zIndex: 2, transition: 'opacity 0.5s ease, transform 0.5s ease', opacity: visible ? 1 : 0, transform: visible ? 'translateY(0)' : 'translateY(16px)' }}
       >
         <BackButton />
-        <img src={`${import.meta.env.BASE_URL}logo.png`} alt={APP_NAME} className="w-auto drop-shadow-2xl" style={{ height: '168px' }} />
+        <img src={`${import.meta.env.BASE_URL}logo.png`} alt={APP_NAME} className="w-auto drop-shadow-2xl" style={{ maxHeight: '168px', maxWidth: '100%' }} />
 
         <div className="liquid-btn relative" style={{ width: '310px', height: '330px' }}>
           <LiquidGlass

@@ -1454,7 +1454,7 @@ function ConnectView({ game }: Readonly<{ game: HostState }>) {
   return (
     <div className="min-h-screen flex flex-col items-center justify-center gap-6 p-6">
       <BackButton />
-      <img src={`${import.meta.env.BASE_URL}logo.png`} alt={APP_NAME} className="h-48 w-auto" />
+      <img src={`${import.meta.env.BASE_URL}logo.png`} alt={APP_NAME} className="w-auto" style={{ maxHeight: '192px', maxWidth: '100%' }} />
       {spotify.isConnected && !spotify.playerReady ? (
         <p className="text-white/50">Connecting to Spotify...</p>
       ) : (
@@ -1873,7 +1873,7 @@ export function LobbyView({ game, fadeOutRef }: Readonly<{ game: HostState; fade
         className="flex flex-col items-center gap-6 p-6 transition-transform duration-500 ease-out"
         style={{ transform: pin ? 'translateY(0)' : 'translateY(30vh)' }}
       >
-        <img src={`${import.meta.env.BASE_URL}logo.png`} alt={APP_NAME} className="h-48 w-auto" />
+        <img src={`${import.meta.env.BASE_URL}logo.png`} alt={APP_NAME} className="w-auto" style={{ maxHeight: '192px', maxWidth: '100%' }} />
         <span className="text-white/45 text-sm flex items-center gap-2">
           {spotify.playerReady ? (
             <><span className="w-2 h-2 rounded-full bg-green-500" />Spotify ready</>
