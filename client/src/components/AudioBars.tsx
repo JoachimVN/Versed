@@ -9,16 +9,23 @@
 // instead of a fixed seconds value, so the stagger pattern's relative shape
 // holds at any tempo instead of vanishing at slow tempos or bunching up at
 // fast ones.
+// `base` is each bar's resting scaleY — used as the inline transform whenever
+// the keyframe animation itself isn't visibly driving the bar: the instant
+// before it starts, and (more importantly) under `prefers-reduced-motion`,
+// where index.css collapses every animation to ~0 duration with no
+// fill-mode, so it reverts to this value immediately. Varying it per bar
+// keeps the equalizer looking alive (and screenshots looking right) even
+// when the animation itself isn't visibly running.
 const AUDIO_BARS = [
-  { anim: 'audioBarC', dur: 1.1, beats: 0.95, delay: 0,    delayFrac: 0    },
-  { anim: 'audioBar',  dur: 1.5, beats: 1.1,  delay: 0.14, delayFrac: 0.12 },
-  { anim: 'audioBarD', dur: 0.85,beats: 0.9,  delay: 0.28, delayFrac: 0.25 },
-  { anim: 'audioBarB', dur: 1.7, beats: 1.15, delay: 0.07, delayFrac: 0.06 },
-  { anim: 'audioBar',  dur: 1,   beats: 0.85, delay: 0.42, delayFrac: 0.38 },
-  { anim: 'audioBarC', dur: 1.3, beats: 1.05, delay: 0.21, delayFrac: 0.19 },
-  { anim: 'audioBarD', dur: 0.9, beats: 0.9,  delay: 0.35, delayFrac: 0.32 },
-  { anim: 'audioBarB', dur: 1.6, beats: 1.1,  delay: 0.08, delayFrac: 0.07 },
-  { anim: 'audioBarC', dur: 1.2, beats: 1,    delay: 0.26, delayFrac: 0.24 },
+  { anim: 'audioBarC', dur: 1.1, beats: 0.95, delay: 0,    delayFrac: 0,    base: 0.55 },
+  { anim: 'audioBar',  dur: 1.5, beats: 1.1,  delay: 0.14, delayFrac: 0.12, base: 0.85 },
+  { anim: 'audioBarD', dur: 0.85,beats: 0.9,  delay: 0.28, delayFrac: 0.25, base: 0.35 },
+  { anim: 'audioBarB', dur: 1.7, beats: 1.15, delay: 0.07, delayFrac: 0.06, base: 0.7  },
+  { anim: 'audioBar',  dur: 1,   beats: 0.85, delay: 0.42, delayFrac: 0.38, base: 0.4  },
+  { anim: 'audioBarC', dur: 1.3, beats: 1.05, delay: 0.21, delayFrac: 0.19, base: 0.95 },
+  { anim: 'audioBarD', dur: 0.9, beats: 0.9,  delay: 0.35, delayFrac: 0.32, base: 0.3  },
+  { anim: 'audioBarB', dur: 1.6, beats: 1.1,  delay: 0.08, delayFrac: 0.07, base: 0.8  },
+  { anim: 'audioBarC', dur: 1.2, beats: 1,    delay: 0.26, delayFrac: 0.24, base: 0.5  },
 ] as const;
 
 const AUDIO_BAR_COLORS: Record<'classic' | 'race' | 'year', string> = {
@@ -62,7 +69,7 @@ export function AudioBars({ playing, accent, height, bpm }: Readonly<{ playing: 
               animationDelay: `${delay}s`,
               animationFillMode: playing ? 'backwards' : undefined,
               transformOrigin: 'center',
-              transform: playing ? undefined : 'scaleY(0.07)',
+              transform: playing ? `scaleY(${bar.base})` : 'scaleY(0.07)',
             }}
           />
         );
