@@ -106,7 +106,7 @@ router.post('/fetch-playlist', async (req: Request, res: Response) => {
   const isSpotifyApi =
     parsedUrl.protocol === 'https:' &&
     parsedUrl.hostname === 'api.spotify.com' &&
-    /^\/v1\/playlists\/[A-Za-z0-9]+(?:\/.*)?$/.test(parsedUrl.pathname);
+    /^\/v1\/(?:me\/playlists|playlists\/[A-Za-z0-9]+(?:\/.*)?)$/.test(parsedUrl.pathname);
 
   if (!isSpotifyApi) {
     return res.status(400).json({ error: 'Only Spotify playlist API URLs are allowed' });
