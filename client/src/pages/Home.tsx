@@ -24,7 +24,7 @@ export default function Home() {
       <div className="flex flex-col items-center gap-8">
         <button
           type="button"
-          className="liquid-btn home-btn-join relative cursor-pointer border-0 bg-transparent p-0"
+          className="liquid-btn glass-tint-teal relative cursor-pointer border-0 bg-transparent p-0"
           style={{ width: '310px', height: '64px', borderRadius: '100px', background: 'rgba(0,0,0,0.001)' }}
           onMouseEnter={() => setHovered('join')}
           onMouseLeave={() => setHovered(null)}
@@ -53,7 +53,7 @@ export default function Home() {
 
         <button
           type="button"
-          className="liquid-btn home-btn-host relative cursor-pointer border-0 bg-transparent p-0"
+          className="liquid-btn glass-tint-purple relative cursor-pointer border-0 bg-transparent p-0"
           style={{ width: '310px', height: '64px', borderRadius: '100px', background: 'rgba(0,0,0,0.001)' }}
           onMouseEnter={() => setHovered('host')}
           onMouseLeave={() => setHovered(null)}

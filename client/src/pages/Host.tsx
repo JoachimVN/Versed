@@ -1327,7 +1327,8 @@ function PlaylistPickerDialog({ game }: Readonly<{ game: HostState }>) {
             {(() => {
               const pluralS = selectedIds.size === 1 ? '' : 's';
               const trackCount = Math.min(mergeUniqueTracks(customPlaylists).length, MAX_POOL_TRACKS);
-              const trackSuffix = trackCount > 0 ? ` (${trackCount.toLocaleString()} song${trackCount === 1 ? '' : 's'})` : '';
+              const trackPluralS = trackCount === 1 ? '' : 's';
+              const trackSuffix = trackCount > 0 ? ` (${trackCount.toLocaleString()} song${trackPluralS})` : '';
               return (
                 <div className="flex items-center justify-between">
                   <p style={{ color: 'rgba(255,255,255,0.4)', fontSize: '0.75rem' }}>
@@ -1510,11 +1511,12 @@ function StartButton({ players, mode, startGame, disabled: extraDisabled }: Read
     race: 'drop-shadow(0 0 12px rgba(220, 80, 10, 0.7))',
     party: 'drop-shadow(0 0 12px rgba(0,238,232,0.6))',
   }[mode];
+  const tintClass = { classic: 'glass-tint-purple', race: 'glass-tint-orange', party: 'glass-tint-cyan' }[mode];
   return (
     <button
       type="button"
       tabIndex={0}
-      className="liquid-btn relative cursor-pointer border-0 bg-transparent p-0 mt-auto"
+      className={`liquid-btn ${tintClass} relative cursor-pointer border-0 bg-transparent p-0 mt-auto`}
       style={{
         width: '310px', height: '64px', borderRadius: '100px',
         background: 'rgba(0,0,0,0.001)',

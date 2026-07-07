@@ -62,6 +62,7 @@ export interface PlayState {
   hostReconnecting: boolean;
   savedSession: { pin: string; name: string } | null;
   guessInputRef: React.RefObject<HTMLInputElement | null>;
+  cameFromQR: boolean;
   setPin: (v: string) => void;
   setName: (v: string) => void;
   setBidIndex: (i: number | ((prev: number) => number)) => void;
@@ -81,12 +82,13 @@ export interface PlayState {
 
 function usePlayGame(pinParam?: string): PlayState {
   const [phase, setPhase] = useState<Phase>('join');
+  const cameFromQR = !!pinParam;
   const [pin, setPin] = useState(pinParam ?? '');
   const [name, setName] = useState('');
   const [error, setError] = useState('');
   const [myName, setMyName] = useState('');
   const myNameRef = useRef('');
-  const pinRef = useRef('');
+  const pinRef = useRef(pinParam ?? '');
   const [roundIndex, setRoundIndex] = useState(0);
   const [totalRounds, setTotalRounds] = useState(10);
   const [hints, setHints] = useState<Hint[]>([]);
@@ -569,7 +571,7 @@ function usePlayGame(pinParam?: string): PlayState {
     guessText, result, myScore, myScoreDelta, myStreak, mode, artistOnly, yearOnly, myRacePoints, myRaceTimeMs,
     party, artistGuessText, stealVictims, stealResult,
     leaderboard, leaderboardDeltas, songPlaying, songTempo, reconnecting, hostReconnecting, savedSession, guessInputRef,
-    newGamePin, rejoinNewGame,
+    cameFromQR, newGamePin, rejoinNewGame,
     setPin, setName,
     setArtistGuessText: (v: string) => {
       artistGuessTextRef.current = v;
@@ -644,11 +646,11 @@ function BidArrow({ direction, enabled, onClick }: Readonly<{ direction: 'left' 
 // ─── Phase views ─────────────────────────────────────────────────────────────
 
 function JoinView({ game }: Readonly<{ game: PlayState }>) {
-  const { pin, name, error, savedSession, setPin, setName, join, rejoinSaved } = game;
+  const { pin, name, error, savedSession, cameFromQR, setPin, setName, join, rejoinSaved } = game;
   const [joinHovered, setJoinHovered] = useState(false);
   const [pinFocused, setPinFocused] = useState(false);
   const [nameFocused, setNameFocused] = useState(false);
-  const canJoin = pin.length === 3 && name.trim().length > 0;
+  const canJoin = cameFromQR ? name.trim().length > 0 : (pin.length === 3 && name.trim().length > 0);
   const keyboardOpen = useKeyboardOpen();
 
   return (
@@ -674,7 +676,7 @@ function JoinView({ game }: Readonly<{ game: PlayState }>) {
         className="h-32 w-auto drop-shadow-2xl"
       />
 
-      {savedSession && (
+      {savedSession && !cameFromQR && (
         <div className="flex flex-col items-center gap-3">
           <button
             type="button"
@@ -705,36 +707,40 @@ function JoinView({ game }: Readonly<{ game: PlayState }>) {
       )}
 
       {/* Input card: LiquidGlass */}
-      <div className="liquid-btn relative" style={{ width: '310px', height: '165px' }}>
+      <div className="liquid-btn relative" style={{ width: '310px', height: cameFromQR ? '115px' : '165px' }}>
         <LiquidGlass
           style={{ position: 'absolute', top: '50%', left: '50%' }}
           {...LIQUID_CARD_PROPS}
           padding="20px 24px"
         >
           <div style={{ width: '262px', textAlign: 'center' }}>
-            {/* PIN */}
-            <div style={{ marginBottom: '14px' }}>
-              <span style={{
-                display: 'block',
-                color: pinFocused ? 'rgba(255,255,255,0.6)' : 'rgba(255,255,255,0.45)',
-                fontSize: '0.6rem', letterSpacing: '0.18em', textTransform: 'uppercase',
-                marginBottom: '6px', transition: 'color 0.2s ease',
-              }}>Game PIN</span>
-              <input
-                type="text"
-                inputMode="numeric"
-                pattern="[0-9]*"
-                placeholder="1 2 3"
-                value={pin}
-                onChange={e => setPin(e.target.value.replace(/\D/g, ''))}
-                maxLength={3}
-                onFocus={() => setPinFocused(true)}
-                onBlur={() => setPinFocused(false)}
-                className="text-white font-black outline-none bg-transparent w-full text-center placeholder-white/20"
-                style={{ fontSize: '2rem', letterSpacing: '0.4em', textIndent: '0.4em', lineHeight: '1', display: 'block' }}
-              />
-            </div>
-            <div style={{ height: '1px', background: 'rgba(255,255,255,0.10)', marginBottom: '14px' }} />
+            {!cameFromQR && (
+              <>
+                {/* PIN */}
+                <div style={{ marginBottom: '14px' }}>
+                  <span style={{
+                    display: 'block',
+                    color: pinFocused ? 'rgba(255,255,255,0.6)' : 'rgba(255,255,255,0.45)',
+                    fontSize: '0.6rem', letterSpacing: '0.18em', textTransform: 'uppercase',
+                    marginBottom: '6px', transition: 'color 0.2s ease',
+                  }}>Game PIN</span>
+                  <input
+                    type="text"
+                    inputMode="numeric"
+                    pattern="[0-9]*"
+                    placeholder="1 2 3"
+                    value={pin}
+                    onChange={e => setPin(e.target.value.replace(/\D/g, ''))}
+                    maxLength={3}
+                    onFocus={() => setPinFocused(true)}
+                    onBlur={() => setPinFocused(false)}
+                    className="text-white font-black outline-none bg-transparent w-full text-center placeholder-white/20"
+                    style={{ fontSize: '2rem', letterSpacing: '0.4em', textIndent: '0.4em', lineHeight: '1', display: 'block' }}
+                  />
+                </div>
+                <div style={{ height: '1px', background: 'rgba(255,255,255,0.10)', marginBottom: '14px' }} />
+              </>
+            )}
             {/* Name */}
             <div>
               <span style={{
@@ -783,7 +789,7 @@ function JoinView({ game }: Readonly<{ game: PlayState }>) {
 
       <button
         type="button"
-        className="liquid-btn relative border-0 bg-transparent p-0"
+        className="liquid-btn glass-tint-teal relative border-0 bg-transparent p-0"
         style={{
           width: '310px',
           height: '64px',
@@ -806,7 +812,10 @@ function JoinView({ game }: Readonly<{ game: PlayState }>) {
           {...LIQUID_PILL_PROPS}
           padding="18px 96px"
         >
-          <span className="text-white font-bold text-xl" style={{ whiteSpace: 'nowrap' }}>Join game</span>
+          <div style={{ position: 'relative' }}>
+            <div style={{ position: 'absolute', inset: '-18px -96px', borderRadius: '100px', pointerEvents: 'none', background: 'rgba(0,166,163,0.088)' }} />
+            <span className="text-white font-bold text-xl" style={{ whiteSpace: 'nowrap', position: 'relative' }}>Join game</span>
+          </div>
         </LiquidGlass>
       </button>
       </div>
