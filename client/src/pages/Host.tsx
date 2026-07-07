@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useRef, useMemo } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { Check, Loader2, Copy, Settings, Flame, Coins, Clock, PartyPopper, Volume2, VolumeX, ShieldAlert, ChevronDown } from 'lucide-react';
+import { Check, Loader2, Copy, Settings, Flame, Coins, Clock, PartyPopper, Volume2, VolumeX, ShieldAlert } from 'lucide-react';
 import LiquidGlass from 'liquid-glass-react';
 import QRCodeLib from 'react-qr-code';
 const QRCode = QRCodeLib as unknown as React.FC<{ value: string; size?: number }>;
@@ -1175,11 +1175,7 @@ function PlaylistsPanel({ playlistsError, loadingPlaylists, playlists, resolving
   selectedIds: Set<string>;
   onChoose: (id: string, imageUrl: string | null) => void;
 }>) {
-  const [workaroundOpen, setWorkaroundOpen] = useState(false);
-  const workaroundRef = useRef<HTMLDivElement>(null);
-  useEffect(() => {
-    if (workaroundOpen) workaroundRef.current?.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
-  }, [workaroundOpen]);
+  const [openBlockedId, setOpenBlockedId] = useState<string | null>(null);
   if (playlistsError === 'unauthorized') return <ReconnectBanner />;
   if (loadingPlaylists) {
     return <p style={{ color: 'rgba(255,255,255,0.45)', fontSize: '0.8125rem' }}>Loading your playlists…</p>;
@@ -1187,28 +1183,29 @@ function PlaylistsPanel({ playlistsError, loadingPlaylists, playlists, resolving
   if (playlistsError) {
     return <p style={{ color: '#fca5a5', fontSize: '0.8125rem' }}>{playlistErrorMessage(playlistsError)}</p>;
   }
-  const anyBlocked = playlists.some(p => !p.importable);
   return (
-    <>
-      <div className="overflow-y-auto" style={{ maxHeight: '48vh' }}>
-        <div className="grid grid-cols-3 gap-2.5">
-          {playlists.map(p => {
-            const selected = selectedIds.has(p.id);
-            const blocked = !p.importable;
-            return (
-              <button
-                key={p.id}
-                onClick={() => { if (!blocked) onChoose(p.id, p.imageUrl); }}
-                disabled={resolving}
-                className="relative flex flex-col items-start gap-1.5 rounded-xl text-left"
-                style={{
-                  padding: '8px',
-                  background: selected ? 'rgba(29, 185, 84, 0.12)' : 'rgba(255,255,255,0.04)',
-                  border: selected ? '1px solid rgba(29, 185, 84, 0.45)' : '1px solid rgba(255,255,255,0.07)',
-                  cursor: resolving || blocked ? 'not-allowed' : 'pointer',
-                  opacity: blocked ? 0.35 : 1,
-                }}
-              >
+    <div className="overflow-y-auto" style={{ maxHeight: '48vh' }}>
+      <div className="grid grid-cols-3 gap-2.5">
+        {playlists.map(p => {
+          const selected = selectedIds.has(p.id);
+          const blocked = !p.importable;
+          const guideOpen = openBlockedId === p.id;
+          return (
+            <button
+              key={p.id}
+              onClick={() => { if (!blocked) onChoose(p.id, p.imageUrl); }}
+              disabled={resolving}
+              className="relative flex flex-col rounded-xl text-left"
+              style={{
+                padding: '8px',
+                background: selected ? 'rgba(29, 185, 84, 0.12)' : 'rgba(255,255,255,0.04)',
+                border: selected ? '1px solid rgba(29, 185, 84, 0.45)' : '1px solid rgba(255,255,255,0.07)',
+                cursor: resolving || blocked ? 'not-allowed' : 'pointer',
+              }}
+            >
+              {/* Dimmed independently of the guide overlay below, which needs
+                  full opacity of its own regardless of the tile's blocked look. */}
+              <div className="flex flex-col items-start gap-1.5 w-full" style={{ opacity: blocked ? 0.35 : 1 }}>
                 <div className="relative w-full">
                   {p.imageUrl ? (
                     <img src={p.imageUrl} alt="" className="w-full aspect-square rounded-lg object-cover" />
@@ -1223,44 +1220,42 @@ function PlaylistsPanel({ playlistsError, loadingPlaylists, playlists, resolving
                       <Check style={{ width: '13px', height: '13px', color: 'white' }} strokeWidth={3} />
                     </div>
                   )}
-                  {blocked && (
-                    <span
-                      onClick={(e) => { e.stopPropagation(); setWorkaroundOpen(true); }}
-                      className="absolute top-1 left-1 flex items-center justify-center rounded-full"
-                      style={{ width: '18px', height: '18px', background: 'rgba(0,0,0,0.6)', border: '1px solid rgba(255,255,255,0.3)', cursor: 'pointer' }}
-                    >
-                      <span style={{ color: 'white', fontSize: '0.6875rem', fontWeight: 700, lineHeight: 1 }}>?</span>
-                    </span>
-                  )}
                 </div>
                 <p className="truncate w-full" style={{ color: 'white', fontWeight: 600, fontSize: '0.75rem' }}>{p.name}</p>
                 <p style={{ color: 'rgba(255,255,255,0.4)', fontSize: '0.6875rem' }}>{p.trackCount} tracks</p>
-              </button>
-            );
-          })}
-        </div>
+              </div>
+              {blocked && (
+                <span
+                  onClick={(e) => { e.stopPropagation(); setOpenBlockedId(guideOpen ? null : p.id); }}
+                  className="absolute top-1 left-1 flex items-center justify-center rounded-full"
+                  style={{ width: '18px', height: '18px', background: 'rgba(0,0,0,0.6)', border: '1px solid rgba(255,255,255,0.3)', cursor: 'pointer' }}
+                >
+                  <span style={{ color: 'white', fontSize: '0.6875rem', fontWeight: 700, lineHeight: 1 }}>?</span>
+                </span>
+              )}
+              {blocked && (
+                <div
+                  onClick={(e) => { e.stopPropagation(); setOpenBlockedId(null); }}
+                  className="absolute inset-0 overflow-y-auto rounded-xl"
+                  style={{
+                    padding: '8px',
+                    paddingTop: '26px',
+                    background: 'rgba(10,10,14,0.95)',
+                    opacity: guideOpen ? 1 : 0,
+                    pointerEvents: guideOpen ? 'auto' : 'none',
+                    transition: 'opacity 200ms ease',
+                  }}
+                >
+                  <p style={{ color: 'rgba(255,255,255,0.75)', fontSize: '0.5625rem', lineHeight: 1.4, whiteSpace: 'pre-line' }}>
+                    {PLAYLIST_ACCESS_WORKAROUND}
+                  </p>
+                </div>
+              )}
+            </button>
+          );
+        })}
       </div>
-      {anyBlocked && (
-        <div ref={workaroundRef} style={{ marginTop: '10px' }}>
-          <button
-            type="button"
-            onClick={() => setWorkaroundOpen(o => !o)}
-            className="flex items-center gap-1"
-            style={{ color: 'rgba(255,255,255,0.4)', fontSize: '0.6875rem', background: 'none', border: 'none', padding: 0, cursor: 'pointer' }}
-          >
-            Why are some playlists greyed out?
-            <ChevronDown
-              style={{ width: '12px', height: '12px', transform: workaroundOpen ? 'rotate(180deg)' : undefined, transition: 'transform 150ms' }}
-            />
-          </button>
-          {workaroundOpen && (
-            <p style={{ color: 'rgba(255,255,255,0.4)', fontSize: '0.6875rem', marginTop: '6px', whiteSpace: 'pre-line' }}>
-              {PLAYLIST_ACCESS_WORKAROUND}
-            </p>
-          )}
-        </div>
-      )}
-    </>
+    </div>
   );
 }
 
