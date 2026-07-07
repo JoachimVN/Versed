@@ -95,6 +95,21 @@ select:focus-visible,
   display: none !important;
 }
 
+/* LiquidGlass draws its own white edge-highlight ring as two spans (4th/5th
+   children) layered on top of everything, including our tint overlay inside
+   children — so the ring stays plain white no matter how the overlay is
+   styled from underneath. Only overriding box-shadow (not background or
+   mix-blend-mode) tints the ring while leaving the library's own animated,
+   cursor-tracking sheen (driven by its internal mouseOffset state) intact. */
+.home-btn-join > :nth-child(4),
+.home-btn-join > :nth-child(5) {
+  box-shadow: 0 0 0 1px rgba(0,166,163,0.35) inset, 0 1px 4px rgba(0,0,0,0.35) !important;
+}
+.home-btn-host > :nth-child(4),
+.home-btn-host > :nth-child(5) {
+  box-shadow: 0 0 0 1px rgba(158,18,204,0.35) inset, 0 1px 4px rgba(0,0,0,0.35) !important;
+}
+
 /* Thin, on-brand scrollbar for every scroll container (playlist picker grid,
    leaderboard, etc.) instead of the OS default. Firefox reads the two
    scrollbar-* properties on the `*` reset above; everything else reads the
@@ -113,7 +128,7 @@ select:focus-visible,
   background-clip: padding-box;
 }
 *::-webkit-scrollbar-thumb:hover {
-  background-color: rgba(150, 17, 193, 0.55);
+  background-color: rgba(158, 18, 204, 0.55);
 }
 
 @keyframes pageEnter {
