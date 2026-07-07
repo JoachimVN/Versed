@@ -7,6 +7,8 @@ import { loadSongs } from './songLoader';
 import { adaptPlaylistTracks } from './customSongPool';
 import { isCorrectGuess, isCorrectArtistGuess } from './fuzzyMatch';
 
+// Below this, rounds start repeating tracks (TOTAL_ROUNDS below) — the client
+// warns the host but still allows starting, so this isn't a hard floor here.
 export const MIN_PLAYLIST_TRACKS = 10;
 
 export const BID_OPTIONS = [0.1, 0.5, 1, 2, 3, 4, 5, 7, 10, 15, 20, 30, 45, 60];
@@ -680,8 +682,8 @@ export function setCustomSongPool(
   game: Game, playlistId: string | undefined, tracks: PlaylistTrackInput[],
 ): { ok: true } | { ok: false; error: string } {
   const pool = adaptPlaylistTracks(tracks, csvByTrackId);
-  if (pool.length < MIN_PLAYLIST_TRACKS) {
-    return { ok: false, error: `Only ${pool.length} playable track${pool.length === 1 ? '' : 's'}. Need at least ${MIN_PLAYLIST_TRACKS}` };
+  if (pool.length === 0) {
+    return { ok: false, error: 'That playlist has no playable tracks' };
   }
   game.songSource = 'playlist';
   game.songPool = pool;

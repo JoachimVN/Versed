@@ -1097,11 +1097,11 @@ function FullScreenDialog({ ariaLabel, dialogRef, children }: Readonly<{
   );
 }
 
-function playlistErrorMessage(error: PlaylistFetchError, count?: number): string {
+function playlistErrorMessage(error: PlaylistFetchError): string {
   switch (error) {
     case 'unauthorized': return 'Reconnect Spotify to allow playlist access.';
     case 'not_found': return "Couldn't find that playlist. Check the link and try again.";
-    case 'too_few': return `Only ${count ?? 0} playable track${count === 1 ? '' : 's'}. Pick a playlist with at least 10.`;
+    case 'empty': return 'That playlist has no playable tracks.';
     default: return "Couldn't load that playlist. Try again.";
   }
 }
@@ -1221,7 +1221,7 @@ function PlaylistPickerDialog({ game }: Readonly<{ game: HostState }>) {
     const result = await fetchPlaylistTracks(id, setResolvedCount);
     setResolving(false);
     if (!result.ok) {
-      setResolveError(playlistErrorMessage(result.error, result.count));
+      setResolveError(playlistErrorMessage(result.error));
       return;
     }
     const imageUrl = fallbackImageUrl ?? result.tracks[0]?.albumArtUrl ?? null;
@@ -1699,7 +1699,9 @@ export function LobbyView({ game }: Readonly<{ game: HostState }>) {
     spotify, pin, players, createGame, startGame, mode, settingsOpen, toggleSettings, setMode, removePlayer,
     gameExpired, playlistPickerOpen, songSource, customPlaylists, startError,
   } = game;
-  const playlistNotReady = songSource === 'playlist' && mergePlaylistTracks(customPlaylists).length < MIN_PLAYLIST_TRACKS;
+  const playlistTrackCount = mergePlaylistTracks(customPlaylists).length;
+  const playlistEmpty = songSource === 'playlist' && playlistTrackCount === 0;
+  const playlistLow = songSource === 'playlist' && playlistTrackCount > 0 && playlistTrackCount < MIN_PLAYLIST_TRACKS;
   const [lobbyVisible, setLobbyVisible] = useState(false);
   const { fadeOut, muted, toggleMute } = useLobbyMusic(gameExpired);
 
@@ -1762,7 +1764,12 @@ export function LobbyView({ game }: Readonly<{ game: HostState }>) {
               ))}
             </div>
           </div>
-          <StartButton players={players} mode={mode} startGame={handleStart} disabled={playlistNotReady} />
+          <StartButton players={players} mode={mode} startGame={handleStart} disabled={playlistEmpty} />
+          {playlistLow && (
+            <p style={{ color: '#fcd34d', fontSize: '0.8125rem' }}>
+              Only {playlistTrackCount} track{playlistTrackCount === 1 ? '' : 's'} total across your selected playlists. Songs may repeat.
+            </p>
+          )}
           {startError && <p style={{ color: '#fca5a5', fontSize: '0.8125rem' }}>{startError}</p>}
         </div>
       ) : null}

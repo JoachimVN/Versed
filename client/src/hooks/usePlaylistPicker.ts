@@ -11,10 +11,13 @@ export interface PlaylistSummary {
 // 'unauthorized' = token lacks the playlist-read scopes (old session, needs
 // re-consent) — distinct from useSpotify's `unauthorized` (Dev-Mode account
 // allowlisting), which has a different cause and a different fix.
-export type PlaylistFetchError = 'unauthorized' | 'not_found' | 'too_few' | 'error';
+// 'empty' = zero playable tracks, the only per-playlist count that still
+// blocks — anything else is allowed through with a warning (see Host.tsx).
+export type PlaylistFetchError = 'unauthorized' | 'not_found' | 'empty' | 'error';
 
 // Mirrors gameManager.ts's MIN_PLAYLIST_TRACKS — kept in sync manually, same
-// as every other client/server type mirror in this codebase.
+// as every other client/server type mirror in this codebase. Below this the
+// combined pool triggers a "songs may repeat" warning, not a hard block.
 export const MIN_PLAYLIST_TRACKS = 10;
 // Not a real product limit — Spotify's API just has no bulk endpoint, so a
 // huge playlist means many sequential page requests. This bounds worst case.
@@ -268,7 +271,7 @@ export function usePlaylistPicker(accessToken: string | null) {
         onProgress?.(tracks.length);
       }
 
-      if (tracks.length < MIN_PLAYLIST_TRACKS) return { ok: false, error: 'too_few', count: tracks.length };
+      if (tracks.length === 0) return { ok: false, error: 'empty', count: 0 };
       // `url` still non-null here means the loop stopped because it hit the
       // cap, not because it ran out of pages — i.e. the playlist has more
       // tracks than we imported.
