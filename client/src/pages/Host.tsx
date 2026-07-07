@@ -1303,15 +1303,15 @@ function PlaylistPickerDialog({ game }: Readonly<{ game: HostState }>) {
                   padding: '9px 14px', borderRadius: '10px',
                   background: (() => {
                     if (resolving || !linkInput.trim()) return 'rgba(178,16,224,0.15)';
-                    return loadHovered ? 'rgba(178,16,224,0.7)' : 'rgba(178,16,224,0.4)';
+                    return loadHovered ? 'rgba(178,16,224,0.55)' : 'rgba(178,16,224,0.4)';
                   })(),
                   border: `1px solid ${(() => {
                     if (resolving || !linkInput.trim()) return 'rgba(208,46,249,0.2)';
-                    return loadHovered ? 'rgba(208,46,249,1)' : 'rgba(208,46,249,0.5)';
+                    return loadHovered ? 'rgba(208,46,249,0.8)' : 'rgba(208,46,249,0.5)';
                   })()}`,
                   color: 'white', fontWeight: 600, fontSize: '0.8125rem',
                   cursor: resolving || !linkInput.trim() ? 'not-allowed' : 'pointer',
-                  boxShadow: loadHovered && !resolving && linkInput.trim() ? '0 0 24px rgba(178,16,224,0.6), inset 0 0 12px rgba(178,16,224,0.2)' : 'none',
+                  boxShadow: loadHovered && !resolving && linkInput.trim() ? '0 0 16px rgba(178,16,224,0.35)' : 'none',
                 }}
                 onMouseEnter={() => !resolving && linkInput.trim() && setLoadHovered(true)}
                 onMouseLeave={() => setLoadHovered(false)}
@@ -1353,10 +1353,10 @@ function PlaylistPickerDialog({ game }: Readonly<{ game: HostState }>) {
                     className="transition-all duration-150"
                     style={{
                       padding: '9px 16px', borderRadius: '10px',
-                      background: doneHovered ? 'rgba(29, 185, 84, 0.5)' : 'rgba(29, 185, 84, 0.35)',
-                      border: `1px solid ${doneHovered ? 'rgba(29, 185, 84, 0.9)' : 'rgba(29, 185, 84, 0.6)'}`,
+                      background: doneHovered ? 'rgba(29, 185, 84, 0.45)' : 'rgba(29, 185, 84, 0.35)',
+                      border: `1px solid ${doneHovered ? 'rgba(29, 185, 84, 0.75)' : 'rgba(29, 185, 84, 0.6)'}`,
                       color: 'white', fontWeight: 600, fontSize: '0.8125rem', cursor: 'pointer',
-                      boxShadow: doneHovered ? '0 0 24px rgba(29, 185, 84, 0.5), inset 0 0 12px rgba(29, 185, 84, 0.15)' : 'none',
+                      boxShadow: doneHovered ? '0 0 16px rgba(29, 185, 84, 0.3)' : 'none',
                     }}
                     onMouseEnter={() => setDoneHovered(true)}
                     onMouseLeave={() => setDoneHovered(false)}
