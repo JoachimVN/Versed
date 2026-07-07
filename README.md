@@ -33,9 +33,21 @@
 </p>
 
 <p align="center">
+  <img src="docs/screenshots/HostLobby.png" alt="Versed host lobby with QR join code"/>
+  <br>
+  <em>Host lobby, waiting for players to join</em>
+</p>
+
+<p align="center">
   <img src="docs/screenshots/Playing.png" alt="Versed host view song playing"/>
   <br>
   <em>Song playing, from the host's view</em>
+</p>
+
+<p align="center">
+  <img src="docs/screenshots/PartyIntro.png" alt="Versed party mode round announcement: Steal Round"/>
+  <br>
+  <em>Party mode round intro</em>
 </p>
 
 <p align="center">
