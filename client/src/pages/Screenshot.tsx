@@ -214,6 +214,7 @@ const MOCK_PLAY: PlayState = {
   hostReconnecting: false,
   savedSession: null,
   guessInputRef: { current: null },
+  cameFromQR: false,
   setPin: noop, setName: noop, setBidIndex: noop, setGuessText: noop, setArtistGuessText: noop,
   submitStealVictim: noop, skipSteal: noop, join: noop, rejoinSaved: noop, submitBid: noop,
   submitGuess: noop, skipGuess: noop, newGamePin: null, rejoinNewGame: noop, renamePlayer: noop,
