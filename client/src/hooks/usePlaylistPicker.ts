@@ -87,6 +87,49 @@ function delay(ms: number): Promise<void> {
   return new Promise(resolve => setTimeout(resolve, ms));
 }
 
+function backoffMs(attempt: number): number {
+  return 500 * 2 ** attempt;
+}
+
+// Wraps fetch with a timeout, surfacing a thrown error (network failure or
+// abort) as data instead of a rejection, so the retry loop in fetchSpotify
+// doesn't need its own try/catch.
+async function fetchWithTimeout(
+  url: string, accessToken: string,
+): Promise<{ res: Response } | { err: unknown }> {
+  const controller = new AbortController();
+  const timeoutId = setTimeout(() => controller.abort(), REQUEST_TIMEOUT_MS);
+  try {
+    const res = await fetch(url, { headers: { Authorization: `Bearer ${accessToken}` }, signal: controller.signal });
+    return { res };
+  } catch (err) {
+    return { err };
+  } finally {
+    clearTimeout(timeoutId);
+  }
+}
+
+// How long to wait before retrying a 429/5xx response — honors Retry-After
+// when Spotify sends one, otherwise falls back to exponential backoff.
+function retryDelayMs(res: Response, attempt: number): number {
+  const retryAfterSec = Number(res.headers.get('Retry-After'));
+  return Number.isFinite(retryAfterSec) && retryAfterSec > 0
+    ? Math.min(retryAfterSec * 1000, 8000)
+    : backoffMs(attempt);
+}
+
+function isAuthError(status: number): boolean {
+  return status === 401 || status === 403;
+}
+
+function isTransientStatus(status: number): boolean {
+  return status === 429 || status >= 500;
+}
+
+function isPlaylistNotFound(notFoundIsPlaylist: boolean, status: number): boolean {
+  return notFoundIsPlaylist && status === 404;
+}
+
 // Centralizes the status-code handling shared by every Spotify Web API call
 // below, so each call site is just one branch instead of three. Retries
 // transient failures (429 with Retry-After, 5xx, timeouts, network errors)
@@ -96,28 +139,20 @@ async function fetchSpotify<T>(
   url: string, accessToken: string, notFoundIsPlaylist = false,
 ): Promise<SpotifyFetchResult<T>> {
   for (let attempt = 0; attempt <= MAX_RETRIES; attempt++) {
-    const controller = new AbortController();
-    const timeoutId = setTimeout(() => controller.abort(), REQUEST_TIMEOUT_MS);
-    let res: Response;
-    try {
-      res = await fetch(url, { headers: { Authorization: `Bearer ${accessToken}` }, signal: controller.signal });
-    } catch (err) {
-      if (attempt < MAX_RETRIES) { await delay(500 * 2 ** attempt); continue; }
-      console.error('[Spotify] request threw after retries', { url: url.replace(/[\r\n]/g, ''), err });
+    const canRetry = attempt < MAX_RETRIES;
+    const attemptResult = await fetchWithTimeout(url, accessToken);
+    if ('err' in attemptResult) {
+      if (canRetry) { await delay(backoffMs(attempt)); continue; }
+      console.error('[Spotify] request threw after retries', { url: url.replace(/[\r\n]/g, ''), err: attemptResult.err });
       return { ok: false, error: 'error' };
-    } finally {
-      clearTimeout(timeoutId);
     }
 
-    if (res.status === 401 || res.status === 403) return { ok: false, error: 'unauthorized' };
-    if (notFoundIsPlaylist && res.status === 404) return { ok: false, error: 'not_found' };
+    const { res } = attemptResult;
+    if (isAuthError(res.status)) return { ok: false, error: 'unauthorized' };
+    if (isPlaylistNotFound(notFoundIsPlaylist, res.status)) return { ok: false, error: 'not_found' };
 
-    if ((res.status === 429 || res.status >= 500) && attempt < MAX_RETRIES) {
-      const retryAfterSec = Number(res.headers.get('Retry-After'));
-      const waitMs = Number.isFinite(retryAfterSec) && retryAfterSec > 0
-        ? Math.min(retryAfterSec * 1000, 8000)
-        : 500 * 2 ** attempt;
-      await delay(waitMs);
+    if (isTransientStatus(res.status) && canRetry) {
+      await delay(retryDelayMs(res, attempt));
       continue;
     }
 
