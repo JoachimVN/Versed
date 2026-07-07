@@ -54,7 +54,7 @@ export default function App() {
         <div
           className="absolute inset-0 pointer-events-none"
           style={{
-            background: 'radial-gradient(ellipse 48% 105% at 50% -5%, rgba(150,50,220,0.3) 0%, rgba(110,32,155,0.05) 55%, transparent 80%)',
+            background: 'radial-gradient(ellipse 48% 105% at 50% -5%, rgba(198,36,255,0.3) 0%, rgba(158,18,204,0.05) 55%, transparent 80%)',
             zIndex: 0,
           }}
         />

@@ -39,7 +39,7 @@ export function RoundIntro({ party, roundKey, dismissible = true }: Readonly<{ p
   if (party.format === 'race') {
     flowBadge = { label: 'Race Round', color: 'rgba(253,186,116,0.95)', bg: 'rgba(234,88,12,0.14)', border: 'rgba(234,88,12,0.4)' };
   } else if (party.format === 'classic') {
-    flowBadge = { label: 'Classic Round', color: 'rgba(216,180,254,0.95)', bg: 'rgba(150,17,193,0.14)', border: 'rgba(150,17,193,0.4)' };
+    flowBadge = { label: 'Classic Round', color: 'rgba(216,180,254,0.95)', bg: 'rgba(158,18,204,0.14)', border: 'rgba(158,18,204,0.4)' };
   }
 
   const overlayStyle = {
@@ -77,7 +77,7 @@ export function RoundIntro({ party, roundKey, dismissible = true }: Readonly<{ p
           fontSize: '2.5rem', fontWeight: 900, lineHeight: 1.1,
           letterSpacing: '0.02em', textTransform: 'uppercase',
           fontFamily: "'Montserrat', sans-serif",
-          background: 'linear-gradient(to bottom left, rgba(0,200,195,0.5) 0%, transparent 55%), linear-gradient(to top right, rgba(150,17,193,0.55) 0%, transparent 55%), #fff',
+          background: 'linear-gradient(to bottom left, rgba(0,238,232,0.5) 0%, transparent 55%), linear-gradient(to top right, rgba(158,18,204,0.55) 0%, transparent 55%), #fff',
           WebkitBackgroundClip: 'text', WebkitTextFillColor: 'transparent', backgroundClip: 'text',
           marginBottom: '14px',
         }}
@@ -135,7 +135,7 @@ export function PartyRevealExtras({ result, stealResult }: Readonly<{
       {chips.map(c => (
         <span key={c} style={{
           padding: '6px 16px', borderRadius: '100px',
-          background: 'rgba(0,200,195,0.1)', border: '1px solid rgba(0,200,195,0.3)',
+          background: 'rgba(0,238,232,0.1)', border: '1px solid rgba(0,238,232,0.3)',
           color: 'rgba(94,234,212,0.9)', fontSize: '0.72rem', fontWeight: 700,
           letterSpacing: '0.1em', textTransform: 'uppercase',
         }}>{c}</span>
@@ -215,8 +215,8 @@ export function PartyBadge({ party }: Readonly<{ party: PartyInfo | null }>) {
           key={b}
           style={{
             padding: '4px 12px', borderRadius: '100px',
-            background: 'rgba(0,200,195,0.1)',
-            border: '1px solid rgba(0,200,195,0.3)',
+            background: 'rgba(0,238,232,0.1)',
+            border: '1px solid rgba(0,238,232,0.3)',
             color: 'rgba(94,234,212,0.9)',
             fontSize: '0.62rem', fontWeight: 700, letterSpacing: '0.14em',
             whiteSpace: 'nowrap',

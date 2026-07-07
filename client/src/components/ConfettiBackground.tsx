@@ -12,11 +12,11 @@ interface Particle {
 }
 
 const COLORS = [
-  '#00807e', '#00b5a3',           // teals
-  '#9611c1', '#6e209b', '#804a92', // purples
+  '#00a6a3', '#00b5a3',           // teals
+  '#9e12cc', '#804a92',            // purples
   '#c84ee8',                       // bright violet
   '#00c4b0', '#b040d8',            // light teal + mid purple
-  '#342758',                       // dark navy (subtle contrast piece)
+  '#3c2c66',                       // dark navy (subtle contrast piece)
 ];
 const COUNT = 120;
 

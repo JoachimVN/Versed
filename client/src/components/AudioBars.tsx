@@ -29,9 +29,9 @@ const AUDIO_BARS = [
 ] as const;
 
 const AUDIO_BAR_COLORS: Record<'classic' | 'race' | 'year', string> = {
-  classic: 'rgba(150,17,193,0.75)',
+  classic: 'rgba(158,18,204,0.75)',
   race: 'rgba(234,88,12,0.75)',
-  year: 'rgba(0,200,195,0.75)',
+  year: 'rgba(0,238,232,0.75)',
 };
 
 // Detected tempo can be wildly wrong (half/double-time, or missing) — clamp

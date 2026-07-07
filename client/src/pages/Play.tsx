@@ -606,7 +606,7 @@ function guessTextClass(guess: string | null, correct: boolean): string {
 
 function bidArrowStyle(enabled: boolean, pressed: boolean, hovered: boolean): { bg: string; border: string } {
   if (!enabled) return { bg: 'rgba(255,255,255,0.03)', border: '1px solid rgba(255,255,255,0.04)' };
-  if (pressed) return { bg: 'rgba(150,17,193,0.28)', border: '1px solid rgba(150,17,193,0.5)' };
+  if (pressed) return { bg: 'rgba(158,18,204,0.28)', border: '1px solid rgba(158,18,204,0.5)' };
   if (hovered) return { bg: 'rgba(255,255,255,0.13)', border: '1px solid rgba(255,255,255,0.18)' };
   return { bg: 'rgba(255,255,255,0.07)', border: '1px solid rgba(255,255,255,0.10)' };
 }
@@ -684,7 +684,7 @@ function JoinView({ game }: Readonly<{ game: PlayState }>) {
           >
             <div style={{
               position: 'absolute', inset: 0, borderRadius: '100px',
-              background: 'rgba(110, 32, 155, 0.05)',
+              background: 'rgba(158,18,204,0.05)',
               pointerEvents: 'none',
             }} />
             <LiquidGlass
@@ -800,7 +800,7 @@ function JoinView({ game }: Readonly<{ game: PlayState }>) {
         <LiquidGlass
           style={{
             position: 'absolute', top: '50%', left: '50%',
-            filter: joinHovered ? 'drop-shadow(0 0 10px rgba(0, 128, 126, 0.65))' : 'drop-shadow(0 0 0px rgba(0, 128, 126, 0))',
+            filter: joinHovered ? 'drop-shadow(0 0 10px rgba(0,166,163,0.65))' : 'drop-shadow(0 0 0px rgba(0,166,163,0))',
             transition: 'filter 0.25s ease',
           }}
           {...LIQUID_PILL_PROPS}
@@ -858,7 +858,7 @@ function WaitingView({ game }: Readonly<{ game: PlayState }>) {
             <div style={{ width: '254px', minHeight: '220px', display: 'flex', flexDirection: 'column', alignItems: 'center' }}>
               <span style={{
                 fontSize: '1.95rem', fontFamily: "'Montserrat', sans-serif", fontWeight: 900, letterSpacing: '0.08em', textTransform: 'uppercase',
-                background: 'linear-gradient(to bottom left, rgba(110,32,155,0.45) 0%, transparent 55%), linear-gradient(to top right, rgba(0,200,195,0.45) 0%, transparent 55%), #fff',
+                background: 'linear-gradient(to bottom left, rgba(158,18,204,0.45) 0%, transparent 55%), linear-gradient(to top right, rgba(0,238,232,0.45) 0%, transparent 55%), #fff',
                 WebkitBackgroundClip: 'text', WebkitTextFillColor: 'transparent', backgroundClip: 'text',
               }}>
                 You're in!
@@ -897,7 +897,7 @@ function WaitingView({ game }: Readonly<{ game: PlayState }>) {
                 <div style={{ width: '100%', height: '1px', background: 'rgba(255,255,255,0.07)', marginBottom: '4px' }} />
                 <div style={{ display: 'flex', gap: '6px' }}>
                   {[0, 1, 2].map(i => (
-                    <div key={i} style={{ width: '6px', height: '6px', borderRadius: '50%', background: 'rgba(0,128,126,0.8)', animation: 'dotBounce 1.4s ease-in-out infinite', animationDelay: `${i * 0.18}s` }} />
+                    <div key={i} style={{ width: '6px', height: '6px', borderRadius: '50%', background: 'rgba(0,166,163,0.8)', animation: 'dotBounce 1.4s ease-in-out infinite', animationDelay: `${i * 0.18}s` }} />
                   ))}
                 </div>
                 <span style={{ color: 'rgba(255,255,255,0.45)', fontSize: '0.72rem', letterSpacing: '0.03em' }}>
@@ -1000,7 +1000,7 @@ export function BettingView({ game }: Readonly<{ game: PlayState }>) {
         <div className="flex flex-col items-center gap-1">
           <span
             className="tabular-nums transition-all duration-200"
-            style={{ color: 'rgba(150,17,193,0.9)', fontWeight: 900, fontSize: '1.6rem', lineHeight: 1 }}
+            style={{ color: 'rgba(158,18,204,0.9)', fontWeight: 900, fontSize: '1.6rem', lineHeight: 1 }}
           >
             ~{estPoints.toLocaleString()}
             {mysteryHidden && <span style={{ color: 'rgba(94,234,212,0.8)', fontSize: '1rem', marginLeft: '6px' }}>×?</span>}
@@ -1024,7 +1024,7 @@ export function BettingView({ game }: Readonly<{ game: PlayState }>) {
             {...LIQUID_PILL_PROPS}
           >
             <div style={{ position: 'relative' }}>
-              <div style={{ position: 'absolute', inset: '-18px -36px', borderRadius: '100px', pointerEvents: 'none', background: 'rgba(110,32,155,0.15)' }} />
+              <div style={{ position: 'absolute', inset: '-18px -36px', borderRadius: '100px', pointerEvents: 'none', background: 'rgba(158,18,204,0.15)' }} />
               <span className="text-white font-bold text-xl" style={{ whiteSpace: 'nowrap', position: 'relative', display: 'inline-block', minWidth: '238px', textAlign: 'center' }}>
                 Lock In · {currentBid}s
               </span>
@@ -1161,7 +1161,7 @@ function GetReadyBody({ isDuel, isRace, party, lowestBid, guesserNames, songPlay
       <span style={{
         display: 'inline-block', minWidth: '220px', textAlign: 'center',
         fontWeight: 900, fontSize: '1.75rem', lineHeight: 1.25,
-        background: 'linear-gradient(to bottom left, rgba(0,200,195,0.4) 0%, transparent 55%), linear-gradient(to top right, rgba(150,17,193,0.5) 0%, transparent 55%), #fff',
+        background: 'linear-gradient(to bottom left, rgba(0,238,232,0.4) 0%, transparent 55%), linear-gradient(to top right, rgba(158,18,204,0.5) 0%, transparent 55%), #fff',
         WebkitBackgroundClip: 'text', WebkitTextFillColor: 'transparent', backgroundClip: 'text',
       }}>
         {guesserNames.join(' & ')}
@@ -1170,7 +1170,7 @@ function GetReadyBody({ isDuel, isRace, party, lowestBid, guesserNames, songPlay
         <div style={{ display: 'flex', gap: '3px' }}>
           {[0, 1, 2].map(i => (
             <div key={i} style={{
-              width: '4px', height: '4px', borderRadius: '50%', background: 'rgba(150,17,193,0.8)',
+              width: '4px', height: '4px', borderRadius: '50%', background: 'rgba(158,18,204,0.8)',
               animation: 'dotBounce 1.4s ease-in-out infinite', animationDelay: `${i * 0.18}s`,
             }} />
           ))}
@@ -1225,9 +1225,9 @@ function guessInputBoxStyle(isListening: boolean, focused: boolean): { border: s
     return { border: '1px solid rgba(255,255,255,0.07)', background: 'rgba(255,255,255,0.03)', boxShadow: 'none' };
   }
   if (focused) {
-    return { border: '1px solid rgba(150,17,193,0.7)', background: 'rgba(150,17,193,0.1)', boxShadow: '0 0 28px rgba(0,200,195,0.18), 0 0 20px rgba(150,17,193,0.22)' };
+    return { border: '1px solid rgba(158,18,204,0.7)', background: 'rgba(158,18,204,0.1)', boxShadow: '0 0 28px rgba(0,238,232,0.18), 0 0 20px rgba(158,18,204,0.22)' };
   }
-  return { border: '1px solid rgba(150,17,193,0.4)', background: 'rgba(150,17,193,0.08)', boxShadow: '0 0 24px rgba(150,17,193,0.1)' };
+  return { border: '1px solid rgba(158,18,204,0.4)', background: 'rgba(158,18,204,0.08)', boxShadow: '0 0 24px rgba(158,18,204,0.1)' };
 }
 
 // 4-box OTP-style display for year guesses. A single transparent input
@@ -1240,9 +1240,9 @@ function YearDigitBox({ digit, active }: Readonly<{ digit: string; active: boole
         width: '48px', height: '58px', borderRadius: '12px',
         display: 'flex', alignItems: 'center', justifyContent: 'center',
         fontSize: '1.5rem', fontWeight: 800, color: 'white',
-        border: active ? '1px solid rgba(150,17,193,0.8)' : '1px solid rgba(255,255,255,0.12)',
-        background: active ? 'rgba(150,17,193,0.12)' : 'rgba(255,255,255,0.04)',
-        boxShadow: active ? '0 0 16px rgba(150,17,193,0.35)' : 'none',
+        border: active ? '1px solid rgba(158,18,204,0.8)' : '1px solid rgba(255,255,255,0.12)',
+        background: active ? 'rgba(158,18,204,0.12)' : 'rgba(255,255,255,0.04)',
+        boxShadow: active ? '0 0 16px rgba(158,18,204,0.35)' : 'none',
         transition: 'border-color 0.15s ease, background 0.15s ease, box-shadow 0.15s ease',
       }}
     >
@@ -1370,8 +1370,8 @@ export function GuessingView({ game }: Readonly<{ game: PlayState }>) {
         {target === 'both' && (
           <div style={{
             width: '100%', borderRadius: '14px', overflow: 'hidden',
-            border: '1px solid rgba(0,200,195,0.25)',
-            background: 'rgba(0,200,195,0.05)',
+            border: '1px solid rgba(0,238,232,0.25)',
+            background: 'rgba(0,238,232,0.05)',
           }}>
             <input
               type="text"
@@ -1410,7 +1410,7 @@ export function GuessingView({ game }: Readonly<{ game: PlayState }>) {
             {...LIQUID_PILL_PROPS}
           >
             <div style={{ position: 'relative' }}>
-              <div style={{ position: 'absolute', inset: '-18px -36px', borderRadius: '100px', pointerEvents: 'none', background: 'rgba(110,32,155,0.15)' }} />
+              <div style={{ position: 'absolute', inset: '-18px -36px', borderRadius: '100px', pointerEvents: 'none', background: 'rgba(158,18,204,0.15)' }} />
               <span className="text-white font-bold text-xl" style={{ whiteSpace: 'nowrap', position: 'relative', display: 'inline-block', minWidth: '238px', textAlign: 'center' }}>
                 Submit
               </span>
@@ -1488,7 +1488,7 @@ function PassedView({ game }: Readonly<{ game: PlayState }>) {
                     {[0, 1, 2].map(i => (
                       <div key={i} style={{
                         width: '6px', height: '6px', borderRadius: '50%',
-                        background: 'rgba(0,128,126,0.8)',
+                        background: 'rgba(0,166,163,0.8)',
                         animation: 'dotBounce 1.4s ease-in-out infinite',
                         animationDelay: `${i * 0.18}s`,
                       }} />
@@ -1819,9 +1819,9 @@ function LeaderboardView({ game }: Readonly<{ game: PlayState }>) {
               <div
                 className="flex items-center justify-center gap-2 rounded-2xl px-4 py-3 text-center"
                 style={{
-                  background: 'linear-gradient(90deg, rgba(0,128,126,0.16) 0%, rgba(150,17,193,0.16) 100%)',
-                  border: '1px solid rgba(0,197,182,0.35)',
-                  boxShadow: '0 0 24px rgba(0,128,126,0.12)',
+                  background: 'linear-gradient(90deg, rgba(0,166,163,0.16) 0%, rgba(158,18,204,0.16) 100%)',
+                  border: '1px solid rgba(0,235,219,0.35)',
+                  boxShadow: '0 0 24px rgba(0,166,163,0.12)',
                 }}
               >
                 <p className="text-sm font-semibold" style={{ color: '#5eead4' }}>Host started a new game!</p>
@@ -1837,7 +1837,7 @@ function LeaderboardView({ game }: Readonly<{ game: PlayState }>) {
                   {...LIQUID_PILL_PROPS}
                 >
                   <div style={{ position: 'relative' }}>
-                    <div style={{ position: 'absolute', inset: '-18px -36px', borderRadius: '100px', pointerEvents: 'none', background: 'rgba(0,128,126,0.18)' }} />
+                    <div style={{ position: 'absolute', inset: '-18px -36px', borderRadius: '100px', pointerEvents: 'none', background: 'rgba(0,166,163,0.18)' }} />
                     <span className="text-white font-bold text-xl" style={{ whiteSpace: 'nowrap', position: 'relative', display: 'inline-block', minWidth: '210px', textAlign: 'center' }}>
                       Play Again
                     </span>
@@ -1914,7 +1914,7 @@ export default function Play() {
       <div
         className="fixed inset-0 pointer-events-none"
         style={{
-          background: 'radial-gradient(ellipse 80% 55% at 50% 115%, rgba(86,20,140,0.26) 0%, rgba(52,39,88,0.10) 45%, transparent 65%)',
+          background: 'radial-gradient(ellipse 80% 55% at 50% 115%, rgba(134,6,189,0.26) 0%, rgba(60,44,102,0.10) 45%, transparent 65%)',
           opacity: glowMounted && isJoin ? 1 : 0,
           transition: 'opacity 0.45s ease',
           zIndex: 0,
