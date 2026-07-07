@@ -791,6 +791,53 @@ function JoinCard({ pin, copied, copyInvite }: Readonly<{ pin: string; copied: b
 
 // ─── Settings row / toggle ────────────────────────────────────────────────────
 
+const STEPPER_BTN_BG = 'rgba(255,255,255,0.07)';
+const STEPPER_BTN_BORDER = 'rgba(255,255,255,0.09)';
+const STEPPER_BTN_COLOR = 'rgba(255,255,255,0.55)';
+const STEPPER_BTN_BG_HOVER = 'rgba(255,255,255,0.14)';
+const STEPPER_BTN_BORDER_HOVER = 'rgba(255,255,255,0.2)';
+const STEPPER_BTN_COLOR_HOVER = 'rgba(255,255,255,0.85)';
+
+// Plain inline `style` always wins over a stylesheet `:hover` rule (even one
+// from a Tailwind class), so hover here has to be applied via JS instead of
+// a `hover:` className — same pattern as the other inline-styled hover
+// buttons in this file (e.g. the mode/difficulty pills below).
+function SettingStepperButton({ symbol, label, onClick, disabled }: Readonly<{
+  symbol: string; label: string; onClick: () => void; disabled?: boolean;
+}>) {
+  return (
+    <button
+      onClick={disabled ? undefined : onClick}
+      disabled={disabled}
+      aria-label={label}
+      className="flex items-center justify-center active:scale-90 transition-transform"
+      style={{
+        width: '28px', height: '28px', borderRadius: '50%',
+        background: STEPPER_BTN_BG,
+        border: `1px solid ${STEPPER_BTN_BORDER}`,
+        color: STEPPER_BTN_COLOR,
+        fontSize: '1.1rem', lineHeight: 1,
+        cursor: disabled ? 'not-allowed' : 'pointer',
+        opacity: disabled ? 0.4 : 1,
+        transition: 'background 0.15s, border-color 0.15s, color 0.15s',
+      }}
+      onMouseEnter={e => {
+        if (disabled) return;
+        const el = e.currentTarget;
+        el.style.background = STEPPER_BTN_BG_HOVER;
+        el.style.borderColor = STEPPER_BTN_BORDER_HOVER;
+        el.style.color = STEPPER_BTN_COLOR_HOVER;
+      }}
+      onMouseLeave={e => {
+        const el = e.currentTarget;
+        el.style.background = STEPPER_BTN_BG;
+        el.style.borderColor = STEPPER_BTN_BORDER;
+        el.style.color = STEPPER_BTN_COLOR;
+      }}
+    >{symbol}</button>
+  );
+}
+
 function SettingRow({ label, value, unit, onDec, onInc, disabled }: Readonly<{
   label: string; value: number; unit: string; onDec: () => void; onInc: () => void; disabled?: boolean;
 }>) {
@@ -800,42 +847,14 @@ function SettingRow({ label, value, unit, onDec, onInc, disabled }: Readonly<{
         {label}
       </span>
       <div className="flex items-center gap-2.5">
-        <button
-          onClick={disabled ? undefined : onDec}
-          disabled={disabled}
-          aria-label={`Decrease ${label}`}
-          className="flex items-center justify-center active:scale-90 transition-transform"
-          style={{
-            width: '28px', height: '28px', borderRadius: '50%',
-            background: 'rgba(255,255,255,0.07)',
-            border: '1px solid rgba(255,255,255,0.09)',
-            color: 'rgba(255,255,255,0.55)',
-            fontSize: '1.1rem', lineHeight: 1,
-            cursor: disabled ? 'not-allowed' : 'pointer',
-            opacity: disabled ? 0.4 : 1,
-          }}
-        >−</button>
+        <SettingStepperButton symbol="−" label={`Decrease ${label}`} onClick={onDec} disabled={disabled} />
         <span style={{
           color: disabled ? 'rgba(255,255,255,0.45)' : 'white',
           fontWeight: 700, minWidth: '42px', textAlign: 'center', fontSize: '0.9375rem',
         }}>
           {value}{unit}
         </span>
-        <button
-          onClick={disabled ? undefined : onInc}
-          disabled={disabled}
-          aria-label={`Increase ${label}`}
-          className="flex items-center justify-center active:scale-90 transition-transform"
-          style={{
-            width: '28px', height: '28px', borderRadius: '50%',
-            background: 'rgba(255,255,255,0.07)',
-            border: '1px solid rgba(255,255,255,0.09)',
-            color: 'rgba(255,255,255,0.55)',
-            fontSize: '1.1rem', lineHeight: 1,
-            cursor: disabled ? 'not-allowed' : 'pointer',
-            opacity: disabled ? 0.4 : 1,
-          }}
-        >+</button>
+        <SettingStepperButton symbol="+" label={`Increase ${label}`} onClick={onInc} disabled={disabled} />
       </div>
     </div>
   );
@@ -901,7 +920,7 @@ const SONG_SOURCE_OPTIONS: { key: SongSource; label: string }[] = [
 ];
 
 const SONG_SOURCE_STYLE: Record<SongSource, { bg: string; border: string; text: string }> = {
-  library: { bg: 'rgba(130, 30, 175, 0.25)', border: '1px solid rgba(160, 60, 200, 0.45)', text: '#d8b4fe' },
+  library: { bg: 'rgba(178,16,224,0.25)', border: '1px solid rgba(208,46,249,0.45)', text: '#d8b4fe' },
   playlist: { bg: 'rgba(29, 185, 84, 0.25)', border: '1px solid rgba(29, 185, 84, 0.45)', text: '#6ee7a0' },
 };
 
@@ -982,7 +1001,9 @@ function PlaylistList({ customPlaylists, onOpen, onRemove }: Readonly<{
       <button
         onClick={onOpen}
         className="w-full flex items-center gap-2.5 rounded-xl text-left"
-        style={{ padding: '8px 10px', background: 'rgba(255,255,255,0.05)', border: '1px dashed rgba(255,255,255,0.15)', cursor: 'pointer' }}
+        style={{ padding: '8px 10px', background: 'rgba(255,255,255,0.05)', border: '1px dashed rgba(255,255,255,0.15)', cursor: 'pointer', transition: 'background 0.15s, border-color 0.15s' }}
+        onMouseEnter={e => { const el = e.currentTarget; el.style.background = 'rgba(255,255,255,0.09)'; el.style.borderColor = 'rgba(255,255,255,0.3)'; }}
+        onMouseLeave={e => { const el = e.currentTarget; el.style.background = 'rgba(255,255,255,0.05)'; el.style.borderColor = 'rgba(255,255,255,0.15)'; }}
       >
         <div className="min-w-0 flex-1">
           <p style={{ color: 'rgba(255,255,255,0.5)', fontSize: '0.8125rem' }}>
@@ -1017,8 +1038,8 @@ function ToggleRow({ label, value, onToggle, disabled }: Readonly<{
         className="relative shrink-0"
         style={{
           width: '40px', height: '22px', borderRadius: '100px',
-          background: value ? 'rgba(130, 30, 175, 0.7)' : 'rgba(255,255,255,0.10)',
-          border: value ? '1px solid rgba(150, 50, 200, 0.6)' : '1px solid rgba(255,255,255,0.08)',
+          background: value ? 'rgba(178,16,224,0.7)' : 'rgba(255,255,255,0.10)',
+          border: value ? '1px solid rgba(198,36,249,0.6)' : '1px solid rgba(255,255,255,0.08)',
           transition: 'background 0.2s ease, border-color 0.2s ease, opacity 0.2s ease',
           cursor: disabled ? 'not-allowed' : 'pointer',
           opacity: disabled ? 0.4 : 1,
@@ -1092,7 +1113,7 @@ function FullScreenDialog({ ariaLabel, dialogRef, children }: Readonly<{
         backdropFilter: 'blur(12px)',
       }}
     >
-      <div style={{ position: 'absolute', inset: 0, pointerEvents: 'none', background: 'radial-gradient(ellipse 60% 40% at 50% 50%, rgba(86,20,140,0.22) 0%, transparent 65%)' }} />
+      <div style={{ position: 'absolute', inset: 0, pointerEvents: 'none', background: 'radial-gradient(ellipse 60% 40% at 50% 50%, rgba(134,6,189,0.22) 0%, transparent 65%)' }} />
       {children}
     </dialog>
   );
@@ -1200,9 +1221,11 @@ function PlaylistPickerDialog({ game }: Readonly<{ game: HostState }>) {
   // LiquidGlass only measures its own size once on mount (and on window
   // resize) — it has no ResizeObserver, so it never notices the card growing
   // as content changes (spinner -> grid, or an error/loading line appearing
-  // below it). Remount it whenever the visible content shape changes so it
-  // re-measures against the new layout.
-  const glassContentKey = [
+  // below it). Re-firing its resize listener (rather than remounting the
+  // component) lets it re-measure in place and transition smoothly to the
+  // new size — remounting instead snaps it back to its 270x69 default first,
+  // which is what caused the visible "rescaling" on every state change.
+  const glassContentShape = [
     loadingPlaylists ? 'loading' : 'idle',
     playlistsError ?? 'none',
     playlists.length > 0 ? 'has-playlists' : 'no-playlists',
@@ -1210,6 +1233,9 @@ function PlaylistPickerDialog({ game }: Readonly<{ game: HostState }>) {
     resolveError ? 'resolve-error' : 'ok',
     truncationNotice ? 'truncated' : 'ok',
   ].join('|');
+  useEffect(() => {
+    window.dispatchEvent(new Event('resize'));
+  }, [glassContentShape]);
 
   const choosePlaylist = async (id: string, fallbackImageUrl: string | null = null) => {
     // Clicking an already-added playlist again toggles it off — no need to
@@ -1242,7 +1268,7 @@ function PlaylistPickerDialog({ game }: Readonly<{ game: HostState }>) {
   return (
     <FullScreenDialog ariaLabel="Choose a playlist">
       <div className="liquid-btn relative" style={{ width: 'min(560px, 92vw)' }}>
-        <LiquidGlass key={glassContentKey} style={{ position: 'absolute', top: '50%', left: '50%' }} {...LIQUID_CARD_PROPS} padding="28px 24px">
+        <LiquidGlass style={{ position: 'absolute', top: '50%', left: '50%' }} {...LIQUID_CARD_PROPS} padding="28px 24px">
           <div style={{ width: 'min(512px, 84vw)', display: 'flex', flexDirection: 'column', gap: '16px' }}>
             <div className="flex items-center justify-between">
               <p style={{ color: 'white', fontWeight: 800, fontSize: '1.1rem' }}>Choose a playlist</p>
@@ -1267,7 +1293,7 @@ function PlaylistPickerDialog({ game }: Readonly<{ game: HostState }>) {
                 disabled={resolving || !linkInput.trim()}
                 style={{
                   padding: '9px 14px', borderRadius: '10px',
-                  background: 'rgba(130,30,175,0.35)', border: '1px solid rgba(160,60,200,0.5)',
+                  background: 'rgba(178,16,224,0.35)', border: '1px solid rgba(208,46,249,0.5)',
                   color: 'white', fontWeight: 600, fontSize: '0.8125rem',
                   cursor: resolving ? 'not-allowed' : 'pointer', opacity: resolving || !linkInput.trim() ? 0.5 : 1,
                 }}
@@ -1295,10 +1321,12 @@ function PlaylistPickerDialog({ game }: Readonly<{ game: HostState }>) {
 
             {(() => {
               const pluralS = selectedIds.size === 1 ? '' : 's';
+              const trackCount = Math.min(mergeUniqueTracks(customPlaylists).length, MAX_POOL_TRACKS);
+              const trackSuffix = trackCount > 0 ? ` (${trackCount.toLocaleString()} song${trackCount === 1 ? '' : 's'})` : '';
               return (
                 <div className="flex items-center justify-between">
                   <p style={{ color: 'rgba(255,255,255,0.4)', fontSize: '0.75rem' }}>
-                    {selectedIds.size === 0 ? 'Nothing selected yet' : `${selectedIds.size} playlist${pluralS} selected`}
+                    {selectedIds.size === 0 ? 'Nothing selected yet' : `${selectedIds.size} playlist${pluralS} selected${trackSuffix}`}
                   </p>
                   <button
                     onClick={closePlaylistPicker}
@@ -1390,7 +1418,7 @@ function ConnectView({ game }: Readonly<{ game: HostState }>) {
 function SettingsButton({ settingsOpen, toggleSettings }: Readonly<{ settingsOpen: boolean; toggleSettings: () => void }>) {
   const [hovered, setHovered] = useState(false);
   let bg = 'rgba(255,255,255,0.06)';
-  if (settingsOpen) bg = 'rgba(120, 25, 170, 0.28)';
+  if (settingsOpen) bg = 'rgba(168,11,219,0.28)';
   else if (hovered) bg = 'rgba(255,255,255,0.11)';
   let color = 'rgba(255,255,255,0.5)';
   if (settingsOpen) color = '#c084fc';
@@ -1404,7 +1432,7 @@ function SettingsButton({ settingsOpen, toggleSettings }: Readonly<{ settingsOpe
       className="absolute top-5 right-5 flex items-center gap-2 rounded-full transition-all duration-200 z-10"
       style={{
         background: bg,
-        border: settingsOpen ? '1px solid rgba(140, 40, 200, 0.45)' : '1px solid rgba(255,255,255,0.10)',
+        border: settingsOpen ? '1px solid rgba(188,26,249,0.45)' : '1px solid rgba(255,255,255,0.10)',
         backdropFilter: 'blur(12px)',
         padding: '6px 14px 6px 10px',
         color,
@@ -1421,9 +1449,9 @@ function SettingsButton({ settingsOpen, toggleSettings }: Readonly<{ settingsOpe
 }
 
 const MODE_STYLE: Record<Mode, { bg: string; border: string; text: string; icon: string }> = {
-  classic: { bg: 'rgba(130, 20, 180, 0.28)', border: '1px solid rgba(140, 30, 200, 0.45)', text: 'white', icon: '#c084fc' },
+  classic: { bg: 'rgba(178,6,229,0.28)', border: '1px solid rgba(188,16,249,0.45)', text: 'white', icon: '#c084fc' },
   race: { bg: 'rgba(220, 80, 10, 0.2)', border: '1px solid rgba(234, 88, 12, 0.4)', text: '#fed7aa', icon: '#fb923c' },
-  party: { bg: 'rgba(0, 160, 155, 0.2)', border: '1px solid rgba(0, 200, 195, 0.4)', text: '#99f6e4', icon: '#2dd4bf' },
+  party: { bg: 'rgba(0,198,192,0.2)', border: '1px solid rgba(0,238,232,0.4)', text: '#99f6e4', icon: '#2dd4bf' },
 };
 
 function ModeToggle({ mode, setMode }: Readonly<{ mode: Mode; setMode: (m: Mode) => void }>) {
@@ -1473,9 +1501,9 @@ function StartButton({ players, mode, startGame, disabled: extraDisabled }: Read
   const [hovered, setHovered] = useState(false);
   const disabled = players.length === 0 || !!extraDisabled;
   const hoverShadow = {
-    classic: 'drop-shadow(0 0 12px rgba(110, 32, 155, 0.7))',
+    classic: 'drop-shadow(0 0 12px rgba(158,18,204,0.7))',
     race: 'drop-shadow(0 0 12px rgba(220, 80, 10, 0.7))',
-    party: 'drop-shadow(0 0 12px rgba(0, 200, 195, 0.6))',
+    party: 'drop-shadow(0 0 12px rgba(0,238,232,0.6))',
   }[mode];
   return (
     <button
@@ -1504,7 +1532,7 @@ function StartButton({ players, mode, startGame, disabled: extraDisabled }: Read
         <div style={{ position: 'relative' }}>
           <div style={{
             position: 'absolute', inset: '-18px -36px', borderRadius: '100px', pointerEvents: 'none',
-            background: { classic: 'rgba(110,32,155,0.12)', race: 'rgba(220,80,10,0.12)', party: 'rgba(0,200,195,0.1)' }[mode],
+            background: { classic: 'rgba(158,18,204,0.12)', race: 'rgba(220,80,10,0.12)', party: 'rgba(0,238,232,0.1)' }[mode],
             transition: 'background 0.25s ease',
           }} />
           <span className="text-white font-bold text-xl" style={{ whiteSpace: 'nowrap', position: 'relative', display: 'inline-block', minWidth: '210px', textAlign: 'center' }}>
@@ -1866,8 +1894,8 @@ function BettingView({ game }: Readonly<{ game: HostState }>) {
                 className="rounded-full transition-all duration-500"
                 style={{
                   width: 12, height: 12,
-                  background: i < bidCount ? 'rgba(150,17,193,0.9)' : 'rgba(255,255,255,0.12)',
-                  boxShadow: i < bidCount ? '0 0 8px rgba(150,17,193,0.55)' : 'none',
+                  background: i < bidCount ? 'rgba(158,18,204,0.9)' : 'rgba(255,255,255,0.12)',
+                  boxShadow: i < bidCount ? '0 0 8px rgba(158,18,204,0.55)' : 'none',
                   transform: i < bidCount ? 'scale(1)' : 'scale(0.78)',
                 }}
               />
