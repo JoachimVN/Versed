@@ -255,5 +255,5 @@ export function useSpotify() {
     setUnauthorized(false);
   }
 
-  return { isConnected: !!accessToken, playerReady, unauthorized, prepareTrack, startPrepared, pauseTrack, activatePlayer, disconnect };
+  return { isConnected: !!accessToken, accessToken, playerReady, unauthorized, prepareTrack, startPrepared, pauseTrack, activatePlayer, disconnect };
 }

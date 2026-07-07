@@ -4,6 +4,18 @@ export interface Hint {
   imageUrl?: string;
 }
 
+export type SongSource = 'library' | 'playlist';
+
+export interface PlaylistTrackInput {
+  spotifyTrackId: string;
+  title: string;
+  artist: string;
+  featuredArtists?: string;
+  durationMs: number | null;
+  year: number | null;
+  albumArtUrl: string | null;
+}
+
 export interface LeaderboardEntry {
   rank: number;
   name: string;

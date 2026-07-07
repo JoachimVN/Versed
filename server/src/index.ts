@@ -8,6 +8,7 @@ import dotenv from 'dotenv';
 import authRouter from './spotifyAuth';
 import * as gm from './gameManager';
 import { getAlbumArtUrl } from './albumArt';
+import { Game, PlaylistTrackInput } from './types';
 
 dotenv.config();
 gm.initSongs();
@@ -82,6 +83,49 @@ if (process.env.NODE_ENV === 'production') {
     },
   }));
   app.get('*', (_req, res) => res.sendFile(path.join(clientDist, 'index.html')));
+}
+
+interface StartGameSettings {
+  bettingTime?: number; guessingTime?: number; totalRounds?: number; mode?: string;
+  raceTime?: number; raceWinnerOnly?: boolean; artistOnly?: boolean; yearOnly?: boolean;
+  difficulty?: string; songSource?: string;
+  customPlaylist?: { id?: string; tracks?: PlaylistTrackInput[] };
+}
+
+function applyStartGameSettings(game: Game, s: StartGameSettings | undefined) {
+  if (s?.bettingTime) game.bettingTime = Math.max(5, Math.min(60, Math.round(s.bettingTime)));
+  if (s?.guessingTime) game.guessingTime = Math.max(5, Math.min(60, Math.round(s.guessingTime)));
+  if (s?.totalRounds) game.totalRounds = Math.max(1, Math.min(30, Math.round(s.totalRounds)));
+  if (s?.mode === 'race') game.mode = 'race';
+  else if (s?.mode === 'party') game.mode = 'party';
+  else game.mode = 'classic';
+  if (s?.raceTime) game.raceTime = Math.max(10, Math.min(60, Math.round(s.raceTime)));
+
+  // Party picks its own guess target per round, so these game-wide toggles
+  // are Classic/Race only — leaving them set under Party would otherwise
+  // leak a stale 'year' accent/target into party rounds client-side.
+  const isParty = game.mode === 'party';
+  game.yearOnly = !isParty && s?.yearOnly === true;
+  // The client only ever shows this toggle in Race mode, and its one
+  // useState persists across mode switches in the lobby — gate it here too,
+  // or a stale `true` left over from a previous Race game would silently
+  // force winner-take-all scoring onto Party's race-format rounds.
+  game.raceWinnerOnly = game.mode === 'race' && s?.raceWinnerOnly === true;
+  // Year isn't a title/artist target, so it can't coexist with artist-only.
+  game.artistOnly = !isParty && !game.yearOnly && s?.artistOnly === true;
+  game.difficulty = s?.difficulty === 'easy' || s?.difficulty === 'medium' ? s.difficulty : 'hard';
+}
+
+function applySongSource(game: Game, s: StartGameSettings | undefined): { ok: true } | { ok: false; error: string } {
+  if (s?.songSource !== 'playlist') {
+    game.songSource = 'library';
+    game.songPool = undefined;
+    game.playlistId = undefined;
+    return { ok: true };
+  }
+  const tracks = s.customPlaylist?.tracks;
+  if (!Array.isArray(tracks)) return { ok: false, error: 'No playlist selected' };
+  return gm.setCustomSongPool(game, s.customPlaylist?.id, tracks);
 }
 
 io.on('connection', (socket) => {
@@ -388,32 +432,20 @@ io.on('connection', (socket) => {
   });
 
   // ── Host: start game → first round ────────────────────────────────────────
-  socket.on('start_game', (payload?: { settings?: { bettingTime?: number; guessingTime?: number; totalRounds?: number; mode?: string; raceTime?: number; raceWinnerOnly?: boolean; artistOnly?: boolean; yearOnly?: boolean; difficulty?: string } }) => {
+  socket.on('start_game', (
+    payload?: { settings?: StartGameSettings },
+    callback?: (r: { error?: string }) => void,
+  ) => {
     const game = gm.getGameBySocket(socket.id);
-    if (game?.hostSocketId !== socket.id || game.phase !== 'lobby') return;
-    const s = payload?.settings;
-    if (s?.bettingTime) game.bettingTime = Math.max(5, Math.min(60, Math.round(s.bettingTime)));
-    if (s?.guessingTime) game.guessingTime = Math.max(5, Math.min(60, Math.round(s.guessingTime)));
-    if (s?.totalRounds) game.totalRounds = Math.max(1, Math.min(30, Math.round(s.totalRounds)));
-    if (s?.mode === 'race') game.mode = 'race';
-    else if (s?.mode === 'party') game.mode = 'party';
-    else game.mode = 'classic';
-    if (s?.raceTime) game.raceTime = Math.max(10, Math.min(60, Math.round(s.raceTime)));
-    // Party picks its own guess target per round, so these game-wide toggles
-    // are Classic/Race only — leaving them set under Party would otherwise
-    // leak a stale 'year' accent/target into party rounds client-side.
-    const isParty = game.mode === 'party';
-    game.yearOnly = !isParty && s?.yearOnly === true;
-    // The client only ever shows this toggle in Race mode, and its one
-    // useState persists across mode switches in the lobby — gate it here too,
-    // or a stale `true` left over from a previous Race game would silently
-    // force winner-take-all scoring onto Party's race-format rounds.
-    game.raceWinnerOnly = game.mode === 'race' && s?.raceWinnerOnly === true;
-    // Year isn't a title/artist target, so it can't coexist with artist-only.
-    game.artistOnly = !isParty && !game.yearOnly && s?.artistOnly === true;
-    game.difficulty = s?.difficulty === 'easy' || s?.difficulty === 'medium' ? s.difficulty : 'hard';
+    if (game?.hostSocketId !== socket.id || game.phase !== 'lobby') return callback?.({ error: 'Not ready' });
+
+    applyStartGameSettings(game, payload?.settings);
+    const sourceResult = applySongSource(game, payload?.settings);
+    if (!sourceResult.ok) return callback?.({ error: sourceResult.error });
+
     game.roundIndex = 0;
     beginRound(game);
+    callback?.({});
   });
 
   // ── Player: submit bid ─────────────────────────────────────────────────────

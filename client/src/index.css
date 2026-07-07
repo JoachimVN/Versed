@@ -38,6 +38,8 @@ body {
   box-sizing: border-box;
   margin: 0;
   padding: 0;
+  scrollbar-width: thin;
+  scrollbar-color: rgba(255, 255, 255, 0.25) transparent;
 }
 
 /* Buttons/inputs here reset border/background inline but never touch
@@ -91,6 +93,27 @@ select:focus-visible,
 /* Hide LiquidGlass hover glow divs that cause white circle artifact in Chrome */
 .liquid-btn > :nth-child(n+6) {
   display: none !important;
+}
+
+/* Thin, on-brand scrollbar for every scroll container (playlist picker grid,
+   leaderboard, etc.) instead of the OS default. Firefox reads the two
+   scrollbar-* properties on the `*` reset above; everything else reads the
+   ::-webkit-scrollbar-* pseudo-elements below. */
+*::-webkit-scrollbar {
+  width: 8px;
+  height: 8px;
+}
+*::-webkit-scrollbar-track {
+  background: transparent;
+}
+*::-webkit-scrollbar-thumb {
+  background-color: rgba(255, 255, 255, 0.25);
+  border-radius: 999px;
+  border: 2px solid transparent;
+  background-clip: padding-box;
+}
+*::-webkit-scrollbar-thumb:hover {
+  background-color: rgba(150, 17, 193, 0.55);
 }
 
 @keyframes pageEnter {

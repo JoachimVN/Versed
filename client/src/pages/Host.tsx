@@ -6,6 +6,7 @@ import QRCodeLib from 'react-qr-code';
 const QRCode = QRCodeLib as unknown as React.FC<{ value: string; size?: number }>;
 import { socket } from '../socket';
 import { useSpotify } from '../hooks/useSpotify';
+import { usePlaylistPicker, resolvePlaylistInput, PlaylistFetchError, PlaylistSummary, MIN_PLAYLIST_TRACKS } from '../hooks/usePlaylistPicker';
 import { useEscapeKey } from '../hooks/useEscapeKey';
 import { useFocusTrap } from '../hooks/useFocusTrap';
 import { useSoundEffect } from '../hooks/useSoundEffect';
@@ -20,16 +21,18 @@ import { AudioBars } from '../components/AudioBars';
 import { LIQUID_CARD_PROPS, LIQUID_PILL_PROPS } from '../components/liquidGlassPresets';
 import { APP_NAME, BACKEND_URL, RACE_TIME } from '../config';
 import { commonPhaseAnnouncement } from '../utils/phaseAnnouncement';
-import type { Hint, LeaderboardEntry, PartyInfo, PlayerInfo, RoundResultEvent } from '../types';
+import type { Hint, LeaderboardEntry, PartyInfo, PlayerInfo, PlaylistTrackInput, RoundResultEvent, SongSource } from '../types';
 
 type Phase = 'connect' | 'lobby' | 'betting' | 'playing' | 'guessing' | 'reveal' | 'leaderboard' | 'finished';
 type Mode = 'classic' | 'race' | 'party';
 type Difficulty = 'easy' | 'medium' | 'hard';
 interface SongInfo { title: string; artist: string; trackId: string; tempo?: number | null }
+interface CustomPlaylist { id: string; name: string; imageUrl: string | null; tracks: PlaylistTrackInput[] }
 
 const wait = (ms: number) => new Promise<void>(resolve => setTimeout(resolve, ms));
 
 type Spotify = ReturnType<typeof useSpotify>;
+type PlaylistPicker = ReturnType<typeof usePlaylistPicker>;
 
 // Remembers the host's last-used lobby settings across page reloads and new
 // games (New Game already leaves these untouched within a session — this
@@ -92,6 +95,11 @@ export interface HostState {
   artistOnly: boolean;
   yearOnly: boolean;
   difficulty: Difficulty;
+  songSource: SongSource;
+  customPlaylist: CustomPlaylist | null;
+  playlistPicker: PlaylistPicker;
+  playlistPickerOpen: boolean;
+  startError: string | null;
   party: PartyInfo | null;
   stealResult: { thief: string; victim: string; amount: number; skipped?: boolean } | null;
   answeredCount: number;
@@ -110,6 +118,11 @@ export interface HostState {
   setArtistOnly: (v: boolean) => void;
   setYearOnly: (v: boolean) => void;
   setDifficulty: (v: Difficulty) => void;
+  setSongSource: (v: SongSource) => void;
+  selectPlaylist: (p: CustomPlaylist) => void;
+  clearPlaylist: () => void;
+  openPlaylistPicker: () => void;
+  closePlaylistPicker: () => void;
   createGame: () => void;
   startGame: () => void;
   skipTurn: () => void;
@@ -159,6 +172,14 @@ function useHostGame(): HostState {
   const [artistOnly, setArtistOnly] = useState(savedSettings.artistOnly ?? false);
   const [yearOnly, setYearOnly] = useState(savedSettings.yearOnly ?? false);
   const [difficulty, setDifficulty] = useState<Difficulty>(savedSettings.difficulty ?? 'hard');
+  // Not persisted in SavedHostSettings, deliberately: a reload can't restore
+  // the actual fetched track data, so a restored 'playlist' flag with no
+  // tracks would leave the host in a confusing half-configured state.
+  const [songSource, setSongSource] = useState<SongSource>('library');
+  const [customPlaylist, setCustomPlaylist] = useState<CustomPlaylist | null>(null);
+  const [playlistPickerOpen, setPlaylistPickerOpen] = useState(false);
+  const [startError, setStartError] = useState<string | null>(null);
+  const playlistPicker = usePlaylistPicker(spotify.accessToken);
 
   useEffect(() => {
     const toSave: SavedHostSettings = {
@@ -437,13 +458,19 @@ function useHostGame(): HostState {
   };
 
   const startGame = () => {
+    setStartError(null);
     spotify.activatePlayer();
     socket.emit('start_game', {
       settings: {
         bettingTime: bettingTimeSetting, guessingTime: guessingTimeSetting,
         totalRounds: roundsSetting, mode, raceTime: raceTimeSetting, raceWinnerOnly, artistOnly, yearOnly,
-        difficulty,
+        difficulty, songSource,
+        customPlaylist: songSource === 'playlist' && customPlaylist
+          ? { id: customPlaylist.id, name: customPlaylist.name, tracks: customPlaylist.tracks }
+          : undefined,
       },
+    }, (ack?: { error?: string }) => {
+      if (ack?.error) setStartError(ack.error);
     });
   };
 
@@ -489,11 +516,18 @@ function useHostGame(): HostState {
     bettingTime, timeLeft, timerTotal, bidCount, countdown, guesserNames, lowestBid, playerBids,
     result, roundDeltas, leaderboard, copied, playProgress, inviteUrl,
     settingsOpen, bettingTimeSetting, guessingTimeSetting, roundsSetting,
-    mode, raceTimeSetting, raceWinnerOnly, artistOnly, yearOnly, difficulty, party, stealResult, answeredCount,
+    mode, raceTimeSetting, raceWinnerOnly, artistOnly, yearOnly, difficulty,
+    songSource, customPlaylist, playlistPicker, playlistPickerOpen, startError,
+    party, stealResult, answeredCount,
     reconnecting, reconnectingCount: reconnectingNames.size, gameExpired, songPlaying, songTempo,
     toggleSettings: () => setSettingsOpen(o => !o),
     setBettingTimeSetting, setGuessingTimeSetting, setRoundsSetting,
     setMode, setRaceTimeSetting, setRaceWinnerOnly, setArtistOnly, setYearOnly, setDifficulty,
+    setSongSource,
+    selectPlaylist: (p: CustomPlaylist) => { setCustomPlaylist(p); setPlaylistPickerOpen(false); },
+    clearPlaylist: () => setCustomPlaylist(null),
+    openPlaylistPicker: () => setPlaylistPickerOpen(true),
+    closePlaylistPicker: () => setPlaylistPickerOpen(false),
     createGame, startGame, copyInvite, newGame,
     skipTurn: () => socket.emit('host_skip_turn'),
     endGame: () => socket.emit('end_game'),
@@ -575,7 +609,9 @@ function BidTimeline({ bids, lowestBid }: Readonly<{ bids: { name: string; bid: 
 function SettingsPanel({ game, open }: Readonly<{ game: HostState; open: boolean }>) {
   const {
     mode, bettingTimeSetting, guessingTimeSetting, roundsSetting, raceTimeSetting, raceWinnerOnly, artistOnly, yearOnly, difficulty,
+    songSource, customPlaylist,
     setBettingTimeSetting, setGuessingTimeSetting, setRoundsSetting, setRaceTimeSetting, setRaceWinnerOnly, setArtistOnly, setYearOnly, setDifficulty,
+    setSongSource, openPlaylistPicker,
     toggleSettings,
   } = game;
   const panelRef = useRef<HTMLDialogElement>(null);
@@ -634,6 +670,13 @@ function SettingsPanel({ game, open }: Readonly<{ game: HostState; open: boolean
         </div>
 
         <div className="px-5 py-4 space-y-4">
+          <SongSourceRow value={songSource} onChange={setSongSource} />
+          {songSource === 'playlist' && (
+            <>
+              <PlaylistChip customPlaylist={customPlaylist} onOpen={openPlaylistPicker} />
+              <p style={{ color: 'rgba(255,255,255,0.35)', fontSize: '0.75rem' }}>All songs play at equal difficulty</p>
+            </>
+          )}
           {/* Party mixes classic and race rounds, so it needs all three timers.
               Classic's "Guess the year" still runs the normal bid/tier flow
               (bet time picks the clip, guess time is the per-tier window), so
@@ -656,7 +699,7 @@ function SettingsPanel({ game, open }: Readonly<{ game: HostState; open: boolean
           <SettingRow label="Rounds" value={roundsSetting} unit=""
             onDec={() => setRoundsSetting(Math.max(1, roundsSetting - 1))}
             onInc={() => setRoundsSetting(Math.min(30, roundsSetting + 1))} />
-          <DifficultyRow value={difficulty} onChange={setDifficulty} />
+          {songSource === 'library' && <DifficultyRow value={difficulty} onChange={setDifficulty} />}
         </div>
 
         {/* Party picks guess targets per round, so the game-wide toggles only
@@ -816,6 +859,86 @@ function DifficultyRow({ value, onChange }: Readonly<{ value: Difficulty; onChan
   );
 }
 
+const SONG_SOURCE_OPTIONS: { key: SongSource; label: string }[] = [
+  { key: 'library', label: 'Versed Library' },
+  { key: 'playlist', label: 'My Playlist' },
+];
+
+const SONG_SOURCE_STYLE: Record<SongSource, { bg: string; border: string; text: string }> = {
+  library: { bg: 'rgba(130, 30, 175, 0.25)', border: '1px solid rgba(160, 60, 200, 0.45)', text: '#d8b4fe' },
+  playlist: { bg: 'rgba(29, 185, 84, 0.25)', border: '1px solid rgba(29, 185, 84, 0.45)', text: '#6ee7a0' },
+};
+
+// Same sliding-pill pattern as DifficultyRow, two options instead of three.
+function SongSourceRow({ value, onChange }: Readonly<{ value: SongSource; onChange: (v: SongSource) => void }>) {
+  const index = SONG_SOURCE_OPTIONS.findIndex(o => o.key === value);
+  const active = SONG_SOURCE_STYLE[value];
+  return (
+    <div className="space-y-2">
+      <span style={{ color: 'rgba(255,255,255,0.5)', fontSize: '0.875rem' }}>Song Source</span>
+      <div
+        className="relative flex rounded-xl"
+        style={{ background: 'rgba(255,255,255,0.05)', border: '1px solid rgba(255,255,255,0.08)', padding: '3px' }}
+      >
+        <div
+          className="absolute rounded-lg"
+          style={{
+            top: '3px', bottom: '3px', left: '3px',
+            width: 'calc((100% - 6px) / 2)',
+            background: active.bg,
+            border: active.border,
+            transform: `translateX(${index * 100}%)`,
+            transition: 'transform 0.25s cubic-bezier(0.4, 0, 0.2, 1), background 0.25s ease, border-color 0.25s ease',
+            pointerEvents: 'none',
+          }}
+        />
+        {SONG_SOURCE_OPTIONS.map(({ key, label }) => (
+          <button
+            key={key}
+            onClick={() => onChange(key)}
+            className="relative flex-1 py-1.5 rounded-lg text-xs font-semibold z-10 transition-colors duration-200"
+            style={{
+              color: value === key ? SONG_SOURCE_STYLE[key].text : 'rgba(255,255,255,0.45)',
+              background: 'transparent', border: 'none', cursor: 'pointer',
+            }}
+          >
+            {label}
+          </button>
+        ))}
+      </div>
+    </div>
+  );
+}
+
+function PlaylistChip({ customPlaylist, onOpen }: Readonly<{
+  customPlaylist: { name: string; imageUrl: string | null; tracks: unknown[] } | null; onOpen: () => void;
+}>) {
+  return (
+    <button
+      onClick={onOpen}
+      className="w-full flex items-center gap-2.5 rounded-xl text-left"
+      style={{ padding: '8px 10px', background: 'rgba(255,255,255,0.05)', border: '1px solid rgba(255,255,255,0.08)', cursor: 'pointer' }}
+    >
+      {customPlaylist?.imageUrl ? (
+        <img src={customPlaylist.imageUrl} alt="" className="w-8 h-8 rounded-md object-cover shrink-0" />
+      ) : (
+        <div className="w-8 h-8 rounded-md shrink-0" style={{ background: 'rgba(255,255,255,0.08)' }} />
+      )}
+      <div className="min-w-0 flex-1">
+        {customPlaylist ? (
+          <>
+            <p className="truncate" style={{ color: 'white', fontWeight: 600, fontSize: '0.8125rem' }}>{customPlaylist.name}</p>
+            <p style={{ color: 'rgba(255,255,255,0.4)', fontSize: '0.6875rem' }}>{customPlaylist.tracks.length} tracks</p>
+          </>
+        ) : (
+          <p style={{ color: 'rgba(255,255,255,0.5)', fontSize: '0.8125rem' }}>Choose a playlist</p>
+        )}
+      </div>
+      <span style={{ color: 'rgba(255,255,255,0.35)', fontSize: '0.75rem' }}>{customPlaylist ? 'Change' : '→'}</span>
+    </button>
+  );
+}
+
 function ToggleRow({ label, value, onToggle, disabled }: Readonly<{
   label: string; value: boolean; onToggle: () => void; disabled?: boolean;
 }>) {
@@ -911,6 +1034,175 @@ function FullScreenDialog({ ariaLabel, dialogRef, children }: Readonly<{
   );
 }
 
+function playlistErrorMessage(error: PlaylistFetchError, count?: number): string {
+  switch (error) {
+    case 'unauthorized': return 'Reconnect Spotify to allow playlist access.';
+    case 'not_found': return "Couldn't find that playlist. Check the link and try again.";
+    case 'too_few': return `Only ${count ?? 0} playable track${count === 1 ? '' : 's'}. Pick a playlist with at least 10.`;
+    default: return "Couldn't load that playlist. Try again.";
+  }
+}
+
+function ReconnectBanner() {
+  return (
+    <div style={{ padding: '12px', borderRadius: '10px', background: 'rgba(220,38,38,0.12)', border: '1px solid rgba(248,113,113,0.3)' }}>
+      <p style={{ color: '#fca5a5', fontSize: '0.8125rem', marginBottom: '8px' }}>
+        Reconnect Spotify to allow playlist access.
+      </p>
+      <a
+        href={`${BACKEND_URL}/api/auth/spotify`}
+        style={{ color: 'white', fontWeight: 600, fontSize: '0.8125rem', textDecoration: 'underline' }}
+      >
+        Reconnect Spotify
+      </a>
+    </div>
+  );
+}
+
+// The playlist picker's main panel has four mutually-exclusive states; kept
+// as its own component (rather than a nested ternary) so each is a plain,
+// independently-readable branch.
+function PlaylistsPanel({ playlistsError, loadingPlaylists, playlists, resolving, onChoose }: Readonly<{
+  playlistsError: PlaylistFetchError | null;
+  loadingPlaylists: boolean;
+  playlists: PlaylistSummary[];
+  resolving: boolean;
+  onChoose: (id: string, imageUrl: string | null) => void;
+}>) {
+  if (playlistsError === 'unauthorized') return <ReconnectBanner />;
+  if (loadingPlaylists) {
+    return <p style={{ color: 'rgba(255,255,255,0.45)', fontSize: '0.8125rem' }}>Loading your playlists…</p>;
+  }
+  if (playlistsError) {
+    return <p style={{ color: '#fca5a5', fontSize: '0.8125rem' }}>Couldn't load your playlists. Try again.</p>;
+  }
+  return (
+    <div className="grid grid-cols-3 gap-2.5 overflow-y-auto" style={{ maxHeight: '48vh' }}>
+      {playlists.map(p => (
+        <button
+          key={p.id}
+          onClick={() => onChoose(p.id, p.imageUrl)}
+          disabled={resolving}
+          className="flex flex-col items-start gap-1.5 rounded-xl text-left"
+          style={{ padding: '8px', background: 'rgba(255,255,255,0.04)', border: '1px solid rgba(255,255,255,0.07)', cursor: resolving ? 'not-allowed' : 'pointer' }}
+        >
+          {p.imageUrl ? (
+            <img src={p.imageUrl} alt="" className="w-full aspect-square rounded-lg object-cover" />
+          ) : (
+            <div className="w-full aspect-square rounded-lg" style={{ background: 'rgba(255,255,255,0.06)' }} />
+          )}
+          <p className="truncate w-full" style={{ color: 'white', fontWeight: 600, fontSize: '0.75rem' }}>{p.name}</p>
+          <p style={{ color: 'rgba(255,255,255,0.4)', fontSize: '0.6875rem' }}>{p.trackCount} tracks</p>
+        </button>
+      ))}
+    </div>
+  );
+}
+
+// Full-screen playlist browser + paste-a-link fallback. Kept out of the
+// small settings popover entirely — this is the "heavy" UI (grid, loading/
+// error states) that the popover's chip just launches.
+function PlaylistPickerDialog({ game }: Readonly<{ game: HostState }>) {
+  const { playlistPicker, closePlaylistPicker, selectPlaylist } = game;
+  const { playlists, loadingPlaylists, playlistsError, fetchPlaylists, fetchPlaylistTracks } = playlistPicker;
+  const [linkInput, setLinkInput] = useState('');
+  const [resolving, setResolving] = useState(false);
+  const [resolveError, setResolveError] = useState<string | null>(null);
+  const [resolvedCount, setResolvedCount] = useState(0);
+
+  useEffect(() => { fetchPlaylists(); }, []); // eslint-disable-line react-hooks/exhaustive-deps
+
+  // LiquidGlass only measures its own size once on mount (and on window
+  // resize) — it has no ResizeObserver, so it never notices the card growing
+  // as content changes (spinner -> grid, or an error/loading line appearing
+  // below it). Remount it whenever the visible content shape changes so it
+  // re-measures against the new layout.
+  const glassContentKey = [
+    loadingPlaylists ? 'loading' : 'idle',
+    playlistsError ?? 'none',
+    playlists.length > 0 ? 'has-playlists' : 'no-playlists',
+    resolving ? 'resolving' : 'idle',
+    resolveError ? 'resolve-error' : 'ok',
+  ].join('|');
+
+  const choosePlaylist = async (id: string, fallbackImageUrl: string | null = null) => {
+    setResolving(true);
+    setResolveError(null);
+    setResolvedCount(0);
+    const result = await fetchPlaylistTracks(id, setResolvedCount);
+    setResolving(false);
+    if (!result.ok) {
+      setResolveError(playlistErrorMessage(result.error, result.count));
+      return;
+    }
+    const imageUrl = fallbackImageUrl ?? result.tracks[0]?.albumArtUrl ?? null;
+    selectPlaylist({ id, name: result.name, imageUrl, tracks: result.tracks });
+  };
+
+  const submitLink = () => {
+    const id = resolvePlaylistInput(linkInput);
+    if (!id) { setResolveError("That doesn't look like a Spotify playlist link."); return; }
+    choosePlaylist(id);
+  };
+
+  return (
+    <FullScreenDialog ariaLabel="Choose a playlist">
+      <div className="liquid-btn relative" style={{ width: 'min(560px, 92vw)' }}>
+        <LiquidGlass key={glassContentKey} style={{ position: 'absolute', top: '50%', left: '50%' }} {...LIQUID_CARD_PROPS} padding="28px 24px">
+          <div style={{ width: 'min(512px, 84vw)', display: 'flex', flexDirection: 'column', gap: '16px' }}>
+            <div className="flex items-center justify-between">
+              <p style={{ color: 'white', fontWeight: 800, fontSize: '1.1rem' }}>Choose a playlist</p>
+              <button
+                onClick={closePlaylistPicker}
+                aria-label="Close"
+                style={{ background: 'none', border: 'none', color: 'rgba(255,255,255,0.45)', cursor: 'pointer', fontSize: '1.25rem', lineHeight: 1 }}
+              >
+                ×
+              </button>
+            </div>
+
+            <div className="flex items-center gap-2">
+              <input
+                value={linkInput}
+                onChange={e => setLinkInput(e.target.value)}
+                placeholder="Or paste a playlist link"
+                style={{ flex: 1, padding: '9px 12px', borderRadius: '10px', background: 'rgba(255,255,255,0.06)', border: '1px solid rgba(255,255,255,0.1)', color: 'white', fontSize: '0.8125rem' }}
+              />
+              <button
+                onClick={submitLink}
+                disabled={resolving || !linkInput.trim()}
+                style={{
+                  padding: '9px 14px', borderRadius: '10px',
+                  background: 'rgba(130,30,175,0.35)', border: '1px solid rgba(160,60,200,0.5)',
+                  color: 'white', fontWeight: 600, fontSize: '0.8125rem',
+                  cursor: resolving ? 'not-allowed' : 'pointer', opacity: resolving || !linkInput.trim() ? 0.5 : 1,
+                }}
+              >
+                Load
+              </button>
+            </div>
+
+            <PlaylistsPanel
+              playlistsError={playlistsError}
+              loadingPlaylists={loadingPlaylists}
+              playlists={playlists}
+              resolving={resolving}
+              onChoose={choosePlaylist}
+            />
+
+            {resolveError && <p style={{ color: '#fca5a5', fontSize: '0.75rem' }}>{resolveError}</p>}
+            {resolving && (
+              <p style={{ color: 'rgba(255,255,255,0.45)', fontSize: '0.8125rem' }}>
+                {resolvedCount > 0 ? `Loading tracks… ${resolvedCount} so far` : 'Loading tracks…'}
+              </p>
+            )}
+          </div>
+        </LiquidGlass>
+      </div>
+    </FullScreenDialog>
+  );
+}
+
 // ─── Phase views ─────────────────────────────────────────────────────────────
 
 function ConnectView({ game }: Readonly<{ game: HostState }>) {
@@ -958,7 +1250,7 @@ function ConnectView({ game }: Readonly<{ game: HostState }>) {
                 <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '6px' }}>
                   <p style={{ color: 'white', fontWeight: 800, fontSize: '1.2rem', letterSpacing: '-0.01em', textAlign: 'center' }}>Account not authorized</p>
                   <p style={{ color: 'rgba(255,255,255,0.45)', fontSize: '0.8rem', textAlign: 'center', lineHeight: 1.5 }}>
-                    Versed is in limited testing — only a few Spotify accounts can host. Ask Joachim to add yours, then try again.
+                    Versed is in limited testing. Only a few Spotify accounts can host. Ask Joachim to add yours, then try again.
                   </p>
                 </div>
                 <button
@@ -1058,9 +1350,11 @@ function ModeToggle({ mode, setMode }: Readonly<{ mode: Mode; setMode: (m: Mode)
   );
 }
 
-function StartButton({ players, mode, startGame }: Readonly<{ players: PlayerInfo[]; mode: Mode; startGame: () => void }>) {
+function StartButton({ players, mode, startGame, disabled: extraDisabled }: Readonly<{
+  players: PlayerInfo[]; mode: Mode; startGame: () => void; disabled?: boolean;
+}>) {
   const [hovered, setHovered] = useState(false);
-  const disabled = players.length === 0;
+  const disabled = players.length === 0 || !!extraDisabled;
   const hoverShadow = {
     classic: 'drop-shadow(0 0 12px rgba(110, 32, 155, 0.7))',
     race: 'drop-shadow(0 0 12px rgba(220, 80, 10, 0.7))',
@@ -1285,7 +1579,11 @@ function MuteButton({ muted, toggleMute }: Readonly<{ muted: boolean; toggleMute
 }
 
 export function LobbyView({ game }: Readonly<{ game: HostState }>) {
-  const { spotify, pin, players, createGame, startGame, mode, settingsOpen, toggleSettings, setMode, removePlayer, gameExpired } = game;
+  const {
+    spotify, pin, players, createGame, startGame, mode, settingsOpen, toggleSettings, setMode, removePlayer,
+    gameExpired, playlistPickerOpen, songSource, customPlaylist, startError,
+  } = game;
+  const playlistNotReady = songSource === 'playlist' && (!customPlaylist || customPlaylist.tracks.length < MIN_PLAYLIST_TRACKS);
   const [lobbyVisible, setLobbyVisible] = useState(false);
   const { fadeOut, muted, toggleMute } = useLobbyMusic(gameExpired);
 
@@ -1311,6 +1609,7 @@ export function LobbyView({ game }: Readonly<{ game: HostState }>) {
       <MuteButton muted={muted} toggleMute={toggleMute} />
 
       <SettingsPanel game={game} open={settingsOpen} />
+      {playlistPickerOpen && <PlaylistPickerDialog game={game} />}
 
       <div
         className="flex flex-col items-center gap-6 p-6 transition-transform duration-500 ease-out"
@@ -1347,7 +1646,8 @@ export function LobbyView({ game }: Readonly<{ game: HostState }>) {
               ))}
             </div>
           </div>
-          <StartButton players={players} mode={mode} startGame={handleStart} />
+          <StartButton players={players} mode={mode} startGame={handleStart} disabled={playlistNotReady} />
+          {startError && <p style={{ color: '#fca5a5', fontSize: '0.8125rem' }}>{startError}</p>}
         </div>
       ) : null}
     </div>

@@ -22,6 +22,21 @@ export interface Hint {
   imageUrl?: string;
 }
 
+export type SongSource = 'library' | 'playlist';
+
+// Raw shape sent from client -> server as part of start_game's settings
+// payload once a host has picked a playlist. Client-supplied, so treated as
+// untrusted and re-sanitized in customSongPool.ts before use.
+export interface PlaylistTrackInput {
+  spotifyTrackId: string;
+  title: string;
+  artist: string;
+  featuredArtists?: string;
+  durationMs: number | null;
+  year: number | null;
+  albumArtUrl: string | null;
+}
+
 // ─── Party mode ───────────────────────────────────────────────────────────────
 
 // How a party round plays out. 'classic' and 'race' reuse those modes' whole
@@ -136,8 +151,12 @@ export interface Game {
   artistOnly: boolean;
   yearOnly: boolean;
   difficulty: Difficulty;
+  songSource: SongSource;
+  songPool?: Song[];
+  playlistId?: string;
   currentRound: Round | null;
   usedSongIds: Set<string>;
+  artistWindow: Song[]; // last few rounds' songs, most recent last — see artistWindowSize
   phaseTimer: ReturnType<typeof setTimeout> | null;
   phaseEndsAt: number | null; // epoch ms when the current countdown expires
 }
