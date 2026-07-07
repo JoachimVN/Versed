@@ -40,6 +40,10 @@ interface SpotifyPlaylistsResponse {
 interface SpotifyArtist { name: string }
 interface SpotifyAlbum { images: SpotifyImage[] | null; release_date?: string }
 interface SpotifyTrack {
+  // Present on /items responses to distinguish tracks from podcast episodes
+  // (episodes lack `artists`, which already filters them out below, but the
+  // type check makes that intentional rather than incidental).
+  type?: string;
   id: string | null;
   name: string;
   duration_ms: number | null;
@@ -48,7 +52,10 @@ interface SpotifyTrack {
   album: SpotifyAlbum;
 }
 interface SpotifyPlaylistTracksResponse {
-  items: { track: SpotifyTrack | null }[];
+  // Spotify's Feb 2026 migration renamed each entry's `track` field to `item`
+  // (a track/episode union) when the endpoint itself moved from /tracks to
+  // /items.
+  items: { item: SpotifyTrack | null }[];
   next: string | null;
 }
 
@@ -121,16 +128,16 @@ function retryDelayMs(res: Response, attempt: number): number {
     : backoffMs(attempt);
 }
 
-function isAuthError(status: number): boolean {
-  return status === 401 || status === 403;
-}
-
 function isTransientStatus(status: number): boolean {
   return status === 429 || status >= 500;
 }
 
 function isPlaylistNotFound(notFoundIsPlaylist: boolean, status: number): boolean {
   return notFoundIsPlaylist && status === 404;
+}
+
+function isAuthError(status: number): boolean {
+  return status === 401 || status === 403;
 }
 
 // Centralizes the status-code handling shared by every Spotify Web API call
@@ -176,7 +183,7 @@ async function fetchSpotify<T>(
 // Filters out removed tracks, local files (unplayable via the Web Playback
 // SDK), and episodes/non-track items (no artists array).
 function toPlaylistTrackInput(t: SpotifyTrack | null): PlaylistTrackInput | null {
-  if (!t || t.is_local || !t.id || !t.artists?.length) return null;
+  if (!t || t.type === 'episode' || t.is_local || !t.id || !t.artists?.length) return null;
   return {
     spotifyTrackId: t.id,
     title: t.name,
@@ -244,13 +251,15 @@ export function usePlaylistPicker(accessToken: string | null) {
 
       const seen = new Set<string>();
       const tracks: PlaylistTrackInput[] = [];
-      let url: string | null = `https://api.spotify.com/v1/playlists/${playlistId}/tracks?limit=100&fields=`
-        + encodeURIComponent('next,items(track(id,name,duration_ms,is_local,artists(name),album(images,release_date)))');
+      // Spotify's Feb 2026 API migration removed `/tracks` — `/items` is its
+      // replacement, with each entry's `track` field renamed to `item`.
+      let url: string | null = `https://api.spotify.com/v1/playlists/${playlistId}/items?limit=100&fields=`
+        + encodeURIComponent('next,items(item(type,id,name,duration_ms,is_local,artists(name),album(images,release_date)))');
       while (url && tracks.length < MAX_PLAYLIST_TRACKS) {
         const result: SpotifyFetchResult<SpotifyPlaylistTracksResponse> = await fetchSpotify(url, accessToken);
         if (!result.ok) return result;
         for (const item of result.data.items) {
-          const track = toPlaylistTrackInput(item.track);
+          const track = toPlaylistTrackInput(item.item);
           if (!track || seen.has(track.spotifyTrackId)) continue;
           seen.add(track.spotifyTrackId);
           tracks.push(track);

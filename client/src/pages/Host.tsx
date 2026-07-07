@@ -1100,7 +1100,6 @@ function FullScreenDialog({ ariaLabel, dialogRef, children }: Readonly<{
 function playlistErrorMessage(error: PlaylistFetchError, count?: number): string {
   switch (error) {
     case 'unauthorized': return 'Reconnect Spotify to allow playlist access.';
-    case 'restricted': return "Spotify blocks API access to this playlist. It's likely one of Spotify's own curated playlists (Discover Weekly, Daily Mix, Top 50, etc.). Try a regular playlist instead.";
     case 'not_found': return "Couldn't find that playlist. Check the link and try again.";
     case 'too_few': return `Only ${count ?? 0} playable track${count === 1 ? '' : 's'}. Pick a playlist with at least 10.`;
     default: return "Couldn't load that playlist. Try again.";
