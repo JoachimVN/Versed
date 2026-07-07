@@ -1,7 +1,7 @@
 import { chromium } from 'playwright';
 import { prepPage, saveIfChanged } from './screenshot-utils.js';
 
-const BASE = 'http://localhost:5173';
+const BASE = 'http://localhost:4321';
 const OUT = 'docs/screenshots';
 const VIEWPORT = { width: 1280, height: 800 };
 
