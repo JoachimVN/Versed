@@ -18,9 +18,11 @@ async function take(browser, url, outFile) {
 
 try {
     const browser = await chromium.launch();
-    await take(browser, '/',                    'Lobby.png');
-    await take(browser, '/screenshot?v=playing', 'Playing.png');
-    await take(browser, '/screenshot?v=reveal',  'Reveal.png');
+    await take(browser, '/',                        'Lobby.png');
+    await take(browser, '/screenshot?v=playing',     'Playing.png');
+    await take(browser, '/screenshot?v=reveal',      'Reveal.png');
+    await take(browser, '/screenshot?v=lobby',       'HostLobby.png');
+    await take(browser, '/screenshot?v=party-intro', 'PartyIntro.png');
     await browser.close();
 } catch (e) {
     console.error(e);

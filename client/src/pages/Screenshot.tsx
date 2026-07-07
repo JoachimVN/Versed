@@ -1,9 +1,10 @@
 import { useSearchParams } from 'react-router-dom';
-import { PlayingView, RevealView } from './Host';
+import { PlayingView, RevealView, LobbyView } from './Host';
 import type { HostState } from './Host';
 import { WatchingView, GuessingView } from './Play';
 import type { PlayState } from './Play';
-import type { RoundResultEvent, LeaderboardEntry } from '../types';
+import { RoundIntro } from '../components/RoundIntro';
+import type { RoundResultEvent, LeaderboardEntry, PartyInfo } from '../types';
 
 // ─── Fixture data ─────────────────────────────────────────────────────────────
 
@@ -147,6 +148,22 @@ const MOCK_HOST_FINISHED: HostState = {
   roundDeltas: { Anna: 2250, John: 1450, Olivia: 1350, Marcus: 1000, Sofia: 250 },
 };
 
+// LobbyView is the only view that reads `game.spotify` directly, so it needs
+// a minimal stand-in rather than the `null as any` the other views get away with.
+const MOCK_HOST_LOBBY: HostState = {
+  ...MOCK_HOST,
+  phase: 'lobby',
+  spotify: { playerReady: true } as any,
+};
+
+// Steal Round is party mode's showiest mechanic (win, then rob a victim), so
+// it's the one screenshotted to represent the round-intro popup.
+const MOCK_PARTY_STEAL: PartyInfo = {
+  format: 'classic', target: 'title', event: 'steal', multiplier: 1,
+  intro: { title: 'Steal Round', tagline: 'Win the round, then rob another player · Bid & guess / name the song' },
+  finale: false, duelists: [],
+};
+
 const MOCK_PLAY: PlayState = {
   phase: 'watching',
   pin: '247',
@@ -223,5 +240,7 @@ export default function Screenshot() {
   if (v === 'watching') return <WatchingView game={MOCK_PLAY} />;
   if (v === 'guessing') return <GuessingView game={MOCK_PLAY_GUESSING} />;
   if (v === 'year-guessing') return <GuessingView game={MOCK_PLAY_YEAR_GUESSING} />;
-  return <p className="text-white p-6 font-mono">?v=playing|reveal|year|watching|guessing|year-guessing</p>;
+  if (v === 'lobby') return <LobbyView game={MOCK_HOST_LOBBY} />;
+  if (v === 'party-intro') return <RoundIntro party={MOCK_PARTY_STEAL} roundKey={0} dismissible={false} />;
+  return <p className="text-white p-6 font-mono">?v=playing|reveal|year|watching|guessing|year-guessing|lobby|party-intro</p>;
 }

@@ -1268,7 +1268,7 @@ function MuteButton({ muted, toggleMute }: Readonly<{ muted: boolean; toggleMute
   );
 }
 
-function LobbyView({ game }: Readonly<{ game: HostState }>) {
+export function LobbyView({ game }: Readonly<{ game: HostState }>) {
   const { spotify, pin, players, createGame, startGame, mode, settingsOpen, toggleSettings, setMode, removePlayer, gameExpired } = game;
   const [lobbyVisible, setLobbyVisible] = useState(false);
   const { fadeOut, muted, toggleMute } = useLobbyMusic(gameExpired);
