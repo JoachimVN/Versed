@@ -18,7 +18,10 @@ export type PlaylistFetchError = 'unauthorized' | 'not_found' | 'too_few' | 'err
 export const MIN_PLAYLIST_TRACKS = 10;
 // Not a real product limit — Spotify's API just has no bulk endpoint, so a
 // huge playlist means many sequential page requests. This bounds worst case.
-const MAX_PLAYLIST_TRACKS = 2000;
+// Mirrors Host.tsx's MAX_POOL_TRACKS (the combined-pool cap across all
+// selected playlists) — kept equal so a single playlist can't individually
+// exceed what the combined pool would allow anyway.
+export const MAX_PLAYLIST_TRACKS = 5000;
 
 interface SpotifyImage { url: string }
 interface SpotifyPlaylistItem {
@@ -226,7 +229,8 @@ export function usePlaylistPicker(accessToken: string | null) {
     // pagination on a large playlist can take several round-trips.
     onProgress?: (count: number) => void,
   ): Promise<
-    { ok: true; name: string; tracks: PlaylistTrackInput[] } | { ok: false; error: PlaylistFetchError; count?: number }
+    { ok: true; name: string; tracks: PlaylistTrackInput[]; truncated: boolean }
+    | { ok: false; error: PlaylistFetchError; count?: number }
   > => {
     if (!accessToken) return { ok: false, error: 'error' };
     // Re-validated here (not just trusted from the caller) immediately before
@@ -256,7 +260,11 @@ export function usePlaylistPicker(accessToken: string | null) {
       }
 
       if (tracks.length < MIN_PLAYLIST_TRACKS) return { ok: false, error: 'too_few', count: tracks.length };
-      return { ok: true, name: metaResult.data.name, tracks };
+      // `url` still non-null here means the loop stopped because it hit the
+      // cap, not because it ran out of pages — i.e. the playlist has more
+      // tracks than we imported.
+      const truncated = tracks.length >= MAX_PLAYLIST_TRACKS && url !== null;
+      return { ok: true, name: metaResult.data.name, tracks, truncated };
     } catch (err) {
       console.error('[Spotify] fetch playlist tracks threw:', err);
       return { ok: false, error: 'error' };

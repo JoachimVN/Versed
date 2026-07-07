@@ -6,7 +6,7 @@ import QRCodeLib from 'react-qr-code';
 const QRCode = QRCodeLib as unknown as React.FC<{ value: string; size?: number }>;
 import { socket } from '../socket';
 import { useSpotify } from '../hooks/useSpotify';
-import { usePlaylistPicker, resolvePlaylistInput, PlaylistFetchError, PlaylistSummary, MIN_PLAYLIST_TRACKS } from '../hooks/usePlaylistPicker';
+import { usePlaylistPicker, resolvePlaylistInput, PlaylistFetchError, PlaylistSummary, MIN_PLAYLIST_TRACKS, MAX_PLAYLIST_TRACKS } from '../hooks/usePlaylistPicker';
 import { useEscapeKey } from '../hooks/useEscapeKey';
 import { useFocusTrap } from '../hooks/useFocusTrap';
 import { useSoundEffect } from '../hooks/useSoundEffect';
@@ -29,10 +29,18 @@ type Difficulty = 'easy' | 'medium' | 'hard';
 interface SongInfo { title: string; artist: string; trackId: string; tempo?: number | null }
 interface CustomPlaylist { id: string; name: string; imageUrl: string | null; tracks: PlaylistTrackInput[] }
 
+// Combined-pool cap across all selected playlists — mirrors
+// usePlaylistPicker's MAX_PLAYLIST_TRACKS (the per-playlist import cap) so
+// stacking several large playlists can't quietly build a pool bigger than a
+// single playlist import would ever have been allowed to be on its own.
+const MAX_POOL_TRACKS = 5000;
+
 // Dedupes by Spotify track ID across all selected playlists — first
-// occurrence wins, so a song present in two playlists is only sent (and
-// counted) once.
-function mergePlaylistTracks(playlists: CustomPlaylist[]): PlaylistTrackInput[] {
+// occurrence wins, so a song present in two playlists is only counted once.
+// Uncapped: used to detect (and message) when the combined pool exceeds
+// MAX_POOL_TRACKS, separately from the capped tracks actually sent to the
+// server (mergePlaylistTracks below).
+function mergeUniqueTracks(playlists: CustomPlaylist[]): PlaylistTrackInput[] {
   const seen = new Set<string>();
   const merged: PlaylistTrackInput[] = [];
   for (const p of playlists) {
@@ -43,6 +51,14 @@ function mergePlaylistTracks(playlists: CustomPlaylist[]): PlaylistTrackInput[] 
     }
   }
   return merged;
+}
+
+// What actually gets sent to the server — earlier-added playlists fill the
+// pool first, so if the cap is hit it's always the most recently added
+// playlist(s) that get trimmed, matching what PlaylistList's notice tells
+// the host.
+function mergePlaylistTracks(playlists: CustomPlaylist[]): PlaylistTrackInput[] {
+  return mergeUniqueTracks(playlists).slice(0, MAX_POOL_TRACKS);
 }
 
 const wait = (ms: number) => new Promise<void>(resolve => setTimeout(resolve, ms));
@@ -933,7 +949,9 @@ function SongSourceRow({ value, onChange }: Readonly<{ value: SongSource; onChan
 function PlaylistList({ customPlaylists, onOpen, onRemove }: Readonly<{
   customPlaylists: CustomPlaylist[]; onOpen: () => void; onRemove: (id: string) => void;
 }>) {
-  const totalTracks = mergePlaylistTracks(customPlaylists).length;
+  const uncappedTotal = mergeUniqueTracks(customPlaylists).length;
+  const totalTracks = Math.min(uncappedTotal, MAX_POOL_TRACKS);
+  const overCap = uncappedTotal > MAX_POOL_TRACKS;
   return (
     <div className="space-y-2">
       {customPlaylists.map(p => (
@@ -975,6 +993,11 @@ function PlaylistList({ customPlaylists, onOpen, onRemove }: Readonly<{
         </div>
         <span style={{ color: 'rgba(255,255,255,0.35)', fontSize: '0.75rem' }}>→</span>
       </button>
+      {overCap && (
+        <p style={{ color: '#fcd34d', fontSize: '0.6875rem' }}>
+          Combined pool capped at {MAX_POOL_TRACKS.toLocaleString()} tracks — {(uncappedTotal - MAX_POOL_TRACKS).toLocaleString()} track{uncappedTotal - MAX_POOL_TRACKS === 1 ? '' : 's'} from the most recently added playlist(s) won't be included.
+        </p>
+      )}
     </div>
   );
 }
@@ -1168,6 +1191,7 @@ function PlaylistPickerDialog({ game }: Readonly<{ game: HostState }>) {
   const [resolving, setResolving] = useState(false);
   const [resolveError, setResolveError] = useState<string | null>(null);
   const [resolvedCount, setResolvedCount] = useState(0);
+  const [truncationNotice, setTruncationNotice] = useState<string | null>(null);
   const selectedIds = new Set(customPlaylists.map(p => p.id));
 
   useEffect(() => { fetchPlaylists(); }, []); // eslint-disable-line react-hooks/exhaustive-deps
@@ -1183,14 +1207,16 @@ function PlaylistPickerDialog({ game }: Readonly<{ game: HostState }>) {
     playlists.length > 0 ? 'has-playlists' : 'no-playlists',
     resolving ? 'resolving' : 'idle',
     resolveError ? 'resolve-error' : 'ok',
+    truncationNotice ? 'truncated' : 'ok',
   ].join('|');
 
   const choosePlaylist = async (id: string, fallbackImageUrl: string | null = null) => {
     // Clicking an already-added playlist again toggles it off — no need to
     // refetch tracks just to remove something already in hand.
-    if (selectedIds.has(id)) { removePlaylist(id); return; }
+    if (selectedIds.has(id)) { removePlaylist(id); setTruncationNotice(null); return; }
     setResolving(true);
     setResolveError(null);
+    setTruncationNotice(null);
     setResolvedCount(0);
     const result = await fetchPlaylistTracks(id, setResolvedCount);
     setResolving(false);
@@ -1200,6 +1226,10 @@ function PlaylistPickerDialog({ game }: Readonly<{ game: HostState }>) {
     }
     const imageUrl = fallbackImageUrl ?? result.tracks[0]?.albumArtUrl ?? null;
     addPlaylist({ id, name: result.name, imageUrl, tracks: result.tracks });
+    setLinkInput('');
+    if (result.truncated) {
+      setTruncationNotice(`That playlist has more than ${MAX_PLAYLIST_TRACKS.toLocaleString()} tracks — only the first ${MAX_PLAYLIST_TRACKS.toLocaleString()} were imported.`);
+    }
   };
 
   const submitLink = () => {
@@ -1255,6 +1285,7 @@ function PlaylistPickerDialog({ game }: Readonly<{ game: HostState }>) {
             />
 
             {resolveError && <p style={{ color: '#fca5a5', fontSize: '0.75rem' }}>{resolveError}</p>}
+            {truncationNotice && <p style={{ color: '#fcd34d', fontSize: '0.75rem' }}>{truncationNotice}</p>}
             {resolving && (
               <p style={{ color: 'rgba(255,255,255,0.45)', fontSize: '0.8125rem' }}>
                 {resolvedCount > 0 ? `Loading tracks… ${resolvedCount} so far` : 'Loading tracks…'}
