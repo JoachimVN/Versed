@@ -51,6 +51,7 @@ const MOCK_HOST: HostState = {
   ],
   result: null,
   roundDeltas: {},
+  roundPity: {},
   leaderboard: [],
   copied: false,
   playProgress: 0.62,
@@ -129,10 +130,10 @@ const MOCK_RESULT_YEAR: RoundResultEvent = {
     { name: 'Marcus', guess: null },
   ],
   yearResults: [
-    { name: 'Olivia', guess: 1983, diff: 0, points: 650 },
-    { name: 'Anna', guess: 1984, diff: 1, points: 480 },
-    { name: 'John', guess: 1979, diff: 4, points: 210 },
-    { name: 'Marcus', guess: null, diff: null, points: 0 },
+    { name: 'Olivia', guess: 1983, diff: 0, points: 650, pity: false },
+    { name: 'Anna', guess: 1984, diff: 1, points: 480, pity: false },
+    { name: 'John', guess: 1979, diff: 4, points: 210, pity: false },
+    { name: 'Marcus', guess: null, diff: null, points: 0, pity: false },
   ],
 };
 
@@ -196,6 +197,7 @@ const MOCK_PLAY: PlayState = {
   result: null,
   myScore: 2650,
   myScoreDelta: 0,
+  myPity: false,
   myStreak: 0,
   mode: 'classic',
   artistOnly: false,

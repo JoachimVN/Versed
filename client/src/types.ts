@@ -26,6 +26,7 @@ export interface PlayerInfo {
   name: string;
   score?: number;
   streak?: number;
+  pity?: boolean;
 }
 
 // Party mode: the per-round recipe as clients see it. A hidden mystery
@@ -45,6 +46,7 @@ export interface YearResult {
   guess: number | null;
   diff: number | null;
   points: number;
+  pity: boolean;
 }
 
 export interface RoundResultEvent {

@@ -113,6 +113,7 @@ export interface HostState {
   playerBids: { name: string; bid: number }[];
   result: RoundResultEvent | null;
   roundDeltas: Record<string, number>;
+  roundPity: Record<string, boolean>;
   leaderboard: LeaderboardEntry[];
   copied: boolean;
   playProgress: number;
@@ -191,6 +192,7 @@ function useHostGame(): HostState {
   const [playerBids, setPlayerBids] = useState<{ name: string; bid: number }[]>([]);
   const [result, setResult] = useState<RoundResultEvent | null>(null);
   const [roundDeltas, setRoundDeltas] = useState<Record<string, number>>({});
+  const [roundPity, setRoundPity] = useState<Record<string, boolean>>({});
   const [leaderboard, setLeaderboard] = useState<LeaderboardEntry[]>([]);
   const [copied, setCopied] = useState(false);
   const [playProgress, setPlayProgress] = useState(0);
@@ -442,12 +444,15 @@ function useHostGame(): HostState {
 
     socket.on('score_update', ({ players: p }: { players: PlayerInfo[] }) => {
       const deltas: Record<string, number> = {};
+      const pity: Record<string, boolean> = {};
       for (const updated of p) {
         const prev = playersRef.current.find(x => x.name === updated.name);
         deltas[updated.name] = (updated.score ?? 0) - (prev?.score ?? 0);
+        pity[updated.name] = updated.pity ?? false;
       }
       playersRef.current = p;
       setRoundDeltas(deltas);
+      setRoundPity(pity);
       setPlayers(p);
     });
 
@@ -561,7 +566,7 @@ function useHostGame(): HostState {
   return {
     spotify, phase, pin, players, roundIndex, totalRounds, hints,
     bettingTime, timeLeft, timerTotal, bidCount, countdown, guesserNames, lowestBid, playerBids,
-    result, roundDeltas, leaderboard, copied, playProgress, inviteUrl,
+    result, roundDeltas, roundPity, leaderboard, copied, playProgress, inviteUrl,
     settingsOpen, bettingTimeSetting, guessingTimeSetting, roundsSetting,
     mode, raceTimeSetting, raceWinnerOnly, artistOnly, yearOnly, difficulty,
     songSource, customPlaylists, playlistPicker, playlistPickerOpen, startError,
@@ -2254,11 +2259,12 @@ function GuessingView({ game }: Readonly<{ game: HostState }>) {
 type GuessCorrectness = 'none' | 'correct' | 'exact';
 
 function RevealPlayerRow({
-  player, entry, delta, delay, correct, instant, removePlayer,
+  player, entry, delta, pity, delay, correct, instant, removePlayer,
 }: Readonly<{
   player: PlayerInfo;
   entry?: { guess: string | null; timeMs?: number | null; live?: boolean };
   delta: number;
+  pity: boolean;
   delay: number;
   correct: GuessCorrectness;
   instant: boolean;
@@ -2307,7 +2313,7 @@ function RevealPlayerRow({
         </div>
         {delta > 0 && (
           <p className={`text-sky-400 text-xs tabular-nums shrink-0 transition-opacity duration-500 ${deltaFading ? 'opacity-0' : 'opacity-100'}`}>
-            +{displayDelta > 0 ? displayDelta.toLocaleString() : ''}
+            +{displayDelta > 0 ? displayDelta.toLocaleString() : ''}{pity && ' (pity)'}
           </p>
         )}
       </div>
@@ -2339,7 +2345,7 @@ function RevealShell({
   isCorrectFor: (player: PlayerInfo) => GuessCorrectness;
   wide?: boolean;
 }>) {
-  const { roundIndex, totalRounds, players, roundDeltas, removePlayer, endGame, stealResult } = game;
+  const { roundIndex, totalRounds, players, roundDeltas, roundPity, removePlayer, endGame, stealResult } = game;
   return (
     <div className={`page-enter relative min-h-screen flex flex-col items-center gap-5 overflow-hidden ${wide ? 'px-2 py-6' : 'p-6'}`}>
       <img
@@ -2372,6 +2378,7 @@ function RevealShell({
             player={p}
             entry={result.playerGuesses?.find(g => g.name === p.name)}
             delta={roundDeltas[p.name] ?? 0}
+            pity={roundPity[p.name] ?? false}
             delay={400 + i * 80}
             correct={isCorrectFor(p)}
             instant={instant}

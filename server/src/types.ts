@@ -74,6 +74,7 @@ export interface YearResult {
   guess: number | null;             // null = no/invalid answer
   diff: number | null;
   points: number;
+  pity: boolean;
 }
 
 // Bidders grouped by bid value. Tiers are played in ascending bid order: the
@@ -106,6 +107,7 @@ export interface Round {
   liveDrafts: Map<string, string>; // socketId → text currently typed, not yet submitted
   correctGuesserName?: string;      // classic mode: name of the player who got it right
   scoredSocketIds: Set<string>;     // players who earned points this round — everyone else's streak resets when the round ends
+  pityAwardedTo: Set<string>;       // players whose score this round included the catch-up pity bonus
   // Race-mode fields
   playStartAt: number | null;      // epoch ms when audio started
   firstCorrectAt: number | null;   // epoch ms of first correct guess (decay origin)

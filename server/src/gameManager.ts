@@ -442,12 +442,14 @@ function currentScores(game: Game): Map<string, number> {
 // player's pre-round total (mutating game.players before calling this would
 // let a player's own updated score, or an already-processed player in a
 // batch, leak into the leader comparison).
-function pityBonus(scores: Map<string, number>, scorerId: string): number {
+function pityBonus(scores: Map<string, number>, scorerId: string, round: Round): number {
   const leaderScore = Math.max(
     0,
     ...Array.from(scores.entries()).filter(([id]) => id !== scorerId).map(([, s]) => s),
   );
-  return leaderScore - (scores.get(scorerId) ?? 0) > PITY_GAP_THRESHOLD ? PITY_BONUS : 0;
+  if (leaderScore - (scores.get(scorerId) ?? 0) <= PITY_GAP_THRESHOLD) return 0;
+  round.pityAwardedTo.add(scorerId);
+  return PITY_BONUS;
 }
 
 // The bid reward steps down the BID_OPTIONS ladder rather than scaling with
@@ -626,6 +628,7 @@ function buildRound(game: Game, party?: PartyConfig): Round {
     guesses: new Map(),
     liveDrafts: new Map(),
     scoredSocketIds: new Set(),
+    pityAwardedTo: new Set(),
     playStartAt: null,
     firstCorrectAt: null,
     correctGuessers: new Set(),
@@ -887,7 +890,7 @@ export function recordGuess(
     const correct = guess !== null && guess === Math.floor(round.song.year ?? 0);
     if (!correct) return failGuess(round, socketId, guesserName);
     const points = calcPoints(game, round.lowestBid, round.song.rank) * roundMultiplier(round)
-      + pityBonus(currentScores(game), socketId);
+      + pityBonus(currentScores(game), socketId, round);
     const result = applyClassicWin(game, round, socketId, guesserName, points);
     // The year reveal UI reads exclusively from `yearResults` (never from
     // correct/guesserName/points), so an early exact-match win still needs a
@@ -902,7 +905,7 @@ export function recordGuess(
 
   const basePoints = calcPoints(game, round.lowestBid, round.song.rank);
   const points = (basePoints + (artistBonus ? basePoints : 0)) * roundMultiplier(round)
-    + pityBonus(currentScores(game), socketId);
+    + pityBonus(currentScores(game), socketId, round);
   return applyClassicWin(game, round, socketId, guesserName, points);
 }
 
@@ -978,7 +981,7 @@ function applyRaceCorrectGuess(
     base = calcRacePoints(game, isFirst, elapsedMs, round.firstCorrectAt! - round.playStartAt!, round.song.rank);
   }
   let points = (base + (artistBonus ? base : 0)) * roundMultiplier(round);
-  if (points > 0) points += pityBonus(currentScores(game), socketId);
+  if (points > 0) points += pityBonus(currentScores(game), socketId, round);
   if (isFirst && round.party?.event === 'steal') {
     round.stealBy = socketId;
     round.stealDone = false;
@@ -1079,12 +1082,12 @@ function scoreYearGuesses(game: Game, round: Round, mult: number, winnerOnly: bo
       points *= mult;
     }
     if (points > 0) {
-      points += pityBonus(preRoundScores, e.id);
+      points += pityBonus(preRoundScores, e.id, round);
       e.player.score += points;
       e.player.streak += 1;
       round.scoredSocketIds.add(e.id);
     }
-    return { name: e.player.name, guess: e.guess, diff: e.diff, points };
+    return { name: e.player.name, guess: e.guess, diff: e.diff, points, pity: round.pityAwardedTo.has(e.id) };
   });
 
   results.sort((a, b) => (a.diff ?? 9999) - (b.diff ?? 9999));
@@ -1108,7 +1111,9 @@ function finalizeClassicYearWin(game: Game, round: Round, winnerId: string, winn
   const actual = Math.floor(round.song.year ?? 0);
   const entries = yearGuessEntries(game, round, actual);
   const results: YearResult[] = entries.map(e => ({
-    name: e.player.name, guess: e.guess, diff: e.diff, points: e.id === winnerId ? winnerPoints : 0,
+    name: e.player.name, guess: e.guess, diff: e.diff,
+    points: e.id === winnerId ? winnerPoints : 0,
+    pity: e.id === winnerId && round.pityAwardedTo.has(winnerId),
   }));
   results.sort((a, b) => (a.diff ?? 9999) - (b.diff ?? 9999));
   round.yearResults = results;

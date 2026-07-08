@@ -866,8 +866,11 @@ io.on('connection', (socket) => {
   }
 
   function emitScoreUpdate(game: GameObj) {
+    const pityAwardedTo = game.currentRound?.pityAwardedTo;
     io.to(game.pin).emit('score_update', {
-      players: Array.from(game.players.values()).map(p => ({ name: p.name, score: p.score, streak: p.streak })),
+      players: Array.from(game.players.values()).map(p => ({
+        name: p.name, score: p.score, streak: p.streak, pity: pityAwardedTo?.has(p.socketId) ?? false,
+      })),
     });
   }
 
