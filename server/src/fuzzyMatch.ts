@@ -14,6 +14,13 @@ const HOMOPHONES: Record<string, string> = {
 const PAREN_METADATA = /^\s*(feat|ft|featuring|from|with|remaster|live|acoustic|remix|edit|version|radio|original|extended|deluxe|bonus|interlude)\b/i;
 const PAREN_RE = /^([^([]*)[([](([^)\]]*?))[)\]]/;
 
+// Some "feature added later" reissues use a bare "Title + Artist" pattern
+// instead of "Title (feat. Artist)" — e.g. Spotify's own listing for
+// PinkPantheress's "Stateside + Zara Larsson". Only strip it when the text
+// after "+" actually names the (featured) artist — plenty of real titles
+// contain "+" too (e.g. "Safe + Sound", "Day + Night", "Pink + White").
+const PLUS_FEATURE_RE = /^(.+?)\s\+\s(.+)$/;
+
 function normalize(s: string): string {
   return s
     .toLowerCase()
@@ -79,7 +86,7 @@ export function isCorrectArtistGuess(guess: string, artist: string, featuredArti
   return false;
 }
 
-export function isCorrectGuess(guess: string, title: string): boolean {
+export function isCorrectGuess(guess: string, title: string, artist?: string, featuredArtists?: string): boolean {
   const g = normalize(guess);
   const t = normalize(title);
   if (!g) return false;
@@ -94,6 +101,10 @@ export function isCorrectGuess(guess: string, title: string): boolean {
     if (fuzzyMatch(g, normalize(parenMatch[1]))) return true;
     if (!PAREN_METADATA.test(parenMatch[2]) && fuzzyMatch(g, normalize(parenMatch[2]))) return true;
   }
+
+  const plusMatch = PLUS_FEATURE_RE.exec(title);
+  if (plusMatch && isCorrectArtistGuess(plusMatch[2], artist ?? '', featuredArtists)
+    && fuzzyMatch(g, normalize(plusMatch[1]))) return true;
 
   return false;
 }

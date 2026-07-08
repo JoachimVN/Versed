@@ -736,7 +736,8 @@ function SettingsPanel({ game, open }: Readonly<{ game: HostState; open: boolean
           )}
           <SettingRow label="Rounds" value={roundsSetting} unit=""
             onDec={() => setRoundsSetting(Math.max(1, roundsSetting - 1))}
-            onInc={() => setRoundsSetting(Math.min(30, roundsSetting + 1))} />
+            onInc={() => setRoundsSetting(roundsSetting + 1)}
+            onChange={setRoundsSetting} />
           {songSource === 'library' && <DifficultyRow value={difficulty} onChange={setDifficulty} />}
         </div>
 
@@ -845,9 +846,19 @@ function SettingStepperButton({ symbol, label, onClick, disabled }: Readonly<{
   );
 }
 
-function SettingRow({ label, value, unit, onDec, onInc, disabled }: Readonly<{
-  label: string; value: number; unit: string; onDec: () => void; onInc: () => void; disabled?: boolean;
+function SettingRow({ label, value, unit, onDec, onInc, onChange, min = 1, disabled }: Readonly<{
+  label: string; value: number; unit: string; onDec: () => void; onInc: () => void;
+  onChange?: (v: number) => void; min?: number; disabled?: boolean;
 }>) {
+  const [text, setText] = useState(String(value));
+  useEffect(() => { setText(String(value)); }, [value]);
+
+  const commit = () => {
+    const n = Number.parseInt(text, 10);
+    if (onChange && !Number.isNaN(n)) onChange(Math.max(min, n));
+    else setText(String(value));
+  };
+
   return (
     <div className="flex items-center justify-between">
       <span style={{ color: disabled ? 'rgba(255,255,255,0.45)' : 'rgba(255,255,255,0.5)', fontSize: '0.875rem' }}>
@@ -855,12 +866,31 @@ function SettingRow({ label, value, unit, onDec, onInc, disabled }: Readonly<{
       </span>
       <div className="flex items-center gap-2.5">
         <SettingStepperButton symbol="−" label={`Decrease ${label}`} onClick={onDec} disabled={disabled} />
-        <span style={{
-          color: disabled ? 'rgba(255,255,255,0.45)' : 'white',
-          fontWeight: 700, minWidth: '42px', textAlign: 'center', fontSize: '0.9375rem',
-        }}>
-          {value}{unit}
-        </span>
+        {onChange ? (
+          <input
+            type="text"
+            inputMode="numeric"
+            pattern="[0-9]*"
+            aria-label={label}
+            value={text}
+            disabled={disabled}
+            onChange={e => { if (/^\d*$/.test(e.target.value)) setText(e.target.value); }}
+            onBlur={commit}
+            onKeyDown={e => { if (e.key === 'Enter') (e.target as HTMLInputElement).blur(); }}
+            style={{
+              color: disabled ? 'rgba(255,255,255,0.45)' : 'white',
+              fontWeight: 700, width: '42px', textAlign: 'center', fontSize: '0.9375rem',
+              background: 'transparent', border: 'none', outline: 'none', padding: 0,
+            }}
+          />
+        ) : (
+          <span style={{
+            color: disabled ? 'rgba(255,255,255,0.45)' : 'white',
+            fontWeight: 700, minWidth: '42px', textAlign: 'center', fontSize: '0.9375rem',
+          }}>
+            {value}{unit}
+          </span>
+        )}
         <SettingStepperButton symbol="+" label={`Increase ${label}`} onClick={onInc} disabled={disabled} />
       </div>
     </div>
