@@ -16,8 +16,8 @@ export default function Home() {
         <img
           src={`${import.meta.env.BASE_URL}logo.png`}
           alt={APP_NAME}
-          className="h-[225px] w-auto drop-shadow-2xl"
-          style={{ marginBottom: '50px' }}
+          className="w-auto drop-shadow-2xl"
+          style={{ maxHeight: '225px', maxWidth: '100%', marginBottom: '50px' }}
         />
         <p className="text-white/60 text-lg tracking-wide"></p>
       </div>
@@ -81,10 +81,6 @@ export default function Home() {
           </LiquidGlass>
         </button>
       </div>
-
-      <p className="absolute bottom-6 inset-x-0 text-white/45 text-sm text-center">
-        Hosting requires a Spotify Premium account
-      </p>
     </div>
   );
 }

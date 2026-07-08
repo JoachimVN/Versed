@@ -61,8 +61,11 @@ export function ConfettiBackground({ burst = false, persistAfterBurst = false, s
     const ctx = canvas.getContext('2d');
     if (!ctx) return;
 
-    let W = window.innerWidth;
-    let H = window.innerHeight;
+    // Size from the canvas's own CSS box, not window.innerHeight — the
+    // container spans 100lvh (behind iOS Safari's translucent bottom bar),
+    // which is taller than innerHeight while the browser bars are expanded.
+    let W = canvas.clientWidth;
+    let H = canvas.clientHeight;
     canvas.width = W;
     canvas.height = H;
 
@@ -178,8 +181,8 @@ export function ConfettiBackground({ burst = false, persistAfterBurst = false, s
     };
 
     const onResize = () => {
-      W = window.innerWidth;
-      H = window.innerHeight;
+      W = canvas.clientWidth;
+      H = canvas.clientHeight;
       canvas.width = W;
       canvas.height = H;
     };
@@ -195,5 +198,5 @@ export function ConfettiBackground({ burst = false, persistAfterBurst = false, s
     };
   }, []);
 
-  return <canvas ref={canvasRef} className="absolute inset-0 pointer-events-none" style={{ zIndex: 0 }} />;
+  return <canvas ref={canvasRef} className="absolute inset-0 w-full h-full pointer-events-none" style={{ zIndex: 0 }} />;
 }
