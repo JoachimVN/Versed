@@ -1363,7 +1363,7 @@ function guessInputBoxStyle(isListening: boolean, focused: boolean): { border: s
 function ChoiceButtons({ options, onPick, disabled }: Readonly<{ options: string[]; onPick: (option: string) => void; disabled?: boolean }>) {
   const style = guessInputBoxStyle(false, false);
   return (
-    <div className="w-full flex flex-col gap-2.5">
+    <div className="w-full grid grid-cols-2 gap-3">
       {options.map(option => (
         <button
           key={option}
@@ -1371,10 +1371,12 @@ function ChoiceButtons({ options, onPick, disabled }: Readonly<{ options: string
           disabled={disabled}
           onClick={() => onPick(option)}
           style={{
-            width: '100%', borderRadius: '16px',
+            borderRadius: '16px',
             border: style.border, background: style.background, boxShadow: style.boxShadow,
-            color: 'white', fontSize: '1.05rem', fontWeight: 700, textAlign: 'center',
-            padding: '18px 16px', cursor: disabled ? 'not-allowed' : 'pointer', fontFamily: 'inherit',
+            color: 'white', fontSize: '0.98rem', fontWeight: 700, textAlign: 'center',
+            padding: '16px 12px', minHeight: '104px', overflowWrap: 'anywhere',
+            display: 'flex', alignItems: 'center', justifyContent: 'center',
+            cursor: disabled ? 'not-allowed' : 'pointer', fontFamily: 'inherit',
             opacity: disabled ? 0.5 : 1, transition: 'opacity 0.2s ease',
           }}
         >
