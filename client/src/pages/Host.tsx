@@ -2211,36 +2211,48 @@ function usesRaceFlow(mode: HostState['mode'], yearOnly: boolean, party: PartyIn
 }
 
 // Race-flow rounds are normally hint-free (the clip itself is the puzzle),
-// but artist-only and year-only rounds ask for something the audio can't
-// give away, so those are the only race rounds that ever carry hints here.
+// but artist-only/year-only rounds and Underdog Boost ask for something the
+// audio can't give away, so those are the only race rounds that ever carry
+// hints here. Underdog's cover-art hint is shown clear (not the classic
+// betting screen's blurred teaser) — it's meant to be a real, strong assist.
 function RaceHintBar({ hints }: Readonly<{ hints: Hint[] }>) {
+  const imageHint = hints.find(h => h.imageUrl);
   const textHints = hints.filter(h => !h.imageUrl);
-  if (textHints.length === 0) return null;
+  if (textHints.length === 0 && !imageHint) return null;
   return (
-    <div
-      className="flex items-center justify-center gap-6 rounded-2xl"
-      style={{
-        padding: '12px 26px',
-        background: 'rgba(255,255,255,0.04)',
-        border: '1px solid rgba(255,255,255,0.08)',
-        backdropFilter: 'blur(16px)',
-      }}
-    >
-      {textHints.map((h, i) => (
-        <React.Fragment key={h.label}>
-          {i > 0 && (
-            <div style={{ width: 1, alignSelf: 'stretch', background: 'rgba(255,255,255,0.08)' }} />
-          )}
-          <div className="flex flex-col items-center gap-1">
-            <span style={{ color: 'rgba(255,255,255,0.45)', fontSize: '0.6rem', textTransform: 'uppercase', letterSpacing: '0.18em' }}>
-              {h.label}
-            </span>
-            <span style={{ color: 'white', fontWeight: 800, fontSize: '1.2rem', lineHeight: 1 }}>
-              {h.value}
-            </span>
-          </div>
-        </React.Fragment>
-      ))}
+    <div className="flex flex-col items-center gap-3">
+      {imageHint?.imageUrl && (
+        <img
+          src={imageHint.imageUrl} alt="" style={{ width: 96, height: 96, borderRadius: 16, objectFit: 'cover', boxShadow: '0 8px 24px rgba(0,0,0,0.5)' }}
+        />
+      )}
+      {textHints.length > 0 && (
+        <div
+          className="flex items-center justify-center gap-6 rounded-2xl"
+          style={{
+            padding: '12px 26px',
+            background: 'rgba(255,255,255,0.04)',
+            border: '1px solid rgba(255,255,255,0.08)',
+            backdropFilter: 'blur(16px)',
+          }}
+        >
+          {textHints.map((h, i) => (
+            <React.Fragment key={h.label}>
+              {i > 0 && (
+                <div style={{ width: 1, alignSelf: 'stretch', background: 'rgba(255,255,255,0.08)' }} />
+              )}
+              <div className="flex flex-col items-center gap-1">
+                <span style={{ color: 'rgba(255,255,255,0.45)', fontSize: '0.6rem', textTransform: 'uppercase', letterSpacing: '0.18em' }}>
+                  {h.label}
+                </span>
+                <span style={{ color: 'white', fontWeight: 800, fontSize: '1.2rem', lineHeight: 1 }}>
+                  {h.value}
+                </span>
+              </div>
+            </React.Fragment>
+          ))}
+        </div>
+      )}
     </div>
   );
 }

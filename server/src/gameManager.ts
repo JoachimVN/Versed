@@ -270,6 +270,28 @@ function generateAllHints(song: Song, suppressArtist: boolean, suppressYear: boo
   return hints;
 }
 
+// Underdog Boost's hints: always exactly the release year/era and the full
+// artist name (or the title, if the artist is what's being guessed) — no
+// random pool/count like a normal round. Cover art is added separately in
+// index.ts once resolved (this only builds the text hints). Deliberately
+// omits Streams/Duration — this event is meant to give a real, targeted
+// assist, not the usual grab-bag of trivia.
+function generateUnderdogHints(song: Song, suppressArtist: boolean, suppressYear: boolean, includeTitle: boolean): Hint[] {
+  const hints: Hint[] = [];
+  if (!suppressYear) {
+    if (song.year) hints.push({ label: 'Release year', value: String(Math.floor(song.year)) });
+    else if (song.decade) hints.push({ label: 'Era', value: `${song.decade}s` });
+  }
+  if (!suppressArtist) {
+    const fullArtist = song.featuredArtists
+      ? `${song.artist} feat. ${song.featuredArtists}`
+      : song.artist;
+    hints.push({ label: 'Artist(s)', value: fullArtist });
+  }
+  if (includeTitle) hints.push({ label: 'Song title', value: song.title });
+  return hints;
+}
+
 // Chaos Hints' safe-to-show categories — deliberately excludes Song title and
 // the full Artist(s) line entirely (not just from fabrication): a real other
 // song's title or artist name would itself read as a plausible, confusing
@@ -717,6 +739,7 @@ function buildRoundHints(song: Song, party: PartyConfig | undefined, guessKind: 
   const suppressArtist = guessKind === 'artist' || guessKind === 'both';
   const suppressYear = guessKind === 'year';
   const includeTitle = guessKind === 'artist' || guessKind === 'year';
+  if (party?.event === 'underdog') return generateUnderdogHints(song, suppressArtist, suppressYear, includeTitle);
   const hints = party?.format === 'classic' && party.event === 'fullhints'
     ? generateAllHints(song, suppressArtist, suppressYear)
     : generateHints(song, suppressArtist, suppressYear, includeTitle);

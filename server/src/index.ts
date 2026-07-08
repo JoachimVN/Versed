@@ -793,10 +793,13 @@ io.on('connection', (socket) => {
     if (coverUrl) {
       round.coverUrl = coverUrl;
       // Classic-flow rounds have a 1-in-4 chance of a blurred-art hint;
-      // 'fullhints' rounds always get it, 'blind' rounds never do.
-      const wantArt = !isRaceFlow && (game.mode === 'classic' || game.mode === 'party')
-        && round.party?.event !== 'blind'
-        && (round.party?.event === 'fullhints' || randomInt(4) === 0);
+      // 'fullhints' and Underdog Boost always get it (Underdog's whole
+      // point is a real, guaranteed assist — not a coin flip), 'blind'
+      // rounds never do.
+      const wantArt = round.party?.event === 'underdog'
+        || (!isRaceFlow && (game.mode === 'classic' || game.mode === 'party')
+          && round.party?.event !== 'blind'
+          && (round.party?.event === 'fullhints' || randomInt(4) === 0));
       if (wantArt) {
         round.hints.push({ label: 'Album art', value: '', imageUrl: coverUrl });
       }
