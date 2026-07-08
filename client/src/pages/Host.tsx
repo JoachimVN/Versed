@@ -737,8 +737,10 @@ function SettingsPanel({ game, open }: Readonly<{ game: HostState; open: boolean
       }}
     >
       <div
-        className="w-72 rounded-2xl overflow-hidden"
+        className="w-72 rounded-2xl overflow-x-hidden overflow-y-auto"
         style={{
+          maxHeight: 'calc(100dvh - 88px)',
+          overscrollBehavior: 'contain',
           background: 'rgba(10, 6, 26, 0.65)',
           backdropFilter: 'blur(32px)',
           border: '1px solid rgba(255,255,255,0.09)',
