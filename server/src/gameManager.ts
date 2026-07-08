@@ -1311,6 +1311,19 @@ function applyRaceCorrectGuess(
     round.stealBy = socketId;
     round.stealDone = false;
   }
+  applyRaceScoreToPlayer(game, round, socketId, elapsedMs, points);
+  recordFinaleRaceWin(game, round, socketId, isFirst);
+  // The mystery multiplier stays hidden until everyone sees the shared
+  // reveal, so the guesser's own immediate ack can't carry the true
+  // (multiplied) total — that would let them back out ×2 vs ×10 right away.
+  // Hand back the pre-multiplier amount instead; the real score still lands
+  // via player.score, and score_update carries the true delta at reveal.
+  return round.party?.event === 'mystery' ? preMultiplier : points;
+}
+
+function applyRaceScoreToPlayer(
+  game: Game, round: Round, socketId: string, elapsedMs: number, points: number,
+): void {
   const player = game.players.get(socketId)!;
   player.score += points;
   if (points > 0) {
@@ -1320,18 +1333,15 @@ function applyRaceCorrectGuess(
     player.fastestCorrectMs = player.fastestCorrectMs === null ? elapsedMs : Math.min(player.fastestCorrectMs, elapsedMs);
     round.scoredSocketIds.add(socketId);
   }
+}
+
+function recordFinaleRaceWin(game: Game, round: Round, socketId: string, isFirst: boolean): void {
   // Finale race sub-round: record who took this game of the best-of-3 —
   // separate from (and on top of) the normal points above.
   if (isFirst && round.party?.finale) {
     game.duelWins[socketId] = (game.duelWins[socketId] ?? 0) + 1;
     resolveDuelIfWon(game, socketId);
   }
-  // The mystery multiplier stays hidden until everyone sees the shared
-  // reveal, so the guesser's own immediate ack can't carry the true
-  // (multiplied) total — that would let them back out ×2 vs ×10 right away.
-  // Hand back the pre-multiplier amount instead; the real score still lands
-  // via player.score, and score_update carries the true delta at reveal.
-  return round.party?.event === 'mystery' ? preMultiplier : points;
 }
 
 export function recordRaceGuess(

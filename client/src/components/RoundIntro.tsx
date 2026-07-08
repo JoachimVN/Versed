@@ -218,7 +218,7 @@ export function PartyBadge({ party }: Readonly<{ party: PartyInfo | null }>) {
   const bits: string[] = [formatBit(party)];
   if (party.finale) {
     const wins = party.duelProgress?.wins;
-    bits.push(wins && wins.length === 2
+    bits.push(wins?.length === 2
       ? `FINALE · ${wins[0].name} ${wins[0].count}–${wins[1].count} ${wins[1].name}`
       : `FINALE · ${party.duelists.join(' vs ')}`);
   }
