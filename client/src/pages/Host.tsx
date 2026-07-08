@@ -21,7 +21,7 @@ import { AudioBars } from '../components/AudioBars';
 import { LIQUID_CARD_PROPS, LIQUID_PILL_PROPS } from '../components/liquidGlassPresets';
 import { APP_NAME, BACKEND_URL, RACE_TIME } from '../config';
 import { commonPhaseAnnouncement } from '../utils/phaseAnnouncement';
-import type { Hint, LeaderboardEntry, PartyInfo, PlayerInfo, PlaylistTrackInput, RoundResultEvent, SongSource } from '../types';
+import type { ChaosLevel, Hint, LeaderboardEntry, PartyEvent, PartyInfo, PlayerInfo, PlaylistTrackInput, RoundResultEvent, SongSource } from '../types';
 
 type Phase = 'connect' | 'lobby' | 'betting' | 'playing' | 'guessing' | 'reveal' | 'leaderboard' | 'finished';
 type Mode = 'classic' | 'race' | 'party';
@@ -73,10 +73,14 @@ type PlaylistPicker = ReturnType<typeof usePlaylistPicker>;
 interface SavedHostSettings {
   bettingTime: number; guessingTime: number; rounds: number; mode: Mode;
   raceTime: number; raceWinnerOnly: boolean; artistOnly: boolean; yearOnly: boolean; difficulty: Difficulty;
+  enabledEvents: PartyEvent[]; chaosLevel: ChaosLevel;
 }
 const HOST_SETTINGS_KEY = 'versed_host_settings';
 const MODES: Set<Mode> = new Set(['classic', 'race', 'party']);
 const DIFFICULTIES: Set<Difficulty> = new Set(['easy', 'medium', 'hard']);
+export const ALL_PARTY_EVENTS: PartyEvent[] = ['double', 'mystery', 'steal', 'snippet', 'fullhints', 'blind', 'outro', 'underdog'];
+const PARTY_EVENT_SET: Set<string> = new Set(ALL_PARTY_EVENTS);
+const CHAOS_LEVELS: Set<ChaosLevel> = new Set(['chill', 'balanced', 'chaotic']);
 
 function loadSavedHostSettings(): Partial<SavedHostSettings> {
   try {
@@ -91,6 +95,10 @@ function loadSavedHostSettings(): Partial<SavedHostSettings> {
       artistOnly: typeof raw.artistOnly === 'boolean' ? raw.artistOnly : undefined,
       yearOnly: typeof raw.yearOnly === 'boolean' ? raw.yearOnly : undefined,
       difficulty: DIFFICULTIES.has(raw.difficulty) ? raw.difficulty : undefined,
+      enabledEvents: Array.isArray(raw.enabledEvents)
+        ? raw.enabledEvents.filter((e: unknown): e is PartyEvent => PARTY_EVENT_SET.has(e as string))
+        : undefined,
+      chaosLevel: CHAOS_LEVELS.has(raw.chaosLevel) ? raw.chaosLevel : undefined,
     };
   } catch { return {}; }
 }
@@ -128,6 +136,8 @@ export interface HostState {
   artistOnly: boolean;
   yearOnly: boolean;
   difficulty: Difficulty;
+  enabledEvents: PartyEvent[];
+  chaosLevel: ChaosLevel;
   songSource: SongSource;
   customPlaylists: CustomPlaylist[];
   playlistPicker: PlaylistPicker;
@@ -151,6 +161,8 @@ export interface HostState {
   setArtistOnly: (v: boolean) => void;
   setYearOnly: (v: boolean) => void;
   setDifficulty: (v: Difficulty) => void;
+  toggleEvent: (e: PartyEvent) => void;
+  setChaosLevel: (v: ChaosLevel) => void;
   setSongSource: (v: SongSource) => void;
   addPlaylist: (p: CustomPlaylist) => void;
   removePlaylist: (id: string) => void;
@@ -206,6 +218,8 @@ function useHostGame(): HostState {
   const [artistOnly, setArtistOnly] = useState(savedSettings.artistOnly ?? false);
   const [yearOnly, setYearOnly] = useState(savedSettings.yearOnly ?? false);
   const [difficulty, setDifficulty] = useState<Difficulty>(savedSettings.difficulty ?? 'hard');
+  const [enabledEvents, setEnabledEvents] = useState<PartyEvent[]>(savedSettings.enabledEvents ?? ALL_PARTY_EVENTS);
+  const [chaosLevel, setChaosLevel] = useState<ChaosLevel>(savedSettings.chaosLevel ?? 'balanced');
   // Not persisted in SavedHostSettings, deliberately: a reload can't restore
   // the actual fetched track data, so a restored 'playlist' flag with no
   // tracks would leave the host in a confusing half-configured state.
@@ -219,9 +233,14 @@ function useHostGame(): HostState {
     const toSave: SavedHostSettings = {
       bettingTime: bettingTimeSetting, guessingTime: guessingTimeSetting, rounds: roundsSetting, mode,
       raceTime: raceTimeSetting, raceWinnerOnly, artistOnly, yearOnly, difficulty,
+      enabledEvents, chaosLevel,
     };
     localStorage.setItem(HOST_SETTINGS_KEY, JSON.stringify(toSave));
-  }, [bettingTimeSetting, guessingTimeSetting, roundsSetting, mode, raceTimeSetting, raceWinnerOnly, artistOnly, yearOnly, difficulty]);
+  }, [bettingTimeSetting, guessingTimeSetting, roundsSetting, mode, raceTimeSetting, raceWinnerOnly, artistOnly, yearOnly, difficulty, enabledEvents, chaosLevel]);
+
+  const toggleEvent = (e: PartyEvent) => {
+    setEnabledEvents(prev => (prev.includes(e) ? prev.filter(x => x !== e) : [...prev, e]));
+  };
   const [party, setParty] = useState<PartyInfo | null>(null);
   const [stealResult, setStealResult] = useState<{ thief: string; victim: string; amount: number; skipped?: boolean } | null>(null);
   const [answeredCount, setAnsweredCount] = useState(0);
@@ -512,7 +531,7 @@ function useHostGame(): HostState {
       settings: {
         bettingTime: bettingTimeSetting, guessingTime: guessingTimeSetting,
         totalRounds: roundsSetting, mode, raceTime: raceTimeSetting, raceWinnerOnly, artistOnly, yearOnly,
-        difficulty, songSource,
+        difficulty, songSource, enabledEvents, chaosLevel,
         customPlaylist: songSource === 'playlist' && customPlaylists.length > 0
           ? {
             id: customPlaylists.map(p => p.id).join(','),
@@ -569,12 +588,14 @@ function useHostGame(): HostState {
     result, roundDeltas, roundPity, leaderboard, copied, playProgress, inviteUrl,
     settingsOpen, bettingTimeSetting, guessingTimeSetting, roundsSetting,
     mode, raceTimeSetting, raceWinnerOnly, artistOnly, yearOnly, difficulty,
+    enabledEvents, chaosLevel,
     songSource, customPlaylists, playlistPicker, playlistPickerOpen, startError,
     party, stealResult, answeredCount,
     reconnecting, reconnectingCount: reconnectingNames.size, gameExpired, songPlaying, songTempo,
     toggleSettings: () => setSettingsOpen(o => !o),
     setBettingTimeSetting, setGuessingTimeSetting, setRoundsSetting,
     setMode, setRaceTimeSetting, setRaceWinnerOnly, setArtistOnly, setYearOnly, setDifficulty,
+    toggleEvent, setChaosLevel,
     setSongSource,
     addPlaylist: (p: CustomPlaylist) => setCustomPlaylists(list => list.some(x => x.id === p.id) ? list : [...list, p]),
     removePlaylist: (id: string) => setCustomPlaylists(list => list.filter(p => p.id !== id)),
@@ -661,8 +682,10 @@ function BidTimeline({ bids, lowestBid }: Readonly<{ bids: { name: string; bid: 
 function SettingsPanel({ game, open }: Readonly<{ game: HostState; open: boolean }>) {
   const {
     mode, bettingTimeSetting, guessingTimeSetting, roundsSetting, raceTimeSetting, raceWinnerOnly, artistOnly, yearOnly, difficulty,
+    enabledEvents, chaosLevel,
     songSource, customPlaylists,
     setBettingTimeSetting, setGuessingTimeSetting, setRoundsSetting, setRaceTimeSetting, setRaceWinnerOnly, setArtistOnly, setYearOnly, setDifficulty,
+    toggleEvent, setChaosLevel,
     setSongSource, openPlaylistPicker, removePlaylist,
     toggleSettings,
   } = game;
@@ -773,6 +796,25 @@ function SettingsPanel({ game, open }: Readonly<{ game: HostState; open: boolean
             )}
             <ToggleRow label="Artist only" value={artistOnly} disabled={yearOnly} onToggle={toggleArtistOnly} />
             <ToggleRow label="Guess the year" value={yearOnly} onToggle={toggleYearOnly} />
+          </div>
+        )}
+
+        {mode === 'party' && (
+          <div className="px-5 pb-4 space-y-4" style={{ borderTop: '1px solid rgba(255,255,255,0.07)', paddingTop: '16px' }}>
+            <ChaosLevelRow value={chaosLevel} onChange={setChaosLevel} />
+            <div className="space-y-2">
+              <span style={{ color: 'rgba(255,255,255,0.5)', fontSize: '0.875rem' }}>Events</span>
+              <div className="space-y-2">
+                {ALL_PARTY_EVENTS.map(e => (
+                  <ToggleRow key={e} label={EVENT_LABELS[e]} value={enabledEvents.includes(e)} onToggle={() => toggleEvent(e)} />
+                ))}
+              </div>
+              {enabledEvents.length === 0 && (
+                <p style={{ color: 'rgba(251,191,36,0.85)', fontSize: '0.7rem' }}>
+                  At least one event should stay on, or rounds will always play plain.
+                </p>
+              )}
+            </div>
           </div>
         )}
       </div>
@@ -1020,6 +1062,75 @@ function SongSourceRow({ value, onChange }: Readonly<{ value: SongSource; onChan
     </div>
   );
 }
+
+const CHAOS_OPTIONS: { key: ChaosLevel; label: string }[] = [
+  { key: 'chill', label: 'Chill' },
+  { key: 'balanced', label: 'Balanced' },
+  { key: 'chaotic', label: 'Chaotic' },
+];
+
+const CHAOS_STYLE: Record<ChaosLevel, { bg: string; border: string; text: string }> = {
+  chill: { bg: 'rgba(14, 165, 233, 0.25)', border: '1px solid rgba(56, 189, 248, 0.45)', text: '#7dd3fc' },
+  balanced: { bg: 'rgba(178,16,224,0.25)', border: '1px solid rgba(208,46,249,0.45)', text: '#d8b4fe' },
+  chaotic: { bg: 'rgba(220, 38, 38, 0.25)', border: '1px solid rgba(248, 113, 113, 0.45)', text: '#fca5a5' },
+};
+
+// Controls how often party events fire and how wild mystery's multiplier
+// spread gets (see NO_EVENT_CHANCE/MYSTERY_MULTIPLIERS_BY_CHAOS server-side).
+// Same sliding-pill pattern as DifficultyRow.
+function ChaosLevelRow({ value, onChange }: Readonly<{ value: ChaosLevel; onChange: (v: ChaosLevel) => void }>) {
+  const index = CHAOS_OPTIONS.findIndex(o => o.key === value);
+  const active = CHAOS_STYLE[value];
+  return (
+    <div className="space-y-2">
+      <span style={{ color: 'rgba(255,255,255,0.5)', fontSize: '0.875rem' }}>Chaos level</span>
+      <div
+        className="relative flex rounded-xl"
+        style={{ background: 'rgba(255,255,255,0.05)', border: '1px solid rgba(255,255,255,0.08)', padding: '3px' }}
+      >
+        <div
+          className="absolute rounded-lg"
+          style={{
+            top: '3px', bottom: '3px', left: '3px',
+            width: 'calc((100% - 6px) / 3)',
+            background: active.bg,
+            border: active.border,
+            transform: `translateX(${index * 100}%)`,
+            transition: 'transform 0.25s cubic-bezier(0.4, 0, 0.2, 1), background 0.25s ease, border-color 0.25s ease',
+            pointerEvents: 'none',
+          }}
+        />
+        {CHAOS_OPTIONS.map(({ key, label }) => (
+          <button
+            key={key}
+            onClick={() => onChange(key)}
+            className="relative flex-1 py-1.5 rounded-lg text-xs font-semibold z-10 transition-colors duration-200"
+            style={{
+              color: value === key ? CHAOS_STYLE[key].text : 'rgba(255,255,255,0.45)',
+              background: 'transparent', border: 'none', cursor: 'pointer',
+            }}
+          >
+            {label}
+          </button>
+        ))}
+      </div>
+    </div>
+  );
+}
+
+// Human labels for the per-event on/off checklist — kept separate from
+// RoundIntro.tsx's EVENT_BITS/server's eventIntros since those live in a
+// different module and are styled for in-round display, not a settings list.
+const EVENT_LABELS: Record<PartyEvent, string> = {
+  double: 'Double Points',
+  mystery: 'Mystery Multiplier',
+  steal: 'Steal Round',
+  snippet: 'Snippet Roulette',
+  fullhints: 'Open Book',
+  blind: 'Blind Bet',
+  outro: 'Down to the Wire',
+  underdog: 'Underdog Boost',
+};
 
 function PlaylistList({ customPlaylists, onOpen, onRemove }: Readonly<{
   customPlaylists: CustomPlaylist[]; onOpen: () => void; onRemove: (id: string) => void;

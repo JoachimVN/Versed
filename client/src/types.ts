@@ -29,12 +29,17 @@ export interface PlayerInfo {
   pity?: boolean;
 }
 
+// Mirrors server/src/types.ts's PartyEvent — kept in sync by hand, no shared
+// import between the two workspaces.
+export type PartyEvent = 'double' | 'mystery' | 'steal' | 'snippet' | 'fullhints' | 'blind' | 'outro' | 'underdog';
+export type ChaosLevel = 'chill' | 'balanced' | 'chaotic';
+
 // Party mode: the per-round recipe as clients see it. A hidden mystery
 // multiplier arrives as null and is revealed (a number) on round_result.
 export interface PartyInfo {
   format: 'classic' | 'race' | 'year';
   target: 'title' | 'artist' | 'both';
-  event: 'double' | 'mystery' | 'steal' | 'snippet' | 'fullhints' | 'blind' | 'outro' | 'underdog' | null;
+  event: PartyEvent | null;
   multiplier: number | null;
   winnerOnly: boolean;
   intro: { title: string; tagline: string };

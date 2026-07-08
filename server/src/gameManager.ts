@@ -1,6 +1,6 @@
 import { randomInt } from 'node:crypto';
 import {
-  Difficulty, Game, GuessTarget, Hint, PartyClientView, PartyConfig, PartyEvent, PartyFormat,
+  ChaosLevel, Difficulty, Game, GuessTarget, Hint, PartyClientView, PartyConfig, PartyEvent, PartyFormat,
   Player, PlaylistTrackInput, Round, Song, YearResult,
 } from './types';
 import { loadSongs } from './songLoader';
@@ -312,8 +312,19 @@ function pickPartyTarget(format: PartyFormat): GuessTarget {
   return pickWeighted<GuessTarget>([['title', 60], ['artist', 25], ['both', 15]]);
 }
 
+// Every party event that exists — the default "everything on" set for a new
+// game, and what host-supplied enabledEvents lists get validated against.
+export const ALL_PARTY_EVENTS: PartyEvent[] = [
+  'double', 'mystery', 'steal', 'snippet', 'fullhints', 'blind', 'outro', 'underdog',
+];
+
+// Chance (out of 100) that a round gets no event at all, per chaos preset.
+// 'balanced' keeps the original hardcoded value so existing games' feel
+// doesn't shift under them.
+const NO_EVENT_CHANCE: Record<ChaosLevel, number> = { chill: 75, balanced: 60, chaotic: 40 };
+
 function pickPartyEvent(game: Game, format: PartyFormat, prevEvent: PartyEvent | null | undefined): PartyEvent | null {
-  if (format === 'year' || randomInt(0, 100) >= 60) return null;
+  if (format === 'year' || randomInt(0, 100) >= NO_EVENT_CHANCE[game.chaosLevel]) return null;
   const pool: [PartyEvent, number][] = [['double', 30], ['mystery', 25], ['snippet', 25]];
   if (format === 'classic') pool.push(['fullhints', 20], ['blind', 20]);
   if (format === 'race') pool.push(['outro', 25]);
@@ -325,18 +336,25 @@ function pickPartyEvent(game: Game, format: PartyFormat, prevEvent: PartyEvent |
   // bid/tier flow (that's a deliberately different kind of "not everyone
   // gets a turn").
   if (format !== 'classic' && game.players.size >= 2) pool.push(['underdog', 20]);
-  return pickWeighted(pool.filter(([e]) => e !== prevEvent));
+  const filtered = pool.filter(([e]) => e !== prevEvent && game.enabledEvents.has(e));
+  // The host disabled everything that was otherwise eligible this round —
+  // fall back to a plain round rather than erroring.
+  if (filtered.length === 0) return null;
+  return pickWeighted(filtered);
 }
 
-// Mystery's payout ladder: the three "modest" multipliers are equally
-// likely, then the big ones get rarer the higher they climb.
-const MYSTERY_MULTIPLIERS: [number, number][] = [
-  [1.5, 27], [2, 27], [3, 27], [4, 12], [5, 5], [10, 2],
-];
+// Mystery's payout ladder per chaos preset: the three "modest" multipliers
+// are equally likely, then the big ones get rarer the higher they climb.
+// 'balanced' is the original hardcoded table, unchanged.
+const MYSTERY_MULTIPLIERS_BY_CHAOS: Record<ChaosLevel, [number, number][]> = {
+  chill: [[1.5, 40], [2, 35], [3, 20], [4, 5]],
+  balanced: [[1.5, 27], [2, 27], [3, 27], [4, 12], [5, 5], [10, 2]],
+  chaotic: [[1.5, 12], [2, 16], [3, 17], [4, 20], [5, 18], [10, 17]],
+};
 
-function eventMultiplier(event: PartyEvent | null): number {
+function eventMultiplier(game: Game, event: PartyEvent | null): number {
   if (event === 'double') return 2;
-  if (event === 'mystery') return pickWeighted(MYSTERY_MULTIPLIERS);
+  if (event === 'mystery') return pickWeighted(MYSTERY_MULTIPLIERS_BY_CHAOS[game.chaosLevel]);
   return 1;
 }
 
@@ -389,7 +407,7 @@ function buildPartyConfig(game: Game): PartyConfig {
 
   const target = pickPartyTarget(format);
   const event = pickPartyEvent(game, format, prev?.event);
-  const multiplier = eventMultiplier(event);
+  const multiplier = eventMultiplier(game, event);
   // Only race/year formats can go winner-only — classic already has its own
   // bid/tier stakes, and stacking this on top would just zero out everyone
   // but the lowest bidder.
@@ -728,6 +746,8 @@ export function createGame(hostSocketId: string, preferredPin?: string): Game {
     artistOnly: false,
     yearOnly: false,
     difficulty: 'hard',
+    enabledEvents: new Set(ALL_PARTY_EVENTS),
+    chaosLevel: 'balanced',
     songSource: 'library',
     playlistId: undefined,
     currentRound: null,

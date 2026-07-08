@@ -9,7 +9,7 @@ import dotenv from 'dotenv';
 import authRouter from './spotifyAuth';
 import * as gm from './gameManager';
 import { getAlbumArtUrl } from './albumArt';
-import { Game, PlaylistTrackInput } from './types';
+import { Game, PartyEvent, PlaylistTrackInput } from './types';
 
 dotenv.config();
 gm.initSongs();
@@ -96,8 +96,11 @@ interface StartGameSettings {
   bettingTime?: number; guessingTime?: number; totalRounds?: number; mode?: string;
   raceTime?: number; raceWinnerOnly?: boolean; artistOnly?: boolean; yearOnly?: boolean;
   difficulty?: string; songSource?: string;
+  enabledEvents?: string[]; chaosLevel?: string;
   customPlaylist?: { id?: string; tracks?: PlaylistTrackInput[] };
 }
+
+const CHAOS_LEVELS = new Set(['chill', 'balanced', 'chaotic']);
 
 function applyStartGameSettings(game: Game, s: StartGameSettings | undefined) {
   if (s?.bettingTime) game.bettingTime = Math.max(5, Math.min(999, Math.round(s.bettingTime)));
@@ -121,6 +124,14 @@ function applyStartGameSettings(game: Game, s: StartGameSettings | undefined) {
   // Year isn't a title/artist target, so it can't coexist with artist-only.
   game.artistOnly = !isParty && !game.yearOnly && s?.artistOnly === true;
   game.difficulty = s?.difficulty === 'easy' || s?.difficulty === 'medium' ? s.difficulty : 'hard';
+
+  game.chaosLevel = CHAOS_LEVELS.has(s?.chaosLevel ?? '') ? (s!.chaosLevel as Game['chaosLevel']) : 'balanced';
+  const requested = Array.isArray(s?.enabledEvents)
+    ? s.enabledEvents.filter((e): e is PartyEvent => (gm.ALL_PARTY_EVENTS as string[]).includes(e))
+    : [];
+  // A malformed or fully-unchecked selection must not brick party mode —
+  // fall back to "everything enabled" rather than an empty pool.
+  game.enabledEvents = requested.length > 0 ? new Set(requested) : new Set(gm.ALL_PARTY_EVENTS);
 }
 
 function applySongSource(game: Game, s: StartGameSettings | undefined): { ok: true } | { ok: false; error: string } {
