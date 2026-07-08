@@ -3,6 +3,7 @@ import { createServer } from 'node:http';
 import { randomInt } from 'node:crypto';
 import { Server } from 'socket.io';
 import cors from 'cors';
+import rateLimit from 'express-rate-limit';
 import path from 'node:path';
 import dotenv from 'dotenv';
 import authRouter from './spotifyAuth';
@@ -68,6 +69,12 @@ const io = new Server(httpServer, {
 
 app.use(cors(corsOptions));
 app.use(express.json());
+app.use(rateLimit({
+  windowMs: 60 * 1000,
+  limit: 300,
+  standardHeaders: true,
+  legacyHeaders: false,
+}));
 app.use('/api/auth', authRouter);
 app.get('/api/health', (_req, res) => res.json({ ok: true }));
 
@@ -93,13 +100,13 @@ interface StartGameSettings {
 }
 
 function applyStartGameSettings(game: Game, s: StartGameSettings | undefined) {
-  if (s?.bettingTime) game.bettingTime = Math.max(5, Math.min(60, Math.round(s.bettingTime)));
-  if (s?.guessingTime) game.guessingTime = Math.max(5, Math.min(60, Math.round(s.guessingTime)));
-  if (s?.totalRounds) game.totalRounds = Math.max(1, Math.min(30, Math.round(s.totalRounds)));
+  if (s?.bettingTime) game.bettingTime = Math.max(5, Math.min(999, Math.round(s.bettingTime)));
+  if (s?.guessingTime) game.guessingTime = Math.max(5, Math.min(999, Math.round(s.guessingTime)));
+  if (s?.totalRounds) game.totalRounds = Math.max(1, Math.min(999, Math.round(s.totalRounds)));
   if (s?.mode === 'race') game.mode = 'race';
   else if (s?.mode === 'party') game.mode = 'party';
   else game.mode = 'classic';
-  if (s?.raceTime) game.raceTime = Math.max(10, Math.min(60, Math.round(s.raceTime)));
+  if (s?.raceTime) game.raceTime = Math.max(10, Math.min(999, Math.round(s.raceTime)));
 
   // Party picks its own guess target per round, so these game-wide toggles
   // are Classic/Race only — leaving them set under Party would otherwise

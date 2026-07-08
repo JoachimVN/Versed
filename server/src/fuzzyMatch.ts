@@ -11,8 +11,31 @@ const HOMOPHONES: Record<string, string> = {
   okay: 'ok',
 };
 
-const PAREN_METADATA = /^\s*(feat|ft|featuring|from|with|remaster|live|acoustic|remix|edit|version|radio|original|extended|deluxe|bonus|interlude)\b/i;
+const METADATA_WORDS = 'feat|ft|featuring|from|with|remaster(?:ed)?|live|acoustic|remix|edit|version|radio|original|extended|deluxe|bonus|interlude';
+const PAREN_METADATA = new RegExp(String.raw`^\s*(${METADATA_WORDS})\b`, 'i');
 const PAREN_RE = /^([^([]*)[([](([^)\]]*?))[)\]]/;
+
+// A metadata word can also sit outside the parenthetical, right before it
+// — e.g. Spotify's "34+35 Remix (feat. Doja Cat, Megan Thee Stallion)" —
+// so the pre-paren segment needs the same word stripped before comparing.
+const TRAILING_METADATA_RE = new RegExp(String.raw`\s+(${METADATA_WORDS})\.?\s*$`, 'i');
+
+function stripTrailingMetadata(s: string): string {
+  let out = s;
+  let prev: string;
+  do {
+    prev = out;
+    out = out.replace(TRAILING_METADATA_RE, '');
+  } while (out !== prev);
+  return out;
+}
+
+// Some "feature added later" reissues use a bare "Title + Artist" pattern
+// instead of "Title (feat. Artist)" — e.g. Spotify's own listing for
+// PinkPantheress's "Stateside + Zara Larsson". Only strip it when the text
+// after "+" actually names the (featured) artist — plenty of real titles
+// contain "+" too (e.g. "Safe + Sound", "Day + Night", "Pink + White").
+const PLUS_FEATURE_RE = /^(.+?)\s\+\s(.+)$/;
 
 function normalize(s: string): string {
   return s
@@ -79,7 +102,7 @@ export function isCorrectArtistGuess(guess: string, artist: string, featuredArti
   return false;
 }
 
-export function isCorrectGuess(guess: string, title: string): boolean {
+export function isCorrectGuess(guess: string, title: string, artist?: string, featuredArtists?: string): boolean {
   const g = normalize(guess);
   const t = normalize(title);
   if (!g) return false;
@@ -92,8 +115,13 @@ export function isCorrectGuess(guess: string, title: string): boolean {
   const parenMatch = PAREN_RE.exec(title);
   if (parenMatch) {
     if (fuzzyMatch(g, normalize(parenMatch[1]))) return true;
+    if (fuzzyMatch(g, normalize(stripTrailingMetadata(parenMatch[1])))) return true;
     if (!PAREN_METADATA.test(parenMatch[2]) && fuzzyMatch(g, normalize(parenMatch[2]))) return true;
   }
+
+  const plusMatch = PLUS_FEATURE_RE.exec(title);
+  if (plusMatch && isCorrectArtistGuess(plusMatch[2], artist ?? '', featuredArtists)
+    && fuzzyMatch(g, normalize(plusMatch[1]))) return true;
 
   return false;
 }

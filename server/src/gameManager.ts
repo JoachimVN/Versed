@@ -395,7 +395,7 @@ function checkGuess(
   if (target === 'artist') {
     return { correct: isCorrectArtistGuess(text, song.artist, song.featuredArtists), artistBonus: false };
   }
-  const correct = isCorrectGuess(text, song.title);
+  const correct = isCorrectGuess(text, song.title, song.artist, song.featuredArtists);
   const artistBonus = target === 'both' && correct && !!artistText
     && isCorrectArtistGuess(artistText, song.artist, song.featuredArtists);
   return { correct, artistBonus };
