@@ -4,7 +4,9 @@ import type { HostState } from './Host';
 import { WatchingView, GuessingView } from './Play';
 import type { PlayState } from './Play';
 import { RoundIntro } from '../components/RoundIntro';
-import type { RoundResultEvent, LeaderboardEntry, PartyInfo } from '../types';
+import { FinalResultsView } from '../components/FinalResults';
+import { PillButton } from '../components/RevealShared';
+import type { RoundResultEvent, LeaderboardEntry, PartyInfo, Award } from '../types';
 
 // ─── Fixture data ─────────────────────────────────────────────────────────────
 
@@ -158,12 +160,18 @@ const MOCK_LEADERBOARD: LeaderboardEntry[] = [
   { rank: 5, name: 'Sofia', score: 2100 },
 ];
 
-const MOCK_HOST_FINISHED: HostState = {
-  ...MOCK_HOST,
-  phase: 'finished',
-  leaderboard: MOCK_LEADERBOARD,
-  roundDeltas: { Anna: 2250, John: 1450, Olivia: 1350, Marcus: 1000, Sofia: 250 },
-};
+const MOCK_LEADERBOARD_LONG: LeaderboardEntry[] = [
+  { rank: 1, name: 'Maximiliana Featherstonehaugh', score: 5350 },
+  { rank: 2, name: 'Bartholomew Higginbotham-Smythe', score: 4100 },
+  { rank: 3, name: 'Olivia', score: 3200 },
+];
+
+const MOCK_AWARDS: Award[] = [
+  { key: 'sharpshooter', playerNames: ['Anna'], detail: '9/10 correct guesses this game, more than anyone else' },
+  { key: 'speedDemon', playerNames: ['John'], detail: '0.8s fastest correct guess' },
+  { key: 'comebackKid', playerNames: ['Olivia', 'Marcus'], detail: '+1200 point single-round swing' },
+  { key: 'duelChampion', playerNames: ['Sofia'], detail: 'Won the finale duel' },
+];
 
 // LobbyView is the only view that reads `game.spotify` directly, so it needs
 // a minimal stand-in rather than the `null as any` the other views get away with.
@@ -262,5 +270,66 @@ export default function Screenshot() {
   if (v === 'year-guessing') return <GuessingView game={MOCK_PLAY_YEAR_GUESSING} />;
   if (v === 'lobby') return <LobbyView game={MOCK_HOST_LOBBY} />;
   if (v === 'party-intro') return <RoundIntro party={MOCK_PARTY_STEAL} roundKey={0} dismissible={false} />;
-  return <p className="text-white p-6 font-mono">?v=playing|reveal|year|watching|guessing|year-guessing|lobby|party-intro</p>;
+  if (v === 'final-host') {
+    return (
+      <FinalResultsView
+        leaderboard={MOCK_LEADERBOARD}
+        awards={MOCK_AWARDS}
+        backgroundSrc={`${import.meta.env.BASE_URL}background6.svg`}
+        footer={<PillButton onClick={noop} label="New Game" />}
+      />
+    );
+  }
+  if (v === 'final-host-1') {
+    return (
+      <FinalResultsView
+        leaderboard={MOCK_LEADERBOARD.slice(0, 1)}
+        awards={[]}
+        backgroundSrc={`${import.meta.env.BASE_URL}background6.svg`}
+        footer={<PillButton onClick={noop} label="New Game" />}
+      />
+    );
+  }
+  if (v === 'final-host-2') {
+    return (
+      <FinalResultsView
+        leaderboard={MOCK_LEADERBOARD.slice(0, 2)}
+        awards={[]}
+        backgroundSrc={`${import.meta.env.BASE_URL}background6.svg`}
+        footer={<PillButton onClick={noop} label="New Game" />}
+      />
+    );
+  }
+  if (v === 'final-host-long') {
+    return (
+      <FinalResultsView
+        leaderboard={MOCK_LEADERBOARD_LONG}
+        awards={MOCK_AWARDS}
+        backgroundSrc={`${import.meta.env.BASE_URL}background6.svg`}
+        footer={<PillButton onClick={noop} label="New Game" />}
+      />
+    );
+  }
+  if (v === 'final-player') {
+    return (
+      <FinalResultsView
+        leaderboard={MOCK_LEADERBOARD}
+        awards={MOCK_AWARDS}
+        myName="John"
+        backgroundSrc={`${import.meta.env.BASE_URL}background5.svg`}
+        footer={<PillButton onClick={noop} label="Leave" />}
+      />
+    );
+  }
+  if (v === 'final-empty') {
+    return (
+      <FinalResultsView
+        leaderboard={[]}
+        awards={[]}
+        backgroundSrc={`${import.meta.env.BASE_URL}background6.svg`}
+        footer={<PillButton onClick={noop} label="New Game" />}
+      />
+    );
+  }
+  return <p className="text-white p-6 font-mono">?v=playing|reveal|year|watching|guessing|year-guessing|lobby|party-intro|final-host|final-host-1|final-host-2|final-host-long|final-player|final-empty</p>;
 }
