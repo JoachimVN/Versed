@@ -182,19 +182,21 @@ export function FinalRoundAnswerContent({ result, label }: Readonly<{ result: Ro
         {label}
       </span>
       <div style={{ width: '100%', height: '1px', background: 'rgba(255,255,255,0.08)', marginBottom: '14px' }} />
-      <span style={{
-        color: 'rgba(255,255,255,0.45)', fontSize: '0.6rem', letterSpacing: '0.18em', textTransform: 'uppercase',
-        marginBottom: '10px', display: 'inline-block',
-      }}>
-        {answerTypeLabel}
-      </span>
       {yearOnly ? (
         <>
           <YearHeading year={result.year ? Math.floor(result.year) : '-'} compact />
           <YearSongFooter result={result} compact />
         </>
       ) : (
-        <SongInfo result={result} />
+        <>
+          <span style={{
+            color: 'rgba(255,255,255,0.45)', fontSize: '0.6rem', letterSpacing: '0.18em', textTransform: 'uppercase',
+            marginBottom: '10px', display: 'inline-block',
+          }}>
+            {answerTypeLabel}
+          </span>
+          <SongInfo result={result} />
+        </>
       )}
     </div>
   );
