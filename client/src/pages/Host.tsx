@@ -1072,30 +1072,60 @@ function SongSourceRow({ value, onChange }: Readonly<{ value: SongSource; onChan
   );
 }
 
-// Controls how often party events fire and how wild mystery's multiplier
-// spread gets. The server interpolates continuously between the three labels.
+// Brand gradient (see versed-brand-design) reused here instead of a generic
+// cyan/lavender/peach scale. The track fills from the left edge to the
+// thumb, and that fill shows the exact slice of this gradient that would
+// sit there if it ran the full width — so it reads as "revealing" a single
+// static gradient rather than a flat tinted bar that moves with the thumb.
+const CHAOS_GRADIENT_STOPS: [number, number, number, number][] = [
+  [0, 0x00, 0xa6, 0xa3],   // #00a6a3
+  [50, 0x3c, 0x2c, 0x66],  // #3c2c66
+  [100, 0x9e, 0x12, 0xcc], // #9e12cc
+];
+
+function chaosColorAt(value: number): string {
+  const [lo, hi] = value <= 50 ? [CHAOS_GRADIENT_STOPS[0], CHAOS_GRADIENT_STOPS[1]] : [CHAOS_GRADIENT_STOPS[1], CHAOS_GRADIENT_STOPS[2]];
+  const t = (value - lo[0]) / (hi[0] - lo[0]);
+  const r = Math.round(lo[1] + (hi[1] - lo[1]) * t);
+  const g = Math.round(lo[2] + (hi[2] - lo[2]) * t);
+  const b = Math.round(lo[3] + (hi[3] - lo[3]) * t);
+  return `rgb(${r}, ${g}, ${b})`;
+}
+
+function chaosTrackBackground(value: number): string {
+  const dim = 'rgba(255,255,255,0.14)';
+  const stops = ['#00a6a3 0%'];
+  if (value > 50) stops.push('#3c2c66 50%');
+  stops.push(`${chaosColorAt(value)} ${value}%`, `${dim} ${value}%`, `${dim} 100%`);
+  return `linear-gradient(90deg, ${stops.join(', ')})`;
+}
+
 function ChaosLevelRow({ value, onChange }: Readonly<{ value: ChaosLevel; onChange: (v: ChaosLevel) => void }>) {
   return (
     <div className="space-y-2">
-      <span style={{ color: 'rgba(255,255,255,0.5)', fontSize: '0.875rem' }}>Chaos level</span>
-      <div className="rounded-xl px-3 py-2" style={{ background: 'rgba(255,255,255,0.05)', border: '1px solid rgba(255,255,255,0.08)' }}>
-        <input
-          type="range"
-          min={0}
-          max={100}
-          step={1}
-          value={value}
-          onChange={e => onChange(Number(e.target.value))}
-          aria-label="Chaos level"
-          aria-valuetext={`${Math.round(value)} percent`}
-          className="block w-full cursor-pointer"
-          style={{ accentColor: '#d8b4fe' }}
-        />
-        <div className="flex justify-between mt-1" aria-hidden="true">
-          <span style={{ color: '#7dd3fc', fontSize: '0.62rem' }}>Chill</span>
-          <span style={{ color: '#d8b4fe', fontSize: '0.62rem' }}>Balanced</span>
-          <span style={{ color: '#fca5a5', fontSize: '0.62rem' }}>Chaotic</span>
-        </div>
+      <div className="flex items-center justify-between">
+        <span style={{ color: 'rgba(255,255,255,0.5)', fontSize: '0.875rem' }}>Chaos level</span>
+        <span style={{ color: 'white', fontWeight: 700, fontSize: '0.875rem' }}>{Math.round(value)}%</span>
+      </div>
+      <input
+        type="range"
+        min={0}
+        max={100}
+        step={1}
+        value={value}
+        onChange={e => onChange(Number(e.target.value))}
+        aria-label="Chaos level"
+        aria-valuetext={`${Math.round(value)} percent`}
+        className="chaos-slider block w-full"
+        style={{
+          '--chaos-track-bg': chaosTrackBackground(value),
+          '--chaos-color': chaosColorAt(value),
+        } as React.CSSProperties}
+      />
+      <div className="flex justify-between" aria-hidden="true">
+        <span style={{ color: '#00a6a3', fontSize: '0.62rem' }}>Chill</span>
+        <span style={{ color: '#8b7bb8', fontSize: '0.62rem' }}>Balanced</span>
+        <span style={{ color: '#9e12cc', fontSize: '0.62rem' }}>Chaotic</span>
       </div>
     </div>
   );
