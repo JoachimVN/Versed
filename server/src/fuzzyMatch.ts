@@ -37,7 +37,7 @@ function stripTrailingMetadata(s: string): string {
 // contain "+" too (e.g. "Safe + Sound", "Day + Night", "Pink + White").
 const PLUS_FEATURE_RE = /^(.+?)\s\+\s(.+)$/;
 
-function normalize(s: string): string {
+function normalizeCore(s: string, useHomophones: boolean): string {
   return s
     .toLowerCase()
     .replace(/&/g, ' and ')
@@ -46,9 +46,21 @@ function normalize(s: string): string {
     .replace(/\b(the|a|an)\b/g, ' ')
     .split(/\s+/)
     .filter(Boolean)
-    .map(w => HOMOPHONES[w] ?? w)
+    .map(w => (useHomophones ? HOMOPHONES[w] ?? w : w))
     .join(' ')
     .trim();
+}
+
+function normalize(s: string): string {
+  return normalizeCore(s, true);
+}
+
+// A missing/extra space in a guess (e.g. "close tonyou" for "Close To You")
+// can turn a 1-character typo into a huge edit distance once homophone
+// substitution has collapsed the target down to something like "close 2 u" —
+// so also compare the un-substituted spelling and accept either match.
+function normalizeRaw(s: string): string {
+  return normalizeCore(s, false);
 }
 
 // A flat minimum tolerance of 2 lets unrelated words collide once a title is
@@ -90,13 +102,19 @@ function fuzzyMatch(g: string, candidate: string): boolean {
   return levenshtein(g, candidate) <= fuzzyThreshold(candidate.length);
 }
 
+function matchesText(g: string, gRaw: string, candidate: string): boolean {
+  if (fuzzyMatch(g, normalize(candidate))) return true;
+  return fuzzyMatch(gRaw, normalizeRaw(candidate));
+}
+
 export function isCorrectArtistGuess(guess: string, artist: string, featuredArtists?: string): boolean {
   const g = normalize(guess);
+  const gRaw = normalizeRaw(guess);
   if (!g) return false;
-  if (fuzzyMatch(g, normalize(artist))) return true;
+  if (matchesText(g, gRaw, artist)) return true;
   if (featuredArtists) {
     for (const name of featuredArtists.split(',')) {
-      if (fuzzyMatch(g, normalize(name))) return true;
+      if (matchesText(g, gRaw, name)) return true;
     }
   }
   return false;
@@ -104,9 +122,9 @@ export function isCorrectArtistGuess(guess: string, artist: string, featuredArti
 
 export function isCorrectGuess(guess: string, title: string, artist?: string, featuredArtists?: string): boolean {
   const g = normalize(guess);
-  const t = normalize(title);
+  const gRaw = normalizeRaw(guess);
   if (!g) return false;
-  if (fuzzyMatch(g, t)) return true;
+  if (matchesText(g, gRaw, title)) return true;
 
   // Accept a guess matching the title before a parenthetical/subtitle, e.g.
   // "I Wanna Dance With Somebody" for "I Wanna Dance With Somebody (Who Loves Me)".
@@ -114,14 +132,14 @@ export function isCorrectGuess(guess: string, title: string, artist?: string, fe
   // like "feat. X", "from X", "remastered", etc.).
   const parenMatch = PAREN_RE.exec(title);
   if (parenMatch) {
-    if (fuzzyMatch(g, normalize(parenMatch[1]))) return true;
-    if (fuzzyMatch(g, normalize(stripTrailingMetadata(parenMatch[1])))) return true;
-    if (!PAREN_METADATA.test(parenMatch[2]) && fuzzyMatch(g, normalize(parenMatch[2]))) return true;
+    if (matchesText(g, gRaw, parenMatch[1])) return true;
+    if (matchesText(g, gRaw, stripTrailingMetadata(parenMatch[1]))) return true;
+    if (!PAREN_METADATA.test(parenMatch[2]) && matchesText(g, gRaw, parenMatch[2])) return true;
   }
 
   const plusMatch = PLUS_FEATURE_RE.exec(title);
   if (plusMatch && isCorrectArtistGuess(plusMatch[2], artist ?? '', featuredArtists)
-    && fuzzyMatch(g, normalize(plusMatch[1]))) return true;
+    && matchesText(g, gRaw, plusMatch[1])) return true;
 
   return false;
 }
