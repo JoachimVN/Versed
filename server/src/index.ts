@@ -216,7 +216,7 @@ io.on('connection', (socket) => {
       raceTime: game.raceTime,
       artistOnly: game.artistOnly,
       yearOnly: game.yearOnly,
-      party: gm.partyView(round),
+      party: gm.partyView(game, round),
       tempo: round.song.tempo,
     });
     if (game.phase === 'guessing' && round.playStartAt && game.phaseEndsAt && !round.passed.has(socket.id)) {
@@ -235,7 +235,7 @@ io.on('connection', (socket) => {
         mode: 'classic',
         artistOnly: game.artistOnly,
         yearOnly: game.yearOnly,
-        party: gm.partyView(round),
+        party: gm.partyView(game, round),
         bidOptions: gm.BID_OPTIONS,
         bidScores: gm.bidScoreTable(),
         tempo: round.song.tempo,
@@ -255,7 +255,7 @@ io.on('connection', (socket) => {
       mode: 'classic',
       artistOnly: game.artistOnly,
       yearOnly: game.yearOnly,
-      party: gm.partyView(round),
+      party: gm.partyView(game, round),
       bidOptions: gm.BID_OPTIONS,
       bidScores: gm.bidScoreTable(),
       tempo: round.song.tempo,
@@ -686,6 +686,18 @@ io.on('connection', (socket) => {
     // round or start two overlapping beginRound() calls.
     if (game.phase !== 'reveal' && game.phase !== 'leaderboard') return;
 
+    // Mid-finale-duel: advance to the next sub-round without touching
+    // roundIndex/totalRounds at all, unless the duel just resolved (someone
+    // reached 2 wins) — advanceDuelOrResolve already applied the bonus and
+    // crowned the Duel Champion in that case, so falling through below ends
+    // the game exactly as an ordinary last round would.
+    if (game.duelActive) {
+      if (gm.advanceDuelOrResolve(game)) {
+        beginRound(game);
+        return;
+      }
+    }
+
     game.roundIndex += 1;
     if (game.roundIndex >= game.totalRounds) {
       game.phase = 'finished';
@@ -760,7 +772,7 @@ io.on('connection', (socket) => {
   async function beginRound(game: GameObj) {
     if (!game) return;
     const round = gm.startRound(game);
-    const party = gm.partyView(round);
+    const party = gm.partyView(game, round);
     const isRaceFlow = gm.isRaceFlowRound(game, round);
     // Race flow is normally hint-free (the audio itself is the puzzle), but
     // artist-only and year-only rounds can't be inferred from audio alone —
@@ -893,7 +905,7 @@ io.on('connection', (socket) => {
       artistOnly: gm.effectiveTarget(game, round) === 'artist',
       yearOnly: gm.effectiveTarget(game, round) === 'year',
       // Reveal payloads always carry the full party config (mystery revealed).
-      party: gm.partyView(round, true),
+      party: gm.partyView(game, round, true),
       // 'chaoshints' rounds: which hint (already sent as `hints` at
       // round_start) was the fabricated one — hidden until now.
       chaosFakeIndex: round.chaosFakeIndex,

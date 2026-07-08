@@ -216,7 +216,12 @@ function eventBit(party: PartyInfo): string | null {
 export function PartyBadge({ party }: Readonly<{ party: PartyInfo | null }>) {
   if (!party) return null;
   const bits: string[] = [formatBit(party)];
-  if (party.finale) bits.push(`FINALE · ${party.duelists.join(' vs ')}`);
+  if (party.finale) {
+    const wins = party.duelProgress?.wins;
+    bits.push(wins && wins.length === 2
+      ? `FINALE · ${wins[0].name} ${wins[0].count}–${wins[1].count} ${wins[1].name}`
+      : `FINALE · ${party.duelists.join(' vs ')}`);
+  }
   else if (party.event === 'underdog') {
     bits.push(party.restricted.length > 0 ? `UNDERDOG · ${party.restricted.join(' & ')}` : 'UNDERDOG BOOST');
   } else if (party.winnerOnly) bits.push('WINNER ONLY');

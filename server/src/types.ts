@@ -85,6 +85,9 @@ export interface PartyClientView {
   duelists: string[];
   restricted: string[];
   choiceOptions?: string[];
+  // Finale only: best-of-3 duel progress, so both screens can show
+  // "Game N of 3 · Alice 1 – 0 Bob" instead of just "The Finale".
+  duelProgress?: { subRoundIndex: number; wins: { name: string; count: number }[] };
 }
 
 export interface YearResult {
@@ -198,6 +201,12 @@ export interface Game {
   enabledEvents: Set<PartyEvent>; // party mode: which events the host allows into the pool
   chaosLevel: ChaosLevel;         // party mode: event frequency + mystery-multiplier spread preset
   duelChampion: string | null;    // party mode: socketId of the finale duel's winner, once resolved
+  // Finale best-of-3 duel state — lives on Game (not Round) since it must
+  // survive each sub-round's fresh Round object.
+  duelActive: boolean;
+  duelDuelistIds: string[];         // fixed for the whole best-of-3 once triggered
+  duelWins: Record<string, number>; // socketId -> sub-round wins so far (0, 1, or 2)
+  duelSubRoundIndex: number;        // 0=classic, 1=race, 2+=year (replayed on tie)
   songSource: SongSource;
   songPool?: Song[];
   playlistId?: string;

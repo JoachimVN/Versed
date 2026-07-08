@@ -2492,7 +2492,12 @@ function RevealShell({
   isCorrectFor: (player: PlayerInfo) => GuessCorrectness;
   wide?: boolean;
 }>) {
-  const { roundIndex, totalRounds, players, roundDeltas, roundPity, removePlayer, endGame, stealResult } = game;
+  const { roundIndex, totalRounds, players, roundDeltas, roundPity, removePlayer, endGame, stealResult, party } = game;
+  // Every sub-round of the finale duel reports finale:true — the host can't
+  // tell from roundIndex/totalRounds alone whether clicking "next" advances
+  // to another duel game or actually ends the match, so it gets a neutral
+  // label instead of prematurely promising "Final Results".
+  const nextLabel = party?.finale ? 'Continue' : (roundIndex + 1 >= totalRounds ? 'Final Results' : 'Next Round');
   return (
     <div className={`page-enter relative min-h-screen flex flex-col items-center gap-5 overflow-hidden ${wide ? 'px-2 py-6' : 'p-6'}`}>
       <img
@@ -2536,7 +2541,7 @@ function RevealShell({
 
       <PillButton
         onClick={() => socket.emit('next_round')}
-        label={roundIndex + 1 >= totalRounds ? 'Final Results' : 'Next Round'}
+        label={nextLabel}
         zIndex={2}
       />
 

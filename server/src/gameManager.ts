@@ -26,7 +26,12 @@ export const RACE_BASE = 1000;
 // ─── Party mode tuning ────────────────────────────────────────────────────────
 export const STEAL_PCT = 0.25;         // steal takes 15% of the victim's score…
 export const STEAL_MIN = 400;          // …but never less than this (capped at their total)
-export const DUEL_WIN_POINTS = 1500;   // finale: first correct duelist takes this
+// Finale: flat bonus for winning the best-of-3 duel outright (first to 2
+// sub-round wins). Deliberately NOT scaled to the score gap between the
+// duelists — "shouldn't be possible to flip a huge score gap based on 3
+// rounds" — so it stays meaningful without ever guaranteeing a placement
+// flip. Per-sub-round points still score normally on top of this.
+export const DUEL_BONUS = 3000;
 export const YEAR_MAX_POINTS = 1000;   // year round: exact answer
 export const YEAR_POINTS_SLOPE = 120;  // …minus this per year off
 export const YEAR_WINNER_BONUS = 500;  // closest answer bonus (split on ties)
@@ -433,20 +438,16 @@ function buildPartyConfig(game: Game): PartyConfig {
 
   const isLast = game.roundIndex === game.totalRounds - 1;
   if (isLast && game.totalRounds > 1 && game.players.size >= 2) {
-    const top = Array.from(game.players.values())
-      .sort((a, b) => b.score - a.score)
-      .slice(0, 2);
-    return {
-      format: 'race', target: 'title', event: null, multiplier: 1, winnerOnly: false,
-      finale: true,
-      duelistIds: top.map(p => p.socketId),
-      duelistNames: top.map(p => p.name),
-      restrictedIds: [], restrictedNames: [],
-      intro: {
-        title: 'The Finale',
-        tagline: `${top[0].name} vs ${top[1].name} / first correct wins ${DUEL_WIN_POINTS} pts`,
-      },
-    };
+    if (!game.duelActive) {
+      const top = Array.from(game.players.values())
+        .sort((a, b) => b.score - a.score)
+        .slice(0, 2);
+      game.duelActive = true;
+      game.duelDuelistIds = top.map(p => p.socketId);
+      game.duelWins = { [top[0].socketId]: 0, [top[1].socketId]: 0 };
+      game.duelSubRoundIndex = 0;
+    }
+    return buildDuelSubRoundConfig(game);
   }
 
   if (game.roundIndex === 0) {
@@ -477,9 +478,45 @@ function buildPartyConfig(game: Game): PartyConfig {
   };
 }
 
+// Best-of-3 finale duel: a fixed format sequence rather than the usual
+// random pick — game 1 is a classic bid/tier round, game 2 a race, game 3
+// (and any replay of it — see finalizeYearRound) a year decider. Each still
+// rolls its own normal event/multiplier, just like a regular round.
+const DUEL_FORMAT_SEQUENCE: PartyFormat[] = ['classic', 'race', 'year'];
+
+function buildDuelSubRoundConfig(game: Game): PartyConfig {
+  const format = DUEL_FORMAT_SEQUENCE[Math.min(game.duelSubRoundIndex, DUEL_FORMAT_SEQUENCE.length - 1)];
+  const [idA, idB] = game.duelDuelistIds;
+  const nameA = game.players.get(idA)?.name ?? '';
+  const nameB = game.players.get(idB)?.name ?? '';
+  const winsA = game.duelWins[idA] ?? 0;
+  const winsB = game.duelWins[idB] ?? 0;
+
+  const prev = game.currentRound?.party;
+  const event = pickPartyEvent(game, format, prev?.event);
+  const multiplier = eventMultiplier(game, event);
+
+  const gameNum = game.duelSubRoundIndex + 1;
+  const gameLabel = gameNum > DUEL_FORMAT_SEQUENCE.length
+    ? `Decider replay ${gameNum - DUEL_FORMAT_SEQUENCE.length}`
+    : `Game ${gameNum} of 3`;
+
+  return {
+    format, target: 'title', event, multiplier, winnerOnly: false,
+    finale: true,
+    duelistIds: [idA, idB],
+    duelistNames: [nameA, nameB],
+    restrictedIds: [], restrictedNames: [],
+    intro: {
+      title: `The Finale · ${gameLabel}`,
+      tagline: `${nameA} ${winsA} – ${winsB} ${nameB} · first to 2 wins takes ${DUEL_BONUS.toLocaleString()} pts`,
+    },
+  };
+}
+
 // The sanitized view clients get: no socketIds, and a mystery multiplier stays
 // hidden (null) until the reveal.
-export function partyView(round: Round, revealed = false): PartyClientView | undefined {
+export function partyView(game: Game, round: Round, revealed = false): PartyClientView | undefined {
   const p = round.party;
   if (!p) return undefined;
   return {
@@ -493,6 +530,10 @@ export function partyView(round: Round, revealed = false): PartyClientView | und
     duelists: p.duelistNames,
     restricted: p.restrictedNames,
     choiceOptions: p.choiceOptions,
+    duelProgress: p.finale ? {
+      subRoundIndex: game.duelSubRoundIndex,
+      wins: game.duelDuelistIds.map(id => ({ name: game.players.get(id)?.name ?? '', count: game.duelWins[id] ?? 0 })),
+    } : undefined,
   };
 }
 
@@ -867,6 +908,10 @@ export function createGame(hostSocketId: string, preferredPin?: string): Game {
     enabledEvents: new Set(ALL_PARTY_EVENTS),
     chaosLevel: 'balanced',
     duelChampion: null,
+    duelActive: false,
+    duelDuelistIds: [],
+    duelWins: {},
+    duelSubRoundIndex: 0,
     songSource: 'library',
     playlistId: undefined,
     currentRound: null,
@@ -974,6 +1019,15 @@ export function rejoinPlayer(game: Game, newSocketId: string, name: string): Pla
     player.socketId = newSocketId;
     game.players.set(newSocketId, player);
     if (game.currentRound) migrateRoundSocketId(game.currentRound, oldId, newSocketId);
+    // Duel state lives on Game (not Round), since it must survive each
+    // sub-round's fresh Round object — so it needs its own remap here,
+    // separate from migrateRoundSocketId's round-scoped one.
+    if (game.duelDuelistIds.includes(oldId)) {
+      game.duelDuelistIds = game.duelDuelistIds.map(id => (id === oldId ? newSocketId : id));
+      const wins = game.duelWins[oldId];
+      if (wins !== undefined) { game.duelWins[newSocketId] = wins; delete game.duelWins[oldId]; }
+      if (game.duelChampion === oldId) game.duelChampion = newSocketId;
+    }
   }
   socketToPin.set(newSocketId, game.pin);
   return player;
@@ -1017,6 +1071,11 @@ export function recordBid(game: Game, socketId: string, seconds: number): boolea
   if (game.phase !== 'betting') return false;
   if (!game.players.has(socketId)) return false;
   if (!BID_OPTIONS.includes(seconds)) return false;
+  // A finale duel's classic sub-round is only for the two duelists — everyone
+  // else just watches (mirrors the finale's existing race-flow restriction,
+  // which classic never needed before the duel could ride this format).
+  const party = game.currentRound?.party;
+  if (party?.finale && !party.duelistIds.includes(socketId)) return false;
   game.currentRound!.bids.set(socketId, seconds);
   return true;
 }
@@ -1156,6 +1215,12 @@ function applyClassicWin(
     round.stealBy = socketId;
     round.stealDone = false;
   }
+  // Finale classic sub-round: record who took this game of the best-of-3 —
+  // separate from (and on top of) the normal points above.
+  if (round.party?.finale) {
+    game.duelWins[socketId] = (game.duelWins[socketId] ?? 0) + 1;
+    resolveDuelIfWon(game, socketId);
+  }
   game.phase = 'reveal';
   settleStreaks(game, round);
   return { correct: true, points, guesserName, allDone: false };
@@ -1194,15 +1259,14 @@ function applyRaceCorrectGuess(
   round.correctGuessers.add(socketId);
   round.guessTimes.set(socketId, elapsedMs);
   if (!isFirst && isWinnerOnlyRound(game, round)) return 0;
-  let base: number;
-  if (round.party?.finale) {
-    // Duel: winner-takes-all, flat stakes.
-    base = isFirst ? DUEL_WIN_POINTS : 0;
-  } else if (isWinnerOnlyRound(game, round)) {
-    base = calcRaceWinnerPoints(game, elapsedMs, game.raceTime, round.song.rank);
-  } else {
-    base = calcRacePoints(game, isFirst, elapsedMs, round.firstCorrectAt! - round.playStartAt!, round.song.rank);
-  }
+  // A finale duelist can never actually reach this function as a non-first
+  // guesser — recordRaceGuess already rejects any guess attempt once the
+  // round's first correct answer has landed, for any finale round — so
+  // `isFirst` is always true here and this scores through the normal
+  // first-correct race payout, same as any other race round.
+  const base = isWinnerOnlyRound(game, round)
+    ? calcRaceWinnerPoints(game, elapsedMs, game.raceTime, round.song.rank)
+    : calcRacePoints(game, isFirst, elapsedMs, round.firstCorrectAt! - round.playStartAt!, round.song.rank);
   const preMultiplier = base + (artistBonus ? base : 0);
   let points = Math.round(preMultiplier * roundMultiplier(round));
   if (points > 0) points += pityBonus(currentScores(game), socketId, round);
@@ -1218,6 +1282,12 @@ function applyRaceCorrectGuess(
     if (points > player.biggestSwing) player.biggestSwing = points;
     player.fastestCorrectMs = player.fastestCorrectMs === null ? elapsedMs : Math.min(player.fastestCorrectMs, elapsedMs);
     round.scoredSocketIds.add(socketId);
+  }
+  // Finale race sub-round: record who took this game of the best-of-3 —
+  // separate from (and on top of) the normal points above.
+  if (isFirst && round.party?.finale) {
+    game.duelWins[socketId] = (game.duelWins[socketId] ?? 0) + 1;
+    resolveDuelIfWon(game, socketId);
   }
   // The mystery multiplier stays hidden until everyone sees the shared
   // reveal, so the guesser's own immediate ack can't carry the true
@@ -1392,7 +1462,28 @@ function scoreYearGuesses(game: Game, round: Round, mult: number, winnerOnly: bo
 // distance is known.
 export function finalizeYearRound(game: Game): YearResult[] {
   const round = game.currentRound!;
-  return scoreYearGuesses(game, round, roundMultiplier(round), isWinnerOnlyRound(game, round));
+  const results = scoreYearGuesses(game, round, roundMultiplier(round), isWinnerOnlyRound(game, round));
+  if (round.party?.finale) recordDuelYearWin(game, round);
+  return results;
+}
+
+// Finale year sub-round (the decider): whoever's strictly closest takes this
+// game of the best-of-3. An exact tie between the two duelists — or neither
+// answering at all — resolves nothing here; advanceDuelOrResolve will notice
+// neither reached 2 wins and call for another year sub-round instead of
+// ending the duel.
+function recordDuelYearWin(game: Game, round: Round): void {
+  const actual = Math.floor(round.song.year ?? 0);
+  const duelistIds = round.party!.duelistIds;
+  const entries = yearGuessEntries(game, round, actual)
+    .filter(e => duelistIds.includes(e.id) && e.diff !== null);
+  if (entries.length === 0) return;
+  const best = Math.min(...entries.map(e => e.diff!));
+  const winners = entries.filter(e => e.diff === best);
+  if (winners.length === 1) {
+    game.duelWins[winners[0].id] = (game.duelWins[winners[0].id] ?? 0) + 1;
+    resolveDuelIfWon(game, winners[0].id);
+  }
 }
 
 // Classic-flow year round that ended early on an exact guess — scored like
@@ -1523,6 +1614,32 @@ export function getRoundGuesses(game: Game): { name: string; guess: string | nul
     if (draft) results.push({ name: player.name, guess: draft, timeMs: null, live: true });
   }
   return results;
+}
+
+// Applies the flat DUEL_BONUS and crowns Duel Champion the instant a
+// duelist's win count reaches 2 — called right where duelWins is
+// incremented (applyClassicWin, applyRaceCorrectGuess, recordDuelYearWin),
+// not lazily at the next "next round" click, so the reveal screen for the
+// deciding sub-round already shows the true final score instead of jumping
+// again once the host continues.
+function resolveDuelIfWon(game: Game, socketId: string): void {
+  if ((game.duelWins[socketId] ?? 0) < 2) return;
+  game.duelChampion = socketId;
+  const winner = game.players.get(socketId);
+  if (winner) winner.score += DUEL_BONUS;
+  game.duelActive = false;
+}
+
+// Called from the host's "next round" action while a finale duel is active.
+// Returns true if the duel should continue (the caller then starts the next
+// sub-round instead of advancing roundIndex/ending the game); false once
+// it's resolved (resolveDuelIfWon already flipped duelActive off), in which
+// case the caller falls through to the normal end-of-game flow exactly as if
+// this were an ordinary last round.
+export function advanceDuelOrResolve(game: Game): boolean {
+  if (!game.duelActive) return false;
+  game.duelSubRoundIndex += 1;
+  return true;
 }
 
 export function getLeaderboard(game: Game) {

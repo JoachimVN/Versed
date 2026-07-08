@@ -959,7 +959,22 @@ function WaitingView({ game }: Readonly<{ game: PlayState }>) {
 }
 
 export function BettingView({ game }: Readonly<{ game: PlayState }>) {
-  const { roundIndex, totalRounds, timeLeft, bettingTime, bidIndex, bidOptions, bidScores, party, error, submitBid, setBidIndex } = game;
+  const { roundIndex, totalRounds, timeLeft, bettingTime, bidIndex, bidOptions, bidScores, party, error, myName, submitBid, setBidIndex } = game;
+  // The finale duel's classic sub-round only takes bids from the two
+  // duelists (see recordBid server-side) — everyone else would just have
+  // every bid silently rejected, so they get a spectator screen instead of
+  // a bid picker that can never actually submit.
+  if (party?.finale && myName && !party.duelists.includes(myName)) {
+    return (
+      <div className="min-h-screen flex flex-col items-center justify-center gap-3 p-6 text-center" style={{ background: '#080812' }}>
+        <p style={{ color: 'rgba(255,255,255,0.45)', fontSize: '0.68rem', letterSpacing: '0.2em', textTransform: 'uppercase' }}>
+          The finale
+        </p>
+        <p style={{ color: 'white', fontWeight: 900, fontSize: '1.5rem' }}>{party.duelists.join(' vs ')}</p>
+        <p style={{ color: 'rgba(255,255,255,0.45)', fontSize: '0.9rem' }}>Just watch this one — only they can bid</p>
+      </div>
+    );
+  }
   const timerPct = bettingTime > 0 ? Math.max(0, (timeLeft / bettingTime)) * 100 : 0;
   const currentBid = bidOptions[bidIndex];
   const canGoLeft = bidIndex > 0;
@@ -1208,7 +1223,15 @@ export function WatchingView({ game }: Readonly<{ game: PlayState }>) {
 function GetReadyBody({ isDuel, isUnderdog, isRace, party, lowestBid, guesserNames, songPlaying }: Readonly<{
   isDuel: boolean; isUnderdog: boolean; isRace: boolean; party: PartyInfo | null; lowestBid: number; guesserNames: string[]; songPlaying: boolean;
 }>) {
-  if (isDuel) {
+  const duelWins = party?.duelProgress?.wins;
+  const duelScoreLine = duelWins && duelWins.length === 2
+    ? `${duelWins[0].name} ${duelWins[0].count} – ${duelWins[1].count} ${duelWins[1].name}`
+    : null;
+  // Race/year sub-rounds keep the existing "everyone races" duel framing —
+  // the classic sub-round (game 1) falls through to the normal bid-based
+  // display below instead, just with the duel score appended, since bidding
+  // still applies there.
+  if (isDuel && isRace) {
     return (
       <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '10px' }}>
         <span style={{ color: 'rgba(255,255,255,0.45)', fontSize: '0.65rem', letterSpacing: '0.2em', textTransform: 'uppercase' }}>
@@ -1218,7 +1241,7 @@ function GetReadyBody({ isDuel, isUnderdog, isRace, party, lowestBid, guesserNam
           {party!.duelists.join(' vs ')}
         </span>
         <span style={{ display: 'inline-block', minWidth: '170px', color: 'rgba(255,255,255,0.45)', fontSize: '0.88rem', textAlign: 'center' }}>
-          First correct wins
+          {duelScoreLine ?? 'First correct wins'}
         </span>
       </div>
     );
@@ -1277,6 +1300,11 @@ function GetReadyBody({ isDuel, isUnderdog, isRace, party, lowestBid, guesserNam
           guesses after {lowestBid}s
         </span>
       </div>
+      {duelScoreLine && (
+        <span style={{ color: 'rgba(255,255,255,0.45)', fontSize: '0.78rem', textAlign: 'center' }}>
+          {duelScoreLine}
+        </span>
+      )}
     </div>
   );
 }

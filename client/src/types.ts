@@ -54,6 +54,8 @@ export interface PartyInfo {
   duelists: string[];
   restricted: string[];
   choiceOptions?: string[];
+  // Finale only: best-of-3 duel progress ("Game N of 3 · Alice 1 – 0 Bob").
+  duelProgress?: { subRoundIndex: number; wins: { name: string; count: number }[] };
 }
 
 export interface YearResult {
