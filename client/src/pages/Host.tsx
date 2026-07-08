@@ -2130,8 +2130,11 @@ export function PlayingView({ game }: Readonly<{ game: HostState }>) {
   // its own per-round target and ignores this game-wide toggle.
   const isRace = mode === 'race' || (party === null && yearOnly) || (party !== null && party.format !== 'classic');
   const isYear = party ? party.format === 'year' : yearOnly;
-  const raceStatus = party?.finale
-    ? `${party.duelists.join(' vs ')} - first correct wins`
+  // Finale duelists or (for underdog rounds) the trailing player(s) — the
+  // only ones actually guessing this round, if either applies.
+  const restrictedNames = party?.finale ? party.duelists : (party?.event === 'underdog' ? party.restricted : null);
+  const raceStatus = restrictedNames
+    ? `${restrictedNames.join(party?.finale ? ' vs ' : ' & ')} - first correct wins`
     : `${answeredCount} / ${players.length} answered`;
   const accent = roundAccent(isRace, isYear);
   return (
@@ -2173,7 +2176,7 @@ export function PlayingView({ game }: Readonly<{ game: HostState }>) {
                   <div style={{ width: '100%', height: '1px', background: 'rgba(255,255,255,0.07)' }} />
                   {isRace ? (
                     <span style={{ color: 'rgba(255,255,255,0.5)', fontSize: '0.9rem', display: 'inline-block', minWidth: '210px', textAlign: 'center' }}>
-                      {party?.finale ? party.duelists.join(' vs ') : 'Everyone will guess'}
+                      {restrictedNames ? restrictedNames.join(party?.finale ? ' vs ' : ' & ') : 'Everyone will guess'}
                     </span>
                   ) : (
                     <>

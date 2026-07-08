@@ -291,6 +291,7 @@ function introFor(
     fullhints: { title: 'Open Book', tag: 'Every hint on the table' },
     blind: { title: 'Blind Bet', tag: 'No hints at all — bid on ears alone' },
     outro: { title: 'Down to the Wire', tag: "The clip plays the song's final stretch" },
+    underdog: { title: 'Underdog Boost', tag: 'Only the player(s) in last place can answer' },
   };
   if (event) {
     const e = eventIntros[event];
@@ -319,6 +320,11 @@ function pickPartyEvent(game: Game, format: PartyFormat, prevEvent: PartyEvent |
   // Steal needs someone else to steal from — pointless (and confusing to
   // announce) in a 1-player game.
   if (game.roundIndex >= 2 && game.players.size >= 2) pool.push(['steal', 20]);
+  // Underdog restricts guessing to whoever's trailing, so it needs someone
+  // else to be ahead of — and it rides race/year scoring, not the classic
+  // bid/tier flow (that's a deliberately different kind of "not everyone
+  // gets a turn").
+  if (format !== 'classic' && game.players.size >= 2) pool.push(['underdog', 20]);
   return pickWeighted(pool.filter(([e]) => e !== prevEvent));
 }
 
@@ -338,9 +344,18 @@ function eventMultiplier(event: PartyEvent | null): number {
 // enough constraints to keep it feeling curated — round 1 is a plain warm-up,
 // the same event never repeats twice in a row, steal waits until scores exist,
 // and the last round is a top-2 duel.
+// Whoever's currently tied for the lowest score — everyone at that score, not
+// just one of them, since the underdog event lets all of them race for it.
+function trailingPlayers(game: Game): { ids: string[]; names: string[] } {
+  const players = Array.from(game.players.values());
+  const min = Math.min(...players.map(p => p.score));
+  const trailing = players.filter(p => p.score === min);
+  return { ids: trailing.map(p => p.socketId), names: trailing.map(p => p.name) };
+}
+
 function buildPartyConfig(game: Game): PartyConfig {
   const plain: Omit<PartyConfig, 'format' | 'target' | 'event' | 'multiplier' | 'winnerOnly' | 'intro'> = {
-    finale: false, duelistIds: [], duelistNames: [],
+    finale: false, duelistIds: [], duelistNames: [], restrictedIds: [], restrictedNames: [],
   };
 
   const isLast = game.roundIndex === game.totalRounds - 1;
@@ -353,6 +368,7 @@ function buildPartyConfig(game: Game): PartyConfig {
       finale: true,
       duelistIds: top.map(p => p.socketId),
       duelistNames: top.map(p => p.name),
+      restrictedIds: [], restrictedNames: [],
       intro: {
         title: 'The Finale',
         tagline: `${top[0].name} vs ${top[1].name} / first correct wins ${DUEL_WIN_POINTS} pts`,
@@ -379,8 +395,11 @@ function buildPartyConfig(game: Game): PartyConfig {
   // but the lowest bidder.
   const winnerOnly = format !== 'classic' && randomInt(0, 100) < 25;
 
+  const restricted = event === 'underdog' ? trailingPlayers(game) : { ids: [], names: [] };
+
   return {
     ...plain, format, target, event, multiplier, winnerOnly,
+    restrictedIds: restricted.ids, restrictedNames: restricted.names,
     intro: introFor(format, target, event, winnerOnly),
   };
 }
@@ -399,6 +418,7 @@ export function partyView(round: Round, revealed = false): PartyClientView | und
     intro: p.intro,
     finale: p.finale,
     duelists: p.duelistNames,
+    restricted: p.restrictedNames,
   };
 }
 
@@ -444,10 +464,22 @@ export function isRaceFlowRound(game: Game, round: Round): boolean {
   return false;
 }
 
-// Who actually plays a race-flow round — the duelists in a finale, everyone
-// otherwise.
+// The current round's participant restriction, if any — the finale's
+// duelists, or (e.g.) underdog's trailing player(s). Finale and a generic
+// restriction never coexist (finale hardcodes its own format/scoring), but
+// every gate that cares "who's allowed to guess this round" can check this
+// one thing instead of re-deriving finale-vs-event logic each time.
+function restrictedParticipantIds(round: Round): string[] | null {
+  if (round.party?.finale) return round.party.duelistIds;
+  if (round.party?.restrictedIds?.length) return round.party.restrictedIds;
+  return null;
+}
+
+// Who actually plays a race-flow round — a restricted subset (finale
+// duelists, underdog trailers) if this round has one, everyone otherwise.
 function raceParticipants(game: Game, round: Round): string[] {
-  if (round.party?.finale) return round.party.duelistIds.filter(id => game.players.has(id));
+  const restricted = restrictedParticipantIds(round);
+  if (restricted) return restricted.filter(id => game.players.has(id));
   return Array.from(game.players.keys());
 }
 
@@ -764,7 +796,10 @@ function migrateRoundSocketId(round: Round, oldId: string, newId: string): void 
   if (round.correctGuessers.delete(oldId)) round.correctGuessers.add(newId);
   const guessTime = round.guessTimes.get(oldId);
   if (guessTime !== undefined) { round.guessTimes.set(newId, guessTime); round.guessTimes.delete(oldId); }
-  if (round.party) round.party.duelistIds = round.party.duelistIds.map(id => (id === oldId ? newId : id));
+  if (round.party) {
+    round.party.duelistIds = round.party.duelistIds.map(id => (id === oldId ? newId : id));
+    round.party.restrictedIds = round.party.restrictedIds.map(id => (id === oldId ? newId : id));
+  }
   if (round.stealBy === oldId) round.stealBy = newId;
 }
 
@@ -1045,7 +1080,8 @@ export function recordRaceGuess(
   if (!game.players.has(socketId)) return null;
   if (game.phase !== 'guessing') return null;
   if (round.passed.has(socketId)) return null;
-  if (round.party?.finale && !round.party.duelistIds.includes(socketId)) return null;
+  const restricted = restrictedParticipantIds(round);
+  if (restricted && !restricted.includes(socketId)) return null;
   if ((isWinnerOnlyRound(game, round) || round.party?.finale) && round.firstCorrectAt !== null) return null;
 
   const elapsedMs = Date.now() - (round.playStartAt ?? Date.now());
@@ -1078,7 +1114,8 @@ export function skipRaceGuess(
   if (!game.players.has(socketId)) return null;
   if (game.phase !== 'guessing') return null;
   if (round.passed.has(socketId)) return null;
-  if (round.party?.finale && !round.party.duelistIds.includes(socketId)) return null;
+  const restricted = restrictedParticipantIds(round);
+  if (restricted && !restricted.includes(socketId)) return null;
 
   round.guesses.set(socketId, null);
   round.passed.add(socketId);

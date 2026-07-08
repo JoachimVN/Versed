@@ -121,7 +121,7 @@ const MOCK_RESULT_YEAR: RoundResultEvent = {
   party: {
     format: 'year', target: 'title', event: null, multiplier: 1, winnerOnly: false,
     intro: { title: 'Guess the Year', tagline: 'Closest answer wins the round' },
-    finale: false, duelists: [],
+    finale: false, duelists: [], restricted: [],
   },
   playerGuesses: [
     { name: 'Anna', guess: '1984' },
@@ -172,7 +172,7 @@ const MOCK_HOST_LOBBY: HostState = {
 const MOCK_PARTY_STEAL: PartyInfo = {
   format: 'classic', target: 'title', event: 'steal', multiplier: 1, winnerOnly: false,
   intro: { title: 'Steal Round', tagline: 'Win the round, then rob another player · Bid & guess / name the song' },
-  finale: false, duelists: [],
+  finale: false, duelists: [], restricted: [],
 };
 
 const MOCK_PLAY: PlayState = {
@@ -238,7 +238,7 @@ const MOCK_PLAY_YEAR_GUESSING: PlayState = {
   party: {
     format: 'year', target: 'title', event: null, multiplier: 1, winnerOnly: false,
     intro: { title: 'Guess the Year', tagline: 'Closest answer wins the round' },
-    finale: false, duelists: [],
+    finale: false, duelists: [], restricted: [],
   },
 };
 

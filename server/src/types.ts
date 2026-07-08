@@ -44,7 +44,8 @@ export interface PlaylistTrackInput {
 // the closest answer wins.
 export type PartyFormat = 'classic' | 'race' | 'year';
 export type GuessTarget = 'title' | 'artist' | 'both';
-export type PartyEvent = 'double' | 'mystery' | 'steal' | 'snippet' | 'fullhints' | 'blind' | 'outro';
+export type PartyEvent =
+  | 'double' | 'mystery' | 'steal' | 'snippet' | 'fullhints' | 'blind' | 'outro' | 'underdog';
 
 export interface PartyConfig {
   format: PartyFormat;
@@ -56,6 +57,11 @@ export interface PartyConfig {
   finale: boolean;                  // last round: top-2 duel, first correct wins
   duelistIds: string[];             // socketIds of the duelists (finale only)
   duelistNames: string[];
+  // Generic "only these players may guess this round" restriction — distinct
+  // from duelistIds/finale so the finale's flat duel payout never leaks onto
+  // a restricted-but-not-finale round (e.g. 'underdog').
+  restrictedIds: string[];
+  restrictedNames: string[];
 }
 
 // What clients are allowed to see of a PartyConfig (no socketIds, mystery
@@ -69,6 +75,7 @@ export interface PartyClientView {
   intro: { title: string; tagline: string };
   finale: boolean;
   duelists: string[];
+  restricted: string[];
 }
 
 export interface YearResult {

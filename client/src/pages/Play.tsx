@@ -313,10 +313,12 @@ function usePlayGame(pinParam?: string): PlayState {
     });
 
     socket.on('your_turn', (data: { timeLimit: number; endsAt?: number }) => {
-      // Finale spectators just listen along: keep them on the watching screen
-      // with the song + timer, no input.
+      // Finale duelists (or, for underdog rounds, the trailing player(s)) are
+      // the only ones who actually get to guess — everyone else just listens
+      // along on the watching screen with the song + timer, no input.
       const p = partyRef.current;
-      if (p?.finale && myNameRef.current && !p.duelists.includes(myNameRef.current)) {
+      const restricted = p?.finale ? p.duelists : (p?.event === 'underdog' ? p.restricted : null);
+      if (restricted && myNameRef.current && !restricted.includes(myNameRef.current)) {
         setSongPlaying(true);
         startCountdown(data.endsAt ?? (Date.now() + data.timeLimit * 1000));
         return;
@@ -1099,6 +1101,7 @@ export function WatchingView({ game }: Readonly<{ game: PlayState }>) {
   useEffect(() => { const t = setTimeout(() => setVisible(true), 30); return () => clearTimeout(t); }, []);
   const isRace = mode === 'race';
   const isDuel = !!party?.finale;
+  const isUnderdog = party?.event === 'underdog';
   const isYear = party ? party.format === 'year' : yearOnly;
   const nonYearAccent = isRace ? 'race' : 'classic';
   const watchAccent = isYear ? 'year' : nonYearAccent;
@@ -1150,7 +1153,7 @@ export function WatchingView({ game }: Readonly<{ game: PlayState }>) {
 
                 <div style={{ width: '100%', height: '1px', background: 'rgba(255,255,255,0.07)' }} />
 
-                <GetReadyBody isDuel={isDuel} isRace={isRace} party={party} lowestBid={lowestBid} guesserNames={guesserNames} songPlaying={songPlaying} />
+                <GetReadyBody isDuel={isDuel} isUnderdog={isUnderdog} isRace={isRace} party={party} lowestBid={lowestBid} guesserNames={guesserNames} songPlaying={songPlaying} />
               </div>
             </LiquidGlass>
           </div>
@@ -1170,8 +1173,8 @@ export function WatchingView({ game }: Readonly<{ game: PlayState }>) {
   );
 }
 
-function GetReadyBody({ isDuel, isRace, party, lowestBid, guesserNames, songPlaying }: Readonly<{
-  isDuel: boolean; isRace: boolean; party: PartyInfo | null; lowestBid: number; guesserNames: string[]; songPlaying: boolean;
+function GetReadyBody({ isDuel, isUnderdog, isRace, party, lowestBid, guesserNames, songPlaying }: Readonly<{
+  isDuel: boolean; isUnderdog: boolean; isRace: boolean; party: PartyInfo | null; lowestBid: number; guesserNames: string[]; songPlaying: boolean;
 }>) {
   if (isDuel) {
     return (
@@ -1184,6 +1187,21 @@ function GetReadyBody({ isDuel, isRace, party, lowestBid, guesserNames, songPlay
         </span>
         <span style={{ display: 'inline-block', minWidth: '170px', color: 'rgba(255,255,255,0.45)', fontSize: '0.88rem', textAlign: 'center' }}>
           First correct wins
+        </span>
+      </div>
+    );
+  }
+  if (isUnderdog) {
+    return (
+      <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '10px' }}>
+        <span style={{ color: 'rgba(255,255,255,0.45)', fontSize: '0.65rem', letterSpacing: '0.2em', textTransform: 'uppercase' }}>
+          Underdog Boost
+        </span>
+        <span style={{ display: 'inline-block', minWidth: '220px', color: 'white', fontWeight: 900, fontSize: '1.65rem', lineHeight: 1.3, textAlign: 'center' }}>
+          {party!.restricted.join(' & ')}
+        </span>
+        <span style={{ display: 'inline-block', minWidth: '170px', color: 'rgba(255,255,255,0.45)', fontSize: '0.88rem', textAlign: 'center' }}>
+          Only they can answer
         </span>
       </div>
     );

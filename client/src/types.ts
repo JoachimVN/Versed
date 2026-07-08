@@ -34,12 +34,13 @@ export interface PlayerInfo {
 export interface PartyInfo {
   format: 'classic' | 'race' | 'year';
   target: 'title' | 'artist' | 'both';
-  event: 'double' | 'mystery' | 'steal' | 'snippet' | 'fullhints' | 'blind' | 'outro' | null;
+  event: 'double' | 'mystery' | 'steal' | 'snippet' | 'fullhints' | 'blind' | 'outro' | 'underdog' | null;
   multiplier: number | null;
   winnerOnly: boolean;
   intro: { title: string; tagline: string };
   finale: boolean;
   duelists: string[];
+  restricted: string[];
 }
 
 export interface YearResult {

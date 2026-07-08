@@ -182,6 +182,7 @@ const EVENT_BITS: Partial<Record<NonNullable<PartyInfo['event']>, string>> = {
   fullhints: 'OPEN BOOK',
   blind: 'BLIND BET · NO HINTS',
   outro: 'DOWN TO THE WIRE',
+  underdog: 'UNDERDOG BOOST',
 };
 
 // Whether this is a bid-and-guess or everyone-at-once round isn't implied by
@@ -211,9 +212,11 @@ export function PartyBadge({ party }: Readonly<{ party: PartyInfo | null }>) {
   if (!party) return null;
   const bits: string[] = [formatBit(party)];
   if (party.finale) bits.push(`FINALE · ${party.duelists.join(' vs ')}`);
-  else if (party.winnerOnly) bits.push('WINNER ONLY');
+  else if (party.event === 'underdog') {
+    bits.push(party.restricted.length > 0 ? `UNDERDOG · ${party.restricted.join(' & ')}` : 'UNDERDOG BOOST');
+  } else if (party.winnerOnly) bits.push('WINNER ONLY');
   if (party.format !== 'year') bits.push(targetBit(party));
-  const event = eventBit(party);
+  const event = party.event === 'underdog' ? null : eventBit(party);
   if (event) bits.push(event);
   return (
     <div style={{ display: 'flex', gap: '6px', justifyContent: 'center', flexWrap: 'wrap' }}>
