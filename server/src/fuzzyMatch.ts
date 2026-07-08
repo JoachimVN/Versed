@@ -12,13 +12,13 @@ const HOMOPHONES: Record<string, string> = {
 };
 
 const METADATA_WORDS = 'feat|ft|featuring|from|with|remaster(?:ed)?|live|acoustic|remix|edit|version|radio|original|extended|deluxe|bonus|interlude';
-const PAREN_METADATA = new RegExp(`^\\s*(${METADATA_WORDS})\\b`, 'i');
+const PAREN_METADATA = new RegExp(String.raw`^\s*(${METADATA_WORDS})\b`, 'i');
 const PAREN_RE = /^([^([]*)[([](([^)\]]*?))[)\]]/;
 
 // A metadata word can also sit outside the parenthetical, right before it
 // — e.g. Spotify's "34+35 Remix (feat. Doja Cat, Megan Thee Stallion)" —
 // so the pre-paren segment needs the same word stripped before comparing.
-const TRAILING_METADATA_RE = new RegExp(`\\s+(${METADATA_WORDS})\\.?\\s*$`, 'i');
+const TRAILING_METADATA_RE = new RegExp(String.raw`\s+(${METADATA_WORDS})\.?\s*$`, 'i');
 
 function stripTrailingMetadata(s: string): string {
   let out = s;
