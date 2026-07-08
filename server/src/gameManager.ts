@@ -1448,7 +1448,7 @@ export function recordChaosHintTap(
   if (round.passed.has(socketId)) return null;
   const restricted = restrictedParticipantIds(round);
   if (restricted && !restricted.includes(socketId)) return null;
-  if (isWinnerOnlyRound(game, round) && round.firstCorrectAt !== null) return null;
+  if ((isWinnerOnlyRound(game, round) || round.party?.finale) && round.firstCorrectAt !== null) return null;
 
   const elapsedMs = Date.now() - (round.playStartAt ?? Date.now());
   round.chaosTapped.set(socketId, tappedIndex);
@@ -1458,7 +1458,8 @@ export function recordChaosHintTap(
   const correct = tappedIndex === round.chaosFakeIndex;
   const points = applyChaosHintTap(game, round, socketId, tappedIndex, elapsedMs);
 
-  const allDone = (isWinnerOnlyRound(game, round) && correct) || participants.every(id => round.passed.has(id));
+  const allDone = ((isWinnerOnlyRound(game, round) || round.party?.finale === true) && correct)
+    || participants.every(id => round.passed.has(id));
   return { correct, points, elapsedMs, allDone };
 }
 
