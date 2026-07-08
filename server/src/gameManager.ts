@@ -338,7 +338,7 @@ function introFor(
     fullhints: { title: 'Open Book', tag: 'Every hint on the table' },
     blind: { title: 'Blind Bet', tag: 'No hints at all — bid on ears alone' },
     outro: { title: 'Down to the Wire', tag: "The clip plays the song's final stretch" },
-    underdog: { title: 'Underdog Boost', tag: 'Only the player(s) in last place can answer' },
+    underdog: { title: 'Underdog Boost', tag: 'Only the player(s) in last place can answer — hints on, ×1.5 points' },
     chaoshints: { title: 'Chaos Hints', tag: 'One hint is a lie — tap the fake one, fastest wins' },
   };
   // Chaos Hints replaces the round's whole objective (spot the fake hint,
@@ -415,6 +415,9 @@ const MYSTERY_MULTIPLIERS_BY_CHAOS: Record<ChaosLevel, [number, number][]> = {
 function eventMultiplier(game: Game, event: PartyEvent | null): number {
   if (event === 'double') return 2;
   if (event === 'mystery') return pickWeighted(MYSTERY_MULTIPLIERS_BY_CHAOS[game.chaosLevel]);
+  // The "boost" in Underdog Boost — a real payout bump on top of exclusive
+  // access to the round, not just first dibs at the normal rate.
+  if (event === 'underdog') return 1.5;
   return 1;
 }
 

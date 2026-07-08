@@ -223,7 +223,7 @@ export function PartyBadge({ party }: Readonly<{ party: PartyInfo | null }>) {
       : `FINALE · ${party.duelists.join(' vs ')}`);
   }
   else if (party.event === 'underdog') {
-    bits.push(party.restricted.length > 0 ? `UNDERDOG · ${party.restricted.join(' & ')}` : 'UNDERDOG BOOST');
+    bits.push(party.restricted.length > 0 ? `UNDERDOG ×1.5 · ${party.restricted.join(' & ')}` : 'UNDERDOG BOOST ×1.5');
   } else if (party.winnerOnly) bits.push('WINNER ONLY');
   // Chaos Hints replaces the guessing objective entirely, so the usual
   // "name the song/artist" target bit would be actively misleading here.

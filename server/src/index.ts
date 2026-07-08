@@ -777,10 +777,13 @@ io.on('connection', (socket) => {
     // Race flow is normally hint-free (the audio itself is the puzzle), but
     // artist-only and year-only rounds can't be inferred from audio alone —
     // this is the only way those toggles have any teeth outside Classic mode.
-    // Party rounds keep the existing (hint-free) race behaviour, except
-    // Chaos Hints — there `round.hints` isn't a guessing aid at all, it's
-    // the "spot the fake" set itself, which the round is meaningless without.
-    const keepHints = (!round.party && (game.artistOnly || game.yearOnly)) || round.party?.event === 'chaoshints';
+    // Party rounds keep the existing (hint-free) race behaviour, except:
+    // Chaos Hints, where `round.hints` isn't a guessing aid at all, it's the
+    // "spot the fake" set itself, which the round is meaningless without;
+    // and Underdog Boost, whose whole point is giving the trailing player(s)
+    // a real shot, not just the normal hint-free race odds.
+    const keepHints = (!round.party && (game.artistOnly || game.yearOnly))
+      || round.party?.event === 'chaoshints' || round.party?.event === 'underdog';
 
     // Prefer the precomputed art from the CSV (Music Popularity Index resolves
     // it offline via Spotify's oEmbed endpoint) so a normal round never calls
