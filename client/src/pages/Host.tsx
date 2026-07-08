@@ -165,6 +165,7 @@ export interface HostState {
   setYearOnly: (v: boolean) => void;
   setDifficulty: (v: Difficulty) => void;
   toggleEvent: (e: PartyEvent) => void;
+  setEnabledEvents: (events: PartyEvent[]) => void;
   setChaosLevel: (v: ChaosLevel) => void;
   setSongSource: (v: SongSource) => void;
   addPlaylist: (p: CustomPlaylist) => void;
@@ -602,7 +603,7 @@ function useHostGame(): HostState {
     toggleSettings: () => setSettingsOpen(o => !o),
     setBettingTimeSetting, setGuessingTimeSetting, setRoundsSetting,
     setMode, setRaceTimeSetting, setRaceWinnerOnly, setArtistOnly, setYearOnly, setDifficulty,
-    toggleEvent, setChaosLevel,
+    toggleEvent, setEnabledEvents, setChaosLevel,
     setSongSource,
     addPlaylist: (p: CustomPlaylist) => setCustomPlaylists(list => list.some(x => x.id === p.id) ? list : [...list, p]),
     removePlaylist: (id: string) => setCustomPlaylists(list => list.filter(p => p.id !== id)),
@@ -692,7 +693,7 @@ function SettingsPanel({ game, open }: Readonly<{ game: HostState; open: boolean
     enabledEvents, chaosLevel,
     songSource, customPlaylists,
     setBettingTimeSetting, setGuessingTimeSetting, setRoundsSetting, setRaceTimeSetting, setRaceWinnerOnly, setArtistOnly, setYearOnly, setDifficulty,
-    toggleEvent, setChaosLevel,
+    toggleEvent, setEnabledEvents, setChaosLevel,
     setSongSource, openPlaylistPicker, removePlaylist,
     toggleSettings,
   } = game;

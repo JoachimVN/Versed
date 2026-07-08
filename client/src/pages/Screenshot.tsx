@@ -93,6 +93,7 @@ const MOCK_HOST: HostState = {
   setYearOnly: noop,
   setDifficulty: noop,
   toggleEvent: noop,
+  setEnabledEvents: noop,
   setChaosLevel: noop,
   setSongSource: noop,
   addPlaylist: noop,
