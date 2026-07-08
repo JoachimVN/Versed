@@ -51,6 +51,7 @@ export interface PartyConfig {
   target: GuessTarget;              // what the guess is checked against (ignored for 'year')
   event: PartyEvent | null;
   multiplier: number;               // actual value — clients see null while a mystery is unrevealed
+  winnerOnly: boolean;               // race/year only: just the winner scores, everyone else gets zero
   intro: { title: string; tagline: string };
   finale: boolean;                  // last round: top-2 duel, first correct wins
   duelistIds: string[];             // socketIds of the duelists (finale only)
@@ -64,6 +65,7 @@ export interface PartyClientView {
   target: GuessTarget;
   event: PartyEvent | null;
   multiplier: number | null;
+  winnerOnly: boolean;
   intro: { title: string; tagline: string };
   finale: boolean;
   duelists: string[];

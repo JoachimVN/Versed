@@ -267,12 +267,22 @@ function generateAllHints(song: Song, suppressArtist: boolean, suppressYear: boo
 
 // ─── Party round recipes ─────────────────────────────────────────────────────
 
-function introFor(format: PartyFormat, target: GuessTarget, event: PartyEvent | null): { title: string; tagline: string } {
-  if (format === 'year') return { title: 'Guess the Year', tagline: 'Closest answer wins the round' };
+function introFor(
+  format: PartyFormat, target: GuessTarget, event: PartyEvent | null, winnerOnly = false,
+): { title: string; tagline: string } {
+  if (format === 'year') {
+    return {
+      title: 'Guess the Year',
+      tagline: winnerOnly
+        ? 'Only the closest guess scores — everyone else gets zero'
+        : 'Closest answer wins the round',
+    };
+  }
   const flow = format === 'classic' ? 'Bid & guess' : 'Everyone races';
   let goal = 'name the song';
   if (target === 'artist') goal = 'name the artist';
   else if (target === 'both') goal = 'title + artist bonus';
+  const suffix = winnerOnly ? ' / winner takes all' : '';
   const eventIntros: Record<PartyEvent, { title: string; tag: string }> = {
     double: { title: 'Double Points', tag: 'Everything is worth 2×' },
     mystery: { title: 'Mystery Multiplier', tag: 'Revealed after the round: ×1, ×2 or ×3' },
@@ -284,10 +294,13 @@ function introFor(format: PartyFormat, target: GuessTarget, event: PartyEvent | 
   };
   if (event) {
     const e = eventIntros[event];
-    return { title: e.title, tagline: `${e.tag} · ${flow} / ${goal}` };
+    return { title: e.title, tagline: `${e.tag} · ${flow} / ${goal}${suffix}` };
   }
-  if (target === 'artist') return { title: 'Who Sings It?', tagline: `${flow} / name the artist` };
-  if (target === 'both') return { title: 'Double Duty', tagline: `${flow} / name the artist too to double your points` };
+  if (target === 'artist') return { title: 'Who Sings It?', tagline: `${flow} / name the artist${suffix}` };
+  if (target === 'both') return { title: 'Double Duty', tagline: `${flow} / name the artist too to double your points${suffix}` };
+  if (format === 'race' && winnerOnly) {
+    return { title: 'Winner Takes All', tagline: 'Everyone guesses at once / only the first correct answer scores' };
+  }
   return format === 'race'
     ? { title: 'Race Round', tagline: 'Everyone guesses at once / speed wins' }
     : { title: 'Classic Round', tagline: 'Bid low, score high' };
@@ -320,7 +333,7 @@ function eventMultiplier(event: PartyEvent | null): number {
 // the same event never repeats twice in a row, steal waits until scores exist,
 // and the last round is a top-2 duel.
 function buildPartyConfig(game: Game): PartyConfig {
-  const plain: Omit<PartyConfig, 'format' | 'target' | 'event' | 'multiplier' | 'intro'> = {
+  const plain: Omit<PartyConfig, 'format' | 'target' | 'event' | 'multiplier' | 'winnerOnly' | 'intro'> = {
     finale: false, duelistIds: [], duelistNames: [],
   };
 
@@ -330,7 +343,7 @@ function buildPartyConfig(game: Game): PartyConfig {
       .sort((a, b) => b.score - a.score)
       .slice(0, 2);
     return {
-      format: 'race', target: 'title', event: null, multiplier: 1,
+      format: 'race', target: 'title', event: null, multiplier: 1, winnerOnly: false,
       finale: true,
       duelistIds: top.map(p => p.socketId),
       duelistNames: top.map(p => p.name),
@@ -343,7 +356,7 @@ function buildPartyConfig(game: Game): PartyConfig {
 
   if (game.roundIndex === 0) {
     return {
-      ...plain, format: 'classic', target: 'title', event: null, multiplier: 1,
+      ...plain, format: 'classic', target: 'title', event: null, multiplier: 1, winnerOnly: false,
       intro: { title: 'Warm-Up', tagline: 'A classic round to get going' },
     };
   }
@@ -355,8 +368,15 @@ function buildPartyConfig(game: Game): PartyConfig {
   const target = pickPartyTarget(format);
   const event = pickPartyEvent(game, format, prev?.event);
   const multiplier = eventMultiplier(event);
+  // Only race/year formats can go winner-only — classic already has its own
+  // bid/tier stakes, and stacking this on top would just zero out everyone
+  // but the lowest bidder.
+  const winnerOnly = format !== 'classic' && randomInt(0, 100) < 25;
 
-  return { ...plain, format, target, event, multiplier, intro: introFor(format, target, event) };
+  return {
+    ...plain, format, target, event, multiplier, winnerOnly,
+    intro: introFor(format, target, event, winnerOnly),
+  };
 }
 
 // The sanitized view clients get: no socketIds, and a mystery multiplier stays
@@ -369,10 +389,17 @@ export function partyView(round: Round, revealed = false): PartyClientView | und
     target: p.target,
     event: p.event,
     multiplier: p.event === 'mystery' && !revealed ? null : p.multiplier,
+    winnerOnly: p.winnerOnly,
     intro: p.intro,
     finale: p.finale,
     duelists: p.duelistNames,
   };
+}
+
+// True when only the round's winner should score — either the game-wide race
+// toggle, or this round's own party recipe called for it.
+function isWinnerOnlyRound(game: Game, round: Round): boolean {
+  return game.raceWinnerOnly || round.party?.winnerOnly === true;
 }
 
 function roundMultiplier(round: Round): number {
@@ -494,7 +521,7 @@ function computeSnippetPosition(song: Song, party: PartyConfig, raceTimeSec: num
   if (party.event === 'snippet') {
     if (!song.durationMs || song.durationMs <= 60_000) {
       party.event = null;
-      party.intro = introFor(party.format, party.target, null);
+      party.intro = introFor(party.format, party.target, null, party.winnerOnly);
       return undefined;
     }
     const min = Math.round(song.durationMs * 0.15);
@@ -505,7 +532,7 @@ function computeSnippetPosition(song: Song, party: PartyConfig, raceTimeSec: num
     const raceMs = raceTimeSec * 1000;
     if (!song.durationMs || song.durationMs <= raceMs + 20_000) {
       party.event = null;
-      party.intro = introFor(party.format, party.target, null);
+      party.intro = introFor(party.format, party.target, null, party.winnerOnly);
       return undefined;
     }
     return song.durationMs - raceMs;
@@ -970,12 +997,12 @@ function applyRaceCorrectGuess(
   if (isFirst) round.firstCorrectAt = Date.now();
   round.correctGuessers.add(socketId);
   round.guessTimes.set(socketId, elapsedMs);
-  if (!isFirst && game.raceWinnerOnly) return 0;
+  if (!isFirst && isWinnerOnlyRound(game, round)) return 0;
   let base: number;
   if (round.party?.finale) {
     // Duel: winner-takes-all, flat stakes.
     base = isFirst ? DUEL_WIN_POINTS : 0;
-  } else if (game.raceWinnerOnly) {
+  } else if (isWinnerOnlyRound(game, round)) {
     base = calcRaceWinnerPoints(game, elapsedMs, game.raceTime, round.song.rank);
   } else {
     base = calcRacePoints(game, isFirst, elapsedMs, round.firstCorrectAt! - round.playStartAt!, round.song.rank);
@@ -1007,7 +1034,7 @@ export function recordRaceGuess(
   if (game.phase !== 'guessing') return null;
   if (round.passed.has(socketId)) return null;
   if (round.party?.finale && !round.party.duelistIds.includes(socketId)) return null;
-  if ((game.raceWinnerOnly || round.party?.finale) && round.firstCorrectAt !== null) return null;
+  if ((isWinnerOnlyRound(game, round) || round.party?.finale) && round.firstCorrectAt !== null) return null;
 
   const elapsedMs = Date.now() - (round.playStartAt ?? Date.now());
   round.guesses.set(socketId, text);
@@ -1025,7 +1052,7 @@ export function recordRaceGuess(
   const { correct, artistBonus } = checkGuess(target, text, artistText, round.song);
   const points = correct ? applyRaceCorrectGuess(game, round, socketId, elapsedMs, artistBonus) : 0;
 
-  const allDone = ((game.raceWinnerOnly || round.party?.finale === true) && correct)
+  const allDone = ((isWinnerOnlyRound(game, round) || round.party?.finale === true) && correct)
     || participants.every(id => round.passed.has(id));
   return { correct, points, elapsedMs, allDone };
 }
@@ -1099,7 +1126,7 @@ function scoreYearGuesses(game: Game, round: Round, mult: number, winnerOnly: bo
 // distance is known.
 export function finalizeYearRound(game: Game): YearResult[] {
   const round = game.currentRound!;
-  return scoreYearGuesses(game, round, roundMultiplier(round), game.raceWinnerOnly);
+  return scoreYearGuesses(game, round, roundMultiplier(round), isWinnerOnlyRound(game, round));
 }
 
 // Classic-flow year round that ended early on an exact guess — scored like

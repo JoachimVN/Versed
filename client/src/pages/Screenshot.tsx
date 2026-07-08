@@ -119,7 +119,7 @@ const MOCK_RESULT_YEAR: RoundResultEvent = {
   coverUrl: 'https://i.scdn.co/image/ab67616d0000b27332a7d87248d1b75463483df5',
   points: 0,
   party: {
-    format: 'year', target: 'title', event: null, multiplier: 1,
+    format: 'year', target: 'title', event: null, multiplier: 1, winnerOnly: false,
     intro: { title: 'Guess the Year', tagline: 'Closest answer wins the round' },
     finale: false, duelists: [],
   },
@@ -170,7 +170,7 @@ const MOCK_HOST_LOBBY: HostState = {
 // Steal Round is party mode's showiest mechanic (win, then rob a victim), so
 // it's the one screenshotted to represent the round-intro popup.
 const MOCK_PARTY_STEAL: PartyInfo = {
-  format: 'classic', target: 'title', event: 'steal', multiplier: 1,
+  format: 'classic', target: 'title', event: 'steal', multiplier: 1, winnerOnly: false,
   intro: { title: 'Steal Round', tagline: 'Win the round, then rob another player · Bid & guess / name the song' },
   finale: false, duelists: [],
 };
@@ -236,7 +236,7 @@ const MOCK_PLAY_YEAR_GUESSING: PlayState = {
   guessText: '198',
   mode: 'race',
   party: {
-    format: 'year', target: 'title', event: null, multiplier: 1,
+    format: 'year', target: 'title', event: null, multiplier: 1, winnerOnly: false,
     intro: { title: 'Guess the Year', tagline: 'Closest answer wins the round' },
     finale: false, duelists: [],
   },

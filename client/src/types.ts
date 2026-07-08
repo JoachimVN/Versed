@@ -36,6 +36,7 @@ export interface PartyInfo {
   target: 'title' | 'artist' | 'both';
   event: 'double' | 'mystery' | 'steal' | 'snippet' | 'fullhints' | 'blind' | 'outro' | null;
   multiplier: number | null;
+  winnerOnly: boolean;
   intro: { title: string; tagline: string };
   finale: boolean;
   duelists: string[];
