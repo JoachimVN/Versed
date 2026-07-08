@@ -12,7 +12,7 @@ import { useFocusTrap } from '../hooks/useFocusTrap';
 import { useSoundEffect } from '../hooks/useSoundEffect';
 import { RankBadge } from '../components/RankBadge';
 import { useAnimatedScore } from '../hooks/useAnimatedScore';
-import { NoOneGotItCardContent, GotItCardContent, YearTimelineContent, PillButton } from '../components/RevealShared';
+import { FinalRoundAnswerContent, NoOneGotItCardContent, GotItCardContent, YearTimelineContent, PillButton } from '../components/RevealShared';
 import { FinalResultsView } from '../components/FinalResults';
 import { RoundIntro, PartyBadge, PartyRevealExtras } from '../components/RoundIntro';
 import { BackButton } from '../components/BackButton';
@@ -2641,8 +2641,11 @@ function RevealShell({
   // to another duel game or actually ends the match, so it gets a neutral
   // label instead of prematurely promising "Final Results".
   let nextLabel = 'Next Round';
-  if (party?.finale) nextLabel = 'Continue';
+  const revealParty = result.party ?? party;
+  const finaleResolved = revealParty?.duelProgress?.wins.some(w => w.count >= 2) ?? false;
+  if (revealParty?.finale && !finaleResolved) nextLabel = 'Continue';
   else if (roundIndex + 1 >= totalRounds) nextLabel = 'Final Results';
+  const isFinalReveal = roundIndex + 1 >= totalRounds && (!revealParty?.finale || finaleResolved);
   return (
     <div className={`page-enter relative min-h-screen flex flex-col items-center gap-5 overflow-hidden ${wide ? 'px-2 py-6' : 'p-6'}`}>
       <img
@@ -2664,25 +2667,29 @@ function RevealShell({
         </LiquidGlass>
       </div>
 
-      <div style={{ position: 'relative', zIndex: 2 }}>
-        <PartyRevealExtras result={result} stealResult={stealResult} hints={game.hints} />
-      </div>
+      {!isFinalReveal && (
+        <div style={{ position: 'relative', zIndex: 2 }}>
+          <PartyRevealExtras result={result} stealResult={stealResult} hints={game.hints} />
+        </div>
+      )}
 
-      <div style={{ position: 'relative', zIndex: 2, background: 'rgba(255,255,255,0.05)', border: '1px solid rgba(255,255,255,0.08)', borderRadius: '16px', padding: '8px 12px', width: '310px', maxWidth: '92vw' }} className="divide-y divide-white/[0.07]">
-        {players.slice().sort((a, b) => (b.score ?? 0) - (a.score ?? 0)).map((p, i) => (
-          <RevealPlayerRow
-            key={p.name}
-            player={p}
-            entry={result.playerGuesses?.find(g => g.name === p.name)}
-            delta={roundDeltas[p.name] ?? 0}
-            pity={roundPity[p.name] ?? false}
-            delay={400 + i * 80}
-            correct={isCorrectFor(p)}
-            instant={instant}
-            removePlayer={removePlayer}
-          />
-        ))}
-      </div>
+      {!isFinalReveal && (
+        <div style={{ position: 'relative', zIndex: 2, background: 'rgba(255,255,255,0.05)', border: '1px solid rgba(255,255,255,0.08)', borderRadius: '16px', padding: '8px 12px', width: '310px', maxWidth: '92vw' }} className="divide-y divide-white/[0.07]">
+          {players.slice().sort((a, b) => (b.score ?? 0) - (a.score ?? 0)).map((p, i) => (
+            <RevealPlayerRow
+              key={p.name}
+              player={p}
+              entry={result.playerGuesses?.find(g => g.name === p.name)}
+              delta={roundDeltas[p.name] ?? 0}
+              pity={roundPity[p.name] ?? false}
+              delay={400 + i * 80}
+              correct={isCorrectFor(p)}
+              instant={instant}
+              removePlayer={removePlayer}
+            />
+          ))}
+        </div>
+      )}
 
       <PillButton
         onClick={() => socket.emit('next_round')}
@@ -2701,6 +2708,22 @@ function RevealShell({
 
 export function RevealView({ game, result, instant = false }: Readonly<{ game: HostState; result: RoundResultEvent; instant?: boolean }>) {
   const isRace = result.mode === 'race';
+  const finaleResolved = result.party?.duelProgress?.wins.some(w => w.count >= 2) ?? false;
+  const isFinalReveal = game.roundIndex + 1 >= game.totalRounds && (!result.party?.finale || finaleResolved);
+
+  if (isFinalReveal) {
+    const isYearReveal = result.party?.format === 'year' || result.yearOnly;
+    return (
+      <RevealShell
+        game={game}
+        result={result}
+        instant={instant}
+        cardHeight={result.coverUrl ? 480 : isYearReveal ? 320 : 240}
+        cardContent={<FinalRoundAnswerContent result={result} label="Final answer" />}
+        isCorrectFor={() => 'none'}
+      />
+    );
+  }
 
   // "Guess the year" rounds (party or the game-wide toggle) have a numeric
   // answer — dedicated card.

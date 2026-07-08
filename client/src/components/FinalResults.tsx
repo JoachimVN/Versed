@@ -6,8 +6,8 @@ import { ConfettiBackground } from './ConfettiBackground';
 import { AwardsStrip } from './RevealShared';
 import type { Award, LeaderboardEntry } from '../types';
 
-type Stage = 'intro' | 'bronze' | 'silver' | 'gold' | 'settled';
-const STAGE_ORDER: Stage[] = ['intro', 'bronze', 'silver', 'gold', 'settled'];
+type Stage = 'dark' | 'intro' | 'bronze' | 'silver' | 'gold' | 'settled';
+const STAGE_ORDER: Stage[] = ['dark', 'intro', 'bronze', 'silver', 'gold', 'settled'];
 const atLeast = (stage: Stage, target: Stage) => STAGE_ORDER.indexOf(stage) >= STAGE_ORDER.indexOf(target);
 
 const RANK_STAGE: Record<1 | 2 | 3, Stage> = { 3: 'bronze', 2: 'silver', 1: 'gold' };
@@ -157,15 +157,16 @@ export function FinalResultsView({ leaderboard, awards, myName, backgroundSrc, f
   const podium = useMemo(() => leaderboard.slice(0, Math.min(3, leaderboard.length)), [leaderboard]);
   const rest = useMemo(() => leaderboard.slice(podium.length), [leaderboard, podium]);
 
-  const [stage, setStage] = useState<Stage>(reducedMotion ? 'settled' : 'intro');
+  const [stage, setStage] = useState<Stage>(reducedMotion ? 'settled' : 'dark');
 
   useEffect(() => {
     if (reducedMotion) { setStage('settled'); return; }
-    setStage('intro');
-    const steps: { stage: Stage; delay: number }[] = [];
-    if (podium[2]) steps.push({ stage: 'bronze', delay: 600 });
-    if (podium[1]) steps.push({ stage: 'silver', delay: 1800 });
-    if (podium[0]) steps.push({ stage: 'gold', delay: 3000 });
+    setStage('dark');
+    const introDelay = 950;
+    const steps: { stage: Stage; delay: number }[] = [{ stage: 'intro', delay: introDelay }];
+    if (podium[2]) steps.push({ stage: 'bronze', delay: introDelay + 650 });
+    if (podium[1]) steps.push({ stage: 'silver', delay: introDelay + 1850 });
+    if (podium[0]) steps.push({ stage: 'gold', delay: introDelay + 3050 });
     const timers = steps.map(s => setTimeout(() => setStage(s.stage), s.delay));
     const lastDelay = steps.at(-1)?.delay ?? 0;
     timers.push(setTimeout(() => setStage('settled'), lastDelay + 800));
@@ -181,6 +182,7 @@ export function FinalResultsView({ leaderboard, awards, myName, backgroundSrc, f
       return winner ? `Final results ready. Winner: ${winner.name} with ${winner.score.toLocaleString()} points.` : 'Final results ready.';
     }
     const lines: string[] = [];
+    if (stage === 'dark') return 'Final results.';
     if (atLeast(stage, 'bronze') && podium[2]) lines.push(`3rd place: ${podium[2].name}, ${podium[2].score.toLocaleString()} points.`);
     if (atLeast(stage, 'silver') && podium[1]) lines.push(`2nd place: ${podium[1].name}, ${podium[1].score.toLocaleString()} points.`);
     if (atLeast(stage, 'gold') && podium[0]) lines.push(`1st place: ${podium[0].name}, ${podium[0].score.toLocaleString()} points.`);
@@ -198,6 +200,7 @@ export function FinalResultsView({ leaderboard, awards, myName, backgroundSrc, f
   }
 
   const settled = stage === 'settled';
+  const darkIntro = stage === 'dark';
   const showConfetti = !reducedMotion && atLeast(stage, 'gold');
 
   // Visual order: 2nd (left) - 1st (center) - 3rd (right), classic podium
@@ -209,10 +212,24 @@ export function FinalResultsView({ leaderboard, awards, myName, backgroundSrc, f
   return (
     <div className="relative min-h-screen flex flex-col p-6 gap-4">
       <BackgroundLayer backgroundSrc={backgroundSrc} showConfetti={showConfetti} />
+      <div
+        className="fixed inset-0 pointer-events-none"
+        style={{
+          zIndex: 20,
+          background: '#000',
+          opacity: darkIntro ? 1 : 0,
+          transition: 'opacity 0.55s ease',
+        }}
+      />
 
       <div aria-live="polite" className="sr-only">{announcement}</div>
 
-      <h2 className="text-3xl font-black text-white text-center relative z-10 page-enter">Final Scores</h2>
+      <h2
+        className="text-3xl font-black text-white text-center relative page-enter"
+        style={{ zIndex: 21, opacity: darkIntro ? 1 : undefined, transition: 'opacity 0.55s ease' }}
+      >
+        Final Results
+      </h2>
 
       <div className="relative z-10 flex items-end justify-center gap-3 px-2" style={{ marginTop: '8px' }}>
         {columns.map(c => (

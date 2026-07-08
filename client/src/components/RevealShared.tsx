@@ -156,6 +156,44 @@ function SongInfo({ result }: Readonly<{ result: RoundResultEvent }>) {
   );
 }
 
+export function FinalRoundAnswerContent({ result, label }: Readonly<{ result: RoundResultEvent; label: string }>) {
+  const artistOnly = result.artistOnly;
+  const yearOnly = result.yearOnly || result.party?.format === 'year';
+  return (
+    <div style={{ width: '262px', display: 'flex', flexDirection: 'column', alignItems: 'center', textAlign: 'center' }}>
+      <span style={{
+        color: 'rgba(255,255,255,0.45)', fontSize: '0.62rem', fontWeight: 800,
+        letterSpacing: '0.16em', textTransform: 'uppercase', marginBottom: '10px', display: 'inline-block',
+      }}>
+        Final round
+      </span>
+      <span style={{
+        fontSize: '1.35rem', fontWeight: 900, letterSpacing: '0.01em',
+        background: 'linear-gradient(to bottom left, rgba(158,18,204,0.45) 0%, transparent 52%), linear-gradient(to top right, rgba(0,238,232,0.34) 0%, transparent 52%), #fff',
+        WebkitBackgroundClip: 'text', WebkitTextFillColor: 'transparent', backgroundClip: 'text',
+        marginBottom: '14px', display: 'inline-block', minWidth: '200px',
+      }}>
+        {label}
+      </span>
+      <div style={{ width: '100%', height: '1px', background: 'rgba(255,255,255,0.08)', marginBottom: '14px' }} />
+      <span style={{
+        color: 'rgba(255,255,255,0.45)', fontSize: '0.6rem', letterSpacing: '0.18em', textTransform: 'uppercase',
+        marginBottom: '10px', display: 'inline-block',
+      }}>
+        {yearOnly ? 'The year was' : artistOnly ? 'The artist was' : 'The song was'}
+      </span>
+      {yearOnly ? (
+        <>
+          <YearHeading year={result.year ? Math.floor(result.year) : '-'} compact />
+          <YearSongFooter result={result} compact />
+        </>
+      ) : (
+        <SongInfo result={result} />
+      )}
+    </div>
+  );
+}
+
 // The "year was" label + big gradient number: shared by the compact
 // no-timeline fallback card and the full timeline card, which only differ
 // in sizing.

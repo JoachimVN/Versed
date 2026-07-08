@@ -8,7 +8,7 @@ import { useAnimatedScore } from '../hooks/useAnimatedScore';
 import { useKeyboardOpen } from '../hooks/useViewportHeight';
 import { useEscapeKey } from '../hooks/useEscapeKey';
 import { useFocusTrap } from '../hooks/useFocusTrap';
-import { NoOneGotItCardContent, GotItCardContent, YearTimelineContent } from '../components/RevealShared';
+import { FinalRoundAnswerContent, NoOneGotItCardContent, GotItCardContent, YearTimelineContent } from '../components/RevealShared';
 import { FinalResultsView } from '../components/FinalResults';
 import { RoundIntro, PartyBadge, PartyRevealExtras } from '../components/RoundIntro';
 import { BackButton } from '../components/BackButton';
@@ -1792,6 +1792,9 @@ function PlayRevealShell({
   wide?: boolean;
 }>) {
   const { myScore, myScoreDelta, myPity, myStreak, stealResult } = game;
+  const revealParty = result.party ?? game.party;
+  const finaleResolved = revealParty?.duelProgress?.wins.some(w => w.count >= 2) ?? false;
+  const isFinalReveal = game.roundIndex + 1 >= game.totalRounds && (!revealParty?.finale || finaleResolved);
   // Ties the score bump to the shared reveal moment — for a mystery round
   // this is the first time the true (multiplied) total is visible, so it
   // should count up rather than just appear.
@@ -1816,7 +1819,7 @@ function PlayRevealShell({
           </LiquidGlass>
         </div>
 
-        <PartyRevealExtras result={result} stealResult={stealResult} hints={game.hints} />
+        {!isFinalReveal && <PartyRevealExtras result={result} stealResult={stealResult} hints={game.hints} />}
 
         {guessesList}
 
@@ -1842,6 +1845,22 @@ function PlayRevealShell({
 
 function YearRevealView({ game, result }: Readonly<{ game: PlayState; result: RoundResultEvent }>) {
   const { myName } = game;
+  const finaleResolved = result.party?.duelProgress?.wins.some(w => w.count >= 2) ?? false;
+  const isFinalReveal = game.roundIndex + 1 >= game.totalRounds && (!result.party?.finale || finaleResolved);
+  const finalLabel = game.myScoreDelta > 0 ? 'You scored' : 'Not quite';
+  if (isFinalReveal) {
+    return (
+      <PlayRevealShell
+        game={game}
+        result={result}
+        wide
+        cardHeight={result.coverUrl ? 500 : 320}
+        cardContent={<FinalRoundAnswerContent result={result} label={finalLabel} />}
+        guessesList={null}
+      />
+    );
+  }
+
   // The timeline card already shows every player's guess and distance —
   // this strip only adds what it doesn't: points earned this round.
   const scorers = (result.yearResults ?? []).filter(r => r.points > 0).sort((a, b) => b.points - a.points);
@@ -1871,6 +1890,26 @@ export function RevealView({ game, result }: Readonly<{ game: PlayState; result:
   const { myName, myRaceTimeMs } = game;
   const isRace = result.mode === 'race';
   const iGotItInRace = isRace && !!result.correctGuessers?.includes(myName);
+  const finaleResolved = result.party?.duelProgress?.wins.some(w => w.count >= 2) ?? false;
+  const isFinalReveal = game.roundIndex + 1 >= game.totalRounds && (!result.party?.finale || finaleResolved);
+  const finalLabel = game.myScoreDelta > 0 ? 'You scored' : 'Not quite';
+
+  if (isFinalReveal) {
+    return (
+      <PlayRevealShell
+        game={game}
+        result={result}
+        cardHeight={result.coverUrl ? 480 : 240}
+        cardContent={<FinalRoundAnswerContent result={result} label={finalLabel} />}
+        guessesList={null}
+        scoreExtra={iGotItInRace && myRaceTimeMs != null && (
+          <p className="text-green-400 text-xs font-semibold mt-1">
+            You got it in {(myRaceTimeMs / 1000).toFixed(1)}s
+          </p>
+        )}
+      />
+    );
+  }
 
   if (!result.correct) {
     const guessesList = result.playerGuesses && result.playerGuesses.length > 0 && (
