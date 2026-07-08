@@ -285,7 +285,7 @@ function introFor(
   const suffix = winnerOnly ? ' / winner takes all' : '';
   const eventIntros: Record<PartyEvent, { title: string; tag: string }> = {
     double: { title: 'Double Points', tag: 'Everything is worth 2×' },
-    mystery: { title: 'Mystery Multiplier', tag: 'Revealed after the round: ×1, ×2 or ×3' },
+    mystery: { title: 'Mystery Multiplier', tag: 'Revealed after the round: ×1.5 up to ×10' },
     steal: { title: 'Steal Round', tag: 'Win the round, then rob another player' },
     snippet: { title: 'Snippet Roulette', tag: 'The clip starts somewhere mid-song' },
     fullhints: { title: 'Open Book', tag: 'Every hint on the table' },
@@ -322,9 +322,15 @@ function pickPartyEvent(game: Game, format: PartyFormat, prevEvent: PartyEvent |
   return pickWeighted(pool.filter(([e]) => e !== prevEvent));
 }
 
+// Mystery's payout ladder: the three "modest" multipliers are equally
+// likely, then the big ones get rarer the higher they climb.
+const MYSTERY_MULTIPLIERS: [number, number][] = [
+  [1.5, 27], [2, 27], [3, 27], [4, 12], [5, 5], [10, 2],
+];
+
 function eventMultiplier(event: PartyEvent | null): number {
   if (event === 'double') return 2;
-  if (event === 'mystery') return 1 + randomInt(0, 3);
+  if (event === 'mystery') return pickWeighted(MYSTERY_MULTIPLIERS);
   return 1;
 }
 
@@ -916,7 +922,7 @@ export function recordGuess(
     const guess = parseYearGuess(text);
     const correct = guess !== null && guess === Math.floor(round.song.year ?? 0);
     if (!correct) return failGuess(round, socketId, guesserName);
-    const points = calcPoints(game, round.lowestBid, round.song.rank) * roundMultiplier(round)
+    const points = Math.round(calcPoints(game, round.lowestBid, round.song.rank) * roundMultiplier(round))
       + pityBonus(currentScores(game), socketId, round);
     const result = applyClassicWin(game, round, socketId, guesserName, points);
     // The year reveal UI reads exclusively from `yearResults` (never from
@@ -931,7 +937,7 @@ export function recordGuess(
   if (!correct) return failGuess(round, socketId, guesserName);
 
   const basePoints = calcPoints(game, round.lowestBid, round.song.rank);
-  const points = (basePoints + (artistBonus ? basePoints : 0)) * roundMultiplier(round)
+  const points = Math.round((basePoints + (artistBonus ? basePoints : 0)) * roundMultiplier(round))
     + pityBonus(currentScores(game), socketId, round);
   return applyClassicWin(game, round, socketId, guesserName, points);
 }
@@ -1007,7 +1013,8 @@ function applyRaceCorrectGuess(
   } else {
     base = calcRacePoints(game, isFirst, elapsedMs, round.firstCorrectAt! - round.playStartAt!, round.song.rank);
   }
-  let points = (base + (artistBonus ? base : 0)) * roundMultiplier(round);
+  const preMultiplier = base + (artistBonus ? base : 0);
+  let points = Math.round(preMultiplier * roundMultiplier(round));
   if (points > 0) points += pityBonus(currentScores(game), socketId, round);
   if (isFirst && round.party?.event === 'steal') {
     round.stealBy = socketId;
@@ -1019,7 +1026,12 @@ function applyRaceCorrectGuess(
     player.streak += 1;
     round.scoredSocketIds.add(socketId);
   }
-  return points;
+  // The mystery multiplier stays hidden until everyone sees the shared
+  // reveal, so the guesser's own immediate ack can't carry the true
+  // (multiplied) total — that would let them back out ×2 vs ×10 right away.
+  // Hand back the pre-multiplier amount instead; the real score still lands
+  // via player.score, and score_update carries the true delta at reveal.
+  return round.party?.event === 'mystery' ? preMultiplier : points;
 }
 
 export function recordRaceGuess(
@@ -1106,7 +1118,7 @@ function scoreYearGuesses(game: Game, round: Round, mult: number, winnerOnly: bo
     if (e.diff !== null && (!winnerOnly || e.diff === best)) {
       points = Math.max(0, YEAR_MAX_POINTS - YEAR_POINTS_SLOPE * e.diff);
       if (e.diff === best) points += Math.round(YEAR_WINNER_BONUS / winners);
-      points *= mult;
+      points = Math.round(points * mult);
     }
     if (points > 0) {
       points += pityBonus(preRoundScores, e.id, round);

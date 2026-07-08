@@ -1473,10 +1473,14 @@ export function GuessingView({ game }: Readonly<{ game: PlayState }>) {
 }
 
 function PassedView({ game }: Readonly<{ game: PlayState }>) {
-  const { mode, myRacePoints, myRaceTimeMs } = game;
+  const { mode, myRacePoints, myRaceTimeMs, party } = game;
   const [visible, setVisible] = useState(false);
   useEffect(() => { const t = setTimeout(() => setVisible(true), 30); return () => clearTimeout(t); }, []);
   const gotIt = mode === 'race' && myRacePoints > 0;
+  // Mystery's multiplier is still hidden at this point (see partyView on the
+  // server), so the points shown here are the pre-multiplier amount — flag
+  // that up front rather than let it read as the final score.
+  const mysteryPending = gotIt && party?.event === 'mystery';
 
   return (
     <div className="relative min-h-screen overflow-hidden">
@@ -1497,7 +1501,7 @@ function PassedView({ game }: Readonly<{ game: PlayState }>) {
           transform: visible ? 'translateY(0)' : 'translateY(14px)',
         }}
       >
-        <div className="liquid-btn relative" style={{ width: '310px', height: gotIt ? '180px' : '150px' }}>
+        <div className="liquid-btn relative" style={{ width: '310px', height: gotIt ? (mysteryPending ? '204px' : '180px') : '150px' }}>
           <LiquidGlass
             style={{ position: 'absolute', top: '50%', left: '50%' }}
             {...LIQUID_CARD_PROPS}
@@ -1520,6 +1524,11 @@ function PassedView({ game }: Readonly<{ game: PlayState }>) {
                       +{myRacePoints} pts
                     </span>
                   </div>
+                  {mysteryPending && (
+                    <span style={{ color: 'rgba(94,234,212,0.8)', fontSize: '0.72rem', fontWeight: 700, letterSpacing: '0.06em', textTransform: 'uppercase' }}>
+                      Mystery multiplier pending…
+                    </span>
+                  )}
                 </>
               ) : (
                 <>
@@ -1623,6 +1632,10 @@ function PlayRevealShell({
   wide?: boolean;
 }>) {
   const { myScore, myScoreDelta, myPity, myStreak, stealResult } = game;
+  // Ties the score bump to the shared reveal moment — for a mystery round
+  // this is the first time the true (multiplied) total is visible, so it
+  // should count up rather than just appear.
+  const { displayScore, displayDelta, deltaFading } = useAnimatedScore(myScore, myScoreDelta, 300);
   return (
     <div className={`page-enter relative min-h-screen flex flex-col items-center justify-center gap-5 overflow-hidden ${wide ? 'px-2 py-6' : 'p-6'}`}>
       <img
@@ -1649,9 +1662,11 @@ function PlayRevealShell({
 
         <div style={{ background: 'rgba(255,255,255,0.05)', border: '1px solid rgba(255,255,255,0.08)', borderRadius: '16px', padding: '16px 32px', textAlign: 'center' }}>
           {myScoreDelta > 0 && (
-            <p className="text-sky-400 text-sm font-bold tabular-nums">+{myScoreDelta.toLocaleString()} pts{myPity && ' (pity)'}</p>
+            <p className={`text-sky-400 text-sm font-bold tabular-nums transition-opacity duration-500 ${deltaFading ? 'opacity-0' : 'opacity-100'}`}>
+              +{displayDelta > 0 ? displayDelta.toLocaleString() : ''} pts{myPity && ' (pity)'}
+            </p>
           )}
-          <p className="text-3xl font-black text-white">{myScore.toLocaleString()}</p>
+          <p className="text-3xl font-black text-white">{displayScore.toLocaleString()}</p>
           <p className="text-white/45 text-sm">your score</p>
           {scoreExtra}
           {myStreak >= 2 && (
@@ -1693,7 +1708,7 @@ function YearRevealView({ game, result }: Readonly<{ game: PlayState; result: Ro
 }
 
 export function RevealView({ game, result }: Readonly<{ game: PlayState; result: RoundResultEvent }>) {
-  const { myName, myRacePoints, myRaceTimeMs } = game;
+  const { myName, myRaceTimeMs } = game;
   const isRace = result.mode === 'race';
   const iGotItInRace = isRace && !!result.correctGuessers?.includes(myName);
 
@@ -1753,7 +1768,7 @@ export function RevealView({ game, result }: Readonly<{ game: PlayState; result:
       guessesList={guessesList}
       scoreExtra={iGotItInRace && myRaceTimeMs != null && (
         <p className="text-green-400 text-xs font-semibold mt-1">
-          You got it in {(myRaceTimeMs / 1000).toFixed(1)}s · +{myRacePoints}
+          You got it in {(myRaceTimeMs / 1000).toFixed(1)}s
         </p>
       )}
     />

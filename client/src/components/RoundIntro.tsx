@@ -125,20 +125,26 @@ export function PartyRevealExtras({ result, stealResult }: Readonly<{
   stealResult: { thief: string; victim: string; amount: number; skipped?: boolean } | null;
 }>) {
   const party = result.party;
-  const chips: string[] = [];
-  if (party?.event === 'mystery' && party.multiplier !== null) chips.push(`Mystery multiplier · ×${party.multiplier}`);
-  else if (party?.event === 'double') chips.push('Double points · ×2');
+  const chips: { text: string; reveal: boolean }[] = [];
+  if (party?.event === 'mystery' && party.multiplier !== null) {
+    chips.push({ text: `Mystery multiplier · ×${party.multiplier}`, reveal: true });
+  } else if (party?.event === 'double') {
+    chips.push({ text: 'Double points · ×2', reveal: false });
+  }
   const showPending = !stealResult && !!result.stealPending;
   if (chips.length === 0 && !stealResult && !showPending) return null;
   return (
     <div className="flex flex-col items-center gap-2" style={{ maxWidth: '92vw' }}>
       {chips.map(c => (
-        <span key={c} style={{
+        <span key={c.text} style={{
           padding: '6px 16px', borderRadius: '100px',
           background: 'rgba(0,238,232,0.1)', border: '1px solid rgba(0,238,232,0.3)',
           color: 'rgba(94,234,212,0.9)', fontSize: '0.72rem', fontWeight: 700,
           letterSpacing: '0.1em', textTransform: 'uppercase',
-        }}>{c}</span>
+          // The mystery multiplier is only just now revealed — a quick pop
+          // sells it as a reveal rather than a chip that was there all along.
+          animation: c.reveal ? 'chipReveal 0.5s cubic-bezier(0.34, 1.56, 0.64, 1)' : undefined,
+        }}>{c.text}</span>
       ))}
       {stealResult?.skipped && (
         <span style={{
