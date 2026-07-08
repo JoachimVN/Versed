@@ -231,6 +231,10 @@ function useHostGame(): HostState {
   const timerRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const playRafRef = useRef<number | null>(null);
   const playGenRef = useRef(0);
+  // Set by betting_closed while the last bid dot's fill animation plays out;
+  // play_song awaits it so the 3-2-1 countdown doesn't start ticking (invisibly,
+  // under the still-showing betting screen) before the phase actually flips.
+  const dotFillDelayRef = useRef<Promise<void> | null>(null);
 
   useEffect(() => {
     if (spotify.isConnected && !spotify.unauthorized && phase === 'connect') setPhase('lobby');
@@ -373,7 +377,9 @@ function useHostGame(): HostState {
       stopCountdown();
       setSongPlaying(false);
       // Brief pause so the last dot's fill animation is visible before transitioning.
-      setTimeout(() => setPhase('playing'), 600);
+      // play_song awaits this same promise so its 3-2-1 countdown can't start
+      // ticking underneath the still-showing betting screen.
+      dotFillDelayRef.current = wait(600).then(() => setPhase('playing'));
     });
 
     socket.on('play_song', async (data: { trackId: string; durationMs: number; countdownMs?: number; positionMs?: number }) => {
@@ -381,6 +387,11 @@ function useHostGame(): HostState {
       const myGen = ++playGenRef.current;
       stopPlaybackBar(); // keep the bar empty through the countdown/buffer
       const prepared = spotify.prepareTrack(data.trackId, data.positionMs ?? 0);
+      if (dotFillDelayRef.current) {
+        await dotFillDelayRef.current;
+        dotFillDelayRef.current = null;
+        if (playGenRef.current !== myGen) return;
+      }
       const ticks = Math.ceil((data.countdownMs ?? 3000) / 1000);
       for (let n = ticks; n > 0; n--) {
         if (playGenRef.current !== myGen) return;
