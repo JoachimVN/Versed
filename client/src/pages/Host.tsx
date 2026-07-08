@@ -1205,7 +1205,7 @@ function EventChipGrid({ enabledEvents, onToggle, onSetAll }: Readonly<{
           </button>
         </div>
       </div>
-      <div className="flex flex-wrap" style={{ gap: '8px' }}>
+      <div className="grid" style={{ gridTemplateColumns: '1fr 1fr', gap: '8px' }}>
         {ALL_PARTY_EVENTS.map(e => {
           const on = enabledEvents.includes(e);
           return (
@@ -1220,15 +1220,25 @@ function EventChipGrid({ enabledEvents, onToggle, onSetAll }: Readonly<{
               onFocus={() => setFocusedEvent(e)}
               onBlur={() => setFocusedEvent(null)}
               style={{
-                borderRadius: '999px',
-                padding: '6px 12px',
+                borderRadius: '10px',
+                minHeight: '46px',
+                padding: '6px 10px',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
                 fontSize: '0.78rem',
                 fontWeight: on ? 600 : 400,
+                textAlign: 'center',
+                lineHeight: 1.25,
                 cursor: 'pointer',
-                background: on ? 'rgba(178,16,224,0.7)' : 'rgba(255,255,255,0.10)',
-                border: on ? '1px solid rgba(198,36,249,0.6)' : '1px solid rgba(255,255,255,0.08)',
                 color: on ? 'white' : 'rgba(255,255,255,0.5)',
-                transition: 'background 0.2s ease, border-color 0.2s ease, color 0.2s ease',
+                backdropFilter: 'blur(10px) saturate(130%)',
+                background: on
+                  ? 'linear-gradient(135deg, rgba(0,128,126,0.22), rgba(52,39,88,0.26) 55%, rgba(110,32,155,0.32))'
+                  : 'rgba(255,255,255,0.03)',
+                border: '1px solid rgba(255,255,255,0.06)',
+                boxShadow: on ? 'inset 0 1px 0 rgba(255,255,255,0.16)' : 'inset 0 1px 0 rgba(255,255,255,0.04)',
+                transition: 'background 0.2s ease, border-color 0.2s ease, color 0.2s ease, box-shadow 0.2s ease',
               }}
             >
               {EVENT_LABELS[e]}
