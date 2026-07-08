@@ -77,6 +77,7 @@ export interface PlayState {
   submitBid: () => void;
   submitGuess: () => void;
   submitChoice: (option: string) => void;
+  submitChaosTap: (index: number) => void;
   skipGuess: () => void;
   newGamePin: string | null;
   rejoinNewGame: () => void;
@@ -540,6 +541,19 @@ function usePlayGame(pinParam?: string): PlayState {
     });
   };
 
+  // Chaos Hints: tapping a hint card submits its index immediately, same
+  // "tap = submit" shape as submitChoice, but its own socket event since the
+  // answer is an index, not free text.
+  const submitChaosTap = (index: number) => {
+    if (guessAutoSubmitTimerRef.current) { clearTimeout(guessAutoSubmitTimerRef.current); guessAutoSubmitTimerRef.current = null; }
+    stopCountdown();
+    socket.emit('submit_chaos_tap', { index }, (r: { correct: boolean; points?: number; timeMs?: number }) => {
+      if (r.correct && r.points != null) setMyRacePoints(r.points);
+      if (r.timeMs != null) setMyRaceTimeMs(r.timeMs);
+      setPhase('passed');
+    });
+  };
+
   const skipGuess = () => {
     guessInputRef.current?.blur();
     if (guessAutoSubmitTimerRef.current) { clearTimeout(guessAutoSubmitTimerRef.current); guessAutoSubmitTimerRef.current = null; }
@@ -620,7 +634,7 @@ function usePlayGame(pinParam?: string): PlayState {
     setGuessText(v);
     socket.emit('update_guess_draft', { text: v });
   },
-    join, rejoinSaved, submitBid, submitGuess, submitChoice, skipGuess, renamePlayer,
+    join, rejoinSaved, submitBid, submitGuess, submitChoice, submitChaosTap, skipGuess, renamePlayer,
   };
 }
 
@@ -1341,6 +1355,36 @@ function ChoiceButtons({ options, onPick, disabled }: Readonly<{ options: string
   );
 }
 
+// Chaos Hints' tap-the-fake-hint cards — one per hint, tap = submit
+// immediately, same "no separate submit button" shape as ChoiceButtons.
+function ChaosHintButtons({ hints, onPick, disabled }: Readonly<{ hints: Hint[]; onPick: (index: number) => void; disabled?: boolean }>) {
+  const style = guessInputBoxStyle(false, false);
+  return (
+    <div className="w-full grid grid-cols-2 gap-2.5">
+      {hints.map((h, i) => (
+        <button
+          key={h.label}
+          type="button"
+          disabled={disabled}
+          onClick={() => onPick(i)}
+          style={{
+            borderRadius: '16px',
+            border: style.border, background: style.background, boxShadow: style.boxShadow,
+            padding: '14px 10px', cursor: disabled ? 'not-allowed' : 'pointer', fontFamily: 'inherit',
+            opacity: disabled ? 0.5 : 1, transition: 'opacity 0.2s ease',
+            display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '4px',
+          }}
+        >
+          <span style={{ color: 'rgba(255,255,255,0.45)', fontSize: '0.62rem', textTransform: 'uppercase', letterSpacing: '0.14em' }}>
+            {h.label}
+          </span>
+          <span style={{ color: 'white', fontWeight: 800, fontSize: '1rem' }}>{h.value}</span>
+        </button>
+      ))}
+    </div>
+  );
+}
+
 // 4-box OTP-style display for year guesses. A single transparent input
 // underneath keeps the real focus/keyboard target (so the mobile keyboard
 // never dismisses), while these boxes render its current characters.
@@ -1378,15 +1422,16 @@ function YearDigitBoxes({ value, focused }: Readonly<{ value: string; focused: b
 }
 
 export function GuessingView({ game }: Readonly<{ game: PlayState }>) {
-  const { phase, timeLeft, timerTotal, myScore, guessText, guessInputRef, setGuessText, submitGuess, submitChoice, skipGuess, artistOnly, yearOnly, songPlaying, songTempo, mode, party, artistGuessText, setArtistGuessText } = game;
+  const { phase, timeLeft, timerTotal, myScore, guessText, guessInputRef, setGuessText, submitGuess, submitChoice, submitChaosTap, skipGuess, artistOnly, yearOnly, songPlaying, songTempo, mode, party, hints, artistGuessText, setArtistGuessText } = game;
   const isListening = phase === 'watching';
   const isChoice = party?.format === 'choice';
+  const isChaosHints = party?.event === 'chaoshints';
   const target = resolveTarget(party, artistOnly, yearOnly);
   const isYear = target === 'year';
   const canSubmit = isYear ? guessText.trim().length === 4 : guessText.trim().length > 0;
   const [inputFocused, setInputFocused] = useState(false);
   const inputBoxStyle = guessInputBoxStyle(isListening, inputFocused);
-  const label = isChoice ? 'Tap the right title' : {
+  const label = isChoice ? 'Tap the right title' : isChaosHints ? 'One of these is a lie' : {
     title: 'Name the song',
     artist: 'Name the artist',
     both: 'Name the song · artist = bonus',
@@ -1422,7 +1467,9 @@ export function GuessingView({ game }: Readonly<{ game: PlayState }>) {
           {label}
         </p>
 
-        {isChoice ? (
+        {isChaosHints ? (
+          <ChaosHintButtons hints={hints} onPick={submitChaosTap} />
+        ) : isChoice ? (
           <ChoiceButtons options={party?.choiceOptions ?? []} onPick={submitChoice} />
         ) : isYear ? (
           <div style={{ position: 'relative' }}>
@@ -1498,7 +1545,7 @@ export function GuessingView({ game }: Readonly<{ game: PlayState }>) {
 
       {/* Actions */}
       <div className="px-5 pb-8 flex flex-col items-center gap-4">
-        {!isChoice && (
+        {!isChoice && !isChaosHints && (
           <button
             type="button"
             className="liquid-btn glass-tint-purple relative cursor-pointer border-0 bg-transparent p-0"
@@ -1724,7 +1771,7 @@ function PlayRevealShell({
           </LiquidGlass>
         </div>
 
-        <PartyRevealExtras result={result} stealResult={stealResult} />
+        <PartyRevealExtras result={result} stealResult={stealResult} hints={game.hints} />
 
         {guessesList}
 

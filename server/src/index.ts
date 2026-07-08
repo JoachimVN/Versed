@@ -580,6 +580,23 @@ io.on('connection', (socket) => {
     }
   });
 
+  // ── Player: tap a hint during a Chaos Hints round ──────────────────────────
+  // Separate from submit_guess since the answer is an option index, not free
+  // text — scoring keys on "did you tap the fabricated hint," not a fuzzy
+  // text match, so it can't reuse the same event/validation path.
+  socket.on('submit_chaos_tap', ({ index }: { index: number }, callback?: (r: { correct: boolean; points?: number; timeMs?: number }) => void) => {
+    const game = gm.getGameBySocket(socket.id);
+    if (!game) return callback?.({ correct: false });
+    const r = gm.recordChaosHintTap(game, socket.id, index);
+    if (!r) return callback?.({ correct: false });
+    callback?.({ correct: r.correct, points: r.points, timeMs: r.elapsedMs });
+    io.to(`host:${game.pin}`).emit('answer_received', {
+      answered: game.currentRound!.passed.size,
+      total: game.players.size,
+    });
+    if (r.allDone) endRaceRound(game);
+  });
+
   // ── Player: steal-round winner picks their victim ──────────────────────────
   socket.on('steal_victim', ({ name }: { name: string }) => {
     const game = gm.getGameBySocket(socket.id);
@@ -748,8 +765,10 @@ io.on('connection', (socket) => {
     // Race flow is normally hint-free (the audio itself is the puzzle), but
     // artist-only and year-only rounds can't be inferred from audio alone —
     // this is the only way those toggles have any teeth outside Classic mode.
-    // Party rounds keep the existing (hint-free) race behaviour.
-    const keepHints = !round.party && (game.artistOnly || game.yearOnly);
+    // Party rounds keep the existing (hint-free) race behaviour, except
+    // Chaos Hints — there `round.hints` isn't a guessing aid at all, it's
+    // the "spot the fake" set itself, which the round is meaningless without.
+    const keepHints = (!round.party && (game.artistOnly || game.yearOnly)) || round.party?.event === 'chaoshints';
 
     // Prefer the precomputed art from the CSV (Music Popularity Index resolves
     // it offline via Spotify's oEmbed endpoint) so a normal round never calls
@@ -875,6 +894,9 @@ io.on('connection', (socket) => {
       yearOnly: gm.effectiveTarget(game, round) === 'year',
       // Reveal payloads always carry the full party config (mystery revealed).
       party: gm.partyView(round, true),
+      // 'chaoshints' rounds: which hint (already sent as `hints` at
+      // round_start) was the fabricated one — hidden until now.
+      chaosFakeIndex: round.chaosFakeIndex,
     };
   }
 

@@ -78,7 +78,7 @@ interface SavedHostSettings {
 const HOST_SETTINGS_KEY = 'versed_host_settings';
 const MODES: Set<Mode> = new Set(['classic', 'race', 'party']);
 const DIFFICULTIES: Set<Difficulty> = new Set(['easy', 'medium', 'hard']);
-export const ALL_PARTY_EVENTS: PartyEvent[] = ['double', 'mystery', 'steal', 'snippet', 'fullhints', 'blind', 'outro', 'underdog'];
+export const ALL_PARTY_EVENTS: PartyEvent[] = ['double', 'mystery', 'steal', 'snippet', 'fullhints', 'blind', 'outro', 'underdog', 'chaoshints'];
 const PARTY_EVENT_SET: Set<string> = new Set(ALL_PARTY_EVENTS);
 const CHAOS_LEVELS: Set<ChaosLevel> = new Set(['chill', 'balanced', 'chaotic']);
 
@@ -1135,6 +1135,7 @@ const EVENT_LABELS: Record<PartyEvent, string> = {
   blind: 'Blind Bet',
   outro: 'Down to the Wire',
   underdog: 'Underdog Boost',
+  chaoshints: 'Chaos Hints',
 };
 
 function PlaylistList({ customPlaylists, onOpen, onRemove }: Readonly<{
@@ -2514,7 +2515,7 @@ function RevealShell({
       </div>
 
       <div style={{ position: 'relative', zIndex: 2 }}>
-        <PartyRevealExtras result={result} stealResult={stealResult} />
+        <PartyRevealExtras result={result} stealResult={stealResult} hints={game.hints} />
       </div>
 
       <div style={{ position: 'relative', zIndex: 2, background: 'rgba(255,255,255,0.05)', border: '1px solid rgba(255,255,255,0.08)', borderRadius: '16px', padding: '8px 12px', width: '310px', maxWidth: '92vw' }} className="divide-y divide-white/[0.07]">

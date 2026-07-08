@@ -265,6 +265,44 @@ function generateAllHints(song: Song, suppressArtist: boolean, suppressYear: boo
   return hints;
 }
 
+// Chaos Hints' safe-to-show categories — deliberately excludes Song title and
+// the full Artist(s) line entirely (not just from fabrication): a real other
+// song's title or artist name would itself read as a plausible, confusing
+// "real" answer, rather than a clean fabrication a player can rule out.
+function safeChaosHints(song: Song): Hint[] {
+  const hints: Hint[] = [];
+  if (song.year) hints.push({ label: 'Release year', value: String(Math.floor(song.year)) });
+  else if (song.decade) hints.push({ label: 'Era', value: `${song.decade}s` });
+  if (song.spotifyStreams) hints.push({ label: 'Streams', value: formatStreams(song.spotifyStreams) });
+  if (song.durationMs) hints.push({ label: 'Duration', value: formatDuration(song.durationMs) });
+  hints.push({ label: 'Artist initials', value: getInitials(song.artist) });
+  return hints;
+}
+
+// Builds the "spot the fake hint" set: every safe category for the real
+// song, with one entry's value swapped for the same category borrowed from a
+// different random song in the pool. Returns undefined if there aren't
+// enough categories to make a believable set, or no other song shares the
+// picked category (both are just missing-data edge cases on small pools).
+function buildChaosHintSet(song: Song, pool: Song[]): { hints: Hint[]; fakeIndex: number } | undefined {
+  const real = safeChaosHints(song);
+  if (real.length < 2) return undefined;
+  const decoyCandidates = pool.filter(s => s.spotifyTrackId !== song.spotifyTrackId);
+  if (decoyCandidates.length === 0) return undefined;
+  const decoySong = pickRandom(decoyCandidates);
+  const decoyHints = safeChaosHints(decoySong);
+  // Only fabricate a category the decoy actually has data for, and where the
+  // fabricated value would actually differ (an identical stat wouldn't read
+  // as a lie at all).
+  const fakeCandidates = real
+    .map((h, i) => ({ i, decoy: decoyHints.find(d => d.label === h.label) }))
+    .filter((c): c is { i: number; decoy: Hint } => !!c.decoy && c.decoy.value !== real[c.i].value);
+  if (fakeCandidates.length === 0) return undefined;
+  const { i: fakeIndex, decoy } = pickRandom(fakeCandidates);
+  const hints = real.map((h, i) => (i === fakeIndex ? { label: h.label, value: decoy.value } : h));
+  return { hints, fakeIndex };
+}
+
 // ─── Party round recipes ─────────────────────────────────────────────────────
 
 function introFor(
@@ -296,7 +334,14 @@ function introFor(
     blind: { title: 'Blind Bet', tag: 'No hints at all — bid on ears alone' },
     outro: { title: 'Down to the Wire', tag: "The clip plays the song's final stretch" },
     underdog: { title: 'Underdog Boost', tag: 'Only the player(s) in last place can answer' },
+    chaoshints: { title: 'Chaos Hints', tag: 'One hint is a lie — tap the fake one, fastest wins' },
   };
+  // Chaos Hints replaces the round's whole objective (spot the fake hint,
+  // not name the song), so it skips the normal flow/goal composition below
+  // — otherwise the tagline would misleadingly still say "name the song".
+  if (event === 'chaoshints') {
+    return { title: eventIntros.chaoshints.title, tagline: eventIntros.chaoshints.tag };
+  }
   if (event) {
     const e = eventIntros[event];
     return { title: e.title, tagline: `${e.tag} · ${flow} / ${goal}${suffix}` };
@@ -322,7 +367,7 @@ function pickPartyTarget(format: PartyFormat): GuessTarget {
 // Every party event that exists — the default "everything on" set for a new
 // game, and what host-supplied enabledEvents lists get validated against.
 export const ALL_PARTY_EVENTS: PartyEvent[] = [
-  'double', 'mystery', 'steal', 'snippet', 'fullhints', 'blind', 'outro', 'underdog',
+  'double', 'mystery', 'steal', 'snippet', 'fullhints', 'blind', 'outro', 'underdog', 'chaoshints',
 ];
 
 // Chance (out of 100) that a round gets no event at all, per chaos preset.
@@ -334,7 +379,10 @@ function pickPartyEvent(game: Game, format: PartyFormat, prevEvent: PartyEvent |
   if (format === 'year' || randomInt(0, 100) >= NO_EVENT_CHANCE[game.chaosLevel]) return null;
   const pool: [PartyEvent, number][] = [['double', 30], ['mystery', 25], ['snippet', 25]];
   if (format === 'classic') pool.push(['fullhints', 20], ['blind', 20]);
-  if (format === 'race') pool.push(['outro', 25]);
+  // Chaos Hints replaces the whole guessing objective with a tap-the-fake-
+  // hint mini-game, which only makes sense riding the plain race flow — not
+  // stacked on "guess the year" or the classic bid/tier flow.
+  if (format === 'race') pool.push(['outro', 25], ['chaoshints', 15]);
   // Steal needs someone else to steal from — pointless (and confusing to
   // announce) in a 1-player game.
   if (game.roundIndex >= 2 && game.players.size >= 2) pool.push(['steal', 20]);
@@ -741,13 +789,35 @@ function buildRound(game: Game, party?: PartyConfig): Round {
 
   const snippetMs = party ? computeSnippetPosition(song, party, game.raceTime) : undefined;
   const guessKind = roundGuessKind(party, game.artistOnly, game.yearOnly);
-  const hints = buildRoundHints(song, party, guessKind);
+
+  // Chaos Hints repurposes the normal `hints` transport to carry its own
+  // 4-hint "spot the fake" set instead of the usual guess-along hints —
+  // bypasses buildRoundHints entirely for this event.
+  let hints: Hint[];
+  let chaosFakeIndex: number | undefined;
+  const chaosSet = party?.event === 'chaoshints' ? buildChaosHintSet(song, pool) : undefined;
+  if (party?.event === 'chaoshints' && !chaosSet) {
+    // Not enough hint categories (or no decoy song shares one) to build a
+    // believable set — silently downgrade to a plain round, same precedent
+    // as computeSnippetPosition's downgrade for snippet/outro.
+    party.event = null;
+    party.multiplier = 1;
+    party.intro = introFor(party.format, party.target, party.event, party.winnerOnly);
+  }
+  if (chaosSet) {
+    hints = chaosSet.hints;
+    chaosFakeIndex = chaosSet.fakeIndex;
+  } else {
+    hints = buildRoundHints(song, party, guessKind);
+  }
 
   return {
     song,
     hints,
     party,
     snippetMs,
+    chaosFakeIndex,
+    chaosTapped: new Map(),
     bids: new Map(),
     bidTiers: [],
     tierIndex: 0,
@@ -869,6 +939,8 @@ function migrateRoundSocketId(round: Round, oldId: string, newId: string): void 
   if (round.correctGuessers.delete(oldId)) round.correctGuessers.add(newId);
   const guessTime = round.guessTimes.get(oldId);
   if (guessTime !== undefined) { round.guessTimes.set(newId, guessTime); round.guessTimes.delete(oldId); }
+  const tapped = round.chaosTapped.get(oldId);
+  if (tapped !== undefined) { round.chaosTapped.set(newId, tapped); round.chaosTapped.delete(oldId); }
   if (round.party) {
     round.party.duelistIds = round.party.duelistIds.map(id => (id === oldId ? newId : id));
     round.party.restrictedIds = round.party.restrictedIds.map(id => (id === oldId ? newId : id));
@@ -1210,6 +1282,62 @@ export function skipRaceGuess(
   return { allDone };
 }
 
+// Mirrors applyRaceCorrectGuess's decay-scoring math, but correctness is
+// "did you tap the fabricated hint" rather than a fuzzy text match. A round
+// only ever has one active event, so this never needs to combine with
+// mystery's hide-until-reveal return trick — moot by construction.
+function applyChaosHintTap(
+  game: Game, round: Round, socketId: string, tappedIndex: number, elapsedMs: number,
+): number {
+  const isCorrect = tappedIndex === round.chaosFakeIndex;
+  const isFirst = round.firstCorrectAt === null;
+  if (isCorrect) {
+    if (isFirst) round.firstCorrectAt = Date.now();
+    round.correctGuessers.add(socketId);
+    round.guessTimes.set(socketId, elapsedMs);
+  }
+  if (!isCorrect || (!isFirst && isWinnerOnlyRound(game, round))) return 0;
+  const base = isWinnerOnlyRound(game, round)
+    ? calcRaceWinnerPoints(game, elapsedMs, game.raceTime, round.song.rank)
+    : calcRacePoints(game, isFirst, elapsedMs, round.firstCorrectAt! - round.playStartAt!, round.song.rank);
+  let points = Math.round(base * roundMultiplier(round));
+  if (points > 0) points += pityBonus(currentScores(game), socketId, round);
+  const player = game.players.get(socketId)!;
+  player.score += points;
+  if (points > 0) {
+    player.streak += 1;
+    player.totalCorrect += 1;
+    if (points > player.biggestSwing) player.biggestSwing = points;
+    player.fastestCorrectMs = player.fastestCorrectMs === null ? elapsedMs : Math.min(player.fastestCorrectMs, elapsedMs);
+    round.scoredSocketIds.add(socketId);
+  }
+  return points;
+}
+
+export function recordChaosHintTap(
+  game: Game, socketId: string, tappedIndex: number,
+): { correct: boolean; points: number; elapsedMs: number; allDone: boolean } | null {
+  const round = game.currentRound;
+  if (!round || round.party?.event !== 'chaoshints') return null;
+  if (!game.players.has(socketId)) return null;
+  if (game.phase !== 'guessing') return null;
+  if (round.passed.has(socketId)) return null;
+  const restricted = restrictedParticipantIds(round);
+  if (restricted && !restricted.includes(socketId)) return null;
+  if (isWinnerOnlyRound(game, round) && round.firstCorrectAt !== null) return null;
+
+  const elapsedMs = Date.now() - (round.playStartAt ?? Date.now());
+  round.chaosTapped.set(socketId, tappedIndex);
+  round.passed.add(socketId);
+  const participants = raceParticipants(game, round);
+
+  const correct = tappedIndex === round.chaosFakeIndex;
+  const points = applyChaosHintTap(game, round, socketId, tappedIndex, elapsedMs);
+
+  const allDone = (isWinnerOnlyRound(game, round) && correct) || participants.every(id => round.passed.has(id));
+  return { correct, points, elapsedMs, allDone };
+}
+
 // Parses a year guess (digits only, plausible range) or null if unusable.
 function parseYearGuess(raw: string | null | undefined): number | null {
   if (!raw) return null;
@@ -1340,6 +1468,8 @@ export function skipSteal(game: Game, thiefId: string): { thief: string } | null
 export function finalizeRaceDrafts(game: Game): void {
   const round = game.currentRound;
   if (!round || game.phase !== 'guessing') return;
+  // Chaos Hints is tap-only — there's no free-text draft to auto-submit.
+  if (round.party?.event === 'chaoshints') return;
   for (const id of game.players.keys()) {
     if (round.passed.has(id)) continue;
     const draft = round.liveDrafts.get(id)?.trim();

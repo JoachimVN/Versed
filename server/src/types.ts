@@ -47,7 +47,7 @@ export interface PlaylistTrackInput {
 export type PartyFormat = 'classic' | 'race' | 'year' | 'choice';
 export type GuessTarget = 'title' | 'artist' | 'both';
 export type PartyEvent =
-  | 'double' | 'mystery' | 'steal' | 'snippet' | 'fullhints' | 'blind' | 'outro' | 'underdog';
+  | 'double' | 'mystery' | 'steal' | 'snippet' | 'fullhints' | 'blind' | 'outro' | 'underdog' | 'chaoshints';
 
 // Chill/chaotic tune how often party events fire and how wild mystery's
 // multiplier spread gets — see NO_EVENT_CHANCE/MYSTERY_MULTIPLIERS_BY_CHAOS
@@ -113,6 +113,12 @@ export interface Round {
   stealBy?: string;                 // socketId of the round winner allowed to steal
   stealDone?: boolean;
   yearResults?: YearResult[];       // 'year' rounds: filled at round end
+  // 'chaoshints' event: `hints` above IS the ~4-hint set shown (one
+  // fabricated) — reuses the existing hints transport rather than a
+  // parallel payload. chaosFakeIndex says which index is the lie, hidden
+  // from clients until reveal.
+  chaosFakeIndex?: number;
+  chaosTapped: Map<string, number>; // socketId → tapped hint index ('chaoshints' rounds only)
   bids: Map<string, number>;
   bidTiers: BidTier[];
   tierIndex: number;
