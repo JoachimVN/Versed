@@ -22,6 +22,13 @@ export interface LeaderboardEntry {
   score: number;
 }
 
+// End-of-game superlative — mirrors server/src/types.ts's Award.
+export interface Award {
+  key: 'sharpshooter' | 'speedDemon' | 'comebackKid' | 'duelChampion';
+  playerNames: string[];
+  detail: string;
+}
+
 export interface PlayerInfo {
   name: string;
   score?: number;

@@ -9,7 +9,7 @@ import dotenv from 'dotenv';
 import authRouter from './spotifyAuth';
 import * as gm from './gameManager';
 import { getAlbumArtUrl } from './albumArt';
-import { Game, PartyEvent, PlaylistTrackInput } from './types';
+import { Award, Game, PartyEvent, PlaylistTrackInput } from './types';
 
 dotenv.config();
 gm.initSongs();
@@ -280,7 +280,7 @@ io.on('connection', (socket) => {
     const round = game.currentRound;
 
     if (game.phase === 'finished') {
-      socket.emit('game_over', { leaderboard: gm.getLeaderboard(game) });
+      socket.emit('game_over', { leaderboard: gm.getLeaderboard(game), awards: gm.computeAwards(game) });
       return;
     }
 
@@ -344,6 +344,7 @@ io.on('connection', (socket) => {
     players: { name: string; score: number; streak: number }[];
     phase: string; roundIndex: number; totalRounds: number;
     leaderboard: { rank: number; name: string; score: number }[];
+    awards: Award[];
   } | { error: string }) => void) => {
     const game = gm.getGame(pin);
     if (!game) return callback({ error: 'Game not found' });
@@ -376,6 +377,7 @@ io.on('connection', (socket) => {
       roundIndex: game.roundIndex,
       totalRounds: game.totalRounds,
       leaderboard: gm.getLeaderboard(game),
+      awards: gm.computeAwards(game),
     });
   });
 
@@ -655,7 +657,7 @@ io.on('connection', (socket) => {
     if (game.phaseTimer) clearTimeout(game.phaseTimer);
     game.phaseEndsAt = null;
     game.phase = 'finished';
-    io.to(game.pin).emit('game_over', { leaderboard: gm.getLeaderboard(game) });
+    io.to(game.pin).emit('game_over', { leaderboard: gm.getLeaderboard(game), awards: gm.computeAwards(game) });
   });
 
   // ── Host: advance to next round ────────────────────────────────────────────
@@ -670,7 +672,7 @@ io.on('connection', (socket) => {
     game.roundIndex += 1;
     if (game.roundIndex >= game.totalRounds) {
       game.phase = 'finished';
-      io.to(game.pin).emit('game_over', { leaderboard: gm.getLeaderboard(game) });
+      io.to(game.pin).emit('game_over', { leaderboard: gm.getLeaderboard(game), awards: gm.computeAwards(game) });
       return;
     }
     beginRound(game);

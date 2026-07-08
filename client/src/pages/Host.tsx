@@ -13,7 +13,7 @@ import { useSoundEffect } from '../hooks/useSoundEffect';
 import { RankBadge } from '../components/RankBadge';
 import { useAnimatedScore } from '../hooks/useAnimatedScore';
 import { ConfettiBackground } from '../components/ConfettiBackground';
-import { NoOneGotItCardContent, GotItCardContent, YearTimelineContent, PillButton } from '../components/RevealShared';
+import { NoOneGotItCardContent, GotItCardContent, YearTimelineContent, PillButton, AwardsStrip } from '../components/RevealShared';
 import { RoundIntro, PartyBadge, PartyRevealExtras } from '../components/RoundIntro';
 import { BackButton } from '../components/BackButton';
 import { CircularTimer } from '../components/CircularTimer';
@@ -21,7 +21,7 @@ import { AudioBars } from '../components/AudioBars';
 import { LIQUID_CARD_PROPS, LIQUID_PILL_PROPS } from '../components/liquidGlassPresets';
 import { APP_NAME, BACKEND_URL, RACE_TIME } from '../config';
 import { commonPhaseAnnouncement } from '../utils/phaseAnnouncement';
-import type { ChaosLevel, Hint, LeaderboardEntry, PartyEvent, PartyInfo, PlayerInfo, PlaylistTrackInput, RoundResultEvent, SongSource } from '../types';
+import type { Award, ChaosLevel, Hint, LeaderboardEntry, PartyEvent, PartyInfo, PlayerInfo, PlaylistTrackInput, RoundResultEvent, SongSource } from '../types';
 
 type Phase = 'connect' | 'lobby' | 'betting' | 'playing' | 'guessing' | 'reveal' | 'leaderboard' | 'finished';
 type Mode = 'classic' | 'race' | 'party';
@@ -123,6 +123,7 @@ export interface HostState {
   roundDeltas: Record<string, number>;
   roundPity: Record<string, boolean>;
   leaderboard: LeaderboardEntry[];
+  awards: Award[];
   copied: boolean;
   playProgress: number;
   inviteUrl: string;
@@ -206,6 +207,7 @@ function useHostGame(): HostState {
   const [roundDeltas, setRoundDeltas] = useState<Record<string, number>>({});
   const [roundPity, setRoundPity] = useState<Record<string, boolean>>({});
   const [leaderboard, setLeaderboard] = useState<LeaderboardEntry[]>([]);
+  const [awards, setAwards] = useState<Award[]>([]);
   const [copied, setCopied] = useState(false);
   const [playProgress, setPlayProgress] = useState(0);
   const [settingsOpen, setSettingsOpen] = useState(false);
@@ -303,7 +305,8 @@ function useHostGame(): HostState {
         const fresh = freshLoadRef.current;
         freshLoadRef.current = false;
         socket.emit('rejoin_host', { pin: pinRef.current, fresh }, (res: {
-          players: PlayerInfo[]; phase: string; roundIndex: number; totalRounds: number; leaderboard: LeaderboardEntry[];
+          players: PlayerInfo[]; phase: string; roundIndex: number; totalRounds: number;
+          leaderboard: LeaderboardEntry[]; awards: Award[];
         } | { error: string }) => {
           if ('error' in res) {
             if (fresh) {
@@ -324,6 +327,7 @@ function useHostGame(): HostState {
               setTotalRounds(res.totalRounds);
               if (res.phase === 'leaderboard' || res.phase === 'finished') {
                 setLeaderboard(res.leaderboard);
+                setAwards(res.awards);
                 setPhase(res.phase);
               }
             }
@@ -480,7 +484,7 @@ function useHostGame(): HostState {
       setPhase('leaderboard');
     });
 
-    socket.on('game_over', ({ leaderboard: lb }: { leaderboard: LeaderboardEntry[] }) => {
+    socket.on('game_over', ({ leaderboard: lb, awards: aw }: { leaderboard: LeaderboardEntry[]; awards?: Award[] }) => {
       // The game can end mid-song now (host's "End game"), so stop playback
       // and timers the same way round_result does.
       ++playGenRef.current;
@@ -489,6 +493,7 @@ function useHostGame(): HostState {
       spotify.pauseTrack();
       setSongPlaying(false);
       setLeaderboard(lb);
+      setAwards(aw ?? []);
       setPhase('finished');
     });
 
@@ -585,7 +590,7 @@ function useHostGame(): HostState {
   return {
     spotify, phase, pin, players, roundIndex, totalRounds, hints,
     bettingTime, timeLeft, timerTotal, bidCount, countdown, guesserNames, lowestBid, playerBids,
-    result, roundDeltas, roundPity, leaderboard, copied, playProgress, inviteUrl,
+    result, roundDeltas, roundPity, leaderboard, awards, copied, playProgress, inviteUrl,
     settingsOpen, bettingTimeSetting, guessingTimeSetting, roundsSetting,
     mode, raceTimeSetting, raceWinnerOnly, artistOnly, yearOnly, difficulty,
     enabledEvents, chaosLevel,
@@ -2582,7 +2587,7 @@ function LeaderboardRow({ entry, delay, highlight }: Readonly<{ entry: Leaderboa
 }
 
 function LeaderboardView({ game }: Readonly<{ game: HostState }>) {
-  const { phase, leaderboard, roundIndex, totalRounds } = game;
+  const { phase, leaderboard, awards, roundIndex, totalRounds } = game;
   const isFinished = phase === 'finished';
 
   return (
@@ -2628,6 +2633,8 @@ function LeaderboardView({ game }: Readonly<{ game: HostState }>) {
           />
         ))}
       </div>
+
+      {isFinished && <AwardsStrip awards={awards} />}
 
       {/* Mid-game leaderboard is the resume point after a host page reload,
           so it needs its own way to continue the game. No "End game" here —

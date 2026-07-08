@@ -1,7 +1,37 @@
 import { Check, Trophy, X } from 'lucide-react';
 import LiquidGlass from 'liquid-glass-react';
-import type { RoundResultEvent } from '../types';
+import type { Award, RoundResultEvent } from '../types';
 import { LIQUID_PILL_PROPS } from './liquidGlassPresets';
+
+const AWARD_LABELS: Record<Award['key'], string> = {
+  sharpshooter: 'Sharpshooter',
+  speedDemon: 'Speed Demon',
+  comebackKid: 'Comeback Kid',
+  duelChampion: 'Duel Champion',
+};
+
+// Final-screen superlatives — shared by Host and Play so both screens read
+// identically. Ties list every qualifying name rather than picking one.
+export function AwardsStrip({ awards }: Readonly<{ awards: Award[] }>) {
+  if (awards.length === 0) return null;
+  return (
+    <div className="flex flex-col items-center gap-2 relative z-10">
+      {awards.map(a => (
+        <div
+          key={a.key}
+          className="flex flex-wrap items-center justify-center gap-x-2 gap-y-0.5 rounded-xl px-3 py-2"
+          style={{ background: 'rgba(255,255,255,0.05)', border: '1px solid rgba(255,255,255,0.08)' }}
+        >
+          <span style={{ color: 'rgba(94,234,212,0.9)', fontSize: '0.68rem', fontWeight: 800, letterSpacing: '0.08em', textTransform: 'uppercase' }}>
+            {AWARD_LABELS[a.key]}
+          </span>
+          <span className="text-white/80 text-sm font-semibold">{a.playerNames.join(' & ')}</span>
+          <span className="text-white/40 text-xs">{a.detail}</span>
+        </div>
+      ))}
+    </div>
+  );
+}
 
 export function PillButton({ onClick, label, zIndex }: Readonly<{ onClick: () => void; label: string; zIndex?: number }>) {
   return (

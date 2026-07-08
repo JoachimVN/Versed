@@ -134,6 +134,20 @@ export interface Player {
   name: string;
   score: number;
   streak: number;
+  // Running, whole-game stats — never reset mid-game (unlike Round's
+  // per-round-only tracking) — used to compute end-of-game awards.
+  totalCorrect: number;
+  totalPasses: number;
+  fastestCorrectMs: number | null; // race-flow only; classic has no per-player timing
+  biggestSwing: number;            // largest single-round point gain
+}
+
+// One end-of-game superlative. Ties share the award rather than picking one
+// name arbitrarily.
+export interface Award {
+  key: 'sharpshooter' | 'speedDemon' | 'comebackKid' | 'duelChampion';
+  playerNames: string[];
+  detail: string;
 }
 
 export type GameMode = 'classic' | 'race' | 'party';
@@ -155,7 +169,11 @@ export interface Game {
   pin: string;
   hostSocketId: string;
   players: Map<string, Player>;
-  formerPlayers: Map<string, { score: number; streak: number }>; // name.toLowerCase() → saved state
+  // name.toLowerCase() → saved state, restored on rejoin
+  formerPlayers: Map<string, {
+    score: number; streak: number;
+    totalCorrect: number; totalPasses: number; fastestCorrectMs: number | null; biggestSwing: number;
+  }>;
   phase: GamePhase;
   roundIndex: number;
   totalRounds: number;
@@ -169,6 +187,7 @@ export interface Game {
   difficulty: Difficulty;
   enabledEvents: Set<PartyEvent>; // party mode: which events the host allows into the pool
   chaosLevel: ChaosLevel;         // party mode: event frequency + mystery-multiplier spread preset
+  duelChampion: string | null;    // party mode: socketId of the finale duel's winner, once resolved
   songSource: SongSource;
   songPool?: Song[];
   playlistId?: string;

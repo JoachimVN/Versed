@@ -1,6 +1,6 @@
 import { randomInt } from 'node:crypto';
 import {
-  ChaosLevel, Difficulty, Game, GuessTarget, Hint, PartyClientView, PartyConfig, PartyEvent, PartyFormat,
+  Award, ChaosLevel, Difficulty, Game, GuessTarget, Hint, PartyClientView, PartyConfig, PartyEvent, PartyFormat,
   Player, PlaylistTrackInput, Round, Song, YearResult,
 } from './types';
 import { loadSongs } from './songLoader';
@@ -748,6 +748,7 @@ export function createGame(hostSocketId: string, preferredPin?: string): Game {
     difficulty: 'hard',
     enabledEvents: new Set(ALL_PARTY_EVENTS),
     chaosLevel: 'balanced',
+    duelChampion: null,
     songSource: 'library',
     playlistId: undefined,
     currentRound: null,
@@ -794,7 +795,11 @@ export function addPlayer(game: Game, socketId: string, name: string): Player | 
   );
   if (taken) return null;
   const former = game.formerPlayers.get(name.trim().toLowerCase());
-  const player: Player = { socketId, name: name.trim(), score: former?.score ?? 0, streak: former?.streak ?? 0 };
+  const player: Player = {
+    socketId, name: name.trim(), score: former?.score ?? 0, streak: former?.streak ?? 0,
+    totalCorrect: former?.totalCorrect ?? 0, totalPasses: former?.totalPasses ?? 0,
+    fastestCorrectMs: former?.fastestCorrectMs ?? null, biggestSwing: former?.biggestSwing ?? 0,
+  };
   game.players.set(socketId, player);
   socketToPin.set(socketId, game.pin);
   return player;
@@ -861,7 +866,13 @@ export function removeSocket(socketId: string): { game: Game; wasHost: boolean }
   const wasHost = game.hostSocketId === socketId;
   if (!wasHost) {
     const player = game.players.get(socketId);
-    if (player) game.formerPlayers.set(player.name.toLowerCase(), { score: player.score, streak: player.streak });
+    if (player) {
+      game.formerPlayers.set(player.name.toLowerCase(), {
+        score: player.score, streak: player.streak,
+        totalCorrect: player.totalCorrect, totalPasses: player.totalPasses,
+        fastestCorrectMs: player.fastestCorrectMs, biggestSwing: player.biggestSwing,
+      });
+    }
     game.players.delete(socketId);
   }
   return { game, wasHost };
@@ -1018,6 +1029,8 @@ function applyClassicWin(
   const player = game.players.get(socketId)!;
   player.score += points;
   player.streak += 1;
+  player.totalCorrect += 1;
+  if (points > player.biggestSwing) player.biggestSwing = points;
   round.scoredSocketIds.add(socketId);
   if (round.party?.event === 'steal') {
     round.stealBy = socketId;
@@ -1040,6 +1053,8 @@ export function skipGuess(game: Game, socketId: string): { allDone: boolean } | 
   round.guesses.set(socketId, null);
   round.passed.add(socketId);
   if (game.phase === 'playing') round.earlyGuessers.add(socketId);
+  const player = game.players.get(socketId);
+  if (player) player.totalPasses += 1;
   const allDone = round.guesserSocketIds.every(id => round.passed.has(id));
   return { allDone };
 }
@@ -1079,6 +1094,9 @@ function applyRaceCorrectGuess(
   player.score += points;
   if (points > 0) {
     player.streak += 1;
+    player.totalCorrect += 1;
+    if (points > player.biggestSwing) player.biggestSwing = points;
+    player.fastestCorrectMs = player.fastestCorrectMs === null ? elapsedMs : Math.min(player.fastestCorrectMs, elapsedMs);
     round.scoredSocketIds.add(socketId);
   }
   // The mystery multiplier stays hidden until everyone sees the shared
@@ -1139,6 +1157,7 @@ export function skipRaceGuess(
 
   round.guesses.set(socketId, null);
   round.passed.add(socketId);
+  game.players.get(socketId)!.totalPasses += 1;
   const allDone = raceParticipants(game, round).every(id => round.passed.has(id));
   return { allDone };
 }
@@ -1181,6 +1200,8 @@ function scoreYearGuesses(game: Game, round: Round, mult: number, winnerOnly: bo
       points += pityBonus(preRoundScores, e.id, round);
       e.player.score += points;
       e.player.streak += 1;
+      e.player.totalCorrect += 1;
+      if (points > e.player.biggestSwing) e.player.biggestSwing = points;
       round.scoredSocketIds.add(e.id);
     }
     return { name: e.player.name, guess: e.guess, diff: e.diff, points, pity: round.pityAwardedTo.has(e.id) };
@@ -1330,6 +1351,50 @@ export function getLeaderboard(game: Game) {
   return Array.from(game.players.values())
     .sort((a, b) => b.score - a.score)
     .map((p, i) => ({ rank: i + 1, name: p.name, score: p.score }));
+}
+
+// End-of-game superlatives, computed once the game's over. Ties share the
+// award rather than picking one name arbitrarily. A stat of zero doesn't
+// count as an achievement, so an award is omitted entirely if nobody
+// actually did the thing (e.g. nobody ever guessed correctly).
+export function computeAwards(game: Game): Award[] {
+  const players = Array.from(game.players.values());
+  const awards: Award[] = [];
+
+  const mostCorrect = Math.max(0, ...players.map(p => p.totalCorrect));
+  if (mostCorrect > 0) {
+    awards.push({
+      key: 'sharpshooter',
+      playerNames: players.filter(p => p.totalCorrect === mostCorrect).map(p => p.name),
+      detail: `${mostCorrect} correct guess${mostCorrect === 1 ? '' : 'es'}`,
+    });
+  }
+
+  const timed = players.filter(p => p.fastestCorrectMs !== null);
+  if (timed.length > 0) {
+    const fastestMs = Math.min(...timed.map(p => p.fastestCorrectMs!));
+    awards.push({
+      key: 'speedDemon',
+      playerNames: timed.filter(p => p.fastestCorrectMs === fastestMs).map(p => p.name),
+      detail: `${(fastestMs / 1000).toFixed(1)}s`,
+    });
+  }
+
+  const biggestSwing = Math.max(0, ...players.map(p => p.biggestSwing));
+  if (biggestSwing > 0) {
+    awards.push({
+      key: 'comebackKid',
+      playerNames: players.filter(p => p.biggestSwing === biggestSwing).map(p => p.name),
+      detail: `+${biggestSwing.toLocaleString()} in one round`,
+    });
+  }
+
+  if (game.duelChampion) {
+    const champ = game.players.get(game.duelChampion);
+    if (champ) awards.push({ key: 'duelChampion', playerNames: [champ.name], detail: 'Won the finale duel' });
+  }
+
+  return awards;
 }
 
 export function updateSocketPin(socketId: string, pin: string) {

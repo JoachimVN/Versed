@@ -8,7 +8,7 @@ import { useAnimatedScore } from '../hooks/useAnimatedScore';
 import { useKeyboardOpen } from '../hooks/useViewportHeight';
 import { useEscapeKey } from '../hooks/useEscapeKey';
 import { useFocusTrap } from '../hooks/useFocusTrap';
-import { NoOneGotItCardContent, GotItCardContent, YearTimelineContent } from '../components/RevealShared';
+import { NoOneGotItCardContent, GotItCardContent, YearTimelineContent, AwardsStrip } from '../components/RevealShared';
 import { RoundIntro, PartyBadge, PartyRevealExtras } from '../components/RoundIntro';
 import { BackButton } from '../components/BackButton';
 import { CircularTimer, timerColor } from '../components/CircularTimer';
@@ -16,7 +16,7 @@ import { AudioBars } from '../components/AudioBars';
 import { LIQUID_CARD_PROPS, LIQUID_PILL_PROPS } from '../components/liquidGlassPresets';
 import { APP_NAME, BID_OPTIONS } from '../config';
 import { commonPhaseAnnouncement } from '../utils/phaseAnnouncement';
-import type { Hint, LeaderboardEntry, PartyInfo, RoundResultEvent } from '../types';
+import type { Award, Hint, LeaderboardEntry, PartyInfo, RoundResultEvent } from '../types';
 
 type Phase =
   | 'join' | 'waiting' | 'betting' | 'bid_submitted'
@@ -57,6 +57,7 @@ export interface PlayState {
   myRaceTimeMs: number | null;
   leaderboard: LeaderboardEntry[];
   leaderboardDeltas: Record<string, number>;
+  awards: Award[];
   songPlaying: boolean;
   songTempo: number | null;
   reconnecting: boolean;
@@ -129,6 +130,7 @@ function usePlayGame(pinParam?: string): PlayState {
   const [leaderboard, setLeaderboard] = useState<LeaderboardEntry[]>([]);
   const leaderboardRef = useRef<LeaderboardEntry[]>([]);
   const [leaderboardDeltas, setLeaderboardDeltas] = useState<Record<string, number>>({});
+  const [awards, setAwards] = useState<Award[]>([]);
   const [songPlaying, setSongPlaying] = useState(false);
   const [songTempo, setSongTempo] = useState<number | null>(null);
   const [reconnecting, setReconnecting] = useState(false);
@@ -396,9 +398,10 @@ function usePlayGame(pinParam?: string): PlayState {
       setPhase('leaderboard');
     });
 
-    socket.on('game_over', ({ leaderboard: lb }: { leaderboard: LeaderboardEntry[] }) => {
+    socket.on('game_over', ({ leaderboard: lb, awards: aw }: { leaderboard: LeaderboardEntry[]; awards?: Award[] }) => {
       clearRoundTimers();
       applyLeaderboard(lb);
+      setAwards(aw ?? []);
       setPhase('finished');
     });
 
@@ -575,7 +578,7 @@ function usePlayGame(pinParam?: string): PlayState {
     timeLeft, timerTotal, bettingTime, bidIndex, bidOptions, bidScores, myBid, guesserNames, lowestBid,
     guessText, result, myScore, myScoreDelta, myPity, myStreak, mode, artistOnly, yearOnly, myRacePoints, myRaceTimeMs,
     party, artistGuessText, stealVictims, stealResult,
-    leaderboard, leaderboardDeltas, songPlaying, songTempo, reconnecting, hostReconnecting, savedSession, guessInputRef,
+    leaderboard, leaderboardDeltas, awards, songPlaying, songTempo, reconnecting, hostReconnecting, savedSession, guessInputRef,
     cameFromQR, newGamePin, rejoinNewGame,
     setPin, setName,
     setArtistGuessText: (v: string) => {
@@ -1832,7 +1835,7 @@ function MyScoreCard({ entry, delay }: Readonly<{ entry: LeaderboardEntry; delay
 }
 
 function LeaderboardView({ game }: Readonly<{ game: PlayState }>) {
-  const { phase, myName, leaderboard, newGamePin, rejoinNewGame } = game;
+  const { phase, myName, leaderboard, awards, newGamePin, rejoinNewGame } = game;
   const navigate = useNavigate();
   const myEntry = leaderboard.find(e => e.name === myName);
   const isFinished = phase === 'finished';
@@ -1881,6 +1884,8 @@ function LeaderboardView({ game }: Readonly<{ game: PlayState }>) {
           />
         ))}
       </div>
+
+      {isFinished && <AwardsStrip awards={awards} />}
 
       {phase === 'leaderboard' && <p className="text-center text-white/45 text-sm relative z-10">Waiting for the host to start the next round…</p>}
 
