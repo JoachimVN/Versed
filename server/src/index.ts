@@ -96,11 +96,9 @@ interface StartGameSettings {
   bettingTime?: number; guessingTime?: number; totalRounds?: number; mode?: string;
   raceTime?: number; raceWinnerOnly?: boolean; artistOnly?: boolean; yearOnly?: boolean;
   difficulty?: string; songSource?: string;
-  enabledEvents?: string[]; chaosLevel?: string;
+  enabledEvents?: string[]; chaosLevel?: number;
   customPlaylist?: { id?: string; tracks?: PlaylistTrackInput[] };
 }
-
-const CHAOS_LEVELS = new Set(['chill', 'balanced', 'chaotic']);
 
 function applyStartGameSettings(game: Game, s: StartGameSettings | undefined) {
   if (s?.bettingTime) game.bettingTime = Math.max(5, Math.min(999, Math.round(s.bettingTime)));
@@ -125,7 +123,9 @@ function applyStartGameSettings(game: Game, s: StartGameSettings | undefined) {
   game.artistOnly = !isParty && !game.yearOnly && s?.artistOnly === true;
   game.difficulty = s?.difficulty === 'easy' || s?.difficulty === 'medium' ? s.difficulty : 'hard';
 
-  game.chaosLevel = CHAOS_LEVELS.has(s?.chaosLevel ?? '') ? (s!.chaosLevel as Game['chaosLevel']) : 'balanced';
+  game.chaosLevel = typeof s?.chaosLevel === 'number' && Number.isFinite(s.chaosLevel)
+    ? Math.max(0, Math.min(100, s.chaosLevel))
+    : 50;
   const requested = Array.isArray(s?.enabledEvents)
     ? s.enabledEvents.filter((e): e is PartyEvent => (gm.ALL_PARTY_EVENTS as string[]).includes(e))
     : [];

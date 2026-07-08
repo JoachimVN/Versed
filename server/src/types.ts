@@ -49,10 +49,9 @@ export type GuessTarget = 'title' | 'artist' | 'both';
 export type PartyEvent =
   | 'double' | 'mystery' | 'steal' | 'snippet' | 'fullhints' | 'blind' | 'outro' | 'underdog' | 'chaoshints';
 
-// Chill/chaotic tune how often party events fire and how wild mystery's
-// multiplier spread gets — see NO_EVENT_CHANCE/MYSTERY_MULTIPLIERS_BY_CHAOS
-// in gameManager.ts. 'balanced' matches the original hardcoded tuning.
-export type ChaosLevel = 'chill' | 'balanced' | 'chaotic';
+// Continuous 0–100 chaos scale. It tunes how often party events fire and how
+// wild mystery's multiplier spread gets; 50 is the balanced default.
+export type ChaosLevel = number;
 
 export interface PartyConfig {
   format: PartyFormat;

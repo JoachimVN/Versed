@@ -68,7 +68,7 @@ const MOCK_HOST: HostState = {
   yearOnly: false,
   difficulty: 'hard',
   enabledEvents: ['double', 'mystery', 'steal', 'snippet', 'fullhints', 'blind', 'outro', 'underdog'],
-  chaosLevel: 'balanced',
+  chaosLevel: 50,
   songSource: 'library',
   customPlaylists: [],
   playlistPicker: { playlists: [], loadingPlaylists: false, playlistsError: null, fetchPlaylists: noop, fetchPlaylistTracks: async () => ({ ok: false, error: 'error' }) } as any,

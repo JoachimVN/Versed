@@ -397,13 +397,14 @@ export const ALL_PARTY_EVENTS: PartyEvent[] = [
   'double', 'mystery', 'steal', 'snippet', 'fullhints', 'blind', 'outro', 'underdog', 'chaoshints',
 ];
 
-// Chance (out of 100) that a round gets no event at all, per chaos preset.
-// 'balanced' keeps the original hardcoded value so existing games' feel
-// doesn't shift under them.
-const NO_EVENT_CHANCE: Record<ChaosLevel, number> = { chill: 75, balanced: 60, chaotic: 40 };
+// Interpolate from 80% plain rounds at Chill through 60% at Balanced to 40%
+// at Chaotic. Every slider position therefore affects the actual frequency.
+function noEventChance(chaosLevel: ChaosLevel): number {
+  return 80 - chaosLevel * 0.4;
+}
 
 function pickPartyEvent(game: Game, format: PartyFormat, prevEvent: PartyEvent | null | undefined): PartyEvent | null {
-  if (format === 'year' || randomInt(0, 100) < NO_EVENT_CHANCE[game.chaosLevel]) return null;
+  if (format === 'year' || randomInt(0, 100) < noEventChance(game.chaosLevel)) return null;
   const pool: [PartyEvent, number][] = [['double', 30], ['mystery', 25], ['snippet', 25]];
   if (format === 'classic') pool.push(['fullhints', 20], ['blind', 20]);
   // Chaos Hints replaces the whole guessing objective with a tap-the-fake-
@@ -425,18 +426,28 @@ function pickPartyEvent(game: Game, format: PartyFormat, prevEvent: PartyEvent |
   return pickWeighted(filtered);
 }
 
-// Mystery's payout ladder per chaos preset: the three "modest" multipliers
-// are equally likely, then the big ones get rarer the higher they climb.
-// 'balanced' is the original hardcoded table, unchanged.
-const MYSTERY_MULTIPLIERS_BY_CHAOS: Record<ChaosLevel, [number, number][]> = {
-  chill: [[1.5, 40], [2, 35], [3, 20], [4, 5]],
-  balanced: [[1.5, 27], [2, 27], [3, 27], [4, 12], [5, 5], [10, 2]],
-  chaotic: [[1.5, 12], [2, 16], [3, 17], [4, 20], [5, 18], [10, 17]],
-};
+// Mystery weights at the three labelled anchors. Intermediate slider values
+// linearly interpolate every weight, rather than snapping to a hidden preset.
+const MYSTERY_MULTIPLIERS = [1.5, 2, 3, 4, 5, 10] as const;
+const MYSTERY_WEIGHT_ANCHORS = {
+  chill: [40, 35, 20, 5, 0, 0],
+  balanced: [27, 27, 27, 12, 5, 2],
+  chaotic: [12, 16, 17, 20, 18, 17],
+} as const;
+
+function mysteryWeights(chaosLevel: ChaosLevel): [number, number][] {
+  const lower = chaosLevel <= 50 ? MYSTERY_WEIGHT_ANCHORS.chill : MYSTERY_WEIGHT_ANCHORS.balanced;
+  const upper = chaosLevel <= 50 ? MYSTERY_WEIGHT_ANCHORS.balanced : MYSTERY_WEIGHT_ANCHORS.chaotic;
+  const progress = chaosLevel <= 50 ? chaosLevel / 50 : (chaosLevel - 50) / 50;
+  return MYSTERY_MULTIPLIERS.map((multiplier, index) => [
+    multiplier,
+    lower[index] + (upper[index] - lower[index]) * progress,
+  ]);
+}
 
 function eventMultiplier(game: Game, event: PartyEvent | null): number {
   if (event === 'double') return 2;
-  if (event === 'mystery') return pickWeighted(MYSTERY_MULTIPLIERS_BY_CHAOS[game.chaosLevel]);
+  if (event === 'mystery') return pickWeighted(mysteryWeights(game.chaosLevel));
   // The "boost" in Underdog Boost — a real payout bump on top of exclusive
   // access to the round, not just first dibs at the normal rate.
   if (event === 'underdog') return 1.5;
@@ -932,7 +943,7 @@ export function createGame(hostSocketId: string, preferredPin?: string): Game {
     yearOnly: false,
     difficulty: 'hard',
     enabledEvents: new Set(ALL_PARTY_EVENTS),
-    chaosLevel: 'balanced',
+    chaosLevel: 50,
     duelChampion: null,
     duelActive: false,
     duelDuelistIds: [],

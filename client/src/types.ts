@@ -39,7 +39,7 @@ export interface PlayerInfo {
 // Mirrors server/src/types.ts's PartyEvent — kept in sync by hand, no shared
 // import between the two workspaces.
 export type PartyEvent = 'double' | 'mystery' | 'steal' | 'snippet' | 'fullhints' | 'blind' | 'outro' | 'underdog' | 'chaoshints';
-export type ChaosLevel = 'chill' | 'balanced' | 'chaotic';
+export type ChaosLevel = number;
 
 // Party mode: the per-round recipe as clients see it. A hidden mystery
 // multiplier arrives as null and is revealed (a number) on round_result.

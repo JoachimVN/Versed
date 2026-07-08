@@ -80,7 +80,7 @@ const MODES: Set<Mode> = new Set(['classic', 'race', 'party']);
 const DIFFICULTIES: Set<Difficulty> = new Set(['easy', 'medium', 'hard']);
 export const ALL_PARTY_EVENTS: PartyEvent[] = ['double', 'mystery', 'steal', 'snippet', 'fullhints', 'blind', 'outro', 'underdog', 'chaoshints'];
 const PARTY_EVENT_SET: Set<string> = new Set(ALL_PARTY_EVENTS);
-const CHAOS_LEVELS: Set<ChaosLevel> = new Set(['chill', 'balanced', 'chaotic']);
+const LEGACY_CHAOS_LEVELS: Record<string, ChaosLevel> = { chill: 0, balanced: 50, chaotic: 100 };
 
 function loadSavedHostSettings(): Partial<SavedHostSettings> {
   try {
@@ -98,7 +98,9 @@ function loadSavedHostSettings(): Partial<SavedHostSettings> {
       enabledEvents: Array.isArray(raw.enabledEvents)
         ? raw.enabledEvents.filter((e: unknown): e is PartyEvent => PARTY_EVENT_SET.has(e as string))
         : undefined,
-      chaosLevel: CHAOS_LEVELS.has(raw.chaosLevel) ? raw.chaosLevel : undefined,
+      chaosLevel: typeof raw.chaosLevel === 'number' && Number.isFinite(raw.chaosLevel)
+        ? Math.max(0, Math.min(100, raw.chaosLevel))
+        : LEGACY_CHAOS_LEVELS[raw.chaosLevel],
     };
   } catch { return {}; }
 }
@@ -221,7 +223,7 @@ function useHostGame(): HostState {
   const [yearOnly, setYearOnly] = useState(savedSettings.yearOnly ?? false);
   const [difficulty, setDifficulty] = useState<Difficulty>(savedSettings.difficulty ?? 'hard');
   const [enabledEvents, setEnabledEvents] = useState<PartyEvent[]>(savedSettings.enabledEvents ?? ALL_PARTY_EVENTS);
-  const [chaosLevel, setChaosLevel] = useState<ChaosLevel>(savedSettings.chaosLevel ?? 'balanced');
+  const [chaosLevel, setChaosLevel] = useState<ChaosLevel>(savedSettings.chaosLevel ?? 50);
   // Not persisted in SavedHostSettings, deliberately: a reload can't restore
   // the actual fetched track data, so a restored 'playlist' flag with no
   // tracks would leave the host in a confusing half-configured state.
@@ -1068,56 +1070,30 @@ function SongSourceRow({ value, onChange }: Readonly<{ value: SongSource; onChan
   );
 }
 
-const CHAOS_OPTIONS: { key: ChaosLevel; label: string }[] = [
-  { key: 'chill', label: 'Chill' },
-  { key: 'balanced', label: 'Balanced' },
-  { key: 'chaotic', label: 'Chaotic' },
-];
-
-const CHAOS_STYLE: Record<ChaosLevel, { bg: string; border: string; text: string }> = {
-  chill: { bg: 'rgba(14, 165, 233, 0.25)', border: '1px solid rgba(56, 189, 248, 0.45)', text: '#7dd3fc' },
-  balanced: { bg: 'rgba(178,16,224,0.25)', border: '1px solid rgba(208,46,249,0.45)', text: '#d8b4fe' },
-  chaotic: { bg: 'rgba(220, 38, 38, 0.25)', border: '1px solid rgba(248, 113, 113, 0.45)', text: '#fca5a5' },
-};
-
 // Controls how often party events fire and how wild mystery's multiplier
-// spread gets (see NO_EVENT_CHANCE/MYSTERY_MULTIPLIERS_BY_CHAOS server-side).
-// Same sliding-pill pattern as DifficultyRow.
+// spread gets. The server interpolates continuously between the three labels.
 function ChaosLevelRow({ value, onChange }: Readonly<{ value: ChaosLevel; onChange: (v: ChaosLevel) => void }>) {
-  const index = CHAOS_OPTIONS.findIndex(o => o.key === value);
-  const active = CHAOS_STYLE[value];
   return (
     <div className="space-y-2">
       <span style={{ color: 'rgba(255,255,255,0.5)', fontSize: '0.875rem' }}>Chaos level</span>
-      <div
-        className="relative flex rounded-xl"
-        style={{ background: 'rgba(255,255,255,0.05)', border: '1px solid rgba(255,255,255,0.08)', padding: '3px' }}
-      >
-        <div
-          className="absolute rounded-lg"
-          style={{
-            top: '3px', bottom: '3px', left: '3px',
-            width: 'calc((100% - 6px) / 3)',
-            background: active.bg,
-            border: active.border,
-            transform: `translateX(${index * 100}%)`,
-            transition: 'transform 0.25s cubic-bezier(0.4, 0, 0.2, 1), background 0.25s ease, border-color 0.25s ease',
-            pointerEvents: 'none',
-          }}
+      <div className="rounded-xl px-3 py-2" style={{ background: 'rgba(255,255,255,0.05)', border: '1px solid rgba(255,255,255,0.08)' }}>
+        <input
+          type="range"
+          min={0}
+          max={100}
+          step={1}
+          value={value}
+          onChange={e => onChange(Number(e.target.value))}
+          aria-label="Chaos level"
+          aria-valuetext={`${Math.round(value)} percent`}
+          className="block w-full cursor-pointer"
+          style={{ accentColor: '#d8b4fe' }}
         />
-        {CHAOS_OPTIONS.map(({ key, label }) => (
-          <button
-            key={key}
-            onClick={() => onChange(key)}
-            className="relative flex-1 py-1.5 rounded-lg text-xs font-semibold z-10 transition-colors duration-200"
-            style={{
-              color: value === key ? CHAOS_STYLE[key].text : 'rgba(255,255,255,0.45)',
-              background: 'transparent', border: 'none', cursor: 'pointer',
-            }}
-          >
-            {label}
-          </button>
-        ))}
+        <div className="flex justify-between mt-1" aria-hidden="true">
+          <span style={{ color: '#7dd3fc', fontSize: '0.62rem' }}>Chill</span>
+          <span style={{ color: '#d8b4fe', fontSize: '0.62rem' }}>Balanced</span>
+          <span style={{ color: '#fca5a5', fontSize: '0.62rem' }}>Chaotic</span>
+        </div>
       </div>
     </div>
   );
