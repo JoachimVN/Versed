@@ -82,26 +82,36 @@ export const ALL_PARTY_EVENTS: PartyEvent[] = ['double', 'mystery', 'steal', 'sn
 const PARTY_EVENT_SET: Set<string> = new Set(ALL_PARTY_EVENTS);
 const LEGACY_CHAOS_LEVELS: Record<string, ChaosLevel> = { chill: 0, balanced: 50, chaotic: 100 };
 
+function clampFiniteNumber(value: unknown, min: number, max: number): number | undefined {
+  if (typeof value !== 'number' || !Number.isFinite(value)) return undefined;
+  return Math.max(min, Math.min(max, value));
+}
+
+function sanitizeHostSettings(settings: Partial<SavedHostSettings>): Partial<SavedHostSettings> {
+  return {
+    bettingTime: clampFiniteNumber(settings.bettingTime, 5, 999),
+    guessingTime: clampFiniteNumber(settings.guessingTime, 5, 999),
+    rounds: clampFiniteNumber(settings.rounds, 1, 999),
+    mode: MODES.has(settings.mode as Mode) ? settings.mode : undefined,
+    raceTime: clampFiniteNumber(settings.raceTime, 10, 999),
+    raceWinnerOnly: typeof settings.raceWinnerOnly === 'boolean' ? settings.raceWinnerOnly : undefined,
+    artistOnly: typeof settings.artistOnly === 'boolean' ? settings.artistOnly : undefined,
+    yearOnly: typeof settings.yearOnly === 'boolean' ? settings.yearOnly : undefined,
+    difficulty: DIFFICULTIES.has(settings.difficulty as Difficulty) ? settings.difficulty : undefined,
+    enabledEvents: Array.isArray(settings.enabledEvents)
+      ? settings.enabledEvents.filter((e: unknown): e is PartyEvent => PARTY_EVENT_SET.has(e as string))
+      : undefined,
+    chaosLevel: clampFiniteNumber(settings.chaosLevel, 0, 100) as ChaosLevel | undefined,
+  };
+}
+
 function loadSavedHostSettings(): Partial<SavedHostSettings> {
   try {
     const raw = JSON.parse(localStorage.getItem(HOST_SETTINGS_KEY) ?? '{}');
-    return {
-      bettingTime: typeof raw.bettingTime === 'number' ? raw.bettingTime : undefined,
-      guessingTime: typeof raw.guessingTime === 'number' ? raw.guessingTime : undefined,
-      rounds: typeof raw.rounds === 'number' ? raw.rounds : undefined,
-      mode: MODES.has(raw.mode) ? raw.mode : undefined,
-      raceTime: typeof raw.raceTime === 'number' ? raw.raceTime : undefined,
-      raceWinnerOnly: typeof raw.raceWinnerOnly === 'boolean' ? raw.raceWinnerOnly : undefined,
-      artistOnly: typeof raw.artistOnly === 'boolean' ? raw.artistOnly : undefined,
-      yearOnly: typeof raw.yearOnly === 'boolean' ? raw.yearOnly : undefined,
-      difficulty: DIFFICULTIES.has(raw.difficulty) ? raw.difficulty : undefined,
-      enabledEvents: Array.isArray(raw.enabledEvents)
-        ? raw.enabledEvents.filter((e: unknown): e is PartyEvent => PARTY_EVENT_SET.has(e as string))
-        : undefined,
-      chaosLevel: typeof raw.chaosLevel === 'number' && Number.isFinite(raw.chaosLevel)
-        ? Math.max(0, Math.min(100, raw.chaosLevel))
-        : LEGACY_CHAOS_LEVELS[raw.chaosLevel],
-    };
+    return sanitizeHostSettings({
+      ...raw,
+      chaosLevel: typeof raw.chaosLevel === 'string' ? LEGACY_CHAOS_LEVELS[raw.chaosLevel] : raw.chaosLevel,
+    });
   } catch { return {}; }
 }
 
@@ -240,7 +250,7 @@ function useHostGame(): HostState {
       raceTime: raceTimeSetting, raceWinnerOnly, artistOnly, yearOnly, difficulty,
       enabledEvents, chaosLevel,
     };
-    localStorage.setItem(HOST_SETTINGS_KEY, JSON.stringify(toSave));
+    localStorage.setItem(HOST_SETTINGS_KEY, JSON.stringify(sanitizeHostSettings(toSave)));
   }, [bettingTimeSetting, guessingTimeSetting, roundsSetting, mode, raceTimeSetting, raceWinnerOnly, artistOnly, yearOnly, difficulty, enabledEvents, chaosLevel]);
 
   const toggleEvent = (e: PartyEvent) => {
@@ -2713,12 +2723,19 @@ export function RevealView({ game, result, instant = false }: Readonly<{ game: H
 
   if (isFinalReveal) {
     const isYearReveal = result.party?.format === 'year' || result.yearOnly;
+    let cardHeight = 240;
+    if (result.coverUrl) {
+      cardHeight = 480;
+    } else if (isYearReveal) {
+      cardHeight = 320;
+    }
+
     return (
       <RevealShell
         game={game}
         result={result}
         instant={instant}
-        cardHeight={result.coverUrl ? 480 : isYearReveal ? 320 : 240}
+        cardHeight={cardHeight}
         cardContent={<FinalRoundAnswerContent result={result} label="Final answer" />}
         isCorrectFor={() => 'none'}
       />
