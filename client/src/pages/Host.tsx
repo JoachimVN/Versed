@@ -811,20 +811,8 @@ function SettingsPanel({ game, open }: Readonly<{ game: HostState; open: boolean
 
         {mode === 'party' && (
           <div className="px-5 pb-4 space-y-4" style={{ borderTop: '1px solid rgba(255,255,255,0.07)', paddingTop: '16px' }}>
-            <ChaosLevelRow value={chaosLevel} onChange={setChaosLevel} />
-            <div className="space-y-2">
-              <span style={{ color: 'rgba(255,255,255,0.5)', fontSize: '0.875rem' }}>Events</span>
-              <div className="space-y-2">
-                {ALL_PARTY_EVENTS.map(e => (
-                  <ToggleRow key={e} label={EVENT_LABELS[e]} value={enabledEvents.includes(e)} onToggle={() => toggleEvent(e)} />
-                ))}
-              </div>
-              {enabledEvents.length === 0 && (
-                <p style={{ color: 'rgba(251,191,36,0.85)', fontSize: '0.7rem' }}>
-                  At least one event should stay on, or rounds will always play plain.
-                </p>
-              )}
-            </div>
+            <ChaosLevelRow value={chaosLevel} onChange={setChaosLevel} disabled={enabledEvents.length === 0} />
+            <EventChipGrid enabledEvents={enabledEvents} onToggle={toggleEvent} onSetAll={setEnabledEvents} />
           </div>
         )}
       </div>
@@ -1101,9 +1089,9 @@ function chaosTrackBackground(value: number): string {
   return `linear-gradient(90deg, ${stops.join(', ')})`;
 }
 
-function ChaosLevelRow({ value, onChange }: Readonly<{ value: ChaosLevel; onChange: (v: ChaosLevel) => void }>) {
+function ChaosLevelRow({ value, onChange, disabled }: Readonly<{ value: ChaosLevel; onChange: (v: ChaosLevel) => void; disabled?: boolean }>) {
   return (
-    <div className="space-y-2">
+    <div className="space-y-2" style={{ opacity: disabled ? 0.4 : 1, transition: 'opacity 0.2s ease' }}>
       <div className="flex items-center justify-between">
         <span style={{ color: 'rgba(255,255,255,0.5)', fontSize: '0.875rem' }}>Chaos level</span>
         <span style={{ color: 'white', fontWeight: 700, fontSize: '0.875rem' }}>{Math.round(value)}%</span>
@@ -1115,12 +1103,14 @@ function ChaosLevelRow({ value, onChange }: Readonly<{ value: ChaosLevel; onChan
         step={1}
         value={value}
         onChange={e => onChange(Number(e.target.value))}
+        disabled={disabled}
         aria-label="Chaos level"
         aria-valuetext={`${Math.round(value)} percent`}
         className="chaos-slider block w-full"
         style={{
           '--chaos-track-bg': chaosTrackBackground(value),
           '--chaos-color': chaosColorAt(value),
+          cursor: disabled ? 'not-allowed' : undefined,
         } as React.CSSProperties}
       />
       <div className="flex justify-between" aria-hidden="true">
@@ -1146,6 +1136,112 @@ const EVENT_LABELS: Record<PartyEvent, string> = {
   underdog: 'Underdog Boost',
   chaoshints: 'Chaos Hints',
 };
+
+// One-line explanation shown under the Events chip grid. Adapted from
+// server/src/gameManager.ts's eventIntros[...].tag (in-round announcement
+// copy), but hand-maintained here as separate, settings-list-appropriate
+// wording — can drift from the server copy if either changes.
+const EVENT_DESCRIPTIONS: Record<PartyEvent, string> = {
+  double: 'Everything is worth 2×',
+  mystery: 'Revealed after the round: ×1.5 up to ×10',
+  steal: 'Win the round, then rob another player',
+  snippet: 'The clip starts somewhere mid-song',
+  fullhints: 'Every hint on the table',
+  blind: 'No hints at all. Bid on ears alone.',
+  outro: "The clip plays the song's final stretch",
+  underdog: 'Only players in last place can answer. Hints on, ×1.5 points.',
+  chaoshints: 'One hint is a lie. Tap the fake one, fastest wins.',
+};
+
+function EventChipGrid({ enabledEvents, onToggle, onSetAll }: Readonly<{
+  enabledEvents: PartyEvent[]; onToggle: (e: PartyEvent) => void; onSetAll: (events: PartyEvent[]) => void;
+}>) {
+  const [hoveredEvent, setHoveredEvent] = useState<PartyEvent | null>(null);
+  const [focusedEvent, setFocusedEvent] = useState<PartyEvent | null>(null);
+  const [selectedEvent, setSelectedEvent] = useState<PartyEvent | null>(null);
+  const shownEvent = hoveredEvent ?? focusedEvent ?? selectedEvent;
+
+  const setAll = (events: PartyEvent[]) => {
+    onSetAll(events);
+    setSelectedEvent(null);
+  };
+
+  let caption: string;
+  let captionColor: string;
+  if (shownEvent) {
+    caption = EVENT_DESCRIPTIONS[shownEvent];
+    captionColor = 'rgba(255,255,255,0.4)';
+  } else if (enabledEvents.length === 0) {
+    caption = 'No events selected. Party rounds will play without event modifiers.';
+    captionColor = 'rgba(255,255,255,0.4)';
+  } else {
+    caption = 'Tap or hover an event for details.';
+    captionColor = 'rgba(255,255,255,0.4)';
+  }
+
+  return (
+    <div className="space-y-2">
+      <div className="flex items-center justify-between">
+        <span style={{ color: 'rgba(255,255,255,0.5)', fontSize: '0.875rem' }}>Events</span>
+        <div className="flex items-center" style={{ gap: '6px', fontSize: '0.7rem' }}>
+          <button
+            type="button"
+            onClick={() => setAll(ALL_PARTY_EVENTS)}
+            style={{ background: 'none', border: 'none', padding: 0, cursor: 'pointer', color: 'rgba(255,255,255,0.4)', transition: 'color 0.15s' }}
+            onMouseEnter={e => { e.currentTarget.style.color = 'rgba(255,255,255,0.75)'; }}
+            onMouseLeave={e => { e.currentTarget.style.color = 'rgba(255,255,255,0.4)'; }}
+          >
+            All
+          </button>
+          <span style={{ color: 'rgba(255,255,255,0.25)' }}>·</span>
+          <button
+            type="button"
+            onClick={() => setAll([])}
+            style={{ background: 'none', border: 'none', padding: 0, cursor: 'pointer', color: 'rgba(255,255,255,0.4)', transition: 'color 0.15s' }}
+            onMouseEnter={e => { e.currentTarget.style.color = 'rgba(255,255,255,0.75)'; }}
+            onMouseLeave={e => { e.currentTarget.style.color = 'rgba(255,255,255,0.4)'; }}
+          >
+            None
+          </button>
+        </div>
+      </div>
+      <div className="flex flex-wrap" style={{ gap: '8px' }}>
+        {ALL_PARTY_EVENTS.map(e => {
+          const on = enabledEvents.includes(e);
+          return (
+            <button
+              key={e}
+              type="button"
+              aria-pressed={on}
+              aria-describedby="event-caption"
+              onClick={() => { onToggle(e); setSelectedEvent(e); }}
+              onMouseEnter={() => setHoveredEvent(e)}
+              onMouseLeave={() => setHoveredEvent(null)}
+              onFocus={() => setFocusedEvent(e)}
+              onBlur={() => setFocusedEvent(null)}
+              style={{
+                borderRadius: '999px',
+                padding: '6px 12px',
+                fontSize: '0.78rem',
+                fontWeight: on ? 600 : 400,
+                cursor: 'pointer',
+                background: on ? 'rgba(178,16,224,0.7)' : 'rgba(255,255,255,0.10)',
+                border: on ? '1px solid rgba(198,36,249,0.6)' : '1px solid rgba(255,255,255,0.08)',
+                color: on ? 'white' : 'rgba(255,255,255,0.5)',
+                transition: 'background 0.2s ease, border-color 0.2s ease, color 0.2s ease',
+              }}
+            >
+              {EVENT_LABELS[e]}
+            </button>
+          );
+        })}
+      </div>
+      <p id="event-caption" aria-live="polite" style={{ color: captionColor, fontSize: '0.7rem', lineHeight: 1.4, minHeight: '2.1rem' }}>
+        {caption}
+      </p>
+    </div>
+  );
+}
 
 function PlaylistList({ customPlaylists, onOpen, onRemove }: Readonly<{
   customPlaylists: CustomPlaylist[]; onOpen: () => void; onRemove: (id: string) => void;
