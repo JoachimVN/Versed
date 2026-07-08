@@ -81,10 +81,6 @@ export default function Home() {
           </LiquidGlass>
         </button>
       </div>
-
-      <p className="absolute bottom-6 inset-x-0 text-white/45 text-sm text-center">
-        Hosting requires a Spotify Premium account
-      </p>
     </div>
   );
 }
