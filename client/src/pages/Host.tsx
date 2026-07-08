@@ -12,8 +12,8 @@ import { useFocusTrap } from '../hooks/useFocusTrap';
 import { useSoundEffect } from '../hooks/useSoundEffect';
 import { RankBadge } from '../components/RankBadge';
 import { useAnimatedScore } from '../hooks/useAnimatedScore';
-import { ConfettiBackground } from '../components/ConfettiBackground';
-import { NoOneGotItCardContent, GotItCardContent, YearTimelineContent, PillButton, AwardsStrip } from '../components/RevealShared';
+import { NoOneGotItCardContent, GotItCardContent, YearTimelineContent, PillButton } from '../components/RevealShared';
+import { FinalResultsView } from '../components/FinalResults';
 import { RoundIntro, PartyBadge, PartyRevealExtras } from '../components/RoundIntro';
 import { BackButton } from '../components/BackButton';
 import { CircularTimer } from '../components/CircularTimer';
@@ -2765,41 +2765,13 @@ function LeaderboardRow({ entry, delay, highlight }: Readonly<{ entry: Leaderboa
 }
 
 function LeaderboardView({ game }: Readonly<{ game: HostState }>) {
-  const { phase, leaderboard, awards, roundIndex, totalRounds } = game;
-  const isFinished = phase === 'finished';
+  const { leaderboard, roundIndex, totalRounds } = game;
 
   return (
     <div className="relative min-h-screen flex flex-col p-6 gap-4">
-      {!isFinished && <div style={{ background: '#080812', position: 'fixed', inset: 0, zIndex: 0 }} />}
-      {isFinished && (
-        <>
-          <img
-            src={`${import.meta.env.BASE_URL}background6.svg`}
-            alt=""
-            aria-hidden="true"
-            style={{ position: 'fixed', inset: 0, width: '100%', height: '100%', objectFit: 'cover', zIndex: 0 }}
-          />
-          <div
-            className="fixed inset-0 pointer-events-none"
-            style={{
-              background: 'rgba(8,8,18,0.96)',
-              backdropFilter: 'blur(48px)',
-              zIndex: 1,
-            }}
-          />
-          <div style={{ position: 'fixed', inset: 0, zIndex: 2, pointerEvents: 'none', filter: 'blur(10px)' }}>
-            <ConfettiBackground burst persistAfterBurst speedMultiplier={3} />
-          </div>
-          <div
-            className="fixed inset-0 pointer-events-none"
-            style={{ background: 'rgba(8,8,18,0.45)', zIndex: 3 }}
-          />
-        </>
-      )}
+      <div style={{ background: '#080812', position: 'fixed', inset: 0, zIndex: 0 }} />
 
-      <h2 className="text-3xl font-black text-white text-center relative z-10">
-        {isFinished ? 'Final Scores' : 'Leaderboard'}
-      </h2>
+      <h2 className="text-3xl font-black text-white text-center relative z-10">Leaderboard</h2>
 
       <div className="flex-1 min-h-0 overflow-y-auto space-y-3 relative z-10">
         {leaderboard.map((e, i) => (
@@ -2812,27 +2784,29 @@ function LeaderboardView({ game }: Readonly<{ game: HostState }>) {
         ))}
       </div>
 
-      {isFinished && <AwardsStrip awards={awards} />}
-
       {/* Mid-game leaderboard is the resume point after a host page reload,
           so it needs its own way to continue the game. No "End game" here —
-          ending it would just swap to this same view's finished state, and
-          early-ending is already available from every in-round screen. */}
-      {!isFinished && (
-        <div className="relative z-10 flex justify-center pb-2">
-          <PillButton
-            onClick={() => socket.emit('next_round')}
-            label={roundIndex + 1 >= totalRounds ? 'Final Results' : 'Next Round'}
-          />
-        </div>
-      )}
-
-      {isFinished && (
-        <div className="relative z-10 flex flex-col items-center gap-3">
-          <PillButton onClick={game.newGame} label="New Game" />
-        </div>
-      )}
+          ending it would just swap to the finished screen, and early-ending
+          is already available from every in-round screen. */}
+      <div className="relative z-10 flex justify-center pb-2">
+        <PillButton
+          onClick={() => socket.emit('next_round')}
+          label={roundIndex + 1 >= totalRounds ? 'Final Results' : 'Next Round'}
+        />
+      </div>
     </div>
+  );
+}
+
+function FinalResultsWrapper({ game }: Readonly<{ game: HostState }>) {
+  const { leaderboard, awards } = game;
+  return (
+    <FinalResultsView
+      leaderboard={leaderboard}
+      awards={awards}
+      backgroundSrc={`${import.meta.env.BASE_URL}background6.svg`}
+      footer={<PillButton onClick={game.newGame} label="New Game" />}
+    />
   );
 }
 
@@ -2875,7 +2849,8 @@ export default function Host() {
       {phase === 'playing' && <PlayingView game={game} />}
       {phase === 'guessing' && <GuessingView game={game} />}
       {phase === 'reveal' && result && <RevealView game={game} result={result} />}
-      {(phase === 'leaderboard' || phase === 'finished') && <LeaderboardView game={game} />}
+      {phase === 'leaderboard' && <LeaderboardView game={game} />}
+      {phase === 'finished' && <FinalResultsWrapper game={game} />}
 
       {reconnecting && !gameExpired && (
         <div className="fixed inset-0 bg-black/70 backdrop-blur-sm flex flex-col items-center justify-center z-50 gap-3">
