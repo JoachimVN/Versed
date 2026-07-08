@@ -3,6 +3,7 @@ import { createServer } from 'node:http';
 import { randomInt } from 'node:crypto';
 import { Server } from 'socket.io';
 import cors from 'cors';
+import rateLimit from 'express-rate-limit';
 import path from 'node:path';
 import dotenv from 'dotenv';
 import authRouter from './spotifyAuth';
@@ -68,6 +69,12 @@ const io = new Server(httpServer, {
 
 app.use(cors(corsOptions));
 app.use(express.json());
+app.use(rateLimit({
+  windowMs: 60 * 1000,
+  limit: 300,
+  standardHeaders: true,
+  legacyHeaders: false,
+}));
 app.use('/api/auth', authRouter);
 app.get('/api/health', (_req, res) => res.json({ ok: true }));
 
