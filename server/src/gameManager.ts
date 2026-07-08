@@ -24,7 +24,6 @@ export const RACE_FLOOR = 200;
 export const RACE_BASE = 1000;
 
 // ─── Party mode tuning ────────────────────────────────────────────────────────
-export const BOTH_ARTIST_BONUS = 300;  // 'both' target: extra for also naming the artist
 export const STEAL_PCT = 0.25;         // steal takes 15% of the victim's score…
 export const STEAL_MIN = 400;          // …but never less than this (capped at their total)
 export const DUEL_WIN_POINTS = 1500;   // finale: first correct duelist takes this
@@ -288,7 +287,7 @@ function introFor(format: PartyFormat, target: GuessTarget, event: PartyEvent | 
     return { title: e.title, tagline: `${e.tag} · ${flow} / ${goal}` };
   }
   if (target === 'artist') return { title: 'Who Sings It?', tagline: `${flow} / name the artist` };
-  if (target === 'both') return { title: 'Double Duty', tagline: `${flow} / title wins, artist adds +${BOTH_ARTIST_BONUS}` };
+  if (target === 'both') return { title: 'Double Duty', tagline: `${flow} / name the artist too to double your points` };
   return format === 'race'
     ? { title: 'Race Round', tagline: 'Everyone guesses at once / speed wins' }
     : { title: 'Classic Round', tagline: 'Bid low, score high' };
@@ -901,8 +900,8 @@ export function recordGuess(
   const { correct, artistBonus } = checkGuess(target, text, artistText, round.song);
   if (!correct) return failGuess(round, socketId, guesserName);
 
-  const points = (calcPoints(game, round.lowestBid, round.song.rank)
-    + (artistBonus ? BOTH_ARTIST_BONUS : 0)) * roundMultiplier(round)
+  const basePoints = calcPoints(game, round.lowestBid, round.song.rank);
+  const points = (basePoints + (artistBonus ? basePoints : 0)) * roundMultiplier(round)
     + pityBonus(currentScores(game), socketId);
   return applyClassicWin(game, round, socketId, guesserName, points);
 }
@@ -978,7 +977,7 @@ function applyRaceCorrectGuess(
   } else {
     base = calcRacePoints(game, isFirst, elapsedMs, round.firstCorrectAt! - round.playStartAt!, round.song.rank);
   }
-  let points = (base + (artistBonus ? BOTH_ARTIST_BONUS : 0)) * roundMultiplier(round);
+  let points = (base + (artistBonus ? base : 0)) * roundMultiplier(round);
   if (points > 0) points += pityBonus(currentScores(game), socketId);
   if (isFirst && round.party?.event === 'steal') {
     round.stealBy = socketId;
