@@ -321,7 +321,9 @@ function usePlayGame(pinParam?: string): PlayState {
       // the only ones who actually get to guess — everyone else just listens
       // along on the watching screen with the song + timer, no input.
       const p = partyRef.current;
-      const restricted = p?.finale ? p.duelists : (p?.event === 'underdog' ? p.restricted : null);
+      let restricted: string[] | null = null;
+      if (p?.finale) restricted = p.duelists;
+      else if (p?.event === 'underdog') restricted = p.restricted;
       if (restricted && myNameRef.current && !restricted.includes(myNameRef.current)) {
         setSongPlaying(true);
         startCountdown(data.endsAt ?? (Date.now() + data.timeLimit * 1000));
@@ -1224,7 +1226,7 @@ function GetReadyBody({ isDuel, isUnderdog, isRace, party, lowestBid, guesserNam
   isDuel: boolean; isUnderdog: boolean; isRace: boolean; party: PartyInfo | null; lowestBid: number; guesserNames: string[]; songPlaying: boolean;
 }>) {
   const duelWins = party?.duelProgress?.wins;
-  const duelScoreLine = duelWins && duelWins.length === 2
+  const duelScoreLine = duelWins?.length === 2
     ? `${duelWins[0].name} ${duelWins[0].count} – ${duelWins[1].count} ${duelWins[1].name}`
     : null;
   // Race/year sub-rounds keep the existing "everyone races" duel framing —
@@ -1459,18 +1461,77 @@ export function GuessingView({ game }: Readonly<{ game: PlayState }>) {
   const canSubmit = isYear ? guessText.trim().length === 4 : guessText.trim().length > 0;
   const [inputFocused, setInputFocused] = useState(false);
   const inputBoxStyle = guessInputBoxStyle(isListening, inputFocused);
-  const label = isChoice ? 'Tap the right title' : isChaosHints ? 'One of these is a lie' : {
+  let label = {
     title: 'Name the song',
     artist: 'Name the artist',
     both: 'Name the song · artist = bonus',
     year: 'Guess the release year',
   }[target];
+  if (isChoice) label = 'Tap the right title';
+  else if (isChaosHints) label = 'One of these is a lie';
   const placeholder = {
     title: 'Type song title…',
     artist: 'Type artist name…',
     both: 'Type song title…',
     year: 'e.g. 1994',
   }[target];
+
+  let guessControl: React.ReactNode;
+  if (isChaosHints) {
+    guessControl = <ChaosHintButtons hints={hints} onPick={submitChaosTap} />;
+  } else if (isChoice) {
+    guessControl = <ChoiceButtons options={party?.choiceOptions ?? []} onPick={submitChoice} />;
+  } else if (isYear) {
+    guessControl = (
+      <div style={{ position: 'relative' }}>
+        <YearDigitBoxes value={guessText} focused={inputFocused} />
+        <input
+          ref={guessInputRef}
+          type="text"
+          inputMode="numeric"
+          value={guessText}
+          onChange={e => setGuessText(e.target.value.replace(/\D/g, '').slice(0, 4))}
+          onKeyDown={e => e.key === 'Enter' && canSubmit && submitGuess()}
+          onFocus={() => setInputFocused(true)}
+          onBlur={() => setInputFocused(false)}
+          autoComplete="off" autoCorrect="off" spellCheck={false}
+          style={{
+            position: 'absolute', inset: 0, width: '100%', height: '100%',
+            background: 'transparent', border: 'none', outline: 'none',
+            color: 'transparent', caretColor: 'transparent', fontSize: '1.5rem',
+          }}
+        />
+      </div>
+    );
+  } else {
+    guessControl = (
+      <div style={{
+        width: '100%', borderRadius: '16px', overflow: 'hidden',
+        border: inputBoxStyle.border,
+        background: inputBoxStyle.background,
+        boxShadow: inputBoxStyle.boxShadow,
+        transition: 'border-color 0.5s ease, background 0.5s ease, box-shadow 0.5s ease',
+      }}>
+        <input
+          ref={guessInputRef}
+          type="text"
+          placeholder={placeholder}
+          value={guessText}
+          onChange={e => setGuessText(e.target.value)}
+          onKeyDown={e => e.key === 'Enter' && canSubmit && submitGuess()}
+          onFocus={() => setInputFocused(true)}
+          onBlur={() => setInputFocused(false)}
+          autoComplete="off" autoCorrect="off" spellCheck={false}
+          style={{
+            display: 'block', width: '100%', background: 'transparent', border: 'none',
+            color: 'white', fontSize: '1.3rem', fontWeight: 700, textAlign: 'center',
+            padding: '20px 16px', outline: 'none', fontFamily: 'inherit',
+          }}
+          className="placeholder-white/20"
+        />
+      </div>
+    );
+  }
 
   return (
     <div className="relative min-h-screen keyboard-resize flex flex-col overflow-hidden" style={{ background: '#080812' }}>
@@ -1495,57 +1556,7 @@ export function GuessingView({ game }: Readonly<{ game: PlayState }>) {
           {label}
         </p>
 
-        {isChaosHints ? (
-          <ChaosHintButtons hints={hints} onPick={submitChaosTap} />
-        ) : isChoice ? (
-          <ChoiceButtons options={party?.choiceOptions ?? []} onPick={submitChoice} />
-        ) : isYear ? (
-          <div style={{ position: 'relative' }}>
-            <YearDigitBoxes value={guessText} focused={inputFocused} />
-            <input
-              ref={guessInputRef}
-              type="text"
-              inputMode="numeric"
-              value={guessText}
-              onChange={e => setGuessText(e.target.value.replace(/\D/g, '').slice(0, 4))}
-              onKeyDown={e => e.key === 'Enter' && canSubmit && submitGuess()}
-              onFocus={() => setInputFocused(true)}
-              onBlur={() => setInputFocused(false)}
-              autoComplete="off" autoCorrect="off" spellCheck={false}
-              style={{
-                position: 'absolute', inset: 0, width: '100%', height: '100%',
-                background: 'transparent', border: 'none', outline: 'none',
-                color: 'transparent', caretColor: 'transparent', fontSize: '1.5rem',
-              }}
-            />
-          </div>
-        ) : (
-          <div style={{
-            width: '100%', borderRadius: '16px', overflow: 'hidden',
-            border: inputBoxStyle.border,
-            background: inputBoxStyle.background,
-            boxShadow: inputBoxStyle.boxShadow,
-            transition: 'border-color 0.5s ease, background 0.5s ease, box-shadow 0.5s ease',
-          }}>
-            <input
-              ref={guessInputRef}
-              type="text"
-              placeholder={placeholder}
-              value={guessText}
-              onChange={e => setGuessText(e.target.value)}
-              onKeyDown={e => e.key === 'Enter' && canSubmit && submitGuess()}
-              onFocus={() => setInputFocused(true)}
-              onBlur={() => setInputFocused(false)}
-              autoComplete="off" autoCorrect="off" spellCheck={false}
-              style={{
-                display: 'block', width: '100%', background: 'transparent', border: 'none',
-                color: 'white', fontSize: '1.3rem', fontWeight: 700, textAlign: 'center',
-                padding: '20px 16px', outline: 'none', fontFamily: 'inherit',
-              }}
-              className="placeholder-white/20"
-            />
-          </div>
-        )}
+        {guessControl}
 
         {target === 'both' && (
           <div style={{
@@ -1624,6 +1635,8 @@ function PassedView({ game }: Readonly<{ game: PlayState }>) {
   // server), so the points shown here are the pre-multiplier amount — flag
   // that up front rather than let it read as the final score.
   const mysteryPending = gotIt && party?.event === 'mystery';
+  let cardHeight = '150px';
+  if (gotIt) cardHeight = mysteryPending ? '204px' : '180px';
 
   return (
     <div className="relative min-h-screen overflow-hidden">
@@ -1644,7 +1657,7 @@ function PassedView({ game }: Readonly<{ game: PlayState }>) {
           transform: visible ? 'translateY(0)' : 'translateY(14px)',
         }}
       >
-        <div className="liquid-btn relative" style={{ width: '310px', height: gotIt ? (mysteryPending ? '204px' : '180px') : '150px' }}>
+        <div className="liquid-btn relative" style={{ width: '310px', height: cardHeight }}>
           <LiquidGlass
             style={{ position: 'absolute', top: '50%', left: '50%' }}
             {...LIQUID_CARD_PROPS}

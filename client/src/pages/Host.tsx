@@ -2204,6 +2204,12 @@ function roundAccent(isRace: boolean, isYear: boolean): 'classic' | 'race' | 'ye
   return isRace ? 'race' : 'classic';
 }
 
+function usesRaceFlow(mode: HostState['mode'], yearOnly: boolean, party: PartyInfo | null): boolean {
+  if (mode === 'race') return true;
+  if (party === null) return yearOnly;
+  return party.format !== 'classic';
+}
+
 // Race-flow rounds are normally hint-free (the clip itself is the puzzle),
 // but artist-only and year-only rounds ask for something the audio can't
 // give away, so those are the only race rounds that ever carry hints here.
@@ -2270,13 +2276,16 @@ export function PlayingView({ game }: Readonly<{ game: HostState }>) {
   // behave exactly like race rounds on this screen. "Guess the year" rides
   // the race flow even in Classic mode — but only outside Party, which picks
   // its own per-round target and ignores this game-wide toggle.
-  const isRace = mode === 'race' || (party === null && yearOnly) || (party !== null && party.format !== 'classic');
+  const isRace = usesRaceFlow(mode, yearOnly, party);
   const isYear = party ? party.format === 'year' : yearOnly;
   // Finale duelists or (for underdog rounds) the trailing player(s) — the
   // only ones actually guessing this round, if either applies.
-  const restrictedNames = party?.finale ? party.duelists : (party?.event === 'underdog' ? party.restricted : null);
+  let restrictedNames: string[] | null = null;
+  if (party?.finale) restrictedNames = party.duelists;
+  else if (party?.event === 'underdog') restrictedNames = party.restricted;
+  const nameSeparator = party?.finale ? ' vs ' : ' & ';
   const raceStatus = restrictedNames
-    ? `${restrictedNames.join(party?.finale ? ' vs ' : ' & ')} - first correct wins`
+    ? `${restrictedNames.join(nameSeparator)} - first correct wins`
     : `${answeredCount} / ${players.length} answered`;
   const accent = roundAccent(isRace, isYear);
   return (
@@ -2319,7 +2328,7 @@ export function PlayingView({ game }: Readonly<{ game: HostState }>) {
                   <div style={{ width: '100%', height: '1px', background: 'rgba(255,255,255,0.07)' }} />
                   {isRace ? (
                     <span style={{ color: 'rgba(255,255,255,0.5)', fontSize: '0.9rem', display: 'inline-block', minWidth: '210px', textAlign: 'center' }}>
-                      {restrictedNames ? restrictedNames.join(party?.finale ? ' vs ' : ' & ') : 'Everyone will guess'}
+                      {restrictedNames ? restrictedNames.join(nameSeparator) : 'Everyone will guess'}
                     </span>
                   ) : (
                     <>
@@ -2497,7 +2506,9 @@ function RevealShell({
   // tell from roundIndex/totalRounds alone whether clicking "next" advances
   // to another duel game or actually ends the match, so it gets a neutral
   // label instead of prematurely promising "Final Results".
-  const nextLabel = party?.finale ? 'Continue' : (roundIndex + 1 >= totalRounds ? 'Final Results' : 'Next Round');
+  let nextLabel = 'Next Round';
+  if (party?.finale) nextLabel = 'Continue';
+  else if (roundIndex + 1 >= totalRounds) nextLabel = 'Final Results';
   return (
     <div className={`page-enter relative min-h-screen flex flex-col items-center gap-5 overflow-hidden ${wide ? 'px-2 py-6' : 'p-6'}`}>
       <img
