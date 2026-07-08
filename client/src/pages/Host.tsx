@@ -721,22 +721,25 @@ function SettingsPanel({ game, open }: Readonly<{ game: HostState; open: boolean
               it always uses Bet/Guess time, never Round time. */}
           {mode !== 'race' && (
             <>
-              <SettingRow label="Bet time" value={bettingTimeSetting} unit="s"
+              <SettingRow label="Bet time" value={bettingTimeSetting} unit="s" min={5}
                 onDec={() => setBettingTimeSetting(Math.max(5, bettingTimeSetting - 5))}
-                onInc={() => setBettingTimeSetting(Math.min(60, bettingTimeSetting + 5))} />
-              <SettingRow label="Guess time" value={guessingTimeSetting} unit="s"
+                onInc={() => setBettingTimeSetting(Math.min(999, bettingTimeSetting + 5))}
+                onChange={setBettingTimeSetting} />
+              <SettingRow label="Guess time" value={guessingTimeSetting} unit="s" min={5}
                 onDec={() => setGuessingTimeSetting(Math.max(5, guessingTimeSetting - 5))}
-                onInc={() => setGuessingTimeSetting(Math.min(60, guessingTimeSetting + 5))} />
+                onInc={() => setGuessingTimeSetting(Math.min(999, guessingTimeSetting + 5))}
+                onChange={setGuessingTimeSetting} />
             </>
           )}
           {mode !== 'classic' && (
-            <SettingRow label={mode === 'party' ? 'Race time' : 'Round time'} value={raceTimeSetting} unit="s"
+            <SettingRow label={mode === 'party' ? 'Race time' : 'Round time'} value={raceTimeSetting} unit="s" min={10}
               onDec={() => setRaceTimeSetting(Math.max(10, raceTimeSetting - 5))}
-              onInc={() => setRaceTimeSetting(Math.min(60, raceTimeSetting + 5))} />
+              onInc={() => setRaceTimeSetting(Math.min(999, raceTimeSetting + 5))}
+              onChange={setRaceTimeSetting} />
           )}
           <SettingRow label="Rounds" value={roundsSetting} unit=""
             onDec={() => setRoundsSetting(Math.max(1, roundsSetting - 1))}
-            onInc={() => setRoundsSetting(roundsSetting + 1)}
+            onInc={() => setRoundsSetting(Math.min(999, roundsSetting + 1))}
             onChange={setRoundsSetting} />
           {songSource === 'library' && <DifficultyRow value={difficulty} onChange={setDifficulty} />}
         </div>
@@ -846,16 +849,16 @@ function SettingStepperButton({ symbol, label, onClick, disabled }: Readonly<{
   );
 }
 
-function SettingRow({ label, value, unit, onDec, onInc, onChange, min = 1, disabled }: Readonly<{
+function SettingRow({ label, value, unit, onDec, onInc, onChange, min = 1, max = 999, disabled }: Readonly<{
   label: string; value: number; unit: string; onDec: () => void; onInc: () => void;
-  onChange?: (v: number) => void; min?: number; disabled?: boolean;
+  onChange?: (v: number) => void; min?: number; max?: number; disabled?: boolean;
 }>) {
   const [text, setText] = useState(String(value));
   useEffect(() => { setText(String(value)); }, [value]);
 
   const commit = () => {
     const n = Number.parseInt(text, 10);
-    if (onChange && !Number.isNaN(n)) onChange(Math.max(min, n));
+    if (onChange && !Number.isNaN(n)) onChange(Math.min(max, Math.max(min, n)));
     else setText(String(value));
   };
 

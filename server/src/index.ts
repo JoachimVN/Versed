@@ -93,13 +93,13 @@ interface StartGameSettings {
 }
 
 function applyStartGameSettings(game: Game, s: StartGameSettings | undefined) {
-  if (s?.bettingTime) game.bettingTime = Math.max(5, Math.min(60, Math.round(s.bettingTime)));
-  if (s?.guessingTime) game.guessingTime = Math.max(5, Math.min(60, Math.round(s.guessingTime)));
-  if (s?.totalRounds) game.totalRounds = Math.max(1, Math.round(s.totalRounds));
+  if (s?.bettingTime) game.bettingTime = Math.max(5, Math.min(999, Math.round(s.bettingTime)));
+  if (s?.guessingTime) game.guessingTime = Math.max(5, Math.min(999, Math.round(s.guessingTime)));
+  if (s?.totalRounds) game.totalRounds = Math.max(1, Math.min(999, Math.round(s.totalRounds)));
   if (s?.mode === 'race') game.mode = 'race';
   else if (s?.mode === 'party') game.mode = 'party';
   else game.mode = 'classic';
-  if (s?.raceTime) game.raceTime = Math.max(10, Math.min(60, Math.round(s.raceTime)));
+  if (s?.raceTime) game.raceTime = Math.max(10, Math.min(999, Math.round(s.raceTime)));
 
   // Party picks its own guess target per round, so these game-wide toggles
   // are Classic/Race only — leaving them set under Party would otherwise
