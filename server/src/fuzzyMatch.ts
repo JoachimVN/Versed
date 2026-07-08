@@ -11,8 +11,24 @@ const HOMOPHONES: Record<string, string> = {
   okay: 'ok',
 };
 
-const PAREN_METADATA = /^\s*(feat|ft|featuring|from|with|remaster|live|acoustic|remix|edit|version|radio|original|extended|deluxe|bonus|interlude)\b/i;
+const METADATA_WORDS = 'feat|ft|featuring|from|with|remaster(?:ed)?|live|acoustic|remix|edit|version|radio|original|extended|deluxe|bonus|interlude';
+const PAREN_METADATA = new RegExp(`^\\s*(${METADATA_WORDS})\\b`, 'i');
 const PAREN_RE = /^([^([]*)[([](([^)\]]*?))[)\]]/;
+
+// A metadata word can also sit outside the parenthetical, right before it
+// — e.g. Spotify's "34+35 Remix (feat. Doja Cat, Megan Thee Stallion)" —
+// so the pre-paren segment needs the same word stripped before comparing.
+const TRAILING_METADATA_RE = new RegExp(`\\s+(${METADATA_WORDS})\\.?\\s*$`, 'i');
+
+function stripTrailingMetadata(s: string): string {
+  let out = s;
+  let prev: string;
+  do {
+    prev = out;
+    out = out.replace(TRAILING_METADATA_RE, '');
+  } while (out !== prev);
+  return out;
+}
 
 // Some "feature added later" reissues use a bare "Title + Artist" pattern
 // instead of "Title (feat. Artist)" — e.g. Spotify's own listing for
@@ -99,6 +115,7 @@ export function isCorrectGuess(guess: string, title: string, artist?: string, fe
   const parenMatch = PAREN_RE.exec(title);
   if (parenMatch) {
     if (fuzzyMatch(g, normalize(parenMatch[1]))) return true;
+    if (fuzzyMatch(g, normalize(stripTrailingMetadata(parenMatch[1])))) return true;
     if (!PAREN_METADATA.test(parenMatch[2]) && fuzzyMatch(g, normalize(parenMatch[2]))) return true;
   }
 
