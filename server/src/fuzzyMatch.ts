@@ -30,6 +30,16 @@ function stripTrailingMetadata(s: string): string {
   return out;
 }
 
+// Spotify also attributes soundtrack cuts with a dash instead of parens, e.g.
+// `Wondering - From "High School Musical: The Musical: The Series"`. Strip
+// that whole trailing segment (not just the leading word) so guesses only
+// have to match the real title.
+const DASH_METADATA_RE = new RegExp(String.raw`\s+-\s+(${METADATA_WORDS})\b.*$`, 'i');
+
+function stripDashMetadata(s: string): string {
+  return s.replace(DASH_METADATA_RE, '').trim();
+}
+
 // Some "feature added later" reissues use a bare "Title + Artist" pattern
 // instead of "Title (feat. Artist)" — e.g. Spotify's own listing for
 // PinkPantheress's "Stateside + Zara Larsson". Only strip it when the text
@@ -120,10 +130,12 @@ export function isCorrectArtistGuess(guess: string, artist: string, featuredArti
   return false;
 }
 
-export function isCorrectGuess(guess: string, title: string, artist?: string, featuredArtists?: string): boolean {
+export function isCorrectGuess(guess: string, rawTitle: string, artist?: string, featuredArtists?: string): boolean {
   const g = normalize(guess);
   const gRaw = normalizeRaw(guess);
   if (!g) return false;
+
+  const title = stripDashMetadata(rawTitle);
   if (matchesText(g, gRaw, title)) return true;
 
   // Accept a guess matching the title before a parenthetical/subtitle, e.g.
