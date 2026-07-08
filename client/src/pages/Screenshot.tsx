@@ -167,10 +167,10 @@ const MOCK_LEADERBOARD_LONG: LeaderboardEntry[] = [
 ];
 
 const MOCK_AWARDS: Award[] = [
-  { key: 'sharpshooter', playerNames: ['Anna'], detail: '9/10 correct guesses this game, more than anyone else' },
-  { key: 'speedDemon', playerNames: ['John'], detail: '0.8s fastest correct guess' },
-  { key: 'comebackKid', playerNames: ['Olivia', 'Marcus'], detail: '+1200 point single-round swing' },
-  { key: 'duelChampion', playerNames: ['Sofia'], detail: 'Won the finale duel' },
+  { key: 'mostCorrect', playerNames: ['Anna'], detail: '9/10 correct guesses this game, more than anyone else' },
+  { key: 'fastestGuess', playerNames: ['John'], detail: '0.8s fastest correct guess' },
+  { key: 'biggestSwing', playerNames: ['Olivia', 'Marcus'], detail: '+1200 point single-round swing' },
+  { key: 'finaleWinner', playerNames: ['Sofia'], detail: 'Won the finale duel' },
 ];
 
 // LobbyView is the only view that reads `game.spotify` directly, so it needs

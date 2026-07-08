@@ -24,7 +24,7 @@ export interface LeaderboardEntry {
 
 // End-of-game superlative — mirrors server/src/types.ts's Award.
 export interface Award {
-  key: 'sharpshooter' | 'speedDemon' | 'comebackKid' | 'duelChampion';
+  key: 'mostCorrect' | 'fastestGuess' | 'biggestSwing' | 'finaleWinner';
   playerNames: string[];
   detail: string;
 }

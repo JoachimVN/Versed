@@ -159,7 +159,7 @@ export interface Player {
 // One end-of-game superlative. Ties share the award rather than picking one
 // name arbitrarily.
 export interface Award {
-  key: 'sharpshooter' | 'speedDemon' | 'comebackKid' | 'duelChampion';
+  key: 'mostCorrect' | 'fastestGuess' | 'biggestSwing' | 'finaleWinner';
   playerNames: string[];
   detail: string;
 }

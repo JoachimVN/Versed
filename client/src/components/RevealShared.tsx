@@ -4,19 +4,19 @@ import type { Award, RoundResultEvent } from '../types';
 import { LIQUID_PILL_PROPS } from './liquidGlassPresets';
 
 const AWARD_LABELS: Record<Award['key'], string> = {
-  sharpshooter: 'Smartass',
-  speedDemon: 'Speed Demon',
-  comebackKid: 'Comeback Kid',
-  duelChampion: 'Duel Champion',
+  mostCorrect: 'Most Correct',
+  fastestGuess: 'Fastest Guess',
+  biggestSwing: 'Biggest Swing',
+  finaleWinner: 'Finale Winner',
 };
 
 // Typed against Award['key'] so a future award key fails type-check here
 // instead of silently rendering a badge with no icon.
 const AWARD_ICONS: Record<Award['key'], typeof Trophy> = {
-  sharpshooter: Trophy,
-  speedDemon: Zap,
-  comebackKid: TrendingUp,
-  duelChampion: Swords,
+  mostCorrect: Trophy,
+  fastestGuess: Zap,
+  biggestSwing: TrendingUp,
+  finaleWinner: Swords,
 };
 
 // Each award gets a color already used elsewhere on this same screen, rather
@@ -25,10 +25,10 @@ const AWARD_ICONS: Record<Award['key'], typeof Trophy> = {
 // medal (fitting for a comeback climbing out of last), and violet is the
 // brand accent used on the podium's CTA button.
 const AWARD_COLORS: Record<Award['key'], string> = {
-  sharpshooter: '#fbbf24',
-  speedDemon: '#5eead4',
-  comebackKid: '#d97706',
-  duelChampion: '#c65fe8',
+  mostCorrect: '#fbbf24',
+  fastestGuess: '#5eead4',
+  biggestSwing: '#d97706',
+  finaleWinner: '#c65fe8',
 };
 
 // Final-screen superlatives — shared by Host and Play so both screens read

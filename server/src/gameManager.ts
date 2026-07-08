@@ -1724,7 +1724,7 @@ export function computeAwards(game: Game): Award[] {
   const mostCorrect = Math.max(0, ...players.map(p => p.totalCorrect));
   if (mostCorrect > 0) {
     awards.push({
-      key: 'sharpshooter',
+      key: 'mostCorrect',
       playerNames: players.filter(p => p.totalCorrect === mostCorrect).map(p => p.name),
       detail: `${mostCorrect} correct guess${mostCorrect === 1 ? '' : 'es'}`,
     });
@@ -1734,7 +1734,7 @@ export function computeAwards(game: Game): Award[] {
   if (timed.length > 0) {
     const fastestMs = Math.min(...timed.map(p => p.fastestCorrectMs!));
     awards.push({
-      key: 'speedDemon',
+      key: 'fastestGuess',
       playerNames: timed.filter(p => p.fastestCorrectMs === fastestMs).map(p => p.name),
       detail: `${(fastestMs / 1000).toFixed(1)}s`,
     });
@@ -1743,7 +1743,7 @@ export function computeAwards(game: Game): Award[] {
   const biggestSwing = Math.max(0, ...players.map(p => p.biggestSwing));
   if (biggestSwing > 0) {
     awards.push({
-      key: 'comebackKid',
+      key: 'biggestSwing',
       playerNames: players.filter(p => p.biggestSwing === biggestSwing).map(p => p.name),
       detail: `+${biggestSwing.toLocaleString()} in one round`,
     });
@@ -1751,7 +1751,7 @@ export function computeAwards(game: Game): Award[] {
 
   if (game.duelChampion) {
     const champ = game.players.get(game.duelChampion);
-    if (champ) awards.push({ key: 'duelChampion', playerNames: [champ.name], detail: 'Won the finale duel' });
+    if (champ) awards.push({ key: 'finaleWinner', playerNames: [champ.name], detail: 'Won the finale duel' });
   }
 
   return awards;
