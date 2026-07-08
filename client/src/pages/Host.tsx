@@ -2545,7 +2545,7 @@ function RevealPlayerRow({
   player, entry, delta, pity, delay, correct, instant, removePlayer,
 }: Readonly<{
   player: PlayerInfo;
-  entry?: { guess: string | null; timeMs?: number | null; live?: boolean };
+  entry?: { guess: string | null; timeMs?: number | null; live?: boolean; artistGuess?: string | null };
   delta: number;
   pity: boolean;
   delay: number;
@@ -2562,7 +2562,7 @@ function RevealPlayerRow({
     guessText = skipped ? 'skipped' : `"${entry.guess}${ellipsis}"`;
   }
   const correctCls = correct === 'exact' ? 'text-amber-400' : 'text-green-400';
-  const guessCls = (!skipped && correct !== 'none') ? `${correctCls} text-xs truncate min-w-0` : 'text-white/28 italic text-xs truncate min-w-0';
+  const guessCls = (!skipped && correct !== 'none') ? `${correctCls} text-xs break-words min-w-0` : 'text-white/28 italic text-xs break-words min-w-0';
   if (!entry) {
     return (
       <button onClick={() => removePlayer(player.name)} aria-label={`Remove ${player.name}`} className="relative group w-full text-left py-1">
@@ -2601,16 +2601,23 @@ function RevealPlayerRow({
         )}
       </div>
       {/* Row 2: guess | total score */}
-      <div className="flex justify-between items-center gap-2">
-        {guessText ? (
-          <p className={guessCls}>
-            {guessText}
-            {correct !== 'none' && entry?.timeMs != null && (
-              <span className="ml-1 text-white/45 text-xs">{(entry.timeMs / 1000).toFixed(1)}s</span>
-            )}
+      <div className="flex flex-col gap-0.5">
+        <div className="flex justify-between items-start gap-2">
+          {guessText ? (
+            <p className={guessCls}>
+              {guessText}
+              {correct !== 'none' && entry?.timeMs != null && (
+                <span className="ml-1 text-white/45 text-xs">{(entry.timeMs / 1000).toFixed(1)}s</span>
+              )}
+            </p>
+          ) : <span />}
+          <p className="text-white/60 text-xs tabular-nums shrink-0">{displayScore.toLocaleString()}</p>
+        </div>
+        {entry?.artistGuess && (
+          <p className="text-white/40 text-xs break-words" style={{ overflowWrap: 'anywhere' }}>
+            Artist: "{entry.artistGuess}"
           </p>
-        ) : <span />}
-        <p className="text-white/60 text-xs tabular-nums shrink-0">{displayScore.toLocaleString()}</p>
+        )}
       </div>
       <span className="absolute -inset-x-3 -inset-y-1 rounded-lg backdrop-blur-sm opacity-0 group-hover:opacity-100 transition-opacity" />
     </button>

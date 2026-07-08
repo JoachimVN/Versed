@@ -906,6 +906,8 @@ function buildRound(game: Game, party?: PartyConfig): Round {
     earlyGuessers: new Set(),
     guesses: new Map(),
     liveDrafts: new Map(),
+    artistGuesses: new Map(),
+    liveArtistDrafts: new Map(),
     scoredSocketIds: new Set(),
     pityAwardedTo: new Set(),
     playStartAt: null,
@@ -1198,6 +1200,8 @@ export function recordGuess(
 
   round.guesses.set(socketId, text);
   const target = effectiveTarget(game, round);
+  const trimmedArtist = artistText?.trim();
+  if (target === 'both' && trimmedArtist) round.artistGuesses.set(socketId, trimmedArtist);
   const guesserName = game.players.get(socketId)?.name ?? '';
 
   if (target === 'year') {
@@ -1373,6 +1377,8 @@ export function recordRaceGuess(
   }
 
   const { correct, artistBonus } = checkGuess(target, text, artistText, round.song);
+  const trimmedArtist = artistText?.trim();
+  if (target === 'both' && trimmedArtist) round.artistGuesses.set(socketId, trimmedArtist);
   const points = correct ? applyRaceCorrectGuess(game, round, socketId, elapsedMs, artistBonus) : 0;
 
   const allDone = ((isWinnerOnlyRound(game, round) || round.party?.finale === true) && correct)
@@ -1612,7 +1618,7 @@ export function finalizeRaceDrafts(game: Game): void {
   for (const id of game.players.keys()) {
     if (round.passed.has(id)) continue;
     const draft = round.liveDrafts.get(id)?.trim();
-    if (draft) recordRaceGuess(game, id, draft);
+    if (draft) recordRaceGuess(game, id, draft, round.liveArtistDrafts.get(id)?.trim());
   }
 }
 
@@ -1631,7 +1637,7 @@ export function finalizeGuessDrafts(
     if (round.passed.has(id)) continue;
     const draft = round.liveDrafts.get(id)?.trim();
     if (!draft) continue;
-    const result = recordGuess(game, id, draft);
+    const result = recordGuess(game, id, draft, round.liveArtistDrafts.get(id)?.trim());
     if (result?.correct) return result as { correct: true; points: number; guesserName: string; allDone: boolean };
   }
   return null;
@@ -1639,27 +1645,38 @@ export function finalizeGuessDrafts(
 
 // Called on every keystroke so an opponent's in-progress guess survives even
 // if the round ends (someone else wins) before they get a chance to submit.
-export function updateLiveDraft(game: Game, socketId: string, text: string): void {
+export function updateLiveDraft(game: Game, socketId: string, text: string, artistText?: string): void {
   const round = game.currentRound;
   if (!round) return;
   if (!isRaceFlowRound(game, round) && !round.guesserSocketIds.includes(socketId)) return;
   if (game.phase !== 'guessing' && game.phase !== 'playing') return;
   if (round.passed.has(socketId)) return;
   round.liveDrafts.set(socketId, text);
+  if (artistText !== undefined) round.liveArtistDrafts.set(socketId, artistText);
 }
 
-export function getRoundGuesses(game: Game): { name: string; guess: string | null; timeMs: number | null; live?: boolean }[] {
+export function getRoundGuesses(game: Game): { name: string; guess: string | null; timeMs: number | null; live?: boolean; artistGuess?: string | null }[] {
   const round = game.currentRound;
   if (!round) return [];
-  const results: { name: string; guess: string | null; timeMs: number | null; live?: boolean }[] = [];
+  const results: { name: string; guess: string | null; timeMs: number | null; live?: boolean; artistGuess?: string | null }[] = [];
   for (const [id, player] of game.players) {
     if (!player.name) continue;
     if (round.guesses.has(id)) {
-      results.push({ name: player.name, guess: round.guesses.get(id) ?? null, timeMs: round.guessTimes.get(id) ?? null });
+      results.push({
+        name: player.name,
+        guess: round.guesses.get(id) ?? null,
+        timeMs: round.guessTimes.get(id) ?? null,
+        artistGuess: round.artistGuesses.get(id) ?? null,
+      });
       continue;
     }
     const draft = round.liveDrafts.get(id)?.trim();
-    if (draft) results.push({ name: player.name, guess: draft, timeMs: null, live: true });
+    if (draft) {
+      results.push({
+        name: player.name, guess: draft, timeMs: null, live: true,
+        artistGuess: round.liveArtistDrafts.get(id)?.trim() || null,
+      });
+    }
   }
   return results;
 }

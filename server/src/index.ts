@@ -622,10 +622,10 @@ io.on('connection', (socket) => {
   });
 
   // ── Player: live guess draft (not yet submitted) ──────────────────────────
-  socket.on('update_guess_draft', ({ text }: { text: string }) => {
+  socket.on('update_guess_draft', ({ text, artistText }: { text: string; artistText?: string }) => {
     const game = gm.getGameBySocket(socket.id);
     if (!game) return;
-    gm.updateLiveDraft(game, socket.id, text);
+    gm.updateLiveDraft(game, socket.id, text, artistText);
   });
 
   // ── Player: skip guess ─────────────────────────────────────────────────────

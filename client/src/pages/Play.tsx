@@ -615,6 +615,7 @@ function usePlayGame(pinParam?: string): PlayState {
     setArtistGuessText: (v: string) => {
       artistGuessTextRef.current = v;
       setArtistGuessText(v);
+      socket.emit('update_guess_draft', { text: guessTextRef.current, artistText: v });
     },
     submitStealVictim: (victimName: string) => {
       socket.emit('steal_victim', { name: victimName });
@@ -634,7 +635,7 @@ function usePlayGame(pinParam?: string): PlayState {
   setGuessText: (v: string) => {
     guessTextRef.current = v;
     setGuessText(v);
-    socket.emit('update_guess_draft', { text: v });
+    socket.emit('update_guess_draft', { text: v, artistText: artistGuessTextRef.current });
   },
     join, rejoinSaved, submitBid, submitGuess, submitChoice, submitChaosTap, skipGuess, renamePlayer,
   };
@@ -1876,11 +1877,18 @@ export function RevealView({ game, result }: Readonly<{ game: PlayState; result:
         {result.playerGuesses.map(g => {
           const ellipsis = g.live ? '…' : '';
           return (
-            <div key={g.name} className="flex justify-between items-center gap-2">
-              <span className="text-white/45 text-xs min-w-0 truncate">{g.name}</span>
-              <span className="text-xs text-right min-w-0 truncate italic text-white/28">
-                {g.guess === null ? 'skipped' : `"${g.guess}${ellipsis}"`}
-              </span>
+            <div key={g.name} className="flex flex-col gap-0.5">
+              <div className="flex justify-between items-start gap-2">
+                <span className="text-white/45 text-xs min-w-0 truncate">{g.name}</span>
+                <span className="text-xs text-right min-w-0 break-words italic text-white/28" style={{ overflowWrap: 'anywhere' }}>
+                  {g.guess === null ? 'skipped' : `"${g.guess}${ellipsis}"`}
+                </span>
+              </div>
+              {g.artistGuess && (
+                <p className="text-white/28 text-xs italic text-right break-words" style={{ overflowWrap: 'anywhere' }}>
+                  Artist: "{g.artistGuess}"
+                </p>
+              )}
             </div>
           );
         })}
@@ -1904,14 +1912,21 @@ export function RevealView({ game, result }: Readonly<{ game: PlayState; result:
         const guessClass = guessTextClass(g.guess, correct);
         const ellipsis = g.live ? '…' : '';
         return (
-          <div key={g.name} className="flex justify-between items-center gap-2">
-            <span className={`text-xs min-w-0 truncate ${correct ? 'text-white font-semibold' : 'text-white/45'}`}>{g.name}</span>
-            <span className={`text-xs text-right min-w-0 truncate ${guessClass}`}>
-              {g.guess === null ? 'skipped' : `"${g.guess}${ellipsis}"`}
-              {correct && g.timeMs != null && (
-                <span className="ml-1 text-white/45 text-xs">{(g.timeMs / 1000).toFixed(1)}s</span>
-              )}
-            </span>
+          <div key={g.name} className="flex flex-col gap-0.5">
+            <div className="flex justify-between items-start gap-2">
+              <span className={`text-xs min-w-0 truncate ${correct ? 'text-white font-semibold' : 'text-white/45'}`}>{g.name}</span>
+              <span className={`text-xs text-right min-w-0 break-words ${guessClass}`} style={{ overflowWrap: 'anywhere' }}>
+                {g.guess === null ? 'skipped' : `"${g.guess}${ellipsis}"`}
+                {correct && g.timeMs != null && (
+                  <span className="ml-1 text-white/45 text-xs">{(g.timeMs / 1000).toFixed(1)}s</span>
+                )}
+              </span>
+            </div>
+            {g.artistGuess && (
+              <p className="text-white/28 text-xs italic text-right break-words" style={{ overflowWrap: 'anywhere' }}>
+                Artist: "{g.artistGuess}"
+              </p>
+            )}
           </div>
         );
       })}
