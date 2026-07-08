@@ -19,43 +19,42 @@ const AWARD_ICONS: Record<Award['key'], typeof Trophy> = {
   duelChampion: Swords,
 };
 
+// Each award gets a color already used elsewhere on this same screen, rather
+// than one flat accent for all four: gold matches the 1st-place podium medal,
+// cyan matches the existing "YOU" highlight, amber matches the 3rd-place
+// medal (fitting for a comeback climbing out of last), and violet is the
+// brand accent used on the podium's CTA button.
+const AWARD_COLORS: Record<Award['key'], string> = {
+  sharpshooter: '#fbbf24',
+  speedDemon: '#5eead4',
+  comebackKid: '#d97706',
+  duelChampion: '#c65fe8',
+};
+
 // Final-screen superlatives — shared by Host and Play so both screens read
 // identically. Ties list every qualifying name rather than picking one.
 export function AwardsStrip({ awards }: Readonly<{ awards: Award[] }>) {
   if (awards.length === 0) return null;
   return (
-    <div
-      className="relative z-10"
-      style={{
-        display: 'grid',
-        gridTemplateColumns: 'repeat(auto-fit, minmax(150px, 1fr))',
-        gap: '8px',
-        width: '100%',
-        maxWidth: '420px',
-        margin: '0 auto',
-      }}
-    >
-      {awards.map(a => {
+    <div className="relative z-10 flex flex-col" style={{ width: '100%', maxWidth: '420px', margin: '0 auto' }}>
+      {awards.map((a, i) => {
         const Icon = AWARD_ICONS[a.key];
+        const color = AWARD_COLORS[a.key];
         return (
           <div
             key={a.key}
-            className="flex items-start gap-2.5 rounded-xl px-3 py-2.5"
-            style={{ background: 'rgba(255,255,255,0.05)', border: '1px solid rgba(255,255,255,0.08)' }}
+            className="flex items-start gap-3 py-3"
+            style={i < awards.length - 1 ? { borderBottom: '1px solid rgba(255,255,255,0.08)' } : undefined}
           >
-            <div style={{
-              width: '28px', height: '28px', borderRadius: '50%', flexShrink: 0,
-              background: 'rgba(94,234,212,0.12)',
-              display: 'flex', alignItems: 'center', justifyContent: 'center',
-            }}>
-              <Icon style={{ width: '15px', height: '15px', color: 'rgba(94,234,212,0.9)' }} />
-            </div>
+            <Icon style={{ width: '16px', height: '16px', color, flexShrink: 0, marginTop: '2px' }} />
             <div className="flex flex-col min-w-0">
-              <span style={{ color: 'rgba(94,234,212,0.9)', fontSize: '0.62rem', fontWeight: 800, letterSpacing: '0.07em', textTransform: 'uppercase' }}>
-                {AWARD_LABELS[a.key]}
+              <span>
+                <span style={{ color, fontSize: '0.62rem', fontWeight: 800, letterSpacing: '0.06em', textTransform: 'uppercase' }}>
+                  {AWARD_LABELS[a.key]}
+                </span>
+                <span className="text-white font-bold text-sm" style={{ marginLeft: '7px' }}>{a.playerNames.join(' & ')}</span>
               </span>
-              <span className="text-white/80 text-xs font-semibold">{a.playerNames.join(' & ')}</span>
-              <span className="text-white/40 text-[0.68rem]">{a.detail}</span>
+              <span className="text-white/40 text-[0.68rem]" style={{ marginTop: '2px' }}>{a.detail}</span>
             </div>
           </div>
         );
