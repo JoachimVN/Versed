@@ -1,13 +1,34 @@
-import { Check, Trophy, X } from 'lucide-react';
+import { Check, Trophy, X, Zap, TrendingUp, Swords } from 'lucide-react';
 import LiquidGlass from 'liquid-glass-react';
 import type { Award, RoundResultEvent } from '../types';
 import { LIQUID_PILL_PROPS } from './liquidGlassPresets';
 
 const AWARD_LABELS: Record<Award['key'], string> = {
-  sharpshooter: 'Sharpshooter',
-  speedDemon: 'Speed Demon',
-  comebackKid: 'Comeback Kid',
-  duelChampion: 'Duel Champion',
+  mostCorrect: 'Most Correct',
+  fastestGuess: 'Fastest Guess',
+  biggestSwing: 'Biggest Swing',
+  finaleWinner: 'Finale Winner',
+};
+
+// Typed against Award['key'] so a future award key fails type-check here
+// instead of silently rendering a badge with no icon.
+const AWARD_ICONS: Record<Award['key'], typeof Trophy> = {
+  mostCorrect: Trophy,
+  fastestGuess: Zap,
+  biggestSwing: TrendingUp,
+  finaleWinner: Swords,
+};
+
+// Each award gets a color already used elsewhere on this same screen, rather
+// than one flat accent for all four: gold matches the 1st-place podium medal,
+// cyan matches the existing "YOU" highlight, amber matches the 3rd-place
+// medal (fitting for a comeback climbing out of last), and violet is the
+// brand accent used on the podium's CTA button.
+const AWARD_COLORS: Record<Award['key'], string> = {
+  mostCorrect: '#fbbf24',
+  fastestGuess: '#5eead4',
+  biggestSwing: '#d97706',
+  finaleWinner: '#c65fe8',
 };
 
 // Final-screen superlatives — shared by Host and Play so both screens read
@@ -15,20 +36,29 @@ const AWARD_LABELS: Record<Award['key'], string> = {
 export function AwardsStrip({ awards }: Readonly<{ awards: Award[] }>) {
   if (awards.length === 0) return null;
   return (
-    <div className="flex flex-col items-center gap-2 relative z-10">
-      {awards.map(a => (
-        <div
-          key={a.key}
-          className="flex flex-wrap items-center justify-center gap-x-2 gap-y-0.5 rounded-xl px-3 py-2"
-          style={{ background: 'rgba(255,255,255,0.05)', border: '1px solid rgba(255,255,255,0.08)' }}
-        >
-          <span style={{ color: 'rgba(94,234,212,0.9)', fontSize: '0.68rem', fontWeight: 800, letterSpacing: '0.08em', textTransform: 'uppercase' }}>
-            {AWARD_LABELS[a.key]}
-          </span>
-          <span className="text-white/80 text-sm font-semibold">{a.playerNames.join(' & ')}</span>
-          <span className="text-white/40 text-xs">{a.detail}</span>
-        </div>
-      ))}
+    <div className="relative z-10 flex flex-col" style={{ width: '100%', maxWidth: '420px', margin: '0 auto' }}>
+      {awards.map((a, i) => {
+        const Icon = AWARD_ICONS[a.key];
+        const color = AWARD_COLORS[a.key];
+        return (
+          <div
+            key={a.key}
+            className="flex items-start gap-3 py-3"
+            style={i < awards.length - 1 ? { borderBottom: '1px solid rgba(255,255,255,0.08)' } : undefined}
+          >
+            <Icon style={{ width: '16px', height: '16px', color, flexShrink: 0, marginTop: '2px' }} />
+            <div className="flex flex-col min-w-0">
+              <span>
+                <span style={{ color, fontSize: '0.62rem', fontWeight: 800, letterSpacing: '0.06em', textTransform: 'uppercase' }}>
+                  {AWARD_LABELS[a.key]}
+                </span>
+                <span className="text-white font-bold text-sm" style={{ marginLeft: '7px' }}>{a.playerNames.join(' & ')}</span>
+              </span>
+              <span className="text-white/40 text-[0.68rem]" style={{ marginTop: '2px' }}>{a.detail}</span>
+            </div>
+          </div>
+        );
+      })}
     </div>
   );
 }
@@ -122,6 +152,53 @@ function SongInfo({ result }: Readonly<{ result: RoundResultEvent }>) {
         </span>
       )}
     </>
+  );
+}
+
+export function FinalRoundAnswerContent({ result, label }: Readonly<{ result: RoundResultEvent; label: string }>) {
+  const artistOnly = result.artistOnly;
+  const yearOnly = result.yearOnly || result.party?.format === 'year';
+  let answerTypeLabel = 'The song was';
+  if (yearOnly) {
+    answerTypeLabel = 'The year was';
+  } else if (artistOnly) {
+    answerTypeLabel = 'The artist was';
+  }
+
+  return (
+    <div style={{ width: '262px', display: 'flex', flexDirection: 'column', alignItems: 'center', textAlign: 'center' }}>
+      <span style={{
+        color: 'rgba(255,255,255,0.45)', fontSize: '0.62rem', fontWeight: 800,
+        letterSpacing: '0.16em', textTransform: 'uppercase', marginBottom: '10px', display: 'inline-block',
+      }}>
+        Final round
+      </span>
+      <span style={{
+        fontSize: '1.35rem', fontWeight: 900, letterSpacing: '0.01em',
+        background: 'linear-gradient(to bottom left, rgba(158,18,204,0.45) 0%, transparent 52%), linear-gradient(to top right, rgba(0,238,232,0.34) 0%, transparent 52%), #fff',
+        WebkitBackgroundClip: 'text', WebkitTextFillColor: 'transparent', backgroundClip: 'text',
+        marginBottom: '14px', display: 'inline-block', minWidth: '200px',
+      }}>
+        {label}
+      </span>
+      <div style={{ width: '100%', height: '1px', background: 'rgba(255,255,255,0.08)', marginBottom: '14px' }} />
+      {yearOnly ? (
+        <>
+          <YearHeading year={result.year ? Math.floor(result.year) : '-'} compact />
+          <YearSongFooter result={result} compact />
+        </>
+      ) : (
+        <>
+          <span style={{
+            color: 'rgba(255,255,255,0.45)', fontSize: '0.6rem', letterSpacing: '0.18em', textTransform: 'uppercase',
+            marginBottom: '10px', display: 'inline-block',
+          }}>
+            {answerTypeLabel}
+          </span>
+          <SongInfo result={result} />
+        </>
+      )}
+    </div>
   );
 }
 

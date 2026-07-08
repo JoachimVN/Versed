@@ -126,12 +126,13 @@ function applyStartGameSettings(game: Game, s: StartGameSettings | undefined) {
   game.chaosLevel = typeof s?.chaosLevel === 'number' && Number.isFinite(s.chaosLevel)
     ? Math.max(0, Math.min(100, s.chaosLevel))
     : 50;
-  const requested = Array.isArray(s?.enabledEvents)
-    ? s.enabledEvents.filter((e): e is PartyEvent => (gm.ALL_PARTY_EVENTS as string[]).includes(e))
-    : [];
-  // A malformed or fully-unchecked selection must not brick party mode —
-  // fall back to "everything enabled" rather than an empty pool.
-  game.enabledEvents = requested.length > 0 ? new Set(requested) : new Set(gm.ALL_PARTY_EVENTS);
+  // A missing/non-array setting (never sent, or malformed) falls back to
+  // "everything enabled". An explicit array — even filtered down to empty,
+  // meaning the host unchecked every event — is respected as-is; the party
+  // event picker already treats an empty pool as "always play plain".
+  game.enabledEvents = Array.isArray(s?.enabledEvents)
+    ? new Set(s.enabledEvents.filter((e): e is PartyEvent => (gm.ALL_PARTY_EVENTS as string[]).includes(e)))
+    : new Set(gm.ALL_PARTY_EVENTS);
 }
 
 function applySongSource(game: Game, s: StartGameSettings | undefined): { ok: true } | { ok: false; error: string } {
@@ -621,10 +622,10 @@ io.on('connection', (socket) => {
   });
 
   // ── Player: live guess draft (not yet submitted) ──────────────────────────
-  socket.on('update_guess_draft', ({ text }: { text: string }) => {
+  socket.on('update_guess_draft', ({ text, artistText }: { text: string; artistText?: string }) => {
     const game = gm.getGameBySocket(socket.id);
     if (!game) return;
-    gm.updateLiveDraft(game, socket.id, text);
+    gm.updateLiveDraft(game, socket.id, text, artistText);
   });
 
   // ── Player: skip guess ─────────────────────────────────────────────────────

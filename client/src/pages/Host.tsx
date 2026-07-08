@@ -12,8 +12,8 @@ import { useFocusTrap } from '../hooks/useFocusTrap';
 import { useSoundEffect } from '../hooks/useSoundEffect';
 import { RankBadge } from '../components/RankBadge';
 import { useAnimatedScore } from '../hooks/useAnimatedScore';
-import { ConfettiBackground } from '../components/ConfettiBackground';
-import { NoOneGotItCardContent, GotItCardContent, YearTimelineContent, PillButton, AwardsStrip } from '../components/RevealShared';
+import { FinalRoundAnswerContent, NoOneGotItCardContent, GotItCardContent, YearTimelineContent, PillButton } from '../components/RevealShared';
+import { FinalResultsView } from '../components/FinalResults';
 import { RoundIntro, PartyBadge, PartyRevealExtras } from '../components/RoundIntro';
 import { BackButton } from '../components/BackButton';
 import { CircularTimer } from '../components/CircularTimer';
@@ -82,26 +82,36 @@ export const ALL_PARTY_EVENTS: PartyEvent[] = ['double', 'mystery', 'steal', 'sn
 const PARTY_EVENT_SET: Set<string> = new Set(ALL_PARTY_EVENTS);
 const LEGACY_CHAOS_LEVELS: Record<string, ChaosLevel> = { chill: 0, balanced: 50, chaotic: 100 };
 
+function clampFiniteNumber(value: unknown, min: number, max: number): number | undefined {
+  if (typeof value !== 'number' || !Number.isFinite(value)) return undefined;
+  return Math.max(min, Math.min(max, value));
+}
+
+function sanitizeHostSettings(settings: Partial<SavedHostSettings>): Partial<SavedHostSettings> {
+  return {
+    bettingTime: clampFiniteNumber(settings.bettingTime, 5, 999),
+    guessingTime: clampFiniteNumber(settings.guessingTime, 5, 999),
+    rounds: clampFiniteNumber(settings.rounds, 1, 999),
+    mode: MODES.has(settings.mode as Mode) ? settings.mode : undefined,
+    raceTime: clampFiniteNumber(settings.raceTime, 10, 999),
+    raceWinnerOnly: typeof settings.raceWinnerOnly === 'boolean' ? settings.raceWinnerOnly : undefined,
+    artistOnly: typeof settings.artistOnly === 'boolean' ? settings.artistOnly : undefined,
+    yearOnly: typeof settings.yearOnly === 'boolean' ? settings.yearOnly : undefined,
+    difficulty: DIFFICULTIES.has(settings.difficulty as Difficulty) ? settings.difficulty : undefined,
+    enabledEvents: Array.isArray(settings.enabledEvents)
+      ? settings.enabledEvents.filter((e: unknown): e is PartyEvent => PARTY_EVENT_SET.has(e as string))
+      : undefined,
+    chaosLevel: clampFiniteNumber(settings.chaosLevel, 0, 100) as ChaosLevel | undefined,
+  };
+}
+
 function loadSavedHostSettings(): Partial<SavedHostSettings> {
   try {
     const raw = JSON.parse(localStorage.getItem(HOST_SETTINGS_KEY) ?? '{}');
-    return {
-      bettingTime: typeof raw.bettingTime === 'number' ? raw.bettingTime : undefined,
-      guessingTime: typeof raw.guessingTime === 'number' ? raw.guessingTime : undefined,
-      rounds: typeof raw.rounds === 'number' ? raw.rounds : undefined,
-      mode: MODES.has(raw.mode) ? raw.mode : undefined,
-      raceTime: typeof raw.raceTime === 'number' ? raw.raceTime : undefined,
-      raceWinnerOnly: typeof raw.raceWinnerOnly === 'boolean' ? raw.raceWinnerOnly : undefined,
-      artistOnly: typeof raw.artistOnly === 'boolean' ? raw.artistOnly : undefined,
-      yearOnly: typeof raw.yearOnly === 'boolean' ? raw.yearOnly : undefined,
-      difficulty: DIFFICULTIES.has(raw.difficulty) ? raw.difficulty : undefined,
-      enabledEvents: Array.isArray(raw.enabledEvents)
-        ? raw.enabledEvents.filter((e: unknown): e is PartyEvent => PARTY_EVENT_SET.has(e as string))
-        : undefined,
-      chaosLevel: typeof raw.chaosLevel === 'number' && Number.isFinite(raw.chaosLevel)
-        ? Math.max(0, Math.min(100, raw.chaosLevel))
-        : LEGACY_CHAOS_LEVELS[raw.chaosLevel],
-    };
+    return sanitizeHostSettings({
+      ...raw,
+      chaosLevel: typeof raw.chaosLevel === 'string' ? LEGACY_CHAOS_LEVELS[raw.chaosLevel] : raw.chaosLevel,
+    });
   } catch { return {}; }
 }
 
@@ -165,6 +175,7 @@ export interface HostState {
   setYearOnly: (v: boolean) => void;
   setDifficulty: (v: Difficulty) => void;
   toggleEvent: (e: PartyEvent) => void;
+  setEnabledEvents: (events: PartyEvent[]) => void;
   setChaosLevel: (v: ChaosLevel) => void;
   setSongSource: (v: SongSource) => void;
   addPlaylist: (p: CustomPlaylist) => void;
@@ -239,7 +250,7 @@ function useHostGame(): HostState {
       raceTime: raceTimeSetting, raceWinnerOnly, artistOnly, yearOnly, difficulty,
       enabledEvents, chaosLevel,
     };
-    localStorage.setItem(HOST_SETTINGS_KEY, JSON.stringify(toSave));
+    localStorage.setItem(HOST_SETTINGS_KEY, JSON.stringify(sanitizeHostSettings(toSave)));
   }, [bettingTimeSetting, guessingTimeSetting, roundsSetting, mode, raceTimeSetting, raceWinnerOnly, artistOnly, yearOnly, difficulty, enabledEvents, chaosLevel]);
 
   const toggleEvent = (e: PartyEvent) => {
@@ -602,7 +613,7 @@ function useHostGame(): HostState {
     toggleSettings: () => setSettingsOpen(o => !o),
     setBettingTimeSetting, setGuessingTimeSetting, setRoundsSetting,
     setMode, setRaceTimeSetting, setRaceWinnerOnly, setArtistOnly, setYearOnly, setDifficulty,
-    toggleEvent, setChaosLevel,
+    toggleEvent, setEnabledEvents, setChaosLevel,
     setSongSource,
     addPlaylist: (p: CustomPlaylist) => setCustomPlaylists(list => list.some(x => x.id === p.id) ? list : [...list, p]),
     removePlaylist: (id: string) => setCustomPlaylists(list => list.filter(p => p.id !== id)),
@@ -692,7 +703,7 @@ function SettingsPanel({ game, open }: Readonly<{ game: HostState; open: boolean
     enabledEvents, chaosLevel,
     songSource, customPlaylists,
     setBettingTimeSetting, setGuessingTimeSetting, setRoundsSetting, setRaceTimeSetting, setRaceWinnerOnly, setArtistOnly, setYearOnly, setDifficulty,
-    toggleEvent, setChaosLevel,
+    toggleEvent, setEnabledEvents, setChaosLevel,
     setSongSource, openPlaylistPicker, removePlaylist,
     toggleSettings,
   } = game;
@@ -810,20 +821,8 @@ function SettingsPanel({ game, open }: Readonly<{ game: HostState; open: boolean
 
         {mode === 'party' && (
           <div className="px-5 pb-4 space-y-4" style={{ borderTop: '1px solid rgba(255,255,255,0.07)', paddingTop: '16px' }}>
-            <ChaosLevelRow value={chaosLevel} onChange={setChaosLevel} />
-            <div className="space-y-2">
-              <span style={{ color: 'rgba(255,255,255,0.5)', fontSize: '0.875rem' }}>Events</span>
-              <div className="space-y-2">
-                {ALL_PARTY_EVENTS.map(e => (
-                  <ToggleRow key={e} label={EVENT_LABELS[e]} value={enabledEvents.includes(e)} onToggle={() => toggleEvent(e)} />
-                ))}
-              </div>
-              {enabledEvents.length === 0 && (
-                <p style={{ color: 'rgba(251,191,36,0.85)', fontSize: '0.7rem' }}>
-                  At least one event should stay on, or rounds will always play plain.
-                </p>
-              )}
-            </div>
+            <ChaosLevelRow value={chaosLevel} onChange={setChaosLevel} disabled={enabledEvents.length === 0} />
+            <EventChipGrid enabledEvents={enabledEvents} onToggle={toggleEvent} onSetAll={setEnabledEvents} />
           </div>
         )}
       </div>
@@ -1072,30 +1071,62 @@ function SongSourceRow({ value, onChange }: Readonly<{ value: SongSource; onChan
   );
 }
 
-// Controls how often party events fire and how wild mystery's multiplier
-// spread gets. The server interpolates continuously between the three labels.
-function ChaosLevelRow({ value, onChange }: Readonly<{ value: ChaosLevel; onChange: (v: ChaosLevel) => void }>) {
+// Brand gradient (see versed-brand-design) reused here instead of a generic
+// cyan/lavender/peach scale. The track fills from the left edge to the
+// thumb, and that fill shows the exact slice of this gradient that would
+// sit there if it ran the full width — so it reads as "revealing" a single
+// static gradient rather than a flat tinted bar that moves with the thumb.
+const CHAOS_GRADIENT_STOPS: [number, number, number, number][] = [
+  [0, 0x00, 0xa6, 0xa3],   // #00a6a3
+  [50, 0x3c, 0x2c, 0x66],  // #3c2c66
+  [100, 0x9e, 0x12, 0xcc], // #9e12cc
+];
+
+function chaosColorAt(value: number): string {
+  const [lo, hi] = value <= 50 ? [CHAOS_GRADIENT_STOPS[0], CHAOS_GRADIENT_STOPS[1]] : [CHAOS_GRADIENT_STOPS[1], CHAOS_GRADIENT_STOPS[2]];
+  const t = (value - lo[0]) / (hi[0] - lo[0]);
+  const r = Math.round(lo[1] + (hi[1] - lo[1]) * t);
+  const g = Math.round(lo[2] + (hi[2] - lo[2]) * t);
+  const b = Math.round(lo[3] + (hi[3] - lo[3]) * t);
+  return `rgb(${r}, ${g}, ${b})`;
+}
+
+function chaosTrackBackground(value: number): string {
+  const dim = 'rgba(255,255,255,0.14)';
+  const stops = ['#00a6a3 0%'];
+  if (value > 50) stops.push('#3c2c66 50%');
+  stops.push(`${chaosColorAt(value)} ${value}%`, `${dim} ${value}%`, `${dim} 100%`);
+  return `linear-gradient(90deg, ${stops.join(', ')})`;
+}
+
+function ChaosLevelRow({ value, onChange, disabled }: Readonly<{ value: ChaosLevel; onChange: (v: ChaosLevel) => void; disabled?: boolean }>) {
   return (
-    <div className="space-y-2">
-      <span style={{ color: 'rgba(255,255,255,0.5)', fontSize: '0.875rem' }}>Chaos level</span>
-      <div className="rounded-xl px-3 py-2" style={{ background: 'rgba(255,255,255,0.05)', border: '1px solid rgba(255,255,255,0.08)' }}>
-        <input
-          type="range"
-          min={0}
-          max={100}
-          step={1}
-          value={value}
-          onChange={e => onChange(Number(e.target.value))}
-          aria-label="Chaos level"
-          aria-valuetext={`${Math.round(value)} percent`}
-          className="block w-full cursor-pointer"
-          style={{ accentColor: '#d8b4fe' }}
-        />
-        <div className="flex justify-between mt-1" aria-hidden="true">
-          <span style={{ color: '#7dd3fc', fontSize: '0.62rem' }}>Chill</span>
-          <span style={{ color: '#d8b4fe', fontSize: '0.62rem' }}>Balanced</span>
-          <span style={{ color: '#fca5a5', fontSize: '0.62rem' }}>Chaotic</span>
-        </div>
+    <div className="space-y-2" style={{ opacity: disabled ? 0.4 : 1, transition: 'opacity 0.2s ease' }}>
+      <div className="flex items-center justify-between">
+        <span style={{ color: 'rgba(255,255,255,0.5)', fontSize: '0.875rem' }}>Chaos level</span>
+        <span style={{ color: 'white', fontWeight: 700, fontSize: '0.875rem' }}>{Math.round(value)}%</span>
+      </div>
+      <input
+        type="range"
+        min={0}
+        max={100}
+        step={1}
+        value={value}
+        onChange={e => onChange(Number(e.target.value))}
+        disabled={disabled}
+        aria-label="Chaos level"
+        aria-valuetext={`${Math.round(value)} percent`}
+        className="chaos-slider block w-full"
+        style={{
+          '--chaos-track-bg': chaosTrackBackground(value),
+          '--chaos-color': chaosColorAt(value),
+          cursor: disabled ? 'not-allowed' : undefined,
+        } as React.CSSProperties}
+      />
+      <div className="flex justify-between" aria-hidden="true">
+        <span style={{ color: '#00a6a3', fontSize: '0.62rem' }}>Chill</span>
+        <span style={{ color: '#8b7bb8', fontSize: '0.62rem' }}>Balanced</span>
+        <span style={{ color: '#9e12cc', fontSize: '0.62rem' }}>Chaotic</span>
       </div>
     </div>
   );
@@ -1115,6 +1146,122 @@ const EVENT_LABELS: Record<PartyEvent, string> = {
   underdog: 'Underdog Boost',
   chaoshints: 'Chaos Hints',
 };
+
+// One-line explanation shown under the Events chip grid. Adapted from
+// server/src/gameManager.ts's eventIntros[...].tag (in-round announcement
+// copy), but hand-maintained here as separate, settings-list-appropriate
+// wording — can drift from the server copy if either changes.
+const EVENT_DESCRIPTIONS: Record<PartyEvent, string> = {
+  double: 'Everything is worth 2×',
+  mystery: 'Revealed after the round: ×1.5 up to ×10',
+  steal: 'Win the round, then rob another player',
+  snippet: 'The clip starts somewhere mid-song',
+  fullhints: 'Every hint on the table',
+  blind: 'No hints at all. Bid on ears alone.',
+  outro: "The clip plays the song's final stretch",
+  underdog: 'Only players in last place can answer. Hints on, ×1.5 points.',
+  chaoshints: 'One hint is a lie. Tap the fake one, fastest wins.',
+};
+
+function EventChipGrid({ enabledEvents, onToggle, onSetAll }: Readonly<{
+  enabledEvents: PartyEvent[]; onToggle: (e: PartyEvent) => void; onSetAll: (events: PartyEvent[]) => void;
+}>) {
+  const [hoveredEvent, setHoveredEvent] = useState<PartyEvent | null>(null);
+  const [focusedEvent, setFocusedEvent] = useState<PartyEvent | null>(null);
+  const [selectedEvent, setSelectedEvent] = useState<PartyEvent | null>(null);
+  const shownEvent = hoveredEvent ?? focusedEvent ?? selectedEvent;
+
+  const setAll = (events: PartyEvent[]) => {
+    onSetAll(events);
+    setSelectedEvent(null);
+  };
+
+  let caption: string;
+  let captionColor: string;
+  if (shownEvent) {
+    caption = EVENT_DESCRIPTIONS[shownEvent];
+    captionColor = 'rgba(255,255,255,0.4)';
+  } else if (enabledEvents.length === 0) {
+    caption = 'No events selected. Party rounds will play without event modifiers.';
+    captionColor = 'rgba(255,255,255,0.4)';
+  } else {
+    caption = 'Tap or hover an event for details.';
+    captionColor = 'rgba(255,255,255,0.4)';
+  }
+
+  return (
+    <div className="space-y-2">
+      <div className="flex items-center justify-between">
+        <span style={{ color: 'rgba(255,255,255,0.5)', fontSize: '0.875rem' }}>Events</span>
+        <div className="flex items-center" style={{ gap: '6px', fontSize: '0.7rem' }}>
+          <button
+            type="button"
+            onClick={() => setAll(ALL_PARTY_EVENTS)}
+            style={{ background: 'none', border: 'none', padding: 0, cursor: 'pointer', color: 'rgba(255,255,255,0.4)', transition: 'color 0.15s' }}
+            onMouseEnter={e => { e.currentTarget.style.color = 'rgba(255,255,255,0.75)'; }}
+            onMouseLeave={e => { e.currentTarget.style.color = 'rgba(255,255,255,0.4)'; }}
+          >
+            All
+          </button>
+          <span style={{ color: 'rgba(255,255,255,0.25)' }}>·</span>
+          <button
+            type="button"
+            onClick={() => setAll([])}
+            style={{ background: 'none', border: 'none', padding: 0, cursor: 'pointer', color: 'rgba(255,255,255,0.4)', transition: 'color 0.15s' }}
+            onMouseEnter={e => { e.currentTarget.style.color = 'rgba(255,255,255,0.75)'; }}
+            onMouseLeave={e => { e.currentTarget.style.color = 'rgba(255,255,255,0.4)'; }}
+          >
+            None
+          </button>
+        </div>
+      </div>
+      <div className="grid" style={{ gridTemplateColumns: '1fr 1fr', gap: '8px' }}>
+        {ALL_PARTY_EVENTS.map(e => {
+          const on = enabledEvents.includes(e);
+          return (
+            <button
+              key={e}
+              type="button"
+              aria-pressed={on}
+              aria-describedby="event-caption"
+              onClick={() => { onToggle(e); setSelectedEvent(e); }}
+              onMouseEnter={() => setHoveredEvent(e)}
+              onMouseLeave={() => setHoveredEvent(null)}
+              onFocus={() => setFocusedEvent(e)}
+              onBlur={() => setFocusedEvent(null)}
+              style={{
+                borderRadius: '10px',
+                minHeight: '46px',
+                padding: '6px 10px',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                fontSize: '0.78rem',
+                fontWeight: on ? 600 : 400,
+                textAlign: 'center',
+                lineHeight: 1.25,
+                cursor: 'pointer',
+                color: on ? 'white' : 'rgba(255,255,255,0.5)',
+                backdropFilter: 'blur(10px) saturate(130%)',
+                background: on
+                  ? 'linear-gradient(135deg, rgba(0,128,126,0.22), rgba(52,39,88,0.26) 55%, rgba(110,32,155,0.32))'
+                  : 'rgba(255,255,255,0.03)',
+                border: '1px solid rgba(255,255,255,0.06)',
+                boxShadow: on ? 'inset 0 1px 0 rgba(255,255,255,0.16)' : 'inset 0 1px 0 rgba(255,255,255,0.04)',
+                transition: 'background 0.2s ease, border-color 0.2s ease, color 0.2s ease, box-shadow 0.2s ease',
+              }}
+            >
+              {EVENT_LABELS[e]}
+            </button>
+          );
+        })}
+      </div>
+      <p id="event-caption" aria-live="polite" style={{ color: captionColor, fontSize: '0.7rem', lineHeight: 1.4, minHeight: '2.1rem' }}>
+        {caption}
+      </p>
+    </div>
+  );
+}
 
 function PlaylistList({ customPlaylists, onOpen, onRemove }: Readonly<{
   customPlaylists: CustomPlaylist[]; onOpen: () => void; onRemove: (id: string) => void;
@@ -2408,7 +2555,7 @@ function RevealPlayerRow({
   player, entry, delta, pity, delay, correct, instant, removePlayer,
 }: Readonly<{
   player: PlayerInfo;
-  entry?: { guess: string | null; timeMs?: number | null; live?: boolean };
+  entry?: { guess: string | null; timeMs?: number | null; live?: boolean; artistGuess?: string | null };
   delta: number;
   pity: boolean;
   delay: number;
@@ -2425,7 +2572,7 @@ function RevealPlayerRow({
     guessText = skipped ? 'skipped' : `"${entry.guess}${ellipsis}"`;
   }
   const correctCls = correct === 'exact' ? 'text-amber-400' : 'text-green-400';
-  const guessCls = (!skipped && correct !== 'none') ? `${correctCls} text-xs truncate min-w-0` : 'text-white/28 italic text-xs truncate min-w-0';
+  const guessCls = (!skipped && correct !== 'none') ? `${correctCls} text-xs break-words min-w-0` : 'text-white/28 italic text-xs break-words min-w-0';
   if (!entry) {
     return (
       <button onClick={() => removePlayer(player.name)} aria-label={`Remove ${player.name}`} className="relative group w-full text-left py-1">
@@ -2464,16 +2611,23 @@ function RevealPlayerRow({
         )}
       </div>
       {/* Row 2: guess | total score */}
-      <div className="flex justify-between items-center gap-2">
-        {guessText ? (
-          <p className={guessCls}>
-            {guessText}
-            {correct !== 'none' && entry?.timeMs != null && (
-              <span className="ml-1 text-white/45 text-xs">{(entry.timeMs / 1000).toFixed(1)}s</span>
-            )}
+      <div className="flex flex-col gap-0.5">
+        <div className="flex justify-between items-start gap-2">
+          {guessText ? (
+            <p className={guessCls}>
+              {guessText}
+              {correct !== 'none' && entry?.timeMs != null && (
+                <span className="ml-1 text-white/45 text-xs">{(entry.timeMs / 1000).toFixed(1)}s</span>
+              )}
+            </p>
+          ) : <span />}
+          <p className="text-white/60 text-xs tabular-nums shrink-0">{displayScore.toLocaleString()}</p>
+        </div>
+        {entry?.artistGuess && (
+          <p className="text-white/40 text-xs break-words" style={{ overflowWrap: 'anywhere' }}>
+            Artist: "{entry.artistGuess}"
           </p>
-        ) : <span />}
-        <p className="text-white/60 text-xs tabular-nums shrink-0">{displayScore.toLocaleString()}</p>
+        )}
       </div>
       <span className="absolute -inset-x-3 -inset-y-1 rounded-lg backdrop-blur-sm opacity-0 group-hover:opacity-100 transition-opacity" />
     </button>
@@ -2497,8 +2651,11 @@ function RevealShell({
   // to another duel game or actually ends the match, so it gets a neutral
   // label instead of prematurely promising "Final Results".
   let nextLabel = 'Next Round';
-  if (party?.finale) nextLabel = 'Continue';
+  const revealParty = result.party ?? party;
+  const finaleResolved = revealParty?.duelProgress?.wins.some(w => w.count >= 2) ?? false;
+  if (revealParty?.finale && !finaleResolved) nextLabel = 'Continue';
   else if (roundIndex + 1 >= totalRounds) nextLabel = 'Final Results';
+  const isFinalReveal = roundIndex + 1 >= totalRounds && (!revealParty?.finale || finaleResolved);
   return (
     <div className={`page-enter relative min-h-screen flex flex-col items-center gap-5 overflow-hidden ${wide ? 'px-2 py-6' : 'p-6'}`}>
       <img
@@ -2520,25 +2677,29 @@ function RevealShell({
         </LiquidGlass>
       </div>
 
-      <div style={{ position: 'relative', zIndex: 2 }}>
-        <PartyRevealExtras result={result} stealResult={stealResult} hints={game.hints} />
-      </div>
+      {!isFinalReveal && (
+        <div style={{ position: 'relative', zIndex: 2 }}>
+          <PartyRevealExtras result={result} stealResult={stealResult} hints={game.hints} />
+        </div>
+      )}
 
-      <div style={{ position: 'relative', zIndex: 2, background: 'rgba(255,255,255,0.05)', border: '1px solid rgba(255,255,255,0.08)', borderRadius: '16px', padding: '8px 12px', width: '310px', maxWidth: '92vw' }} className="divide-y divide-white/[0.07]">
-        {players.slice().sort((a, b) => (b.score ?? 0) - (a.score ?? 0)).map((p, i) => (
-          <RevealPlayerRow
-            key={p.name}
-            player={p}
-            entry={result.playerGuesses?.find(g => g.name === p.name)}
-            delta={roundDeltas[p.name] ?? 0}
-            pity={roundPity[p.name] ?? false}
-            delay={400 + i * 80}
-            correct={isCorrectFor(p)}
-            instant={instant}
-            removePlayer={removePlayer}
-          />
-        ))}
-      </div>
+      {!isFinalReveal && (
+        <div style={{ position: 'relative', zIndex: 2, background: 'rgba(255,255,255,0.05)', border: '1px solid rgba(255,255,255,0.08)', borderRadius: '16px', padding: '8px 12px', width: '310px', maxWidth: '92vw' }} className="divide-y divide-white/[0.07]">
+          {players.slice().sort((a, b) => (b.score ?? 0) - (a.score ?? 0)).map((p, i) => (
+            <RevealPlayerRow
+              key={p.name}
+              player={p}
+              entry={result.playerGuesses?.find(g => g.name === p.name)}
+              delta={roundDeltas[p.name] ?? 0}
+              pity={roundPity[p.name] ?? false}
+              delay={400 + i * 80}
+              correct={isCorrectFor(p)}
+              instant={instant}
+              removePlayer={removePlayer}
+            />
+          ))}
+        </div>
+      )}
 
       <PillButton
         onClick={() => socket.emit('next_round')}
@@ -2557,6 +2718,29 @@ function RevealShell({
 
 export function RevealView({ game, result, instant = false }: Readonly<{ game: HostState; result: RoundResultEvent; instant?: boolean }>) {
   const isRace = result.mode === 'race';
+  const finaleResolved = result.party?.duelProgress?.wins.some(w => w.count >= 2) ?? false;
+  const isFinalReveal = game.roundIndex + 1 >= game.totalRounds && (!result.party?.finale || finaleResolved);
+
+  if (isFinalReveal) {
+    const isYearReveal = result.party?.format === 'year' || result.yearOnly;
+    let cardHeight = 240;
+    if (result.coverUrl) {
+      cardHeight = 480;
+    } else if (isYearReveal) {
+      cardHeight = 320;
+    }
+
+    return (
+      <RevealShell
+        game={game}
+        result={result}
+        instant={instant}
+        cardHeight={cardHeight}
+        cardContent={<FinalRoundAnswerContent result={result} label="Final answer" />}
+        isCorrectFor={() => 'none'}
+      />
+    );
+  }
 
   // "Guess the year" rounds (party or the game-wide toggle) have a numeric
   // answer — dedicated card.
@@ -2621,41 +2805,13 @@ function LeaderboardRow({ entry, delay, highlight }: Readonly<{ entry: Leaderboa
 }
 
 function LeaderboardView({ game }: Readonly<{ game: HostState }>) {
-  const { phase, leaderboard, awards, roundIndex, totalRounds } = game;
-  const isFinished = phase === 'finished';
+  const { leaderboard, roundIndex, totalRounds } = game;
 
   return (
     <div className="relative min-h-screen flex flex-col p-6 gap-4">
-      {!isFinished && <div style={{ background: '#080812', position: 'fixed', inset: 0, zIndex: 0 }} />}
-      {isFinished && (
-        <>
-          <img
-            src={`${import.meta.env.BASE_URL}background6.svg`}
-            alt=""
-            aria-hidden="true"
-            style={{ position: 'fixed', inset: 0, width: '100%', height: '100%', objectFit: 'cover', zIndex: 0 }}
-          />
-          <div
-            className="fixed inset-0 pointer-events-none"
-            style={{
-              background: 'rgba(8,8,18,0.96)',
-              backdropFilter: 'blur(48px)',
-              zIndex: 1,
-            }}
-          />
-          <div style={{ position: 'fixed', inset: 0, zIndex: 2, pointerEvents: 'none', filter: 'blur(10px)' }}>
-            <ConfettiBackground burst persistAfterBurst speedMultiplier={3} />
-          </div>
-          <div
-            className="fixed inset-0 pointer-events-none"
-            style={{ background: 'rgba(8,8,18,0.45)', zIndex: 3 }}
-          />
-        </>
-      )}
+      <div style={{ background: '#080812', position: 'fixed', inset: 0, zIndex: 0 }} />
 
-      <h2 className="text-3xl font-black text-white text-center relative z-10">
-        {isFinished ? 'Final Scores' : 'Leaderboard'}
-      </h2>
+      <h2 className="text-3xl font-black text-white text-center relative z-10">Leaderboard</h2>
 
       <div className="flex-1 min-h-0 overflow-y-auto space-y-3 relative z-10">
         {leaderboard.map((e, i) => (
@@ -2668,27 +2824,29 @@ function LeaderboardView({ game }: Readonly<{ game: HostState }>) {
         ))}
       </div>
 
-      {isFinished && <AwardsStrip awards={awards} />}
-
       {/* Mid-game leaderboard is the resume point after a host page reload,
           so it needs its own way to continue the game. No "End game" here —
-          ending it would just swap to this same view's finished state, and
-          early-ending is already available from every in-round screen. */}
-      {!isFinished && (
-        <div className="relative z-10 flex justify-center pb-2">
-          <PillButton
-            onClick={() => socket.emit('next_round')}
-            label={roundIndex + 1 >= totalRounds ? 'Final Results' : 'Next Round'}
-          />
-        </div>
-      )}
-
-      {isFinished && (
-        <div className="relative z-10 flex flex-col items-center gap-3">
-          <PillButton onClick={game.newGame} label="New Game" />
-        </div>
-      )}
+          ending it would just swap to the finished screen, and early-ending
+          is already available from every in-round screen. */}
+      <div className="relative z-10 flex justify-center pb-2">
+        <PillButton
+          onClick={() => socket.emit('next_round')}
+          label={roundIndex + 1 >= totalRounds ? 'Final Results' : 'Next Round'}
+        />
+      </div>
     </div>
+  );
+}
+
+function FinalResultsWrapper({ game }: Readonly<{ game: HostState }>) {
+  const { leaderboard, awards } = game;
+  return (
+    <FinalResultsView
+      leaderboard={leaderboard}
+      awards={awards}
+      backgroundSrc={`${import.meta.env.BASE_URL}background6.svg`}
+      footer={<PillButton onClick={game.newGame} label="New Game" />}
+    />
   );
 }
 
@@ -2731,7 +2889,8 @@ export default function Host() {
       {phase === 'playing' && <PlayingView game={game} />}
       {phase === 'guessing' && <GuessingView game={game} />}
       {phase === 'reveal' && result && <RevealView game={game} result={result} />}
-      {(phase === 'leaderboard' || phase === 'finished') && <LeaderboardView game={game} />}
+      {phase === 'leaderboard' && <LeaderboardView game={game} />}
+      {phase === 'finished' && <FinalResultsWrapper game={game} />}
 
       {reconnecting && !gameExpired && (
         <div className="fixed inset-0 bg-black/70 backdrop-blur-sm flex flex-col items-center justify-center z-50 gap-3">

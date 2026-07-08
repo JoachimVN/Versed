@@ -8,7 +8,8 @@ import { useAnimatedScore } from '../hooks/useAnimatedScore';
 import { useKeyboardOpen } from '../hooks/useViewportHeight';
 import { useEscapeKey } from '../hooks/useEscapeKey';
 import { useFocusTrap } from '../hooks/useFocusTrap';
-import { NoOneGotItCardContent, GotItCardContent, YearTimelineContent, AwardsStrip } from '../components/RevealShared';
+import { FinalRoundAnswerContent, NoOneGotItCardContent, GotItCardContent, YearTimelineContent } from '../components/RevealShared';
+import { FinalResultsView } from '../components/FinalResults';
 import { RoundIntro, PartyBadge, PartyRevealExtras } from '../components/RoundIntro';
 import { BackButton } from '../components/BackButton';
 import { CircularTimer, timerColor } from '../components/CircularTimer';
@@ -615,6 +616,7 @@ function usePlayGame(pinParam?: string): PlayState {
     setArtistGuessText: (v: string) => {
       artistGuessTextRef.current = v;
       setArtistGuessText(v);
+      socket.emit('update_guess_draft', { text: guessTextRef.current, artistText: v });
     },
     submitStealVictim: (victimName: string) => {
       socket.emit('steal_victim', { name: victimName });
@@ -634,7 +636,7 @@ function usePlayGame(pinParam?: string): PlayState {
   setGuessText: (v: string) => {
     guessTextRef.current = v;
     setGuessText(v);
-    socket.emit('update_guess_draft', { text: v });
+    socket.emit('update_guess_draft', { text: v, artistText: artistGuessTextRef.current });
   },
     join, rejoinSaved, submitBid, submitGuess, submitChoice, submitChaosTap, skipGuess, renamePlayer,
   };
@@ -1363,7 +1365,7 @@ function guessInputBoxStyle(isListening: boolean, focused: boolean): { border: s
 function ChoiceButtons({ options, onPick, disabled }: Readonly<{ options: string[]; onPick: (option: string) => void; disabled?: boolean }>) {
   const style = guessInputBoxStyle(false, false);
   return (
-    <div className="w-full flex flex-col gap-2.5">
+    <div className="w-full grid grid-cols-2 gap-3">
       {options.map(option => (
         <button
           key={option}
@@ -1371,10 +1373,12 @@ function ChoiceButtons({ options, onPick, disabled }: Readonly<{ options: string
           disabled={disabled}
           onClick={() => onPick(option)}
           style={{
-            width: '100%', borderRadius: '16px',
+            borderRadius: '16px',
             border: style.border, background: style.background, boxShadow: style.boxShadow,
-            color: 'white', fontSize: '1.05rem', fontWeight: 700, textAlign: 'center',
-            padding: '18px 16px', cursor: disabled ? 'not-allowed' : 'pointer', fontFamily: 'inherit',
+            color: 'white', fontSize: '0.98rem', fontWeight: 700, textAlign: 'center',
+            padding: '16px 12px', minHeight: '104px', overflowWrap: 'anywhere',
+            display: 'flex', alignItems: 'center', justifyContent: 'center',
+            cursor: disabled ? 'not-allowed' : 'pointer', fontFamily: 'inherit',
             opacity: disabled ? 0.5 : 1, transition: 'opacity 0.2s ease',
           }}
         >
@@ -1788,6 +1792,9 @@ function PlayRevealShell({
   wide?: boolean;
 }>) {
   const { myScore, myScoreDelta, myPity, myStreak, stealResult } = game;
+  const revealParty = result.party ?? game.party;
+  const finaleResolved = revealParty?.duelProgress?.wins.some(w => w.count >= 2) ?? false;
+  const isFinalReveal = game.roundIndex + 1 >= game.totalRounds && (!revealParty?.finale || finaleResolved);
   // Ties the score bump to the shared reveal moment — for a mystery round
   // this is the first time the true (multiplied) total is visible, so it
   // should count up rather than just appear.
@@ -1812,7 +1819,7 @@ function PlayRevealShell({
           </LiquidGlass>
         </div>
 
-        <PartyRevealExtras result={result} stealResult={stealResult} hints={game.hints} />
+        {!isFinalReveal && <PartyRevealExtras result={result} stealResult={stealResult} hints={game.hints} />}
 
         {guessesList}
 
@@ -1838,6 +1845,22 @@ function PlayRevealShell({
 
 function YearRevealView({ game, result }: Readonly<{ game: PlayState; result: RoundResultEvent }>) {
   const { myName } = game;
+  const finaleResolved = result.party?.duelProgress?.wins.some(w => w.count >= 2) ?? false;
+  const isFinalReveal = game.roundIndex + 1 >= game.totalRounds && (!result.party?.finale || finaleResolved);
+  const finalLabel = game.myScoreDelta > 0 ? 'You scored' : 'Not quite';
+  if (isFinalReveal) {
+    return (
+      <PlayRevealShell
+        game={game}
+        result={result}
+        wide
+        cardHeight={result.coverUrl ? 500 : 320}
+        cardContent={<FinalRoundAnswerContent result={result} label={finalLabel} />}
+        guessesList={null}
+      />
+    );
+  }
+
   // The timeline card already shows every player's guess and distance —
   // this strip only adds what it doesn't: points earned this round.
   const scorers = (result.yearResults ?? []).filter(r => r.points > 0).sort((a, b) => b.points - a.points);
@@ -1867,6 +1890,26 @@ export function RevealView({ game, result }: Readonly<{ game: PlayState; result:
   const { myName, myRaceTimeMs } = game;
   const isRace = result.mode === 'race';
   const iGotItInRace = isRace && !!result.correctGuessers?.includes(myName);
+  const finaleResolved = result.party?.duelProgress?.wins.some(w => w.count >= 2) ?? false;
+  const isFinalReveal = game.roundIndex + 1 >= game.totalRounds && (!result.party?.finale || finaleResolved);
+  const finalLabel = game.myScoreDelta > 0 ? 'You scored' : 'Not quite';
+
+  if (isFinalReveal) {
+    return (
+      <PlayRevealShell
+        game={game}
+        result={result}
+        cardHeight={result.coverUrl ? 480 : 240}
+        cardContent={<FinalRoundAnswerContent result={result} label={finalLabel} />}
+        guessesList={null}
+        scoreExtra={iGotItInRace && myRaceTimeMs != null && (
+          <p className="text-green-400 text-xs font-semibold mt-1">
+            You got it in {(myRaceTimeMs / 1000).toFixed(1)}s
+          </p>
+        )}
+      />
+    );
+  }
 
   if (!result.correct) {
     const guessesList = result.playerGuesses && result.playerGuesses.length > 0 && (
@@ -1874,11 +1917,18 @@ export function RevealView({ game, result }: Readonly<{ game: PlayState; result:
         {result.playerGuesses.map(g => {
           const ellipsis = g.live ? '…' : '';
           return (
-            <div key={g.name} className="flex justify-between items-center gap-2">
-              <span className="text-white/45 text-xs min-w-0 truncate">{g.name}</span>
-              <span className="text-xs text-right min-w-0 truncate italic text-white/28">
-                {g.guess === null ? 'skipped' : `"${g.guess}${ellipsis}"`}
-              </span>
+            <div key={g.name} className="flex flex-col gap-0.5">
+              <div className="flex justify-between items-start gap-2">
+                <span className="text-white/45 text-xs min-w-0 truncate">{g.name}</span>
+                <span className="text-xs text-right min-w-0 break-words italic text-white/28" style={{ overflowWrap: 'anywhere' }}>
+                  {g.guess === null ? 'skipped' : `"${g.guess}${ellipsis}"`}
+                </span>
+              </div>
+              {g.artistGuess && (
+                <p className="text-white/28 text-xs italic text-right break-words" style={{ overflowWrap: 'anywhere' }}>
+                  Artist: "{g.artistGuess}"
+                </p>
+              )}
             </div>
           );
         })}
@@ -1902,14 +1952,21 @@ export function RevealView({ game, result }: Readonly<{ game: PlayState; result:
         const guessClass = guessTextClass(g.guess, correct);
         const ellipsis = g.live ? '…' : '';
         return (
-          <div key={g.name} className="flex justify-between items-center gap-2">
-            <span className={`text-xs min-w-0 truncate ${correct ? 'text-white font-semibold' : 'text-white/45'}`}>{g.name}</span>
-            <span className={`text-xs text-right min-w-0 truncate ${guessClass}`}>
-              {g.guess === null ? 'skipped' : `"${g.guess}${ellipsis}"`}
-              {correct && g.timeMs != null && (
-                <span className="ml-1 text-white/45 text-xs">{(g.timeMs / 1000).toFixed(1)}s</span>
-              )}
-            </span>
+          <div key={g.name} className="flex flex-col gap-0.5">
+            <div className="flex justify-between items-start gap-2">
+              <span className={`text-xs min-w-0 truncate ${correct ? 'text-white font-semibold' : 'text-white/45'}`}>{g.name}</span>
+              <span className={`text-xs text-right min-w-0 break-words ${guessClass}`} style={{ overflowWrap: 'anywhere' }}>
+                {g.guess === null ? 'skipped' : `"${g.guess}${ellipsis}"`}
+                {correct && g.timeMs != null && (
+                  <span className="ml-1 text-white/45 text-xs">{(g.timeMs / 1000).toFixed(1)}s</span>
+                )}
+              </span>
+            </div>
+            {g.artistGuess && (
+              <p className="text-white/28 text-xs italic text-right break-words" style={{ overflowWrap: 'anywhere' }}>
+                Artist: "{g.artistGuess}"
+              </p>
+            )}
           </div>
         );
       })}
@@ -1970,35 +2027,12 @@ function MyScoreCard({ entry, delay }: Readonly<{ entry: LeaderboardEntry; delay
 }
 
 function LeaderboardView({ game }: Readonly<{ game: PlayState }>) {
-  const { phase, myName, leaderboard, awards, newGamePin, rejoinNewGame } = game;
-  const navigate = useNavigate();
+  const { myName, leaderboard } = game;
   const myEntry = leaderboard.find(e => e.name === myName);
-  const isFinished = phase === 'finished';
 
   return (
     <div className="relative min-h-screen flex flex-col p-6 gap-4">
-      {isFinished && (
-        <>
-          <img
-            src={`${import.meta.env.BASE_URL}background5.svg`}
-            alt=""
-            aria-hidden="true"
-            style={{ position: 'fixed', inset: 0, width: '100%', height: '100%', objectFit: 'cover', zIndex: 0 }}
-          />
-          <div
-            className="fixed inset-0 pointer-events-none"
-            style={{
-              background: 'rgba(8,8,18,0.88)',
-              backdropFilter: 'blur(48px)',
-              zIndex: 1,
-            }}
-          />
-        </>
-      )}
-
-      <h2 className="text-3xl font-black text-white text-center relative z-10">
-        {isFinished ? 'Final Scores' : 'Leaderboard'}
-      </h2>
+      <h2 className="text-3xl font-black text-white text-center relative z-10">Leaderboard</h2>
 
       {myEntry && (
         <div className="relative z-10">
@@ -2020,63 +2054,78 @@ function LeaderboardView({ game }: Readonly<{ game: PlayState }>) {
         ))}
       </div>
 
-      {isFinished && <AwardsStrip awards={awards} />}
+      <p className="text-center text-white/45 text-sm relative z-10">Waiting for the host to start the next round…</p>
+    </div>
+  );
+}
 
-      {phase === 'leaderboard' && <p className="text-center text-white/45 text-sm relative z-10">Waiting for the host to start the next round…</p>}
-
-      {isFinished && (
-        <div className="relative z-10 flex flex-col items-center gap-3">
-          {newGamePin && (
-            <>
-              <div
-                className="flex items-center justify-center gap-2 rounded-2xl px-4 py-3 text-center"
-                style={{
-                  background: 'linear-gradient(90deg, rgba(0,166,163,0.16) 0%, rgba(158,18,204,0.16) 100%)',
-                  border: '1px solid rgba(0,235,219,0.35)',
-                  boxShadow: '0 0 24px rgba(0,166,163,0.12)',
-                }}
-              >
-                <p className="text-sm font-semibold" style={{ color: '#5eead4' }}>Host started a new game!</p>
-              </div>
-              <button
-                type="button"
-                className="liquid-btn glass-tint-teal relative cursor-pointer border-0 bg-transparent p-0"
-                style={{ width: '310px', height: '64px', borderRadius: '100px', background: 'rgba(0,0,0,0.001)' }}
-                onClick={rejoinNewGame}
-              >
-                <LiquidGlass
-                  style={{ position: 'absolute', top: '50%', left: '50%' }}
-                  {...LIQUID_PILL_PROPS}
-                >
-                  <div style={{ position: 'relative' }}>
-                    <div style={{ position: 'absolute', inset: '-18px -36px', borderRadius: '100px', pointerEvents: 'none', background: 'rgba(0,166,163,0.18)' }} />
-                    <span className="text-white font-bold text-xl" style={{ whiteSpace: 'nowrap', position: 'relative', display: 'inline-block', minWidth: '210px', textAlign: 'center' }}>
-                      Play Again
-                    </span>
-                  </div>
-                </LiquidGlass>
-              </button>
-            </>
-          )}
-
+function FinalResultsFooter({ game }: Readonly<{ game: PlayState }>) {
+  const { newGamePin, rejoinNewGame } = game;
+  const navigate = useNavigate();
+  return (
+    <>
+      {newGamePin && (
+        <>
+          <div
+            className="flex items-center justify-center gap-2 rounded-2xl px-4 py-3 text-center"
+            style={{
+              background: 'linear-gradient(90deg, rgba(0,166,163,0.16) 0%, rgba(158,18,204,0.16) 100%)',
+              border: '1px solid rgba(0,235,219,0.35)',
+              boxShadow: '0 0 24px rgba(0,166,163,0.12)',
+            }}
+          >
+            <p className="text-sm font-semibold" style={{ color: '#5eead4' }}>Host started a new game!</p>
+          </div>
           <button
             type="button"
-            className="liquid-btn relative cursor-pointer border-0 bg-transparent p-0"
+            className="liquid-btn glass-tint-teal relative cursor-pointer border-0 bg-transparent p-0"
             style={{ width: '310px', height: '64px', borderRadius: '100px', background: 'rgba(0,0,0,0.001)' }}
-            onClick={() => navigate('/')}
+            onClick={rejoinNewGame}
           >
             <LiquidGlass
               style={{ position: 'absolute', top: '50%', left: '50%' }}
               {...LIQUID_PILL_PROPS}
             >
-              <span className="text-white font-bold text-xl" style={{ whiteSpace: 'nowrap', position: 'relative', display: 'inline-block', minWidth: '210px', textAlign: 'center' }}>
-                Leave
-              </span>
+              <div style={{ position: 'relative' }}>
+                <div style={{ position: 'absolute', inset: '-18px -36px', borderRadius: '100px', pointerEvents: 'none', background: 'rgba(0,166,163,0.18)' }} />
+                <span className="text-white font-bold text-xl" style={{ whiteSpace: 'nowrap', position: 'relative', display: 'inline-block', minWidth: '210px', textAlign: 'center' }}>
+                  Play Again
+                </span>
+              </div>
             </LiquidGlass>
           </button>
-        </div>
+        </>
       )}
-    </div>
+
+      <button
+        type="button"
+        className="liquid-btn relative cursor-pointer border-0 bg-transparent p-0"
+        style={{ width: '310px', height: '64px', borderRadius: '100px', background: 'rgba(0,0,0,0.001)' }}
+        onClick={() => navigate('/')}
+      >
+        <LiquidGlass
+          style={{ position: 'absolute', top: '50%', left: '50%' }}
+          {...LIQUID_PILL_PROPS}
+        >
+          <span className="text-white font-bold text-xl" style={{ whiteSpace: 'nowrap', position: 'relative', display: 'inline-block', minWidth: '210px', textAlign: 'center' }}>
+            Leave
+          </span>
+        </LiquidGlass>
+      </button>
+    </>
+  );
+}
+
+function FinalResultsWrapper({ game }: Readonly<{ game: PlayState }>) {
+  const { leaderboard, awards, myName } = game;
+  return (
+    <FinalResultsView
+      leaderboard={leaderboard}
+      awards={awards}
+      myName={myName}
+      backgroundSrc={`${import.meta.env.BASE_URL}background5.svg`}
+      footer={<FinalResultsFooter game={game} />}
+    />
   );
 }
 
@@ -2145,7 +2194,8 @@ export default function Play() {
           ? <YearRevealView game={game} result={result} />
           : <RevealView game={game} result={result} />
       )}
-      {(phase === 'leaderboard' || phase === 'finished') && <LeaderboardView game={game} />}
+      {phase === 'leaderboard' && <LeaderboardView game={game} />}
+      {phase === 'finished' && <FinalResultsWrapper game={game} />}
 
       <RoundIntro party={game.party} roundKey={game.roundIndex} dismissible={false} />
       {game.stealVictims && <StealPicker victims={game.stealVictims} onPick={game.submitStealVictim} onSkip={game.skipSteal} />}

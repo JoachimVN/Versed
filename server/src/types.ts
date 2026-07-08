@@ -131,6 +131,8 @@ export interface Round {
   earlyGuessers: Set<string>; // guessers who opted in before their listening time expired
   guesses: Map<string, string | null>; // socketId → text submitted (null = skipped)
   liveDrafts: Map<string, string>; // socketId → text currently typed, not yet submitted
+  artistGuesses: Map<string, string>; // socketId → artist text submitted (only when target === 'both')
+  liveArtistDrafts: Map<string, string>; // socketId → artist text currently typed, not yet submitted
   correctGuesserName?: string;      // classic mode: name of the player who got it right
   scoredSocketIds: Set<string>;     // players who earned points this round — everyone else's streak resets when the round ends
   pityAwardedTo: Set<string>;       // players whose score this round included the catch-up pity bonus
@@ -157,7 +159,7 @@ export interface Player {
 // One end-of-game superlative. Ties share the award rather than picking one
 // name arbitrarily.
 export interface Award {
-  key: 'sharpshooter' | 'speedDemon' | 'comebackKid' | 'duelChampion';
+  key: 'mostCorrect' | 'fastestGuess' | 'biggestSwing' | 'finaleWinner';
   playerNames: string[];
   detail: string;
 }

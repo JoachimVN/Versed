@@ -24,7 +24,7 @@ export interface LeaderboardEntry {
 
 // End-of-game superlative — mirrors server/src/types.ts's Award.
 export interface Award {
-  key: 'sharpshooter' | 'speedDemon' | 'comebackKid' | 'duelChampion';
+  key: 'mostCorrect' | 'fastestGuess' | 'biggestSwing' | 'finaleWinner';
   playerNames: string[];
   detail: string;
 }
@@ -79,7 +79,7 @@ export interface RoundResultEvent {
   artistOnly?: boolean;
   yearOnly?: boolean;
   correctGuessers?: string[];
-  playerGuesses?: { name: string; guess: string | null; timeMs?: number | null; live?: boolean }[];
+  playerGuesses?: { name: string; guess: string | null; timeMs?: number | null; live?: boolean; artistGuess?: string | null }[];
   party?: PartyInfo;
   yearResults?: YearResult[];
   stealPending?: string;

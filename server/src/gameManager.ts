@@ -906,6 +906,8 @@ function buildRound(game: Game, party?: PartyConfig): Round {
     earlyGuessers: new Set(),
     guesses: new Map(),
     liveDrafts: new Map(),
+    artistGuesses: new Map(),
+    liveArtistDrafts: new Map(),
     scoredSocketIds: new Set(),
     pityAwardedTo: new Set(),
     playStartAt: null,
@@ -1198,6 +1200,8 @@ export function recordGuess(
 
   round.guesses.set(socketId, text);
   const target = effectiveTarget(game, round);
+  const trimmedArtist = artistText?.trim();
+  if (target === 'both' && trimmedArtist) round.artistGuesses.set(socketId, trimmedArtist);
   const guesserName = game.players.get(socketId)?.name ?? '';
 
   if (target === 'year') {
@@ -1373,6 +1377,8 @@ export function recordRaceGuess(
   }
 
   const { correct, artistBonus } = checkGuess(target, text, artistText, round.song);
+  const trimmedArtist = artistText?.trim();
+  if (target === 'both' && trimmedArtist) round.artistGuesses.set(socketId, trimmedArtist);
   const points = correct ? applyRaceCorrectGuess(game, round, socketId, elapsedMs, artistBonus) : 0;
 
   const allDone = ((isWinnerOnlyRound(game, round) || round.party?.finale === true) && correct)
@@ -1428,6 +1434,7 @@ function applyChaosHintTap(
     player.fastestCorrectMs = player.fastestCorrectMs === null ? elapsedMs : Math.min(player.fastestCorrectMs, elapsedMs);
     round.scoredSocketIds.add(socketId);
   }
+  recordFinaleRaceWin(game, round, socketId, isFirst);
   return points;
 }
 
@@ -1441,7 +1448,7 @@ export function recordChaosHintTap(
   if (round.passed.has(socketId)) return null;
   const restricted = restrictedParticipantIds(round);
   if (restricted && !restricted.includes(socketId)) return null;
-  if (isWinnerOnlyRound(game, round) && round.firstCorrectAt !== null) return null;
+  if ((isWinnerOnlyRound(game, round) || round.party?.finale) && round.firstCorrectAt !== null) return null;
 
   const elapsedMs = Date.now() - (round.playStartAt ?? Date.now());
   round.chaosTapped.set(socketId, tappedIndex);
@@ -1451,7 +1458,8 @@ export function recordChaosHintTap(
   const correct = tappedIndex === round.chaosFakeIndex;
   const points = applyChaosHintTap(game, round, socketId, tappedIndex, elapsedMs);
 
-  const allDone = (isWinnerOnlyRound(game, round) && correct) || participants.every(id => round.passed.has(id));
+  const allDone = ((isWinnerOnlyRound(game, round) || round.party?.finale === true) && correct)
+    || participants.every(id => round.passed.has(id));
   return { correct, points, elapsedMs, allDone };
 }
 
@@ -1611,7 +1619,7 @@ export function finalizeRaceDrafts(game: Game): void {
   for (const id of game.players.keys()) {
     if (round.passed.has(id)) continue;
     const draft = round.liveDrafts.get(id)?.trim();
-    if (draft) recordRaceGuess(game, id, draft);
+    if (draft) recordRaceGuess(game, id, draft, round.liveArtistDrafts.get(id)?.trim());
   }
 }
 
@@ -1630,7 +1638,7 @@ export function finalizeGuessDrafts(
     if (round.passed.has(id)) continue;
     const draft = round.liveDrafts.get(id)?.trim();
     if (!draft) continue;
-    const result = recordGuess(game, id, draft);
+    const result = recordGuess(game, id, draft, round.liveArtistDrafts.get(id)?.trim());
     if (result?.correct) return result as { correct: true; points: number; guesserName: string; allDone: boolean };
   }
   return null;
@@ -1638,27 +1646,38 @@ export function finalizeGuessDrafts(
 
 // Called on every keystroke so an opponent's in-progress guess survives even
 // if the round ends (someone else wins) before they get a chance to submit.
-export function updateLiveDraft(game: Game, socketId: string, text: string): void {
+export function updateLiveDraft(game: Game, socketId: string, text: string, artistText?: string): void {
   const round = game.currentRound;
   if (!round) return;
   if (!isRaceFlowRound(game, round) && !round.guesserSocketIds.includes(socketId)) return;
   if (game.phase !== 'guessing' && game.phase !== 'playing') return;
   if (round.passed.has(socketId)) return;
   round.liveDrafts.set(socketId, text);
+  if (artistText !== undefined) round.liveArtistDrafts.set(socketId, artistText);
 }
 
-export function getRoundGuesses(game: Game): { name: string; guess: string | null; timeMs: number | null; live?: boolean }[] {
+export function getRoundGuesses(game: Game): { name: string; guess: string | null; timeMs: number | null; live?: boolean; artistGuess?: string | null }[] {
   const round = game.currentRound;
   if (!round) return [];
-  const results: { name: string; guess: string | null; timeMs: number | null; live?: boolean }[] = [];
+  const results: { name: string; guess: string | null; timeMs: number | null; live?: boolean; artistGuess?: string | null }[] = [];
   for (const [id, player] of game.players) {
     if (!player.name) continue;
     if (round.guesses.has(id)) {
-      results.push({ name: player.name, guess: round.guesses.get(id) ?? null, timeMs: round.guessTimes.get(id) ?? null });
+      results.push({
+        name: player.name,
+        guess: round.guesses.get(id) ?? null,
+        timeMs: round.guessTimes.get(id) ?? null,
+        artistGuess: round.artistGuesses.get(id) ?? null,
+      });
       continue;
     }
     const draft = round.liveDrafts.get(id)?.trim();
-    if (draft) results.push({ name: player.name, guess: draft, timeMs: null, live: true });
+    if (draft) {
+      results.push({
+        name: player.name, guess: draft, timeMs: null, live: true,
+        artistGuess: round.liveArtistDrafts.get(id)?.trim() || null,
+      });
+    }
   }
   return results;
 }
@@ -1706,7 +1725,7 @@ export function computeAwards(game: Game): Award[] {
   const mostCorrect = Math.max(0, ...players.map(p => p.totalCorrect));
   if (mostCorrect > 0) {
     awards.push({
-      key: 'sharpshooter',
+      key: 'mostCorrect',
       playerNames: players.filter(p => p.totalCorrect === mostCorrect).map(p => p.name),
       detail: `${mostCorrect} correct guess${mostCorrect === 1 ? '' : 'es'}`,
     });
@@ -1716,7 +1735,7 @@ export function computeAwards(game: Game): Award[] {
   if (timed.length > 0) {
     const fastestMs = Math.min(...timed.map(p => p.fastestCorrectMs!));
     awards.push({
-      key: 'speedDemon',
+      key: 'fastestGuess',
       playerNames: timed.filter(p => p.fastestCorrectMs === fastestMs).map(p => p.name),
       detail: `${(fastestMs / 1000).toFixed(1)}s`,
     });
@@ -1725,7 +1744,7 @@ export function computeAwards(game: Game): Award[] {
   const biggestSwing = Math.max(0, ...players.map(p => p.biggestSwing));
   if (biggestSwing > 0) {
     awards.push({
-      key: 'comebackKid',
+      key: 'biggestSwing',
       playerNames: players.filter(p => p.biggestSwing === biggestSwing).map(p => p.name),
       detail: `+${biggestSwing.toLocaleString()} in one round`,
     });
@@ -1733,7 +1752,7 @@ export function computeAwards(game: Game): Award[] {
 
   if (game.duelChampion) {
     const champ = game.players.get(game.duelChampion);
-    if (champ) awards.push({ key: 'duelChampion', playerNames: [champ.name], detail: 'Won the finale duel' });
+    if (champ) awards.push({ key: 'finaleWinner', playerNames: [champ.name], detail: 'Won the finale duel' });
   }
 
   return awards;
