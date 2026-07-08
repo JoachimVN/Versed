@@ -13,7 +13,7 @@ import { useSoundEffect } from '../hooks/useSoundEffect';
 import { RankBadge } from '../components/RankBadge';
 import { useAnimatedScore } from '../hooks/useAnimatedScore';
 import { ConfettiBackground } from '../components/ConfettiBackground';
-import { NoOneGotItCardContent, GotItCardContent, YearTimelineContent, PillButton } from '../components/RevealShared';
+import { NoOneGotItCardContent, GotItCardContent, YearTimelineContent, PillButton, AwardsStrip } from '../components/RevealShared';
 import { RoundIntro, PartyBadge, PartyRevealExtras } from '../components/RoundIntro';
 import { BackButton } from '../components/BackButton';
 import { CircularTimer } from '../components/CircularTimer';
@@ -21,7 +21,7 @@ import { AudioBars } from '../components/AudioBars';
 import { LIQUID_CARD_PROPS, LIQUID_PILL_PROPS } from '../components/liquidGlassPresets';
 import { APP_NAME, BACKEND_URL, RACE_TIME } from '../config';
 import { commonPhaseAnnouncement } from '../utils/phaseAnnouncement';
-import type { Hint, LeaderboardEntry, PartyInfo, PlayerInfo, PlaylistTrackInput, RoundResultEvent, SongSource } from '../types';
+import type { Award, ChaosLevel, Hint, LeaderboardEntry, PartyEvent, PartyInfo, PlayerInfo, PlaylistTrackInput, RoundResultEvent, SongSource } from '../types';
 
 type Phase = 'connect' | 'lobby' | 'betting' | 'playing' | 'guessing' | 'reveal' | 'leaderboard' | 'finished';
 type Mode = 'classic' | 'race' | 'party';
@@ -73,10 +73,14 @@ type PlaylistPicker = ReturnType<typeof usePlaylistPicker>;
 interface SavedHostSettings {
   bettingTime: number; guessingTime: number; rounds: number; mode: Mode;
   raceTime: number; raceWinnerOnly: boolean; artistOnly: boolean; yearOnly: boolean; difficulty: Difficulty;
+  enabledEvents: PartyEvent[]; chaosLevel: ChaosLevel;
 }
 const HOST_SETTINGS_KEY = 'versed_host_settings';
 const MODES: Set<Mode> = new Set(['classic', 'race', 'party']);
 const DIFFICULTIES: Set<Difficulty> = new Set(['easy', 'medium', 'hard']);
+export const ALL_PARTY_EVENTS: PartyEvent[] = ['double', 'mystery', 'steal', 'snippet', 'fullhints', 'blind', 'outro', 'underdog', 'chaoshints'];
+const PARTY_EVENT_SET: Set<string> = new Set(ALL_PARTY_EVENTS);
+const LEGACY_CHAOS_LEVELS: Record<string, ChaosLevel> = { chill: 0, balanced: 50, chaotic: 100 };
 
 function loadSavedHostSettings(): Partial<SavedHostSettings> {
   try {
@@ -91,6 +95,12 @@ function loadSavedHostSettings(): Partial<SavedHostSettings> {
       artistOnly: typeof raw.artistOnly === 'boolean' ? raw.artistOnly : undefined,
       yearOnly: typeof raw.yearOnly === 'boolean' ? raw.yearOnly : undefined,
       difficulty: DIFFICULTIES.has(raw.difficulty) ? raw.difficulty : undefined,
+      enabledEvents: Array.isArray(raw.enabledEvents)
+        ? raw.enabledEvents.filter((e: unknown): e is PartyEvent => PARTY_EVENT_SET.has(e as string))
+        : undefined,
+      chaosLevel: typeof raw.chaosLevel === 'number' && Number.isFinite(raw.chaosLevel)
+        ? Math.max(0, Math.min(100, raw.chaosLevel))
+        : LEGACY_CHAOS_LEVELS[raw.chaosLevel],
     };
   } catch { return {}; }
 }
@@ -115,6 +125,7 @@ export interface HostState {
   roundDeltas: Record<string, number>;
   roundPity: Record<string, boolean>;
   leaderboard: LeaderboardEntry[];
+  awards: Award[];
   copied: boolean;
   playProgress: number;
   inviteUrl: string;
@@ -128,6 +139,8 @@ export interface HostState {
   artistOnly: boolean;
   yearOnly: boolean;
   difficulty: Difficulty;
+  enabledEvents: PartyEvent[];
+  chaosLevel: ChaosLevel;
   songSource: SongSource;
   customPlaylists: CustomPlaylist[];
   playlistPicker: PlaylistPicker;
@@ -151,6 +164,8 @@ export interface HostState {
   setArtistOnly: (v: boolean) => void;
   setYearOnly: (v: boolean) => void;
   setDifficulty: (v: Difficulty) => void;
+  toggleEvent: (e: PartyEvent) => void;
+  setChaosLevel: (v: ChaosLevel) => void;
   setSongSource: (v: SongSource) => void;
   addPlaylist: (p: CustomPlaylist) => void;
   removePlaylist: (id: string) => void;
@@ -194,6 +209,7 @@ function useHostGame(): HostState {
   const [roundDeltas, setRoundDeltas] = useState<Record<string, number>>({});
   const [roundPity, setRoundPity] = useState<Record<string, boolean>>({});
   const [leaderboard, setLeaderboard] = useState<LeaderboardEntry[]>([]);
+  const [awards, setAwards] = useState<Award[]>([]);
   const [copied, setCopied] = useState(false);
   const [playProgress, setPlayProgress] = useState(0);
   const [settingsOpen, setSettingsOpen] = useState(false);
@@ -206,6 +222,8 @@ function useHostGame(): HostState {
   const [artistOnly, setArtistOnly] = useState(savedSettings.artistOnly ?? false);
   const [yearOnly, setYearOnly] = useState(savedSettings.yearOnly ?? false);
   const [difficulty, setDifficulty] = useState<Difficulty>(savedSettings.difficulty ?? 'hard');
+  const [enabledEvents, setEnabledEvents] = useState<PartyEvent[]>(savedSettings.enabledEvents ?? ALL_PARTY_EVENTS);
+  const [chaosLevel, setChaosLevel] = useState<ChaosLevel>(savedSettings.chaosLevel ?? 50);
   // Not persisted in SavedHostSettings, deliberately: a reload can't restore
   // the actual fetched track data, so a restored 'playlist' flag with no
   // tracks would leave the host in a confusing half-configured state.
@@ -219,9 +237,14 @@ function useHostGame(): HostState {
     const toSave: SavedHostSettings = {
       bettingTime: bettingTimeSetting, guessingTime: guessingTimeSetting, rounds: roundsSetting, mode,
       raceTime: raceTimeSetting, raceWinnerOnly, artistOnly, yearOnly, difficulty,
+      enabledEvents, chaosLevel,
     };
     localStorage.setItem(HOST_SETTINGS_KEY, JSON.stringify(toSave));
-  }, [bettingTimeSetting, guessingTimeSetting, roundsSetting, mode, raceTimeSetting, raceWinnerOnly, artistOnly, yearOnly, difficulty]);
+  }, [bettingTimeSetting, guessingTimeSetting, roundsSetting, mode, raceTimeSetting, raceWinnerOnly, artistOnly, yearOnly, difficulty, enabledEvents, chaosLevel]);
+
+  const toggleEvent = (e: PartyEvent) => {
+    setEnabledEvents(prev => (prev.includes(e) ? prev.filter(x => x !== e) : [...prev, e]));
+  };
   const [party, setParty] = useState<PartyInfo | null>(null);
   const [stealResult, setStealResult] = useState<{ thief: string; victim: string; amount: number; skipped?: boolean } | null>(null);
   const [answeredCount, setAnsweredCount] = useState(0);
@@ -284,7 +307,8 @@ function useHostGame(): HostState {
         const fresh = freshLoadRef.current;
         freshLoadRef.current = false;
         socket.emit('rejoin_host', { pin: pinRef.current, fresh }, (res: {
-          players: PlayerInfo[]; phase: string; roundIndex: number; totalRounds: number; leaderboard: LeaderboardEntry[];
+          players: PlayerInfo[]; phase: string; roundIndex: number; totalRounds: number;
+          leaderboard: LeaderboardEntry[]; awards: Award[];
         } | { error: string }) => {
           if ('error' in res) {
             if (fresh) {
@@ -305,6 +329,7 @@ function useHostGame(): HostState {
               setTotalRounds(res.totalRounds);
               if (res.phase === 'leaderboard' || res.phase === 'finished') {
                 setLeaderboard(res.leaderboard);
+                setAwards(res.awards);
                 setPhase(res.phase);
               }
             }
@@ -461,7 +486,7 @@ function useHostGame(): HostState {
       setPhase('leaderboard');
     });
 
-    socket.on('game_over', ({ leaderboard: lb }: { leaderboard: LeaderboardEntry[] }) => {
+    socket.on('game_over', ({ leaderboard: lb, awards: aw }: { leaderboard: LeaderboardEntry[]; awards?: Award[] }) => {
       // The game can end mid-song now (host's "End game"), so stop playback
       // and timers the same way round_result does.
       ++playGenRef.current;
@@ -470,6 +495,7 @@ function useHostGame(): HostState {
       spotify.pauseTrack();
       setSongPlaying(false);
       setLeaderboard(lb);
+      setAwards(aw ?? []);
       setPhase('finished');
     });
 
@@ -512,7 +538,7 @@ function useHostGame(): HostState {
       settings: {
         bettingTime: bettingTimeSetting, guessingTime: guessingTimeSetting,
         totalRounds: roundsSetting, mode, raceTime: raceTimeSetting, raceWinnerOnly, artistOnly, yearOnly,
-        difficulty, songSource,
+        difficulty, songSource, enabledEvents, chaosLevel,
         customPlaylist: songSource === 'playlist' && customPlaylists.length > 0
           ? {
             id: customPlaylists.map(p => p.id).join(','),
@@ -566,15 +592,17 @@ function useHostGame(): HostState {
   return {
     spotify, phase, pin, players, roundIndex, totalRounds, hints,
     bettingTime, timeLeft, timerTotal, bidCount, countdown, guesserNames, lowestBid, playerBids,
-    result, roundDeltas, roundPity, leaderboard, copied, playProgress, inviteUrl,
+    result, roundDeltas, roundPity, leaderboard, awards, copied, playProgress, inviteUrl,
     settingsOpen, bettingTimeSetting, guessingTimeSetting, roundsSetting,
     mode, raceTimeSetting, raceWinnerOnly, artistOnly, yearOnly, difficulty,
+    enabledEvents, chaosLevel,
     songSource, customPlaylists, playlistPicker, playlistPickerOpen, startError,
     party, stealResult, answeredCount,
     reconnecting, reconnectingCount: reconnectingNames.size, gameExpired, songPlaying, songTempo,
     toggleSettings: () => setSettingsOpen(o => !o),
     setBettingTimeSetting, setGuessingTimeSetting, setRoundsSetting,
     setMode, setRaceTimeSetting, setRaceWinnerOnly, setArtistOnly, setYearOnly, setDifficulty,
+    toggleEvent, setChaosLevel,
     setSongSource,
     addPlaylist: (p: CustomPlaylist) => setCustomPlaylists(list => list.some(x => x.id === p.id) ? list : [...list, p]),
     removePlaylist: (id: string) => setCustomPlaylists(list => list.filter(p => p.id !== id)),
@@ -661,8 +689,10 @@ function BidTimeline({ bids, lowestBid }: Readonly<{ bids: { name: string; bid: 
 function SettingsPanel({ game, open }: Readonly<{ game: HostState; open: boolean }>) {
   const {
     mode, bettingTimeSetting, guessingTimeSetting, roundsSetting, raceTimeSetting, raceWinnerOnly, artistOnly, yearOnly, difficulty,
+    enabledEvents, chaosLevel,
     songSource, customPlaylists,
     setBettingTimeSetting, setGuessingTimeSetting, setRoundsSetting, setRaceTimeSetting, setRaceWinnerOnly, setArtistOnly, setYearOnly, setDifficulty,
+    toggleEvent, setChaosLevel,
     setSongSource, openPlaylistPicker, removePlaylist,
     toggleSettings,
   } = game;
@@ -707,8 +737,10 @@ function SettingsPanel({ game, open }: Readonly<{ game: HostState; open: boolean
       }}
     >
       <div
-        className="w-72 rounded-2xl overflow-hidden"
+        className="w-72 rounded-2xl overflow-x-hidden overflow-y-auto"
         style={{
+          maxHeight: 'calc(100dvh - 88px)',
+          overscrollBehavior: 'contain',
           background: 'rgba(10, 6, 26, 0.65)',
           backdropFilter: 'blur(32px)',
           border: '1px solid rgba(255,255,255,0.09)',
@@ -773,6 +805,25 @@ function SettingsPanel({ game, open }: Readonly<{ game: HostState; open: boolean
             )}
             <ToggleRow label="Artist only" value={artistOnly} disabled={yearOnly} onToggle={toggleArtistOnly} />
             <ToggleRow label="Guess the year" value={yearOnly} onToggle={toggleYearOnly} />
+          </div>
+        )}
+
+        {mode === 'party' && (
+          <div className="px-5 pb-4 space-y-4" style={{ borderTop: '1px solid rgba(255,255,255,0.07)', paddingTop: '16px' }}>
+            <ChaosLevelRow value={chaosLevel} onChange={setChaosLevel} />
+            <div className="space-y-2">
+              <span style={{ color: 'rgba(255,255,255,0.5)', fontSize: '0.875rem' }}>Events</span>
+              <div className="space-y-2">
+                {ALL_PARTY_EVENTS.map(e => (
+                  <ToggleRow key={e} label={EVENT_LABELS[e]} value={enabledEvents.includes(e)} onToggle={() => toggleEvent(e)} />
+                ))}
+              </div>
+              {enabledEvents.length === 0 && (
+                <p style={{ color: 'rgba(251,191,36,0.85)', fontSize: '0.7rem' }}>
+                  At least one event should stay on, or rounds will always play plain.
+                </p>
+              )}
+            </div>
           </div>
         )}
       </div>
@@ -1020,6 +1071,50 @@ function SongSourceRow({ value, onChange }: Readonly<{ value: SongSource; onChan
     </div>
   );
 }
+
+// Controls how often party events fire and how wild mystery's multiplier
+// spread gets. The server interpolates continuously between the three labels.
+function ChaosLevelRow({ value, onChange }: Readonly<{ value: ChaosLevel; onChange: (v: ChaosLevel) => void }>) {
+  return (
+    <div className="space-y-2">
+      <span style={{ color: 'rgba(255,255,255,0.5)', fontSize: '0.875rem' }}>Chaos level</span>
+      <div className="rounded-xl px-3 py-2" style={{ background: 'rgba(255,255,255,0.05)', border: '1px solid rgba(255,255,255,0.08)' }}>
+        <input
+          type="range"
+          min={0}
+          max={100}
+          step={1}
+          value={value}
+          onChange={e => onChange(Number(e.target.value))}
+          aria-label="Chaos level"
+          aria-valuetext={`${Math.round(value)} percent`}
+          className="block w-full cursor-pointer"
+          style={{ accentColor: '#d8b4fe' }}
+        />
+        <div className="flex justify-between mt-1" aria-hidden="true">
+          <span style={{ color: '#7dd3fc', fontSize: '0.62rem' }}>Chill</span>
+          <span style={{ color: '#d8b4fe', fontSize: '0.62rem' }}>Balanced</span>
+          <span style={{ color: '#fca5a5', fontSize: '0.62rem' }}>Chaotic</span>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// Human labels for the per-event on/off checklist — kept separate from
+// RoundIntro.tsx's EVENT_BITS/server's eventIntros since those live in a
+// different module and are styled for in-round display, not a settings list.
+const EVENT_LABELS: Record<PartyEvent, string> = {
+  double: 'Double Points',
+  mystery: 'Mystery Multiplier',
+  steal: 'Steal Round',
+  snippet: 'Snippet Roulette',
+  fullhints: 'Open Book',
+  blind: 'Blind Bet',
+  outro: 'Down to the Wire',
+  underdog: 'Underdog Boost',
+  chaoshints: 'Chaos Hints',
+};
 
 function PlaylistList({ customPlaylists, onOpen, onRemove }: Readonly<{
   customPlaylists: CustomPlaylist[]; onOpen: () => void; onRemove: (id: string) => void;
@@ -2087,36 +2182,79 @@ function roundAccent(isRace: boolean, isYear: boolean): 'classic' | 'race' | 'ye
   return isRace ? 'race' : 'classic';
 }
 
+function usesRaceFlow(mode: HostState['mode'], yearOnly: boolean, party: PartyInfo | null): boolean {
+  if (mode === 'race') return true;
+  if (party === null) return yearOnly;
+  return party.format !== 'classic';
+}
+
 // Race-flow rounds are normally hint-free (the clip itself is the puzzle),
-// but artist-only and year-only rounds ask for something the audio can't
-// give away, so those are the only race rounds that ever carry hints here.
+// but artist-only/year-only rounds and Underdog Boost ask for something the
+// audio can't give away, so those are the only race rounds that ever carry
+// hints here. Underdog's cover-art hint is shown clear (not the classic
+// betting screen's blurred teaser) — it's meant to be a real, strong assist.
 function RaceHintBar({ hints }: Readonly<{ hints: Hint[] }>) {
+  const imageHint = hints.find(h => h.imageUrl);
   const textHints = hints.filter(h => !h.imageUrl);
-  if (textHints.length === 0) return null;
+  if (textHints.length === 0 && !imageHint) return null;
   return (
-    <div
-      className="flex items-center justify-center gap-6 rounded-2xl"
-      style={{
-        padding: '12px 26px',
-        background: 'rgba(255,255,255,0.04)',
-        border: '1px solid rgba(255,255,255,0.08)',
-        backdropFilter: 'blur(16px)',
-      }}
-    >
-      {textHints.map((h, i) => (
-        <React.Fragment key={h.label}>
-          {i > 0 && (
-            <div style={{ width: 1, alignSelf: 'stretch', background: 'rgba(255,255,255,0.08)' }} />
-          )}
-          <div className="flex flex-col items-center gap-1">
-            <span style={{ color: 'rgba(255,255,255,0.45)', fontSize: '0.6rem', textTransform: 'uppercase', letterSpacing: '0.18em' }}>
-              {h.label}
-            </span>
-            <span style={{ color: 'white', fontWeight: 800, fontSize: '1.2rem', lineHeight: 1 }}>
-              {h.value}
-            </span>
-          </div>
-        </React.Fragment>
+    <div className="flex flex-col items-center gap-3">
+      {imageHint?.imageUrl && (
+        <img
+          src={imageHint.imageUrl} alt="" style={{ width: 96, height: 96, borderRadius: 16, objectFit: 'cover', boxShadow: '0 8px 24px rgba(0,0,0,0.5)' }}
+        />
+      )}
+      {textHints.length > 0 && (
+        <div
+          className="flex items-center justify-center gap-6 rounded-2xl"
+          style={{
+            padding: '12px 26px',
+            background: 'rgba(255,255,255,0.04)',
+            border: '1px solid rgba(255,255,255,0.08)',
+            backdropFilter: 'blur(16px)',
+          }}
+        >
+          {textHints.map((h, i) => (
+            <React.Fragment key={h.label}>
+              {i > 0 && (
+                <div style={{ width: 1, alignSelf: 'stretch', background: 'rgba(255,255,255,0.08)' }} />
+              )}
+              <div className="flex flex-col items-center gap-1">
+                <span style={{ color: 'rgba(255,255,255,0.45)', fontSize: '0.6rem', textTransform: 'uppercase', letterSpacing: '0.18em' }}>
+                  {h.label}
+                </span>
+                <span style={{ color: 'white', fontWeight: 800, fontSize: '1.2rem', lineHeight: 1 }}>
+                  {h.value}
+                </span>
+              </div>
+            </React.Fragment>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
+
+// Multiple Choice's 4 options, shown on the host screen purely as a
+// reference (the host never answers) — useful when the host screen is cast
+// to a shared TV so the room can see the options too.
+function ChoiceOptionsBar({ options }: Readonly<{ options?: string[] }>) {
+  if (!options || options.length === 0) return null;
+  return (
+    <div className="grid grid-cols-2 gap-2" style={{ maxWidth: '480px' }}>
+      {options.map(option => (
+        <div
+          key={option}
+          className="rounded-xl text-center"
+          style={{
+            padding: '10px 16px',
+            background: 'rgba(255,255,255,0.04)',
+            border: '1px solid rgba(255,255,255,0.08)',
+            color: 'white', fontWeight: 700, fontSize: '0.95rem',
+          }}
+        >
+          {option}
+        </div>
       ))}
     </div>
   );
@@ -2128,10 +2266,16 @@ export function PlayingView({ game }: Readonly<{ game: HostState }>) {
   // behave exactly like race rounds on this screen. "Guess the year" rides
   // the race flow even in Classic mode — but only outside Party, which picks
   // its own per-round target and ignores this game-wide toggle.
-  const isRace = mode === 'race' || (party === null && yearOnly) || (party !== null && party.format !== 'classic');
+  const isRace = usesRaceFlow(mode, yearOnly, party);
   const isYear = party ? party.format === 'year' : yearOnly;
-  const raceStatus = party?.finale
-    ? `${party.duelists.join(' vs ')} - first correct wins`
+  // Finale duelists or (for underdog rounds) the trailing player(s) — the
+  // only ones actually guessing this round, if either applies.
+  let restrictedNames: string[] | null = null;
+  if (party?.finale) restrictedNames = party.duelists;
+  else if (party?.event === 'underdog') restrictedNames = party.restricted;
+  const nameSeparator = party?.finale ? ' vs ' : ' & ';
+  const raceStatus = restrictedNames
+    ? `${restrictedNames.join(nameSeparator)} - first correct wins`
     : `${answeredCount} / ${players.length} answered`;
   const accent = roundAccent(isRace, isYear);
   return (
@@ -2142,6 +2286,7 @@ export function PlayingView({ game }: Readonly<{ game: HostState }>) {
         <p className="text-white/45 text-sm">Round {roundIndex + 1}/{totalRounds}</p>
         <PartyBadge party={party} />
         <RaceHintBar hints={hints} />
+        <ChoiceOptionsBar options={party?.choiceOptions} />
 
         <div className="liquid-btn relative" style={{ width: 'min(77vw, 527px)', height: countdown === null ? '340px' : '306px' }}>
           <LiquidGlass
@@ -2173,7 +2318,7 @@ export function PlayingView({ game }: Readonly<{ game: HostState }>) {
                   <div style={{ width: '100%', height: '1px', background: 'rgba(255,255,255,0.07)' }} />
                   {isRace ? (
                     <span style={{ color: 'rgba(255,255,255,0.5)', fontSize: '0.9rem', display: 'inline-block', minWidth: '210px', textAlign: 'center' }}>
-                      {party?.finale ? party.duelists.join(' vs ') : 'Everyone will guess'}
+                      {restrictedNames ? restrictedNames.join(nameSeparator) : 'Everyone will guess'}
                     </span>
                   ) : (
                     <>
@@ -2219,6 +2364,7 @@ function GuessingView({ game }: Readonly<{ game: HostState }>) {
         <p className="text-white/45 text-sm">Round {roundIndex + 1}/{totalRounds}</p>
         <PartyBadge party={party} />
         <RaceHintBar hints={hints} />
+        <ChoiceOptionsBar options={party?.choiceOptions} />
 
         <div className="liquid-btn relative" style={{ width: '310px', height: '420px' }}>
           <LiquidGlass
@@ -2345,7 +2491,14 @@ function RevealShell({
   isCorrectFor: (player: PlayerInfo) => GuessCorrectness;
   wide?: boolean;
 }>) {
-  const { roundIndex, totalRounds, players, roundDeltas, roundPity, removePlayer, endGame, stealResult } = game;
+  const { roundIndex, totalRounds, players, roundDeltas, roundPity, removePlayer, endGame, stealResult, party } = game;
+  // Every sub-round of the finale duel reports finale:true — the host can't
+  // tell from roundIndex/totalRounds alone whether clicking "next" advances
+  // to another duel game or actually ends the match, so it gets a neutral
+  // label instead of prematurely promising "Final Results".
+  let nextLabel = 'Next Round';
+  if (party?.finale) nextLabel = 'Continue';
+  else if (roundIndex + 1 >= totalRounds) nextLabel = 'Final Results';
   return (
     <div className={`page-enter relative min-h-screen flex flex-col items-center gap-5 overflow-hidden ${wide ? 'px-2 py-6' : 'p-6'}`}>
       <img
@@ -2368,7 +2521,7 @@ function RevealShell({
       </div>
 
       <div style={{ position: 'relative', zIndex: 2 }}>
-        <PartyRevealExtras result={result} stealResult={stealResult} />
+        <PartyRevealExtras result={result} stealResult={stealResult} hints={game.hints} />
       </div>
 
       <div style={{ position: 'relative', zIndex: 2, background: 'rgba(255,255,255,0.05)', border: '1px solid rgba(255,255,255,0.08)', borderRadius: '16px', padding: '8px 12px', width: '310px', maxWidth: '92vw' }} className="divide-y divide-white/[0.07]">
@@ -2389,7 +2542,7 @@ function RevealShell({
 
       <PillButton
         onClick={() => socket.emit('next_round')}
-        label={roundIndex + 1 >= totalRounds ? 'Final Results' : 'Next Round'}
+        label={nextLabel}
         zIndex={2}
       />
 
@@ -2468,7 +2621,7 @@ function LeaderboardRow({ entry, delay, highlight }: Readonly<{ entry: Leaderboa
 }
 
 function LeaderboardView({ game }: Readonly<{ game: HostState }>) {
-  const { phase, leaderboard, roundIndex, totalRounds } = game;
+  const { phase, leaderboard, awards, roundIndex, totalRounds } = game;
   const isFinished = phase === 'finished';
 
   return (
@@ -2514,6 +2667,8 @@ function LeaderboardView({ game }: Readonly<{ game: HostState }>) {
           />
         ))}
       </div>
+
+      {isFinished && <AwardsStrip awards={awards} />}
 
       {/* Mid-game leaderboard is the resume point after a host page reload,
           so it needs its own way to continue the game. No "End game" here —

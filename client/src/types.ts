@@ -22,6 +22,13 @@ export interface LeaderboardEntry {
   score: number;
 }
 
+// End-of-game superlative — mirrors server/src/types.ts's Award.
+export interface Award {
+  key: 'sharpshooter' | 'speedDemon' | 'comebackKid' | 'duelChampion';
+  playerNames: string[];
+  detail: string;
+}
+
 export interface PlayerInfo {
   name: string;
   score?: number;
@@ -29,17 +36,26 @@ export interface PlayerInfo {
   pity?: boolean;
 }
 
+// Mirrors server/src/types.ts's PartyEvent — kept in sync by hand, no shared
+// import between the two workspaces.
+export type PartyEvent = 'double' | 'mystery' | 'steal' | 'snippet' | 'fullhints' | 'blind' | 'outro' | 'underdog' | 'chaoshints';
+export type ChaosLevel = number;
+
 // Party mode: the per-round recipe as clients see it. A hidden mystery
 // multiplier arrives as null and is revealed (a number) on round_result.
 export interface PartyInfo {
-  format: 'classic' | 'race' | 'year';
+  format: 'classic' | 'race' | 'year' | 'choice';
   target: 'title' | 'artist' | 'both';
-  event: 'double' | 'mystery' | 'steal' | 'snippet' | 'fullhints' | 'blind' | 'outro' | null;
+  event: PartyEvent | null;
   multiplier: number | null;
   winnerOnly: boolean;
   intro: { title: string; tagline: string };
   finale: boolean;
   duelists: string[];
+  restricted: string[];
+  choiceOptions?: string[];
+  // Finale only: best-of-3 duel progress ("Game N of 3 · Alice 1 – 0 Bob").
+  duelProgress?: { subRoundIndex: number; wins: { name: string; count: number }[] };
 }
 
 export interface YearResult {
@@ -67,6 +83,7 @@ export interface RoundResultEvent {
   party?: PartyInfo;
   yearResults?: YearResult[];
   stealPending?: string;
+  chaosFakeIndex?: number; // 'chaoshints' rounds: which hint (in `hints` sent at round_start) was fabricated
 }
 
 declare global {

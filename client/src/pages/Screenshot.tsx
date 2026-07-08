@@ -53,6 +53,7 @@ const MOCK_HOST: HostState = {
   roundDeltas: {},
   roundPity: {},
   leaderboard: [],
+  awards: [],
   copied: false,
   playProgress: 0.62,
   inviteUrl: '',
@@ -66,6 +67,8 @@ const MOCK_HOST: HostState = {
   artistOnly: false,
   yearOnly: false,
   difficulty: 'hard',
+  enabledEvents: ['double', 'mystery', 'steal', 'snippet', 'fullhints', 'blind', 'outro', 'underdog'],
+  chaosLevel: 50,
   songSource: 'library',
   customPlaylists: [],
   playlistPicker: { playlists: [], loadingPlaylists: false, playlistsError: null, fetchPlaylists: noop, fetchPlaylistTracks: async () => ({ ok: false, error: 'error' }) } as any,
@@ -89,6 +92,8 @@ const MOCK_HOST: HostState = {
   setArtistOnly: noop,
   setYearOnly: noop,
   setDifficulty: noop,
+  toggleEvent: noop,
+  setChaosLevel: noop,
   setSongSource: noop,
   addPlaylist: noop,
   removePlaylist: noop,
@@ -121,7 +126,7 @@ const MOCK_RESULT_YEAR: RoundResultEvent = {
   party: {
     format: 'year', target: 'title', event: null, multiplier: 1, winnerOnly: false,
     intro: { title: 'Guess the Year', tagline: 'Closest answer wins the round' },
-    finale: false, duelists: [],
+    finale: false, duelists: [], restricted: [],
   },
   playerGuesses: [
     { name: 'Anna', guess: '1984' },
@@ -172,7 +177,7 @@ const MOCK_HOST_LOBBY: HostState = {
 const MOCK_PARTY_STEAL: PartyInfo = {
   format: 'classic', target: 'title', event: 'steal', multiplier: 1, winnerOnly: false,
   intro: { title: 'Steal Round', tagline: 'Win the round, then rob another player · Bid & guess / name the song' },
-  finale: false, duelists: [],
+  finale: false, duelists: [], restricted: [],
 };
 
 const MOCK_PLAY: PlayState = {
@@ -210,6 +215,7 @@ const MOCK_PLAY: PlayState = {
   myRaceTimeMs: null,
   leaderboard: [],
   leaderboardDeltas: {},
+  awards: [],
   songPlaying: true,
   songTempo: 117,
   reconnecting: false,
@@ -219,7 +225,7 @@ const MOCK_PLAY: PlayState = {
   cameFromQR: false,
   setPin: noop, setName: noop, setBidIndex: noop, setGuessText: noop, setArtistGuessText: noop,
   submitStealVictim: noop, skipSteal: noop, join: noop, rejoinSaved: noop, submitBid: noop,
-  submitGuess: noop, skipGuess: noop, newGamePin: null, rejoinNewGame: noop, renamePlayer: noop,
+  submitGuess: noop, submitChoice: noop, submitChaosTap: noop, skipGuess: noop, newGamePin: null, rejoinNewGame: noop, renamePlayer: noop,
 };
 
 const MOCK_PLAY_GUESSING: PlayState = {
@@ -238,7 +244,7 @@ const MOCK_PLAY_YEAR_GUESSING: PlayState = {
   party: {
     format: 'year', target: 'title', event: null, multiplier: 1, winnerOnly: false,
     intro: { title: 'Guess the Year', tagline: 'Closest answer wins the round' },
-    finale: false, duelists: [],
+    finale: false, duelists: [], restricted: [],
   },
 };
 

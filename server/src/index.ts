@@ -9,7 +9,7 @@ import dotenv from 'dotenv';
 import authRouter from './spotifyAuth';
 import * as gm from './gameManager';
 import { getAlbumArtUrl } from './albumArt';
-import { Game, PlaylistTrackInput } from './types';
+import { Award, Game, PartyEvent, PlaylistTrackInput } from './types';
 
 dotenv.config();
 gm.initSongs();
@@ -96,6 +96,7 @@ interface StartGameSettings {
   bettingTime?: number; guessingTime?: number; totalRounds?: number; mode?: string;
   raceTime?: number; raceWinnerOnly?: boolean; artistOnly?: boolean; yearOnly?: boolean;
   difficulty?: string; songSource?: string;
+  enabledEvents?: string[]; chaosLevel?: number;
   customPlaylist?: { id?: string; tracks?: PlaylistTrackInput[] };
 }
 
@@ -121,6 +122,16 @@ function applyStartGameSettings(game: Game, s: StartGameSettings | undefined) {
   // Year isn't a title/artist target, so it can't coexist with artist-only.
   game.artistOnly = !isParty && !game.yearOnly && s?.artistOnly === true;
   game.difficulty = s?.difficulty === 'easy' || s?.difficulty === 'medium' ? s.difficulty : 'hard';
+
+  game.chaosLevel = typeof s?.chaosLevel === 'number' && Number.isFinite(s.chaosLevel)
+    ? Math.max(0, Math.min(100, s.chaosLevel))
+    : 50;
+  const requested = Array.isArray(s?.enabledEvents)
+    ? s.enabledEvents.filter((e): e is PartyEvent => (gm.ALL_PARTY_EVENTS as string[]).includes(e))
+    : [];
+  // A malformed or fully-unchecked selection must not brick party mode —
+  // fall back to "everything enabled" rather than an empty pool.
+  game.enabledEvents = requested.length > 0 ? new Set(requested) : new Set(gm.ALL_PARTY_EVENTS);
 }
 
 function applySongSource(game: Game, s: StartGameSettings | undefined): { ok: true } | { ok: false; error: string } {
@@ -205,7 +216,7 @@ io.on('connection', (socket) => {
       raceTime: game.raceTime,
       artistOnly: game.artistOnly,
       yearOnly: game.yearOnly,
-      party: gm.partyView(round),
+      party: gm.partyView(game, round),
       tempo: round.song.tempo,
     });
     if (game.phase === 'guessing' && round.playStartAt && game.phaseEndsAt && !round.passed.has(socket.id)) {
@@ -224,7 +235,7 @@ io.on('connection', (socket) => {
         mode: 'classic',
         artistOnly: game.artistOnly,
         yearOnly: game.yearOnly,
-        party: gm.partyView(round),
+        party: gm.partyView(game, round),
         bidOptions: gm.BID_OPTIONS,
         bidScores: gm.bidScoreTable(),
         tempo: round.song.tempo,
@@ -244,7 +255,7 @@ io.on('connection', (socket) => {
       mode: 'classic',
       artistOnly: game.artistOnly,
       yearOnly: game.yearOnly,
-      party: gm.partyView(round),
+      party: gm.partyView(game, round),
       bidOptions: gm.BID_OPTIONS,
       bidScores: gm.bidScoreTable(),
       tempo: round.song.tempo,
@@ -269,7 +280,7 @@ io.on('connection', (socket) => {
     const round = game.currentRound;
 
     if (game.phase === 'finished') {
-      socket.emit('game_over', { leaderboard: gm.getLeaderboard(game) });
+      socket.emit('game_over', { leaderboard: gm.getLeaderboard(game), awards: gm.computeAwards(game) });
       return;
     }
 
@@ -333,6 +344,7 @@ io.on('connection', (socket) => {
     players: { name: string; score: number; streak: number }[];
     phase: string; roundIndex: number; totalRounds: number;
     leaderboard: { rank: number; name: string; score: number }[];
+    awards: Award[];
   } | { error: string }) => void) => {
     const game = gm.getGame(pin);
     if (!game) return callback({ error: 'Game not found' });
@@ -365,6 +377,7 @@ io.on('connection', (socket) => {
       roundIndex: game.roundIndex,
       totalRounds: game.totalRounds,
       leaderboard: gm.getLeaderboard(game),
+      awards: gm.computeAwards(game),
     });
   });
 
@@ -495,13 +508,17 @@ io.on('connection', (socket) => {
     if (!ok) return;
 
     const round = game.currentRound!;
+    const totalBidders = round.party?.finale
+      ? round.party.duelistIds.filter(id => game.players.has(id)).length
+      : game.players.size;
     io.to(`host:${game.pin}`).emit('bid_received', {
       bidCount: round.bids.size,
-      totalPlayers: game.players.size,
+      totalPlayers: totalBidders,
     });
 
-    // Early close when every player has placed a bid
-    if (round.bids.size >= game.players.size) {
+    // Finale classic rounds only accept bids from the two duelists; ordinary
+    // rounds continue to wait for every active player.
+    if (round.bids.size >= totalBidders) {
       if (game.phaseTimer) clearTimeout(game.phaseTimer);
       closeBettingAndPlay(game);
     }
@@ -565,6 +582,23 @@ io.on('connection', (socket) => {
     } else if (result.allDone) {
       advanceTierOrReveal(game);
     }
+  });
+
+  // ── Player: tap a hint during a Chaos Hints round ──────────────────────────
+  // Separate from submit_guess since the answer is an option index, not free
+  // text — scoring keys on "did you tap the fabricated hint," not a fuzzy
+  // text match, so it can't reuse the same event/validation path.
+  socket.on('submit_chaos_tap', ({ index }: { index: number }, callback?: (r: { correct: boolean; points?: number; timeMs?: number }) => void) => {
+    const game = gm.getGameBySocket(socket.id);
+    if (!game) return callback?.({ correct: false });
+    const r = gm.recordChaosHintTap(game, socket.id, index);
+    if (!r) return callback?.({ correct: false });
+    callback?.({ correct: r.correct, points: r.points, timeMs: r.elapsedMs });
+    io.to(`host:${game.pin}`).emit('answer_received', {
+      answered: game.currentRound!.passed.size,
+      total: game.players.size,
+    });
+    if (r.allDone) endRaceRound(game);
   });
 
   // ── Player: steal-round winner picks their victim ──────────────────────────
@@ -644,7 +678,7 @@ io.on('connection', (socket) => {
     if (game.phaseTimer) clearTimeout(game.phaseTimer);
     game.phaseEndsAt = null;
     game.phase = 'finished';
-    io.to(game.pin).emit('game_over', { leaderboard: gm.getLeaderboard(game) });
+    io.to(game.pin).emit('game_over', { leaderboard: gm.getLeaderboard(game), awards: gm.computeAwards(game) });
   });
 
   // ── Host: advance to next round ────────────────────────────────────────────
@@ -656,10 +690,22 @@ io.on('connection', (socket) => {
     // round or start two overlapping beginRound() calls.
     if (game.phase !== 'reveal' && game.phase !== 'leaderboard') return;
 
+    // Mid-finale-duel: advance to the next sub-round without touching
+    // roundIndex/totalRounds at all, unless the duel just resolved (someone
+    // reached 2 wins) — advanceDuelOrResolve already applied the bonus and
+    // crowned the Duel Champion in that case, so falling through below ends
+    // the game exactly as an ordinary last round would.
+    if (game.duelActive) {
+      if (gm.advanceDuelOrResolve(game)) {
+        beginRound(game);
+        return;
+      }
+    }
+
     game.roundIndex += 1;
     if (game.roundIndex >= game.totalRounds) {
       game.phase = 'finished';
-      io.to(game.pin).emit('game_over', { leaderboard: gm.getLeaderboard(game) });
+      io.to(game.pin).emit('game_over', { leaderboard: gm.getLeaderboard(game), awards: gm.computeAwards(game) });
       return;
     }
     beginRound(game);
@@ -730,13 +776,18 @@ io.on('connection', (socket) => {
   async function beginRound(game: GameObj) {
     if (!game) return;
     const round = gm.startRound(game);
-    const party = gm.partyView(round);
+    const party = gm.partyView(game, round);
     const isRaceFlow = gm.isRaceFlowRound(game, round);
     // Race flow is normally hint-free (the audio itself is the puzzle), but
     // artist-only and year-only rounds can't be inferred from audio alone —
     // this is the only way those toggles have any teeth outside Classic mode.
-    // Party rounds keep the existing (hint-free) race behaviour.
-    const keepHints = !round.party && (game.artistOnly || game.yearOnly);
+    // Party rounds keep the existing (hint-free) race behaviour, except:
+    // Chaos Hints, where `round.hints` isn't a guessing aid at all, it's the
+    // "spot the fake" set itself, which the round is meaningless without;
+    // and Underdog Boost, whose whole point is giving the trailing player(s)
+    // a real shot, not just the normal hint-free race odds.
+    const keepHints = (!round.party && (game.artistOnly || game.yearOnly))
+      || round.party?.event === 'chaoshints' || round.party?.event === 'underdog';
 
     // Prefer the precomputed art from the CSV (Music Popularity Index resolves
     // it offline via Spotify's oEmbed endpoint) so a normal round never calls
@@ -746,10 +797,13 @@ io.on('connection', (socket) => {
     if (coverUrl) {
       round.coverUrl = coverUrl;
       // Classic-flow rounds have a 1-in-4 chance of a blurred-art hint;
-      // 'fullhints' rounds always get it, 'blind' rounds never do.
-      const wantArt = !isRaceFlow && (game.mode === 'classic' || game.mode === 'party')
-        && round.party?.event !== 'blind'
-        && (round.party?.event === 'fullhints' || randomInt(4) === 0);
+      // 'fullhints' and Underdog Boost always get it (Underdog's whole
+      // point is a real, guaranteed assist — not a coin flip), 'blind'
+      // rounds never do.
+      const wantArt = round.party?.event === 'underdog'
+        || (!isRaceFlow && (game.mode === 'classic' || game.mode === 'party')
+          && round.party?.event !== 'blind'
+          && (round.party?.event === 'fullhints' || randomInt(4) === 0));
       if (wantArt) {
         round.hints.push({ label: 'Album art', value: '', imageUrl: coverUrl });
       }
@@ -861,7 +915,10 @@ io.on('connection', (socket) => {
       artistOnly: gm.effectiveTarget(game, round) === 'artist',
       yearOnly: gm.effectiveTarget(game, round) === 'year',
       // Reveal payloads always carry the full party config (mystery revealed).
-      party: gm.partyView(round, true),
+      party: gm.partyView(game, round, true),
+      // 'chaoshints' rounds: which hint (already sent as `hints` at
+      // round_start) was the fabricated one — hidden until now.
+      chaosFakeIndex: round.chaosFakeIndex,
     };
   }
 

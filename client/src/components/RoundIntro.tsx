@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from 'react';
-import type { PartyInfo, RoundResultEvent } from '../types';
+import type { Hint, PartyInfo, RoundResultEvent } from '../types';
 import { useEscapeKey } from '../hooks/useEscapeKey';
 import { useFocusTrap } from '../hooks/useFocusTrap';
 
@@ -120,25 +120,34 @@ export function RoundIntro({ party, roundKey, dismissible = true }: Readonly<{ p
 
 // Party extras shown under the reveal card: revealed multiplier, steal outcome
 // (or "picking a victim…" while the thief decides). Shared by host and player.
-export function PartyRevealExtras({ result, stealResult }: Readonly<{
+export function PartyRevealExtras({ result, stealResult, hints }: Readonly<{
   result: RoundResultEvent;
   stealResult: { thief: string; victim: string; amount: number; skipped?: boolean } | null;
+  hints?: Hint[];
 }>) {
   const party = result.party;
-  const chips: string[] = [];
-  if (party?.event === 'mystery' && party.multiplier !== null) chips.push(`Mystery multiplier · ×${party.multiplier}`);
-  else if (party?.event === 'double') chips.push('Double points · ×2');
+  const chips: { text: string; reveal: boolean }[] = [];
+  if (party?.event === 'mystery' && party.multiplier !== null) {
+    chips.push({ text: `Mystery multiplier · ×${party.multiplier}`, reveal: true });
+  } else if (party?.event === 'double') {
+    chips.push({ text: 'Double points · ×2', reveal: false });
+  } else if (party?.event === 'chaoshints' && result.chaosFakeIndex != null && hints?.[result.chaosFakeIndex]) {
+    chips.push({ text: `The lie was · ${hints[result.chaosFakeIndex].label}`, reveal: true });
+  }
   const showPending = !stealResult && !!result.stealPending;
   if (chips.length === 0 && !stealResult && !showPending) return null;
   return (
     <div className="flex flex-col items-center gap-2" style={{ maxWidth: '92vw' }}>
       {chips.map(c => (
-        <span key={c} style={{
+        <span key={c.text} style={{
           padding: '6px 16px', borderRadius: '100px',
           background: 'rgba(0,238,232,0.1)', border: '1px solid rgba(0,238,232,0.3)',
           color: 'rgba(94,234,212,0.9)', fontSize: '0.72rem', fontWeight: 700,
           letterSpacing: '0.1em', textTransform: 'uppercase',
-        }}>{c}</span>
+          // The mystery multiplier is only just now revealed — a quick pop
+          // sells it as a reveal rather than a chip that was there all along.
+          animation: c.reveal ? 'chipReveal 0.5s cubic-bezier(0.34, 1.56, 0.64, 1)' : undefined,
+        }}>{c.text}</span>
       ))}
       {stealResult?.skipped && (
         <span style={{
@@ -176,6 +185,8 @@ const EVENT_BITS: Partial<Record<NonNullable<PartyInfo['event']>, string>> = {
   fullhints: 'OPEN BOOK',
   blind: 'BLIND BET · NO HINTS',
   outro: 'DOWN TO THE WIRE',
+  underdog: 'UNDERDOG BOOST',
+  chaoshints: 'CHAOS HINTS',
 };
 
 // Whether this is a bid-and-guess or everyone-at-once round isn't implied by
@@ -183,6 +194,7 @@ const EVENT_BITS: Partial<Record<NonNullable<PartyInfo['event']>, string>> = {
 // with no special target or event shows no badge at all mid-round.
 function formatBit(party: PartyInfo): string {
   if (party.format === 'year') return 'GUESS THE YEAR';
+  if (party.format === 'choice') return 'MULTIPLE CHOICE';
   return party.format === 'race' ? 'RACE ROUND' : 'CLASSIC ROUND';
 }
 
@@ -204,10 +216,19 @@ function eventBit(party: PartyInfo): string | null {
 export function PartyBadge({ party }: Readonly<{ party: PartyInfo | null }>) {
   if (!party) return null;
   const bits: string[] = [formatBit(party)];
-  if (party.finale) bits.push(`FINALE · ${party.duelists.join(' vs ')}`);
-  else if (party.winnerOnly) bits.push('WINNER ONLY');
-  if (party.format !== 'year') bits.push(targetBit(party));
-  const event = eventBit(party);
+  if (party.finale) {
+    const wins = party.duelProgress?.wins;
+    bits.push(wins?.length === 2
+      ? `FINALE · ${wins[0].name} ${wins[0].count}–${wins[1].count} ${wins[1].name}`
+      : `FINALE · ${party.duelists.join(' vs ')}`);
+  }
+  else if (party.event === 'underdog') {
+    bits.push(party.restricted.length > 0 ? `UNDERDOG ×1.5 · ${party.restricted.join(' & ')}` : 'UNDERDOG BOOST ×1.5');
+  } else if (party.winnerOnly) bits.push('WINNER ONLY');
+  // Chaos Hints replaces the guessing objective entirely, so the usual
+  // "name the song/artist" target bit would be actively misleading here.
+  if (party.format !== 'year' && party.event !== 'chaoshints') bits.push(targetBit(party));
+  const event = party.event === 'underdog' ? null : eventBit(party);
   if (event) bits.push(event);
   return (
     <div style={{ display: 'flex', gap: '6px', justifyContent: 'center', flexWrap: 'wrap' }}>

@@ -1,6 +1,6 @@
 import { randomInt } from 'node:crypto';
 import {
-  Difficulty, Game, GuessTarget, Hint, PartyClientView, PartyConfig, PartyEvent, PartyFormat,
+  Award, ChaosLevel, Difficulty, Game, GuessTarget, Hint, PartyClientView, PartyConfig, PartyEvent, PartyFormat,
   Player, PlaylistTrackInput, Round, Song, YearResult,
 } from './types';
 import { loadSongs } from './songLoader';
@@ -26,7 +26,12 @@ export const RACE_BASE = 1000;
 // ─── Party mode tuning ────────────────────────────────────────────────────────
 export const STEAL_PCT = 0.25;         // steal takes 15% of the victim's score…
 export const STEAL_MIN = 400;          // …but never less than this (capped at their total)
-export const DUEL_WIN_POINTS = 1500;   // finale: first correct duelist takes this
+// Finale: flat bonus for winning the best-of-3 duel outright (first to 2
+// sub-round wins). Deliberately NOT scaled to the score gap between the
+// duelists — "shouldn't be possible to flip a huge score gap based on 3
+// rounds" — so it stays meaningful without ever guaranteeing a placement
+// flip. Per-sub-round points still score normally on top of this.
+export const DUEL_BONUS = 3000;
 export const YEAR_MAX_POINTS = 1000;   // year round: exact answer
 export const YEAR_POINTS_SLOPE = 120;  // …minus this per year off
 export const YEAR_WINNER_BONUS = 500;  // closest answer bonus (split on ties)
@@ -265,6 +270,66 @@ function generateAllHints(song: Song, suppressArtist: boolean, suppressYear: boo
   return hints;
 }
 
+// Underdog Boost's hints: always exactly the release year/era and the full
+// artist name (or the title, if the artist is what's being guessed) — no
+// random pool/count like a normal round. Cover art is added separately in
+// index.ts once resolved (this only builds the text hints). Deliberately
+// omits Streams/Duration — this event is meant to give a real, targeted
+// assist, not the usual grab-bag of trivia.
+function generateUnderdogHints(song: Song, suppressArtist: boolean, suppressYear: boolean, includeTitle: boolean): Hint[] {
+  const hints: Hint[] = [];
+  if (!suppressYear) {
+    if (song.year) hints.push({ label: 'Release year', value: String(Math.floor(song.year)) });
+    else if (song.decade) hints.push({ label: 'Era', value: `${song.decade}s` });
+  }
+  if (!suppressArtist) {
+    const fullArtist = song.featuredArtists
+      ? `${song.artist} feat. ${song.featuredArtists}`
+      : song.artist;
+    hints.push({ label: 'Artist(s)', value: fullArtist });
+  }
+  if (includeTitle) hints.push({ label: 'Song title', value: song.title });
+  return hints;
+}
+
+// Chaos Hints' safe-to-show categories — deliberately excludes Song title and
+// the full Artist(s) line entirely (not just from fabrication): a real other
+// song's title or artist name would itself read as a plausible, confusing
+// "real" answer, rather than a clean fabrication a player can rule out.
+function safeChaosHints(song: Song): Hint[] {
+  const hints: Hint[] = [];
+  if (song.year) hints.push({ label: 'Release year', value: String(Math.floor(song.year)) });
+  else if (song.decade) hints.push({ label: 'Era', value: `${song.decade}s` });
+  if (song.spotifyStreams) hints.push({ label: 'Streams', value: formatStreams(song.spotifyStreams) });
+  if (song.durationMs) hints.push({ label: 'Duration', value: formatDuration(song.durationMs) });
+  hints.push({ label: 'Artist initials', value: getInitials(song.artist) });
+  return hints;
+}
+
+// Builds the "spot the fake hint" set: every safe category for the real
+// song, with one entry's value swapped for the same category borrowed from a
+// different random song in the pool. Returns undefined if there aren't
+// enough categories to make a believable set, or no other song shares the
+// picked category (both are just missing-data edge cases on small pools).
+function buildChaosHintSet(song: Song, pool: Song[]): { hints: Hint[]; fakeIndex: number } | undefined {
+  const real = safeChaosHints(song);
+  if (real.length < 2) return undefined;
+  const decoyCandidates = pool.filter(s => s.spotifyTrackId !== song.spotifyTrackId);
+  if (decoyCandidates.length === 0) return undefined;
+  const decoySong = pickRandom(decoyCandidates);
+  const decoyHints = safeChaosHints(decoySong);
+  // Only fabricate a category the decoy actually has data for, and where the
+  // fabricated value would actually differ (an identical stat wouldn't read
+  // as a lie at all).
+  const fakeCandidates = real
+    .map((h, i) => ({ i, decoy: decoyHints.find(d => d.label === h.label) }))
+    .filter((c): c is { i: number; decoy: Hint } => !!c.decoy && c.decoy.value !== real[c.i].value);
+  if (fakeCandidates.length === 0) return undefined;
+  const { i: fakeIndex, decoy } = pickRandom(fakeCandidates);
+  const hints = real.map((h, i) => (i === fakeIndex ? { label: h.label, value: decoy.value } : h));
+  return { hints, fakeIndex };
+}
+
 // ─── Party round recipes ─────────────────────────────────────────────────────
 
 function introFor(
@@ -278,23 +343,38 @@ function introFor(
         : 'Closest answer wins the round',
     };
   }
-  const flow = format === 'classic' ? 'Bid & guess' : 'Everyone races';
+  // Multiple Choice always forces target:'title' (see pickPartyTarget), so
+  // only the flow wording differs here — the event/winnerOnly branches below
+  // still apply normally (an event on a Choice round must still be
+  // announced, not silently dropped).
+  const flow = format === 'classic' ? 'Bid & guess' : format === 'choice' ? 'Tap the right title' : 'Everyone races';
   let goal = 'name the song';
   if (target === 'artist') goal = 'name the artist';
   else if (target === 'both') goal = 'title + artist bonus';
   const suffix = winnerOnly ? ' / winner takes all' : '';
   const eventIntros: Record<PartyEvent, { title: string; tag: string }> = {
     double: { title: 'Double Points', tag: 'Everything is worth 2×' },
-    mystery: { title: 'Mystery Multiplier', tag: 'Revealed after the round: ×1, ×2 or ×3' },
+    mystery: { title: 'Mystery Multiplier', tag: 'Revealed after the round: ×1.5 up to ×10' },
     steal: { title: 'Steal Round', tag: 'Win the round, then rob another player' },
     snippet: { title: 'Snippet Roulette', tag: 'The clip starts somewhere mid-song' },
     fullhints: { title: 'Open Book', tag: 'Every hint on the table' },
     blind: { title: 'Blind Bet', tag: 'No hints at all — bid on ears alone' },
     outro: { title: 'Down to the Wire', tag: "The clip plays the song's final stretch" },
+    underdog: { title: 'Underdog Boost', tag: 'Only the player(s) in last place can answer — hints on, ×1.5 points' },
+    chaoshints: { title: 'Chaos Hints', tag: 'One hint is a lie — tap the fake one, fastest wins' },
   };
+  // Chaos Hints replaces the round's whole objective (spot the fake hint,
+  // not name the song), so it skips the normal flow/goal composition below
+  // — otherwise the tagline would misleadingly still say "name the song".
+  if (event === 'chaoshints') {
+    return { title: eventIntros.chaoshints.title, tagline: eventIntros.chaoshints.tag };
+  }
   if (event) {
     const e = eventIntros[event];
     return { title: e.title, tagline: `${e.tag} · ${flow} / ${goal}${suffix}` };
+  }
+  if (format === 'choice') {
+    return { title: 'Multiple Choice', tagline: `${flow}, fastest wins${suffix}` };
   }
   if (target === 'artist') return { title: 'Who Sings It?', tagline: `${flow} / name the artist${suffix}` };
   if (target === 'both') return { title: 'Double Duty', tagline: `${flow} / name the artist too to double your points${suffix}` };
@@ -307,24 +387,70 @@ function introFor(
 }
 
 function pickPartyTarget(format: PartyFormat): GuessTarget {
-  if (format === 'year') return 'title';
+  if (format === 'year' || format === 'choice') return 'title';
   return pickWeighted<GuessTarget>([['title', 60], ['artist', 25], ['both', 15]]);
 }
 
+// Every party event that exists — the default "everything on" set for a new
+// game, and what host-supplied enabledEvents lists get validated against.
+export const ALL_PARTY_EVENTS: PartyEvent[] = [
+  'double', 'mystery', 'steal', 'snippet', 'fullhints', 'blind', 'outro', 'underdog', 'chaoshints',
+];
+
+// Interpolate from 80% plain rounds at Chill through 60% at Balanced to 40%
+// at Chaotic. Every slider position therefore affects the actual frequency.
+function noEventChance(chaosLevel: ChaosLevel): number {
+  return 80 - chaosLevel * 0.4;
+}
+
 function pickPartyEvent(game: Game, format: PartyFormat, prevEvent: PartyEvent | null | undefined): PartyEvent | null {
-  if (format === 'year' || randomInt(0, 100) >= 60) return null;
+  if (format === 'year' || randomInt(0, 100) < noEventChance(game.chaosLevel)) return null;
   const pool: [PartyEvent, number][] = [['double', 30], ['mystery', 25], ['snippet', 25]];
   if (format === 'classic') pool.push(['fullhints', 20], ['blind', 20]);
-  if (format === 'race') pool.push(['outro', 25]);
+  // Chaos Hints replaces the whole guessing objective with a tap-the-fake-
+  // hint mini-game, which only makes sense riding the plain race flow — not
+  // stacked on "guess the year" or the classic bid/tier flow.
+  if (format === 'race') pool.push(['outro', 25], ['chaoshints', 15]);
   // Steal needs someone else to steal from — pointless (and confusing to
   // announce) in a 1-player game.
   if (game.roundIndex >= 2 && game.players.size >= 2) pool.push(['steal', 20]);
-  return pickWeighted(pool.filter(([e]) => e !== prevEvent));
+  // Underdog restricts guessing to whoever's trailing, so it needs someone
+  // else to be ahead of — and it rides race/year scoring, not the classic
+  // bid/tier flow (that's a deliberately different kind of "not everyone
+  // gets a turn").
+  if (format !== 'classic' && game.players.size >= 2) pool.push(['underdog', 20]);
+  const filtered = pool.filter(([e]) => e !== prevEvent && game.enabledEvents.has(e));
+  // The host disabled everything that was otherwise eligible this round —
+  // fall back to a plain round rather than erroring.
+  if (filtered.length === 0) return null;
+  return pickWeighted(filtered);
 }
 
-function eventMultiplier(event: PartyEvent | null): number {
+// Mystery weights at the three labelled anchors. Intermediate slider values
+// linearly interpolate every weight, rather than snapping to a hidden preset.
+const MYSTERY_MULTIPLIERS = [1.5, 2, 3, 4, 5, 10] as const;
+const MYSTERY_WEIGHT_ANCHORS = {
+  chill: [40, 35, 20, 5, 0, 0],
+  balanced: [27, 27, 27, 12, 5, 2],
+  chaotic: [12, 16, 17, 20, 18, 17],
+} as const;
+
+function mysteryWeights(chaosLevel: ChaosLevel): [number, number][] {
+  const lower = chaosLevel <= 50 ? MYSTERY_WEIGHT_ANCHORS.chill : MYSTERY_WEIGHT_ANCHORS.balanced;
+  const upper = chaosLevel <= 50 ? MYSTERY_WEIGHT_ANCHORS.balanced : MYSTERY_WEIGHT_ANCHORS.chaotic;
+  const progress = chaosLevel <= 50 ? chaosLevel / 50 : (chaosLevel - 50) / 50;
+  return MYSTERY_MULTIPLIERS.map((multiplier, index) => [
+    multiplier,
+    lower[index] + (upper[index] - lower[index]) * progress,
+  ]);
+}
+
+function eventMultiplier(game: Game, event: PartyEvent | null): number {
   if (event === 'double') return 2;
-  if (event === 'mystery') return 1 + randomInt(0, 3);
+  if (event === 'mystery') return pickWeighted(mysteryWeights(game.chaosLevel));
+  // The "boost" in Underdog Boost — a real payout bump on top of exclusive
+  // access to the round, not just first dibs at the normal rate.
+  if (event === 'underdog') return 1.5;
   return 1;
 }
 
@@ -332,26 +458,32 @@ function eventMultiplier(event: PartyEvent | null): number {
 // enough constraints to keep it feeling curated — round 1 is a plain warm-up,
 // the same event never repeats twice in a row, steal waits until scores exist,
 // and the last round is a top-2 duel.
+// Whoever's currently tied for the lowest score — everyone at that score, not
+// just one of them, since the underdog event lets all of them race for it.
+function trailingPlayers(game: Game): { ids: string[]; names: string[] } {
+  const players = Array.from(game.players.values());
+  const min = Math.min(...players.map(p => p.score));
+  const trailing = players.filter(p => p.score === min);
+  return { ids: trailing.map(p => p.socketId), names: trailing.map(p => p.name) };
+}
+
 function buildPartyConfig(game: Game): PartyConfig {
   const plain: Omit<PartyConfig, 'format' | 'target' | 'event' | 'multiplier' | 'winnerOnly' | 'intro'> = {
-    finale: false, duelistIds: [], duelistNames: [],
+    finale: false, duelistIds: [], duelistNames: [], restrictedIds: [], restrictedNames: [],
   };
 
   const isLast = game.roundIndex === game.totalRounds - 1;
   if (isLast && game.totalRounds > 1 && game.players.size >= 2) {
-    const top = Array.from(game.players.values())
-      .sort((a, b) => b.score - a.score)
-      .slice(0, 2);
-    return {
-      format: 'race', target: 'title', event: null, multiplier: 1, winnerOnly: false,
-      finale: true,
-      duelistIds: top.map(p => p.socketId),
-      duelistNames: top.map(p => p.name),
-      intro: {
-        title: 'The Finale',
-        tagline: `${top[0].name} vs ${top[1].name} / first correct wins ${DUEL_WIN_POINTS} pts`,
-      },
-    };
+    if (!game.duelActive) {
+      const top = Array.from(game.players.values())
+        .sort((a, b) => b.score - a.score)
+        .slice(0, 2);
+      game.duelActive = true;
+      game.duelDuelistIds = top.map(p => p.socketId);
+      game.duelWins = { [top[0].socketId]: 0, [top[1].socketId]: 0 };
+      game.duelSubRoundIndex = 0;
+    }
+    return buildDuelSubRoundConfig(game);
   }
 
   if (game.roundIndex === 0) {
@@ -362,26 +494,65 @@ function buildPartyConfig(game: Game): PartyConfig {
   }
 
   const prev = game.currentRound?.party;
-  let format = pickWeighted<PartyFormat>([['classic', 45], ['race', 40], ['year', 15]]);
+  let format = pickWeighted<PartyFormat>([['classic', 40], ['race', 35], ['year', 15], ['choice', 10]]);
   if (format === 'year' && prev?.format === 'year') format = 'race';
 
   const target = pickPartyTarget(format);
   const event = pickPartyEvent(game, format, prev?.event);
-  const multiplier = eventMultiplier(event);
+  const multiplier = eventMultiplier(game, event);
   // Only race/year formats can go winner-only — classic already has its own
   // bid/tier stakes, and stacking this on top would just zero out everyone
   // but the lowest bidder.
   const winnerOnly = format !== 'classic' && randomInt(0, 100) < 25;
 
+  const restricted = event === 'underdog' ? trailingPlayers(game) : { ids: [], names: [] };
+
   return {
     ...plain, format, target, event, multiplier, winnerOnly,
+    restrictedIds: restricted.ids, restrictedNames: restricted.names,
     intro: introFor(format, target, event, winnerOnly),
+  };
+}
+
+// Best-of-3 finale duel: a fixed format sequence rather than the usual
+// random pick — game 1 is a classic bid/tier round, game 2 a race, game 3
+// (and any replay of it — see finalizeYearRound) a year decider. Each still
+// rolls its own normal event/multiplier, just like a regular round.
+const DUEL_FORMAT_SEQUENCE: PartyFormat[] = ['classic', 'race', 'year'];
+
+function buildDuelSubRoundConfig(game: Game): PartyConfig {
+  const format = DUEL_FORMAT_SEQUENCE[Math.min(game.duelSubRoundIndex, DUEL_FORMAT_SEQUENCE.length - 1)];
+  const [idA, idB] = game.duelDuelistIds;
+  const nameA = game.players.get(idA)?.name ?? '';
+  const nameB = game.players.get(idB)?.name ?? '';
+  const winsA = game.duelWins[idA] ?? 0;
+  const winsB = game.duelWins[idB] ?? 0;
+
+  const prev = game.currentRound?.party;
+  const event = pickPartyEvent(game, format, prev?.event);
+  const multiplier = eventMultiplier(game, event);
+
+  const gameNum = game.duelSubRoundIndex + 1;
+  const gameLabel = gameNum > DUEL_FORMAT_SEQUENCE.length
+    ? `Decider replay ${gameNum - DUEL_FORMAT_SEQUENCE.length}`
+    : `Game ${gameNum} of 3`;
+
+  return {
+    format, target: 'title', event, multiplier, winnerOnly: false,
+    finale: true,
+    duelistIds: [idA, idB],
+    duelistNames: [nameA, nameB],
+    restrictedIds: [], restrictedNames: [],
+    intro: {
+      title: `The Finale · ${gameLabel}`,
+      tagline: `${nameA} ${winsA} – ${winsB} ${nameB} · first to 2 wins takes ${DUEL_BONUS.toLocaleString()} pts`,
+    },
   };
 }
 
 // The sanitized view clients get: no socketIds, and a mystery multiplier stays
 // hidden (null) until the reveal.
-export function partyView(round: Round, revealed = false): PartyClientView | undefined {
+export function partyView(game: Game, round: Round, revealed = false): PartyClientView | undefined {
   const p = round.party;
   if (!p) return undefined;
   return {
@@ -393,6 +564,12 @@ export function partyView(round: Round, revealed = false): PartyClientView | und
     intro: p.intro,
     finale: p.finale,
     duelists: p.duelistNames,
+    restricted: p.restrictedNames,
+    choiceOptions: p.choiceOptions,
+    duelProgress: p.finale ? {
+      subRoundIndex: game.duelSubRoundIndex,
+      wins: game.duelDuelistIds.map(id => ({ name: game.players.get(id)?.name ?? '', count: game.duelWins[id] ?? 0 })),
+    } : undefined,
   };
 }
 
@@ -438,10 +615,22 @@ export function isRaceFlowRound(game: Game, round: Round): boolean {
   return false;
 }
 
-// Who actually plays a race-flow round — the duelists in a finale, everyone
-// otherwise.
+// The current round's participant restriction, if any — the finale's
+// duelists, or (e.g.) underdog's trailing player(s). Finale and a generic
+// restriction never coexist (finale hardcodes its own format/scoring), but
+// every gate that cares "who's allowed to guess this round" can check this
+// one thing instead of re-deriving finale-vs-event logic each time.
+function restrictedParticipantIds(round: Round): string[] | null {
+  if (round.party?.finale) return round.party.duelistIds;
+  if (round.party?.restrictedIds?.length) return round.party.restrictedIds;
+  return null;
+}
+
+// Who actually plays a race-flow round — a restricted subset (finale
+// duelists, underdog trailers) if this round has one, everyone otherwise.
 function raceParticipants(game: Game, round: Round): string[] {
-  if (round.party?.finale) return round.party.duelistIds.filter(id => game.players.has(id));
+  const restricted = restrictedParticipantIds(round);
+  if (restricted) return restricted.filter(id => game.players.has(id));
   return Array.from(game.players.keys());
 }
 
@@ -561,6 +750,7 @@ function buildRoundHints(song: Song, party: PartyConfig | undefined, guessKind: 
   const suppressArtist = guessKind === 'artist' || guessKind === 'both';
   const suppressYear = guessKind === 'year';
   const includeTitle = guessKind === 'artist' || guessKind === 'year';
+  if (party?.event === 'underdog') return generateUnderdogHints(song, suppressArtist, suppressYear, includeTitle);
   const hints = party?.format === 'classic' && party.event === 'fullhints'
     ? generateAllHints(song, suppressArtist, suppressYear)
     : generateHints(song, suppressArtist, suppressYear, includeTitle);
@@ -618,6 +808,27 @@ function avoidRecentArtists(game: Game, pool: Song[], rawPoolSize: number): Song
   return notRecentArtist.length > 0 ? notRecentArtist : pool;
 }
 
+// Two titles that would make an ambiguous pair of options — exact match or
+// one a substring of the other (case-insensitive) — so a "wrong" option can
+// never actually also be a fair reading of the real title.
+function titlesCollide(a: string, b: string): boolean {
+  const na = a.trim().toLowerCase();
+  const nb = b.trim().toLowerCase();
+  return na === nb || na.includes(nb) || nb.includes(na);
+}
+
+// Multiple Choice's 3 wrong options — drawn from the same (already
+// difficulty/constraint-filtered) pool the round's own song came from, so
+// they're naturally the same difficulty tier. Returns undefined if the pool
+// can't supply 3 safe distractors (a tiny custom playlist), signalling the
+// caller to downgrade the round instead.
+function pickChoiceOptions(song: Song, pool: Song[]): string[] | undefined {
+  const candidates = pool.filter(s => s.spotifyTrackId !== song.spotifyTrackId && !titlesCollide(s.title, song.title));
+  if (candidates.length < 3) return undefined;
+  const distractors = shuffle(candidates).slice(0, 3).map(s => s.title);
+  return shuffle([song.title, ...distractors]);
+}
+
 // Round selection applies these constraints strictest/most-essential first,
 // softest/most-skippable last — and each stage reverts to its input pool if
 // applying it would leave nothing, so the last-applied (softest) filter is
@@ -635,15 +846,56 @@ function buildRound(game: Game, party?: PartyConfig): Round {
 
   const song = pickRandom(pool);
 
+  if (party?.format === 'choice') {
+    const choiceOptions = pickChoiceOptions(song, pool);
+    if (choiceOptions) {
+      party.choiceOptions = choiceOptions;
+    } else {
+      // Not enough distinct titles in this pool for 3 real distractors —
+      // silently fall back to a plain classic round, same precedent as
+      // computeSnippetPosition's downgrade for snippet/outro.
+      party.format = 'classic';
+      party.target = 'title';
+      party.event = null;
+      party.multiplier = 1;
+      party.winnerOnly = false;
+      party.restrictedIds = [];
+      party.restrictedNames = [];
+      party.intro = introFor(party.format, party.target, party.event, party.winnerOnly);
+    }
+  }
+
   const snippetMs = party ? computeSnippetPosition(song, party, game.raceTime) : undefined;
   const guessKind = roundGuessKind(party, game.artistOnly, game.yearOnly);
-  const hints = buildRoundHints(song, party, guessKind);
+
+  // Chaos Hints repurposes the normal `hints` transport to carry its own
+  // 4-hint "spot the fake" set instead of the usual guess-along hints —
+  // bypasses buildRoundHints entirely for this event.
+  let hints: Hint[];
+  let chaosFakeIndex: number | undefined;
+  const chaosSet = party?.event === 'chaoshints' ? buildChaosHintSet(song, pool) : undefined;
+  if (party?.event === 'chaoshints' && !chaosSet) {
+    // Not enough hint categories (or no decoy song shares one) to build a
+    // believable set — silently downgrade to a plain round, same precedent
+    // as computeSnippetPosition's downgrade for snippet/outro.
+    party.event = null;
+    party.multiplier = 1;
+    party.intro = introFor(party.format, party.target, party.event, party.winnerOnly);
+  }
+  if (chaosSet) {
+    hints = chaosSet.hints;
+    chaosFakeIndex = chaosSet.fakeIndex;
+  } else {
+    hints = buildRoundHints(song, party, guessKind);
+  }
 
   return {
     song,
     hints,
     party,
     snippetMs,
+    chaosFakeIndex,
+    chaosTapped: new Map(),
     bids: new Map(),
     bidTiers: [],
     tierIndex: 0,
@@ -690,6 +942,13 @@ export function createGame(hostSocketId: string, preferredPin?: string): Game {
     artistOnly: false,
     yearOnly: false,
     difficulty: 'hard',
+    enabledEvents: new Set(ALL_PARTY_EVENTS),
+    chaosLevel: 50,
+    duelChampion: null,
+    duelActive: false,
+    duelDuelistIds: [],
+    duelWins: {},
+    duelSubRoundIndex: 0,
     songSource: 'library',
     playlistId: undefined,
     currentRound: null,
@@ -736,7 +995,11 @@ export function addPlayer(game: Game, socketId: string, name: string): Player | 
   );
   if (taken) return null;
   const former = game.formerPlayers.get(name.trim().toLowerCase());
-  const player: Player = { socketId, name: name.trim(), score: former?.score ?? 0, streak: former?.streak ?? 0 };
+  const player: Player = {
+    socketId, name: name.trim(), score: former?.score ?? 0, streak: former?.streak ?? 0,
+    totalCorrect: former?.totalCorrect ?? 0, totalPasses: former?.totalPasses ?? 0,
+    fastestCorrectMs: former?.fastestCorrectMs ?? null, biggestSwing: former?.biggestSwing ?? 0,
+  };
   game.players.set(socketId, player);
   socketToPin.set(socketId, game.pin);
   return player;
@@ -758,7 +1021,12 @@ function migrateRoundSocketId(round: Round, oldId: string, newId: string): void 
   if (round.correctGuessers.delete(oldId)) round.correctGuessers.add(newId);
   const guessTime = round.guessTimes.get(oldId);
   if (guessTime !== undefined) { round.guessTimes.set(newId, guessTime); round.guessTimes.delete(oldId); }
-  if (round.party) round.party.duelistIds = round.party.duelistIds.map(id => (id === oldId ? newId : id));
+  const tapped = round.chaosTapped.get(oldId);
+  if (tapped !== undefined) { round.chaosTapped.set(newId, tapped); round.chaosTapped.delete(oldId); }
+  if (round.party) {
+    round.party.duelistIds = round.party.duelistIds.map(id => (id === oldId ? newId : id));
+    round.party.restrictedIds = round.party.restrictedIds.map(id => (id === oldId ? newId : id));
+  }
   if (round.stealBy === oldId) round.stealBy = newId;
 }
 
@@ -788,6 +1056,15 @@ export function rejoinPlayer(game: Game, newSocketId: string, name: string): Pla
     player.socketId = newSocketId;
     game.players.set(newSocketId, player);
     if (game.currentRound) migrateRoundSocketId(game.currentRound, oldId, newSocketId);
+    // Duel state lives on Game (not Round), since it must survive each
+    // sub-round's fresh Round object — so it needs its own remap here,
+    // separate from migrateRoundSocketId's round-scoped one.
+    if (game.duelDuelistIds.includes(oldId)) {
+      game.duelDuelistIds = game.duelDuelistIds.map(id => (id === oldId ? newSocketId : id));
+      const wins = game.duelWins[oldId];
+      if (wins !== undefined) { game.duelWins[newSocketId] = wins; delete game.duelWins[oldId]; }
+      if (game.duelChampion === oldId) game.duelChampion = newSocketId;
+    }
   }
   socketToPin.set(newSocketId, game.pin);
   return player;
@@ -800,7 +1077,13 @@ export function removeSocket(socketId: string): { game: Game; wasHost: boolean }
   const wasHost = game.hostSocketId === socketId;
   if (!wasHost) {
     const player = game.players.get(socketId);
-    if (player) game.formerPlayers.set(player.name.toLowerCase(), { score: player.score, streak: player.streak });
+    if (player) {
+      game.formerPlayers.set(player.name.toLowerCase(), {
+        score: player.score, streak: player.streak,
+        totalCorrect: player.totalCorrect, totalPasses: player.totalPasses,
+        fastestCorrectMs: player.fastestCorrectMs, biggestSwing: player.biggestSwing,
+      });
+    }
     game.players.delete(socketId);
   }
   return { game, wasHost };
@@ -825,6 +1108,11 @@ export function recordBid(game: Game, socketId: string, seconds: number): boolea
   if (game.phase !== 'betting') return false;
   if (!game.players.has(socketId)) return false;
   if (!BID_OPTIONS.includes(seconds)) return false;
+  // A finale duel's classic sub-round is only for the two duelists — everyone
+  // else just watches (mirrors the finale's existing race-flow restriction,
+  // which classic never needed before the duel could ride this format).
+  const party = game.currentRound?.party;
+  if (party?.finale && !party.duelistIds.includes(socketId)) return false;
   game.currentRound!.bids.set(socketId, seconds);
   return true;
 }
@@ -916,7 +1204,7 @@ export function recordGuess(
     const guess = parseYearGuess(text);
     const correct = guess !== null && guess === Math.floor(round.song.year ?? 0);
     if (!correct) return failGuess(round, socketId, guesserName);
-    const points = calcPoints(game, round.lowestBid, round.song.rank) * roundMultiplier(round)
+    const points = Math.round(calcPoints(game, round.lowestBid, round.song.rank) * roundMultiplier(round))
       + pityBonus(currentScores(game), socketId, round);
     const result = applyClassicWin(game, round, socketId, guesserName, points);
     // The year reveal UI reads exclusively from `yearResults` (never from
@@ -931,7 +1219,7 @@ export function recordGuess(
   if (!correct) return failGuess(round, socketId, guesserName);
 
   const basePoints = calcPoints(game, round.lowestBid, round.song.rank);
-  const points = (basePoints + (artistBonus ? basePoints : 0)) * roundMultiplier(round)
+  const points = Math.round((basePoints + (artistBonus ? basePoints : 0)) * roundMultiplier(round))
     + pityBonus(currentScores(game), socketId, round);
   return applyClassicWin(game, round, socketId, guesserName, points);
 }
@@ -957,10 +1245,18 @@ function applyClassicWin(
   const player = game.players.get(socketId)!;
   player.score += points;
   player.streak += 1;
+  player.totalCorrect += 1;
+  if (points > player.biggestSwing) player.biggestSwing = points;
   round.scoredSocketIds.add(socketId);
   if (round.party?.event === 'steal') {
     round.stealBy = socketId;
     round.stealDone = false;
+  }
+  // Finale classic sub-round: record who took this game of the best-of-3 —
+  // separate from (and on top of) the normal points above.
+  if (round.party?.finale) {
+    game.duelWins[socketId] = (game.duelWins[socketId] ?? 0) + 1;
+    resolveDuelIfWon(game, socketId);
   }
   game.phase = 'reveal';
   settleStreaks(game, round);
@@ -979,6 +1275,8 @@ export function skipGuess(game: Game, socketId: string): { allDone: boolean } | 
   round.guesses.set(socketId, null);
   round.passed.add(socketId);
   if (game.phase === 'playing') round.earlyGuessers.add(socketId);
+  const player = game.players.get(socketId);
+  if (player) player.totalPasses += 1;
   const allDone = round.guesserSocketIds.every(id => round.passed.has(id));
   return { allDone };
 }
@@ -998,28 +1296,52 @@ function applyRaceCorrectGuess(
   round.correctGuessers.add(socketId);
   round.guessTimes.set(socketId, elapsedMs);
   if (!isFirst && isWinnerOnlyRound(game, round)) return 0;
-  let base: number;
-  if (round.party?.finale) {
-    // Duel: winner-takes-all, flat stakes.
-    base = isFirst ? DUEL_WIN_POINTS : 0;
-  } else if (isWinnerOnlyRound(game, round)) {
-    base = calcRaceWinnerPoints(game, elapsedMs, game.raceTime, round.song.rank);
-  } else {
-    base = calcRacePoints(game, isFirst, elapsedMs, round.firstCorrectAt! - round.playStartAt!, round.song.rank);
-  }
-  let points = (base + (artistBonus ? base : 0)) * roundMultiplier(round);
+  // A finale duelist can never actually reach this function as a non-first
+  // guesser — recordRaceGuess already rejects any guess attempt once the
+  // round's first correct answer has landed, for any finale round — so
+  // `isFirst` is always true here and this scores through the normal
+  // first-correct race payout, same as any other race round.
+  const base = isWinnerOnlyRound(game, round)
+    ? calcRaceWinnerPoints(game, elapsedMs, game.raceTime, round.song.rank)
+    : calcRacePoints(game, isFirst, elapsedMs, round.firstCorrectAt! - round.playStartAt!, round.song.rank);
+  const preMultiplier = base + (artistBonus ? base : 0);
+  let points = Math.round(preMultiplier * roundMultiplier(round));
   if (points > 0) points += pityBonus(currentScores(game), socketId, round);
   if (isFirst && round.party?.event === 'steal') {
     round.stealBy = socketId;
     round.stealDone = false;
   }
+  applyRaceScoreToPlayer(game, round, socketId, elapsedMs, points);
+  recordFinaleRaceWin(game, round, socketId, isFirst);
+  // The mystery multiplier stays hidden until everyone sees the shared
+  // reveal, so the guesser's own immediate ack can't carry the true
+  // (multiplied) total — that would let them back out ×2 vs ×10 right away.
+  // Hand back the pre-multiplier amount instead; the real score still lands
+  // via player.score, and score_update carries the true delta at reveal.
+  return round.party?.event === 'mystery' ? preMultiplier : points;
+}
+
+function applyRaceScoreToPlayer(
+  game: Game, round: Round, socketId: string, elapsedMs: number, points: number,
+): void {
   const player = game.players.get(socketId)!;
   player.score += points;
   if (points > 0) {
     player.streak += 1;
+    player.totalCorrect += 1;
+    if (points > player.biggestSwing) player.biggestSwing = points;
+    player.fastestCorrectMs = player.fastestCorrectMs === null ? elapsedMs : Math.min(player.fastestCorrectMs, elapsedMs);
     round.scoredSocketIds.add(socketId);
   }
-  return points;
+}
+
+function recordFinaleRaceWin(game: Game, round: Round, socketId: string, isFirst: boolean): void {
+  // Finale race sub-round: record who took this game of the best-of-3 —
+  // separate from (and on top of) the normal points above.
+  if (isFirst && round.party?.finale) {
+    game.duelWins[socketId] = (game.duelWins[socketId] ?? 0) + 1;
+    resolveDuelIfWon(game, socketId);
+  }
 }
 
 export function recordRaceGuess(
@@ -1033,7 +1355,8 @@ export function recordRaceGuess(
   if (!game.players.has(socketId)) return null;
   if (game.phase !== 'guessing') return null;
   if (round.passed.has(socketId)) return null;
-  if (round.party?.finale && !round.party.duelistIds.includes(socketId)) return null;
+  const restricted = restrictedParticipantIds(round);
+  if (restricted && !restricted.includes(socketId)) return null;
   if ((isWinnerOnlyRound(game, round) || round.party?.finale) && round.firstCorrectAt !== null) return null;
 
   const elapsedMs = Date.now() - (round.playStartAt ?? Date.now());
@@ -1066,12 +1389,70 @@ export function skipRaceGuess(
   if (!game.players.has(socketId)) return null;
   if (game.phase !== 'guessing') return null;
   if (round.passed.has(socketId)) return null;
-  if (round.party?.finale && !round.party.duelistIds.includes(socketId)) return null;
+  const restricted = restrictedParticipantIds(round);
+  if (restricted && !restricted.includes(socketId)) return null;
 
   round.guesses.set(socketId, null);
   round.passed.add(socketId);
+  game.players.get(socketId)!.totalPasses += 1;
   const allDone = raceParticipants(game, round).every(id => round.passed.has(id));
   return { allDone };
+}
+
+// Mirrors applyRaceCorrectGuess's decay-scoring math, but correctness is
+// "did you tap the fabricated hint" rather than a fuzzy text match. A round
+// only ever has one active event, so this never needs to combine with
+// mystery's hide-until-reveal return trick — moot by construction.
+function applyChaosHintTap(
+  game: Game, round: Round, socketId: string, tappedIndex: number, elapsedMs: number,
+): number {
+  const isCorrect = tappedIndex === round.chaosFakeIndex;
+  const isFirst = round.firstCorrectAt === null;
+  if (isCorrect) {
+    if (isFirst) round.firstCorrectAt = Date.now();
+    round.correctGuessers.add(socketId);
+    round.guessTimes.set(socketId, elapsedMs);
+  }
+  if (!isCorrect || (!isFirst && isWinnerOnlyRound(game, round))) return 0;
+  const base = isWinnerOnlyRound(game, round)
+    ? calcRaceWinnerPoints(game, elapsedMs, game.raceTime, round.song.rank)
+    : calcRacePoints(game, isFirst, elapsedMs, round.firstCorrectAt! - round.playStartAt!, round.song.rank);
+  let points = Math.round(base * roundMultiplier(round));
+  if (points > 0) points += pityBonus(currentScores(game), socketId, round);
+  const player = game.players.get(socketId)!;
+  player.score += points;
+  if (points > 0) {
+    player.streak += 1;
+    player.totalCorrect += 1;
+    if (points > player.biggestSwing) player.biggestSwing = points;
+    player.fastestCorrectMs = player.fastestCorrectMs === null ? elapsedMs : Math.min(player.fastestCorrectMs, elapsedMs);
+    round.scoredSocketIds.add(socketId);
+  }
+  return points;
+}
+
+export function recordChaosHintTap(
+  game: Game, socketId: string, tappedIndex: number,
+): { correct: boolean; points: number; elapsedMs: number; allDone: boolean } | null {
+  const round = game.currentRound;
+  if (!round || round.party?.event !== 'chaoshints') return null;
+  if (!game.players.has(socketId)) return null;
+  if (game.phase !== 'guessing') return null;
+  if (round.passed.has(socketId)) return null;
+  const restricted = restrictedParticipantIds(round);
+  if (restricted && !restricted.includes(socketId)) return null;
+  if (isWinnerOnlyRound(game, round) && round.firstCorrectAt !== null) return null;
+
+  const elapsedMs = Date.now() - (round.playStartAt ?? Date.now());
+  round.chaosTapped.set(socketId, tappedIndex);
+  round.passed.add(socketId);
+  const participants = raceParticipants(game, round);
+
+  const correct = tappedIndex === round.chaosFakeIndex;
+  const points = applyChaosHintTap(game, round, socketId, tappedIndex, elapsedMs);
+
+  const allDone = (isWinnerOnlyRound(game, round) && correct) || participants.every(id => round.passed.has(id));
+  return { correct, points, elapsedMs, allDone };
 }
 
 // Parses a year guess (digits only, plausible range) or null if unusable.
@@ -1106,12 +1487,14 @@ function scoreYearGuesses(game: Game, round: Round, mult: number, winnerOnly: bo
     if (e.diff !== null && (!winnerOnly || e.diff === best)) {
       points = Math.max(0, YEAR_MAX_POINTS - YEAR_POINTS_SLOPE * e.diff);
       if (e.diff === best) points += Math.round(YEAR_WINNER_BONUS / winners);
-      points *= mult;
+      points = Math.round(points * mult);
     }
     if (points > 0) {
       points += pityBonus(preRoundScores, e.id, round);
       e.player.score += points;
       e.player.streak += 1;
+      e.player.totalCorrect += 1;
+      if (points > e.player.biggestSwing) e.player.biggestSwing = points;
       round.scoredSocketIds.add(e.id);
     }
     return { name: e.player.name, guess: e.guess, diff: e.diff, points, pity: round.pityAwardedTo.has(e.id) };
@@ -1126,7 +1509,28 @@ function scoreYearGuesses(game: Game, round: Round, mult: number, winnerOnly: bo
 // distance is known.
 export function finalizeYearRound(game: Game): YearResult[] {
   const round = game.currentRound!;
-  return scoreYearGuesses(game, round, roundMultiplier(round), isWinnerOnlyRound(game, round));
+  const results = scoreYearGuesses(game, round, roundMultiplier(round), isWinnerOnlyRound(game, round));
+  if (round.party?.finale) recordDuelYearWin(game, round);
+  return results;
+}
+
+// Finale year sub-round (the decider): whoever's strictly closest takes this
+// game of the best-of-3. An exact tie between the two duelists — or neither
+// answering at all — resolves nothing here; advanceDuelOrResolve will notice
+// neither reached 2 wins and call for another year sub-round instead of
+// ending the duel.
+function recordDuelYearWin(game: Game, round: Round): void {
+  const actual = Math.floor(round.song.year ?? 0);
+  const duelistIds = round.party!.duelistIds;
+  const entries = yearGuessEntries(game, round, actual)
+    .filter(e => duelistIds.includes(e.id) && e.diff !== null);
+  if (entries.length === 0) return;
+  const best = Math.min(...entries.map(e => e.diff!));
+  const winners = entries.filter(e => e.diff === best);
+  if (winners.length === 1) {
+    game.duelWins[winners[0].id] = (game.duelWins[winners[0].id] ?? 0) + 1;
+    resolveDuelIfWon(game, winners[0].id);
+  }
 }
 
 // Classic-flow year round that ended early on an exact guess — scored like
@@ -1202,6 +1606,8 @@ export function skipSteal(game: Game, thiefId: string): { thief: string } | null
 export function finalizeRaceDrafts(game: Game): void {
   const round = game.currentRound;
   if (!round || game.phase !== 'guessing') return;
+  // Chaos Hints is tap-only — there's no free-text draft to auto-submit.
+  if (round.party?.event === 'chaoshints') return;
   for (const id of game.players.keys()) {
     if (round.passed.has(id)) continue;
     const draft = round.liveDrafts.get(id)?.trim();
@@ -1257,10 +1663,80 @@ export function getRoundGuesses(game: Game): { name: string; guess: string | nul
   return results;
 }
 
+// Applies the flat DUEL_BONUS and crowns Duel Champion the instant a
+// duelist's win count reaches 2 — called right where duelWins is
+// incremented (applyClassicWin, applyRaceCorrectGuess, recordDuelYearWin),
+// not lazily at the next "next round" click, so the reveal screen for the
+// deciding sub-round already shows the true final score instead of jumping
+// again once the host continues.
+function resolveDuelIfWon(game: Game, socketId: string): void {
+  if ((game.duelWins[socketId] ?? 0) < 2) return;
+  game.duelChampion = socketId;
+  const winner = game.players.get(socketId);
+  if (winner) winner.score += DUEL_BONUS;
+  game.duelActive = false;
+}
+
+// Called from the host's "next round" action while a finale duel is active.
+// Returns true if the duel should continue (the caller then starts the next
+// sub-round instead of advancing roundIndex/ending the game); false once
+// it's resolved (resolveDuelIfWon already flipped duelActive off), in which
+// case the caller falls through to the normal end-of-game flow exactly as if
+// this were an ordinary last round.
+export function advanceDuelOrResolve(game: Game): boolean {
+  if (!game.duelActive) return false;
+  game.duelSubRoundIndex += 1;
+  return true;
+}
+
 export function getLeaderboard(game: Game) {
   return Array.from(game.players.values())
     .sort((a, b) => b.score - a.score)
     .map((p, i) => ({ rank: i + 1, name: p.name, score: p.score }));
+}
+
+// End-of-game superlatives, computed once the game's over. Ties share the
+// award rather than picking one name arbitrarily. A stat of zero doesn't
+// count as an achievement, so an award is omitted entirely if nobody
+// actually did the thing (e.g. nobody ever guessed correctly).
+export function computeAwards(game: Game): Award[] {
+  const players = Array.from(game.players.values());
+  const awards: Award[] = [];
+
+  const mostCorrect = Math.max(0, ...players.map(p => p.totalCorrect));
+  if (mostCorrect > 0) {
+    awards.push({
+      key: 'sharpshooter',
+      playerNames: players.filter(p => p.totalCorrect === mostCorrect).map(p => p.name),
+      detail: `${mostCorrect} correct guess${mostCorrect === 1 ? '' : 'es'}`,
+    });
+  }
+
+  const timed = players.filter(p => p.fastestCorrectMs !== null);
+  if (timed.length > 0) {
+    const fastestMs = Math.min(...timed.map(p => p.fastestCorrectMs!));
+    awards.push({
+      key: 'speedDemon',
+      playerNames: timed.filter(p => p.fastestCorrectMs === fastestMs).map(p => p.name),
+      detail: `${(fastestMs / 1000).toFixed(1)}s`,
+    });
+  }
+
+  const biggestSwing = Math.max(0, ...players.map(p => p.biggestSwing));
+  if (biggestSwing > 0) {
+    awards.push({
+      key: 'comebackKid',
+      playerNames: players.filter(p => p.biggestSwing === biggestSwing).map(p => p.name),
+      detail: `+${biggestSwing.toLocaleString()} in one round`,
+    });
+  }
+
+  if (game.duelChampion) {
+    const champ = game.players.get(game.duelChampion);
+    if (champ) awards.push({ key: 'duelChampion', playerNames: [champ.name], detail: 'Won the finale duel' });
+  }
+
+  return awards;
 }
 
 export function updateSocketPin(socketId: string, pin: string) {

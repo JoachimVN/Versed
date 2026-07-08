@@ -41,10 +41,17 @@ export interface PlaylistTrackInput {
 
 // How a party round plays out. 'classic' and 'race' reuse those modes' whole
 // flows; 'year' rides the race flow but everyone answers a release year and
-// the closest answer wins.
-export type PartyFormat = 'classic' | 'race' | 'year';
+// the closest answer wins; 'choice' also rides the race flow, but with 4
+// title options shown instead of a text input — tapping one submits its
+// exact text, so scoring is unchanged from a normal race guess.
+export type PartyFormat = 'classic' | 'race' | 'year' | 'choice';
 export type GuessTarget = 'title' | 'artist' | 'both';
-export type PartyEvent = 'double' | 'mystery' | 'steal' | 'snippet' | 'fullhints' | 'blind' | 'outro';
+export type PartyEvent =
+  | 'double' | 'mystery' | 'steal' | 'snippet' | 'fullhints' | 'blind' | 'outro' | 'underdog' | 'chaoshints';
+
+// Continuous 0–100 chaos scale. It tunes how often party events fire and how
+// wild mystery's multiplier spread gets; 50 is the balanced default.
+export type ChaosLevel = number;
 
 export interface PartyConfig {
   format: PartyFormat;
@@ -56,6 +63,12 @@ export interface PartyConfig {
   finale: boolean;                  // last round: top-2 duel, first correct wins
   duelistIds: string[];             // socketIds of the duelists (finale only)
   duelistNames: string[];
+  // Generic "only these players may guess this round" restriction — distinct
+  // from duelistIds/finale so the finale's flat duel payout never leaks onto
+  // a restricted-but-not-finale round (e.g. 'underdog').
+  restrictedIds: string[];
+  restrictedNames: string[];
+  choiceOptions?: string[];          // 'choice' format: shuffled title options (correct one included)
 }
 
 // What clients are allowed to see of a PartyConfig (no socketIds, mystery
@@ -69,6 +82,11 @@ export interface PartyClientView {
   intro: { title: string; tagline: string };
   finale: boolean;
   duelists: string[];
+  restricted: string[];
+  choiceOptions?: string[];
+  // Finale only: best-of-3 duel progress, so both screens can show
+  // "Game N of 3 · Alice 1 – 0 Bob" instead of just "The Finale".
+  duelProgress?: { subRoundIndex: number; wins: { name: string; count: number }[] };
 }
 
 export interface YearResult {
@@ -97,6 +115,12 @@ export interface Round {
   stealBy?: string;                 // socketId of the round winner allowed to steal
   stealDone?: boolean;
   yearResults?: YearResult[];       // 'year' rounds: filled at round end
+  // 'chaoshints' event: `hints` above IS the ~4-hint set shown (one
+  // fabricated) — reuses the existing hints transport rather than a
+  // parallel payload. chaosFakeIndex says which index is the lie, hidden
+  // from clients until reveal.
+  chaosFakeIndex?: number;
+  chaosTapped: Map<string, number>; // socketId → tapped hint index ('chaoshints' rounds only)
   bids: Map<string, number>;
   bidTiers: BidTier[];
   tierIndex: number;
@@ -122,6 +146,20 @@ export interface Player {
   name: string;
   score: number;
   streak: number;
+  // Running, whole-game stats — never reset mid-game (unlike Round's
+  // per-round-only tracking) — used to compute end-of-game awards.
+  totalCorrect: number;
+  totalPasses: number;
+  fastestCorrectMs: number | null; // race-flow only; classic has no per-player timing
+  biggestSwing: number;            // largest single-round point gain
+}
+
+// One end-of-game superlative. Ties share the award rather than picking one
+// name arbitrarily.
+export interface Award {
+  key: 'sharpshooter' | 'speedDemon' | 'comebackKid' | 'duelChampion';
+  playerNames: string[];
+  detail: string;
 }
 
 export type GameMode = 'classic' | 'race' | 'party';
@@ -143,7 +181,11 @@ export interface Game {
   pin: string;
   hostSocketId: string;
   players: Map<string, Player>;
-  formerPlayers: Map<string, { score: number; streak: number }>; // name.toLowerCase() → saved state
+  // name.toLowerCase() → saved state, restored on rejoin
+  formerPlayers: Map<string, {
+    score: number; streak: number;
+    totalCorrect: number; totalPasses: number; fastestCorrectMs: number | null; biggestSwing: number;
+  }>;
   phase: GamePhase;
   roundIndex: number;
   totalRounds: number;
@@ -155,6 +197,15 @@ export interface Game {
   artistOnly: boolean;
   yearOnly: boolean;
   difficulty: Difficulty;
+  enabledEvents: Set<PartyEvent>; // party mode: which events the host allows into the pool
+  chaosLevel: ChaosLevel;         // party mode: event frequency + mystery-multiplier spread preset
+  duelChampion: string | null;    // party mode: socketId of the finale duel's winner, once resolved
+  // Finale best-of-3 duel state — lives on Game (not Round) since it must
+  // survive each sub-round's fresh Round object.
+  duelActive: boolean;
+  duelDuelistIds: string[];         // fixed for the whole best-of-3 once triggered
+  duelWins: Record<string, number>; // socketId -> sub-round wins so far (0, 1, or 2)
+  duelSubRoundIndex: number;        // 0=classic, 1=race, 2+=year (replayed on tie)
   songSource: SongSource;
   songPool?: Song[];
   playlistId?: string;
