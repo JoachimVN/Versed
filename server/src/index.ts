@@ -508,13 +508,17 @@ io.on('connection', (socket) => {
     if (!ok) return;
 
     const round = game.currentRound!;
+    const totalBidders = round.party?.finale
+      ? round.party.duelistIds.filter(id => game.players.has(id)).length
+      : game.players.size;
     io.to(`host:${game.pin}`).emit('bid_received', {
       bidCount: round.bids.size,
-      totalPlayers: game.players.size,
+      totalPlayers: totalBidders,
     });
 
-    // Early close when every player has placed a bid
-    if (round.bids.size >= game.players.size) {
+    // Finale classic rounds only accept bids from the two duelists; ordinary
+    // rounds continue to wait for every active player.
+    if (round.bids.size >= totalBidders) {
       if (game.phaseTimer) clearTimeout(game.phaseTimer);
       closeBettingAndPlay(game);
     }

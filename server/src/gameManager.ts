@@ -403,7 +403,7 @@ export const ALL_PARTY_EVENTS: PartyEvent[] = [
 const NO_EVENT_CHANCE: Record<ChaosLevel, number> = { chill: 75, balanced: 60, chaotic: 40 };
 
 function pickPartyEvent(game: Game, format: PartyFormat, prevEvent: PartyEvent | null | undefined): PartyEvent | null {
-  if (format === 'year' || randomInt(0, 100) >= NO_EVENT_CHANCE[game.chaosLevel]) return null;
+  if (format === 'year' || randomInt(0, 100) < NO_EVENT_CHANCE[game.chaosLevel]) return null;
   const pool: [PartyEvent, number][] = [['double', 30], ['mystery', 25], ['snippet', 25]];
   if (format === 'classic') pool.push(['fullhints', 20], ['blind', 20]);
   // Chaos Hints replaces the whole guessing objective with a tap-the-fake-
