@@ -44,6 +44,7 @@ export interface PlayState {
   result: RoundResultEvent | null;
   myScore: number;
   myScoreDelta: number;
+  myPity: boolean;
   myStreak: number;
   mode: 'classic' | 'race';
   artistOnly: boolean;
@@ -111,6 +112,7 @@ function usePlayGame(pinParam?: string): PlayState {
   const [myScore, setMyScore] = useState(0);
   const myScoreRef = useRef(0);
   const [myScoreDelta, setMyScoreDelta] = useState(0);
+  const [myPity, setMyPity] = useState(false);
   const [myStreak, setMyStreak] = useState(0);
   const [mode, setMode] = useState<'classic' | 'race'>('classic');
   const modeRef = useRef<'classic' | 'race'>('classic');
@@ -347,10 +349,11 @@ function usePlayGame(pinParam?: string): PlayState {
       setPhase('reveal');
     });
 
-    socket.on('score_update', ({ players }: { players: { name: string; score: number; streak: number }[] }) => {
+    socket.on('score_update', ({ players }: { players: { name: string; score: number; streak: number; pity?: boolean }[] }) => {
       const me = players.find(p => p.name === myNameRef.current);
       if (me) {
         setMyScoreDelta(Math.max(0, me.score - myScoreRef.current));
+        setMyPity(me.pity ?? false);
         myScoreRef.current = me.score;
         setMyScore(me.score);
         setMyStreak(me.streak);
@@ -568,7 +571,7 @@ function usePlayGame(pinParam?: string): PlayState {
   return {
     phase, pin, name, myName, error, roundIndex, totalRounds, hints,
     timeLeft, timerTotal, bettingTime, bidIndex, bidOptions, bidScores, myBid, guesserNames, lowestBid,
-    guessText, result, myScore, myScoreDelta, myStreak, mode, artistOnly, yearOnly, myRacePoints, myRaceTimeMs,
+    guessText, result, myScore, myScoreDelta, myPity, myStreak, mode, artistOnly, yearOnly, myRacePoints, myRaceTimeMs,
     party, artistGuessText, stealVictims, stealResult,
     leaderboard, leaderboardDeltas, songPlaying, songTempo, reconnecting, hostReconnecting, savedSession, guessInputRef,
     cameFromQR, newGamePin, rejoinNewGame,
@@ -1056,8 +1059,42 @@ function BidSubmittedView({ game }: Readonly<{ game: PlayState }>) {
 }
 
 
+// What this round wants answered: party rounds carry it per-round, classic/
+// race games use the game-wide artist/year toggles.
+type GuessTarget = 'title' | 'artist' | 'both' | 'year';
+function resolveTarget(party: PartyInfo | null, artistOnly: boolean, yearOnly: boolean): GuessTarget {
+  if (party) return party.format === 'year' ? 'year' : party.target;
+  if (yearOnly) return 'year';
+  return artistOnly ? 'artist' : 'title';
+}
+
+// Same pill style as PartyBadge's target bit, so a plain classic/race round
+// (no party recipe, just the artist/year toggle) still gets an explicit,
+// equally visible answer to "what am I about to guess" before the guessing
+// screen — previously only party rounds got this via PartyBadge.
+function TargetChip({ target }: Readonly<{ target: GuessTarget }>) {
+  const text = {
+    title: 'NAME THE SONG',
+    artist: 'NAME THE ARTIST',
+    both: 'TITLE + ARTIST',
+    year: 'GUESS THE YEAR',
+  }[target];
+  return (
+    <span style={{
+      padding: '4px 12px', borderRadius: '100px',
+      background: 'rgba(0,238,232,0.1)',
+      border: '1px solid rgba(0,238,232,0.3)',
+      color: 'rgba(94,234,212,0.9)',
+      fontSize: '0.62rem', fontWeight: 700, letterSpacing: '0.14em',
+      whiteSpace: 'nowrap',
+    }}>
+      {text}
+    </span>
+  );
+}
+
 export function WatchingView({ game }: Readonly<{ game: PlayState }>) {
-  const { lowestBid, guesserNames, mode, yearOnly, songPlaying, songTempo, party, roundIndex, totalRounds, myScore, myStreak } = game;
+  const { lowestBid, guesserNames, mode, artistOnly, yearOnly, songPlaying, songTempo, party, roundIndex, totalRounds, myScore, myStreak } = game;
   const [visible, setVisible] = useState(false);
   useEffect(() => { const t = setTimeout(() => setVisible(true), 30); return () => clearTimeout(t); }, []);
   const isRace = mode === 'race';
@@ -1092,6 +1129,7 @@ export function WatchingView({ game }: Readonly<{ game: PlayState }>) {
             Round {roundIndex + 1}<span style={{ color: 'rgba(255,255,255,0.45)' }}>/{totalRounds}</span>
           </p>
           <PartyBadge party={party} />
+          {!party && <TargetChip target={resolveTarget(party, artistOnly, yearOnly)} />}
         </div>
 
         <div className="flex-1 flex items-center justify-center w-full">
@@ -1279,16 +1317,7 @@ function YearDigitBoxes({ value, focused }: Readonly<{ value: string; focused: b
 export function GuessingView({ game }: Readonly<{ game: PlayState }>) {
   const { phase, timeLeft, timerTotal, myScore, guessText, guessInputRef, setGuessText, submitGuess, skipGuess, artistOnly, yearOnly, songPlaying, songTempo, mode, party, artistGuessText, setArtistGuessText } = game;
   const isListening = phase === 'watching';
-  // What this round wants answered: party rounds carry it per-round,
-  // classic/race games use the game-wide artist/year toggles.
-  let target: 'title' | 'artist' | 'both' | 'year';
-  if (party) {
-    target = party.format === 'year' ? 'year' : party.target;
-  } else if (yearOnly) {
-    target = 'year';
-  } else {
-    target = artistOnly ? 'artist' : 'title';
-  }
+  const target = resolveTarget(party, artistOnly, yearOnly);
   const isYear = target === 'year';
   const canSubmit = isYear ? guessText.trim().length === 4 : guessText.trim().length > 0;
   const [inputFocused, setInputFocused] = useState(false);
@@ -1593,7 +1622,7 @@ function PlayRevealShell({
   scoreExtra?: React.ReactNode;
   wide?: boolean;
 }>) {
-  const { myScore, myScoreDelta, myStreak, stealResult } = game;
+  const { myScore, myScoreDelta, myPity, myStreak, stealResult } = game;
   return (
     <div className={`page-enter relative min-h-screen flex flex-col items-center justify-center gap-5 overflow-hidden ${wide ? 'px-2 py-6' : 'p-6'}`}>
       <img
@@ -1620,7 +1649,7 @@ function PlayRevealShell({
 
         <div style={{ background: 'rgba(255,255,255,0.05)', border: '1px solid rgba(255,255,255,0.08)', borderRadius: '16px', padding: '16px 32px', textAlign: 'center' }}>
           {myScoreDelta > 0 && (
-            <p className="text-sky-400 text-sm font-bold tabular-nums">+{myScoreDelta.toLocaleString()} pts</p>
+            <p className="text-sky-400 text-sm font-bold tabular-nums">+{myScoreDelta.toLocaleString()} pts{myPity && ' (pity)'}</p>
           )}
           <p className="text-3xl font-black text-white">{myScore.toLocaleString()}</p>
           <p className="text-white/45 text-sm">your score</p>
@@ -1646,7 +1675,7 @@ function YearRevealView({ game, result }: Readonly<{ game: PlayState; result: Ro
       {scorers.map(r => (
         <div key={r.name} className="flex justify-between items-center gap-2">
           <span className={`text-xs min-w-0 truncate ${r.name === myName ? 'text-white font-semibold' : 'text-white/45'}`}>{r.name}</span>
-          <span className="ml-1.5 text-xs text-sky-400 font-semibold tabular-nums shrink-0">+{r.points.toLocaleString()}</span>
+          <span className="ml-1.5 text-xs text-sky-400 font-semibold tabular-nums shrink-0">+{r.points.toLocaleString()}{r.pity && ' (pity)'}</span>
         </div>
       ))}
     </div>

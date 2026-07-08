@@ -26,6 +26,7 @@ export interface PlayerInfo {
   name: string;
   score?: number;
   streak?: number;
+  pity?: boolean;
 }
 
 // Party mode: the per-round recipe as clients see it. A hidden mystery
@@ -35,6 +36,7 @@ export interface PartyInfo {
   target: 'title' | 'artist' | 'both';
   event: 'double' | 'mystery' | 'steal' | 'snippet' | 'fullhints' | 'blind' | 'outro' | null;
   multiplier: number | null;
+  winnerOnly: boolean;
   intro: { title: string; tagline: string };
   finale: boolean;
   duelists: string[];
@@ -45,6 +47,7 @@ export interface YearResult {
   guess: number | null;
   diff: number | null;
   points: number;
+  pity: boolean;
 }
 
 export interface RoundResultEvent {

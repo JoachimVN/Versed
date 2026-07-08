@@ -51,6 +51,7 @@ const MOCK_HOST: HostState = {
   ],
   result: null,
   roundDeltas: {},
+  roundPity: {},
   leaderboard: [],
   copied: false,
   playProgress: 0.62,
@@ -118,7 +119,7 @@ const MOCK_RESULT_YEAR: RoundResultEvent = {
   coverUrl: 'https://i.scdn.co/image/ab67616d0000b27332a7d87248d1b75463483df5',
   points: 0,
   party: {
-    format: 'year', target: 'title', event: null, multiplier: 1,
+    format: 'year', target: 'title', event: null, multiplier: 1, winnerOnly: false,
     intro: { title: 'Guess the Year', tagline: 'Closest answer wins the round' },
     finale: false, duelists: [],
   },
@@ -129,10 +130,10 @@ const MOCK_RESULT_YEAR: RoundResultEvent = {
     { name: 'Marcus', guess: null },
   ],
   yearResults: [
-    { name: 'Olivia', guess: 1983, diff: 0, points: 650 },
-    { name: 'Anna', guess: 1984, diff: 1, points: 480 },
-    { name: 'John', guess: 1979, diff: 4, points: 210 },
-    { name: 'Marcus', guess: null, diff: null, points: 0 },
+    { name: 'Olivia', guess: 1983, diff: 0, points: 650, pity: false },
+    { name: 'Anna', guess: 1984, diff: 1, points: 480, pity: false },
+    { name: 'John', guess: 1979, diff: 4, points: 210, pity: false },
+    { name: 'Marcus', guess: null, diff: null, points: 0, pity: false },
   ],
 };
 
@@ -169,7 +170,7 @@ const MOCK_HOST_LOBBY: HostState = {
 // Steal Round is party mode's showiest mechanic (win, then rob a victim), so
 // it's the one screenshotted to represent the round-intro popup.
 const MOCK_PARTY_STEAL: PartyInfo = {
-  format: 'classic', target: 'title', event: 'steal', multiplier: 1,
+  format: 'classic', target: 'title', event: 'steal', multiplier: 1, winnerOnly: false,
   intro: { title: 'Steal Round', tagline: 'Win the round, then rob another player · Bid & guess / name the song' },
   finale: false, duelists: [],
 };
@@ -196,6 +197,7 @@ const MOCK_PLAY: PlayState = {
   result: null,
   myScore: 2650,
   myScoreDelta: 0,
+  myPity: false,
   myStreak: 0,
   mode: 'classic',
   artistOnly: false,
@@ -234,7 +236,7 @@ const MOCK_PLAY_YEAR_GUESSING: PlayState = {
   guessText: '198',
   mode: 'race',
   party: {
-    format: 'year', target: 'title', event: null, multiplier: 1,
+    format: 'year', target: 'title', event: null, multiplier: 1, winnerOnly: false,
     intro: { title: 'Guess the Year', tagline: 'Closest answer wins the round' },
     finale: false, duelists: [],
   },

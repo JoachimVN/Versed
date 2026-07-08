@@ -51,6 +51,7 @@ export interface PartyConfig {
   target: GuessTarget;              // what the guess is checked against (ignored for 'year')
   event: PartyEvent | null;
   multiplier: number;               // actual value — clients see null while a mystery is unrevealed
+  winnerOnly: boolean;               // race/year only: just the winner scores, everyone else gets zero
   intro: { title: string; tagline: string };
   finale: boolean;                  // last round: top-2 duel, first correct wins
   duelistIds: string[];             // socketIds of the duelists (finale only)
@@ -64,6 +65,7 @@ export interface PartyClientView {
   target: GuessTarget;
   event: PartyEvent | null;
   multiplier: number | null;
+  winnerOnly: boolean;
   intro: { title: string; tagline: string };
   finale: boolean;
   duelists: string[];
@@ -74,6 +76,7 @@ export interface YearResult {
   guess: number | null;             // null = no/invalid answer
   diff: number | null;
   points: number;
+  pity: boolean;
 }
 
 // Bidders grouped by bid value. Tiers are played in ascending bid order: the
@@ -106,6 +109,7 @@ export interface Round {
   liveDrafts: Map<string, string>; // socketId → text currently typed, not yet submitted
   correctGuesserName?: string;      // classic mode: name of the player who got it right
   scoredSocketIds: Set<string>;     // players who earned points this round — everyone else's streak resets when the round ends
+  pityAwardedTo: Set<string>;       // players whose score this round included the catch-up pity bonus
   // Race-mode fields
   playStartAt: number | null;      // epoch ms when audio started
   firstCorrectAt: number | null;   // epoch ms of first correct guess (decay origin)

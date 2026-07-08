@@ -205,6 +205,7 @@ export function PartyBadge({ party }: Readonly<{ party: PartyInfo | null }>) {
   if (!party) return null;
   const bits: string[] = [formatBit(party)];
   if (party.finale) bits.push(`FINALE · ${party.duelists.join(' vs ')}`);
+  else if (party.winnerOnly) bits.push('WINNER ONLY');
   if (party.format !== 'year') bits.push(targetBit(party));
   const event = eventBit(party);
   if (event) bits.push(event);

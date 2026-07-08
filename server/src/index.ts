@@ -193,7 +193,22 @@ io.on('connection', (socket) => {
   }
 
   function emitRaceTurnSnapshot(game: GameObj, round: RoundObj | null) {
-    if (game.phase === 'guessing' && round?.playStartAt && game.phaseEndsAt && !round.passed.has(socket.id)) {
+    if (!round) return;
+    // Resend the round's own round_start first so a reconnecting client resets
+    // its party/artistOnly/yearOnly state instead of keeping whatever the
+    // previous round (which may have been a different format) left behind.
+    socket.emit('round_start', {
+      roundIndex: game.roundIndex,
+      total: game.totalRounds,
+      hints: round.hints,
+      mode: 'race',
+      raceTime: game.raceTime,
+      artistOnly: game.artistOnly,
+      yearOnly: game.yearOnly,
+      party: gm.partyView(round),
+      tempo: round.song.tempo,
+    });
+    if (game.phase === 'guessing' && round.playStartAt && game.phaseEndsAt && !round.passed.has(socket.id)) {
       socket.emit('your_turn', { timeLimit: game.raceTime, endsAt: game.phaseEndsAt });
     }
   }
@@ -218,6 +233,22 @@ io.on('connection', (socket) => {
     }
 
     if ((game.phase !== 'playing' && game.phase !== 'guessing') || !round) return;
+
+    // Same as the betting branch above: resend round_start so a reconnecting
+    // client resets party/artistOnly/yearOnly instead of keeping state from
+    // whatever round (possibly a different format) it last saw before dropping.
+    socket.emit('round_start', {
+      roundIndex: game.roundIndex,
+      total: game.totalRounds,
+      hints: round.hints,
+      mode: 'classic',
+      artistOnly: game.artistOnly,
+      yearOnly: game.yearOnly,
+      party: gm.partyView(round),
+      bidOptions: gm.BID_OPTIONS,
+      bidScores: gm.bidScoreTable(),
+      tempo: round.song.tempo,
+    });
 
     const guesserNames = round.guesserSocketIds
       .map(id => game.players.get(id)?.name ?? '')
@@ -835,8 +866,11 @@ io.on('connection', (socket) => {
   }
 
   function emitScoreUpdate(game: GameObj) {
+    const pityAwardedTo = game.currentRound?.pityAwardedTo;
     io.to(game.pin).emit('score_update', {
-      players: Array.from(game.players.values()).map(p => ({ name: p.name, score: p.score, streak: p.streak })),
+      players: Array.from(game.players.values()).map(p => ({
+        name: p.name, score: p.score, streak: p.streak, pity: pityAwardedTo?.has(p.socketId) ?? false,
+      })),
     });
   }
 
