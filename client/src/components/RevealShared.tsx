@@ -4,7 +4,7 @@ import type { Award, RoundResultEvent } from '../types';
 import { LIQUID_PILL_PROPS } from './liquidGlassPresets';
 
 const AWARD_LABELS: Record<Award['key'], string> = {
-  sharpshooter: 'Sharpshooter',
+  sharpshooter: 'Smartass',
   speedDemon: 'Speed Demon',
   comebackKid: 'Comeback Kid',
   duelChampion: 'Duel Champion',
@@ -158,6 +158,13 @@ function SongInfo({ result }: Readonly<{ result: RoundResultEvent }>) {
 export function FinalRoundAnswerContent({ result, label }: Readonly<{ result: RoundResultEvent; label: string }>) {
   const artistOnly = result.artistOnly;
   const yearOnly = result.yearOnly || result.party?.format === 'year';
+  let answerTypeLabel = 'The song was';
+  if (yearOnly) {
+    answerTypeLabel = 'The year was';
+  } else if (artistOnly) {
+    answerTypeLabel = 'The artist was';
+  }
+
   return (
     <div style={{ width: '262px', display: 'flex', flexDirection: 'column', alignItems: 'center', textAlign: 'center' }}>
       <span style={{
@@ -179,7 +186,7 @@ export function FinalRoundAnswerContent({ result, label }: Readonly<{ result: Ro
         color: 'rgba(255,255,255,0.45)', fontSize: '0.6rem', letterSpacing: '0.18em', textTransform: 'uppercase',
         marginBottom: '10px', display: 'inline-block',
       }}>
-        {yearOnly ? 'The year was' : artistOnly ? 'The artist was' : 'The song was'}
+        {answerTypeLabel}
       </span>
       {yearOnly ? (
         <>

@@ -7,12 +7,13 @@ import { AwardsStrip } from './RevealShared';
 import type { Award, LeaderboardEntry } from '../types';
 
 type Stage = 'dark' | 'intro' | 'bronze' | 'silver' | 'gold' | 'settled';
+type PodiumRank = 1 | 2 | 3;
 const STAGE_ORDER: Stage[] = ['dark', 'intro', 'bronze', 'silver', 'gold', 'settled'];
 const atLeast = (stage: Stage, target: Stage) => STAGE_ORDER.indexOf(stage) >= STAGE_ORDER.indexOf(target);
 
-const RANK_STAGE: Record<1 | 2 | 3, Stage> = { 3: 'bronze', 2: 'silver', 1: 'gold' };
-const PODIUM_HEIGHTS: Record<1 | 2 | 3, number> = { 1: 176, 2: 138, 3: 112 };
-const PODIUM_STYLE: Record<1 | 2 | 3, { border: string; glow: string; medal: string }> = {
+const RANK_STAGE: Record<PodiumRank, Stage> = { 3: 'bronze', 2: 'silver', 1: 'gold' };
+const PODIUM_HEIGHTS: Record<PodiumRank, number> = { 1: 176, 2: 138, 3: 112 };
+const PODIUM_STYLE: Record<PodiumRank, { border: string; glow: string; medal: string }> = {
   1: { border: 'rgba(251,191,36,0.45)', glow: 'rgba(251,191,36,0.16)', medal: '🥇' },
   2: { border: 'rgba(203,213,225,0.4)', glow: 'rgba(203,213,225,0.1)', medal: '🥈' },
   3: { border: 'rgba(217,119,6,0.4)', glow: 'rgba(217,119,6,0.12)', medal: '🥉' },
@@ -65,7 +66,7 @@ function AnimatedPodiumScore({ score, instant }: Readonly<{ score: number; insta
 }
 
 function PodiumSlot({ rank, entry, revealed, isMe, reducedMotion }: Readonly<{
-  rank: 1 | 2 | 3;
+  rank: PodiumRank;
   entry: LeaderboardEntry;
   revealed: boolean;
   isMe: boolean;
@@ -207,7 +208,7 @@ export function FinalResultsView({ leaderboard, awards, myName, backgroundSrc, f
   // shape. Ranks with no player at all (1- and 2-player games) drop out.
   const columns = ([2, 1, 3] as const)
     .map(rank => ({ rank, entry: podium[rank - 1] ?? null }))
-    .filter((c): c is { rank: 1 | 2 | 3; entry: LeaderboardEntry } => c.entry !== null);
+    .filter((c): c is { rank: PodiumRank; entry: LeaderboardEntry } => c.entry !== null);
 
   return (
     <div className="relative min-h-screen flex flex-col p-6 gap-4">
