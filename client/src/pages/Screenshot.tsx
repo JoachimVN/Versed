@@ -225,7 +225,7 @@ const MOCK_PLAY: PlayState = {
   cameFromQR: false,
   setPin: noop, setName: noop, setBidIndex: noop, setGuessText: noop, setArtistGuessText: noop,
   submitStealVictim: noop, skipSteal: noop, join: noop, rejoinSaved: noop, submitBid: noop,
-  submitGuess: noop, skipGuess: noop, newGamePin: null, rejoinNewGame: noop, renamePlayer: noop,
+  submitGuess: noop, submitChoice: noop, skipGuess: noop, newGamePin: null, rejoinNewGame: noop, renamePlayer: noop,
 };
 
 const MOCK_PLAY_GUESSING: PlayState = {

@@ -190,6 +190,7 @@ const EVENT_BITS: Partial<Record<NonNullable<PartyInfo['event']>, string>> = {
 // with no special target or event shows no badge at all mid-round.
 function formatBit(party: PartyInfo): string {
   if (party.format === 'year') return 'GUESS THE YEAR';
+  if (party.format === 'choice') return 'MULTIPLE CHOICE';
   return party.format === 'race' ? 'RACE ROUND' : 'CLASSIC ROUND';
 }
 

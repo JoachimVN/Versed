@@ -76,6 +76,7 @@ export interface PlayState {
   rejoinSaved: () => void;
   submitBid: () => void;
   submitGuess: () => void;
+  submitChoice: (option: string) => void;
   skipGuess: () => void;
   newGamePin: string | null;
   rejoinNewGame: () => void;
@@ -525,6 +526,20 @@ function usePlayGame(pinParam?: string): PlayState {
     });
   };
 
+  // Multiple Choice: tapping an option submits its exact text immediately —
+  // no typing state to manage, so this bypasses guessText/guessTextRef
+  // entirely rather than routing through submitGuess (which reads from that
+  // state and would otherwise race a just-set-but-not-yet-flushed value).
+  const submitChoice = (option: string) => {
+    if (guessAutoSubmitTimerRef.current) { clearTimeout(guessAutoSubmitTimerRef.current); guessAutoSubmitTimerRef.current = null; }
+    stopCountdown();
+    socket.emit('submit_guess', { text: option }, (r: { correct: boolean; points?: number; timeMs?: number }) => {
+      if (r.correct && r.points != null) setMyRacePoints(r.points);
+      if (r.timeMs != null) setMyRaceTimeMs(r.timeMs);
+      setPhase('passed');
+    });
+  };
+
   const skipGuess = () => {
     guessInputRef.current?.blur();
     if (guessAutoSubmitTimerRef.current) { clearTimeout(guessAutoSubmitTimerRef.current); guessAutoSubmitTimerRef.current = null; }
@@ -605,7 +620,7 @@ function usePlayGame(pinParam?: string): PlayState {
     setGuessText(v);
     socket.emit('update_guess_draft', { text: v });
   },
-    join, rejoinSaved, submitBid, submitGuess, skipGuess, renamePlayer,
+    join, rejoinSaved, submitBid, submitGuess, submitChoice, skipGuess, renamePlayer,
   };
 }
 
@@ -1299,6 +1314,33 @@ function guessInputBoxStyle(isListening: boolean, focused: boolean): { border: s
   return { border: '1px solid rgba(158,18,204,0.4)', background: 'rgba(158,18,204,0.08)', boxShadow: '0 0 24px rgba(158,18,204,0.1)' };
 }
 
+// Multiple Choice's 4 tappable title options — a tap submits immediately
+// (see submitChoice), so there's no separate Submit button for this format.
+function ChoiceButtons({ options, onPick, disabled }: Readonly<{ options: string[]; onPick: (option: string) => void; disabled?: boolean }>) {
+  const style = guessInputBoxStyle(false, false);
+  return (
+    <div className="w-full flex flex-col gap-2.5">
+      {options.map(option => (
+        <button
+          key={option}
+          type="button"
+          disabled={disabled}
+          onClick={() => onPick(option)}
+          style={{
+            width: '100%', borderRadius: '16px',
+            border: style.border, background: style.background, boxShadow: style.boxShadow,
+            color: 'white', fontSize: '1.05rem', fontWeight: 700, textAlign: 'center',
+            padding: '18px 16px', cursor: disabled ? 'not-allowed' : 'pointer', fontFamily: 'inherit',
+            opacity: disabled ? 0.5 : 1, transition: 'opacity 0.2s ease',
+          }}
+        >
+          {option}
+        </button>
+      ))}
+    </div>
+  );
+}
+
 // 4-box OTP-style display for year guesses. A single transparent input
 // underneath keeps the real focus/keyboard target (so the mobile keyboard
 // never dismisses), while these boxes render its current characters.
@@ -1336,14 +1378,15 @@ function YearDigitBoxes({ value, focused }: Readonly<{ value: string; focused: b
 }
 
 export function GuessingView({ game }: Readonly<{ game: PlayState }>) {
-  const { phase, timeLeft, timerTotal, myScore, guessText, guessInputRef, setGuessText, submitGuess, skipGuess, artistOnly, yearOnly, songPlaying, songTempo, mode, party, artistGuessText, setArtistGuessText } = game;
+  const { phase, timeLeft, timerTotal, myScore, guessText, guessInputRef, setGuessText, submitGuess, submitChoice, skipGuess, artistOnly, yearOnly, songPlaying, songTempo, mode, party, artistGuessText, setArtistGuessText } = game;
   const isListening = phase === 'watching';
+  const isChoice = party?.format === 'choice';
   const target = resolveTarget(party, artistOnly, yearOnly);
   const isYear = target === 'year';
   const canSubmit = isYear ? guessText.trim().length === 4 : guessText.trim().length > 0;
   const [inputFocused, setInputFocused] = useState(false);
   const inputBoxStyle = guessInputBoxStyle(isListening, inputFocused);
-  const label = {
+  const label = isChoice ? 'Tap the right title' : {
     title: 'Name the song',
     artist: 'Name the artist',
     both: 'Name the song · artist = bonus',
@@ -1379,7 +1422,9 @@ export function GuessingView({ game }: Readonly<{ game: PlayState }>) {
           {label}
         </p>
 
-        {isYear ? (
+        {isChoice ? (
+          <ChoiceButtons options={party?.choiceOptions ?? []} onPick={submitChoice} />
+        ) : isYear ? (
           <div style={{ position: 'relative' }}>
             <YearDigitBoxes value={guessText} focused={inputFocused} />
             <input
@@ -1453,30 +1498,32 @@ export function GuessingView({ game }: Readonly<{ game: PlayState }>) {
 
       {/* Actions */}
       <div className="px-5 pb-8 flex flex-col items-center gap-4">
-        <button
-          type="button"
-          className="liquid-btn glass-tint-purple relative cursor-pointer border-0 bg-transparent p-0"
-          style={{
-            width: '310px', height: '64px', borderRadius: '100px',
-            background: 'rgba(0,0,0,0.001)',
-            opacity: canSubmit ? 1 : 0.28,
-            cursor: canSubmit ? 'pointer' : 'not-allowed',
-            transition: 'opacity 0.25s ease',
-          }}
-          onClick={() => canSubmit && submitGuess()}
-        >
-          <LiquidGlass
-            style={{ position: 'absolute', top: '50%', left: '50%' }}
-            {...LIQUID_PILL_PROPS}
+        {!isChoice && (
+          <button
+            type="button"
+            className="liquid-btn glass-tint-purple relative cursor-pointer border-0 bg-transparent p-0"
+            style={{
+              width: '310px', height: '64px', borderRadius: '100px',
+              background: 'rgba(0,0,0,0.001)',
+              opacity: canSubmit ? 1 : 0.28,
+              cursor: canSubmit ? 'pointer' : 'not-allowed',
+              transition: 'opacity 0.25s ease',
+            }}
+            onClick={() => canSubmit && submitGuess()}
           >
-            <div style={{ position: 'relative' }}>
-              <div style={{ position: 'absolute', inset: '-18px -36px', borderRadius: '100px', pointerEvents: 'none', background: 'rgba(158,18,204,0.15)' }} />
-              <span className="text-white font-bold text-xl" style={{ whiteSpace: 'nowrap', position: 'relative', display: 'inline-block', minWidth: '238px', textAlign: 'center' }}>
-                Submit
-              </span>
-            </div>
-          </LiquidGlass>
-        </button>
+            <LiquidGlass
+              style={{ position: 'absolute', top: '50%', left: '50%' }}
+              {...LIQUID_PILL_PROPS}
+            >
+              <div style={{ position: 'relative' }}>
+                <div style={{ position: 'absolute', inset: '-18px -36px', borderRadius: '100px', pointerEvents: 'none', background: 'rgba(158,18,204,0.15)' }} />
+                <span className="text-white font-bold text-xl" style={{ whiteSpace: 'nowrap', position: 'relative', display: 'inline-block', minWidth: '238px', textAlign: 'center' }}>
+                  Submit
+                </span>
+              </div>
+            </LiquidGlass>
+          </button>
+        )}
 
         <button
           onClick={skipGuess}

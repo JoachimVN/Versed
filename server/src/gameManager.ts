@@ -278,7 +278,11 @@ function introFor(
         : 'Closest answer wins the round',
     };
   }
-  const flow = format === 'classic' ? 'Bid & guess' : 'Everyone races';
+  // Multiple Choice always forces target:'title' (see pickPartyTarget), so
+  // only the flow wording differs here — the event/winnerOnly branches below
+  // still apply normally (an event on a Choice round must still be
+  // announced, not silently dropped).
+  const flow = format === 'classic' ? 'Bid & guess' : format === 'choice' ? 'Tap the right title' : 'Everyone races';
   let goal = 'name the song';
   if (target === 'artist') goal = 'name the artist';
   else if (target === 'both') goal = 'title + artist bonus';
@@ -297,6 +301,9 @@ function introFor(
     const e = eventIntros[event];
     return { title: e.title, tagline: `${e.tag} · ${flow} / ${goal}${suffix}` };
   }
+  if (format === 'choice') {
+    return { title: 'Multiple Choice', tagline: `${flow}, fastest wins${suffix}` };
+  }
   if (target === 'artist') return { title: 'Who Sings It?', tagline: `${flow} / name the artist${suffix}` };
   if (target === 'both') return { title: 'Double Duty', tagline: `${flow} / name the artist too to double your points${suffix}` };
   if (format === 'race' && winnerOnly) {
@@ -308,7 +315,7 @@ function introFor(
 }
 
 function pickPartyTarget(format: PartyFormat): GuessTarget {
-  if (format === 'year') return 'title';
+  if (format === 'year' || format === 'choice') return 'title';
   return pickWeighted<GuessTarget>([['title', 60], ['artist', 25], ['both', 15]]);
 }
 
@@ -402,7 +409,7 @@ function buildPartyConfig(game: Game): PartyConfig {
   }
 
   const prev = game.currentRound?.party;
-  let format = pickWeighted<PartyFormat>([['classic', 45], ['race', 40], ['year', 15]]);
+  let format = pickWeighted<PartyFormat>([['classic', 40], ['race', 35], ['year', 15], ['choice', 10]]);
   if (format === 'year' && prev?.format === 'year') format = 'race';
 
   const target = pickPartyTarget(format);
@@ -437,6 +444,7 @@ export function partyView(round: Round, revealed = false): PartyClientView | und
     finale: p.finale,
     duelists: p.duelistNames,
     restricted: p.restrictedNames,
+    choiceOptions: p.choiceOptions,
   };
 }
 
@@ -674,6 +682,27 @@ function avoidRecentArtists(game: Game, pool: Song[], rawPoolSize: number): Song
   return notRecentArtist.length > 0 ? notRecentArtist : pool;
 }
 
+// Two titles that would make an ambiguous pair of options — exact match or
+// one a substring of the other (case-insensitive) — so a "wrong" option can
+// never actually also be a fair reading of the real title.
+function titlesCollide(a: string, b: string): boolean {
+  const na = a.trim().toLowerCase();
+  const nb = b.trim().toLowerCase();
+  return na === nb || na.includes(nb) || nb.includes(na);
+}
+
+// Multiple Choice's 3 wrong options — drawn from the same (already
+// difficulty/constraint-filtered) pool the round's own song came from, so
+// they're naturally the same difficulty tier. Returns undefined if the pool
+// can't supply 3 safe distractors (a tiny custom playlist), signalling the
+// caller to downgrade the round instead.
+function pickChoiceOptions(song: Song, pool: Song[]): string[] | undefined {
+  const candidates = pool.filter(s => s.spotifyTrackId !== song.spotifyTrackId && !titlesCollide(s.title, song.title));
+  if (candidates.length < 3) return undefined;
+  const distractors = shuffle(candidates).slice(0, 3).map(s => s.title);
+  return shuffle([song.title, ...distractors]);
+}
+
 // Round selection applies these constraints strictest/most-essential first,
 // softest/most-skippable last — and each stage reverts to its input pool if
 // applying it would leave nothing, so the last-applied (softest) filter is
@@ -690,6 +719,25 @@ function buildRound(game: Game, party?: PartyConfig): Round {
   pool = avoidRecentArtists(game, pool, rawPool.length);
 
   const song = pickRandom(pool);
+
+  if (party?.format === 'choice') {
+    const choiceOptions = pickChoiceOptions(song, pool);
+    if (choiceOptions) {
+      party.choiceOptions = choiceOptions;
+    } else {
+      // Not enough distinct titles in this pool for 3 real distractors —
+      // silently fall back to a plain classic round, same precedent as
+      // computeSnippetPosition's downgrade for snippet/outro.
+      party.format = 'classic';
+      party.target = 'title';
+      party.event = null;
+      party.multiplier = 1;
+      party.winnerOnly = false;
+      party.restrictedIds = [];
+      party.restrictedNames = [];
+      party.intro = introFor(party.format, party.target, party.event, party.winnerOnly);
+    }
+  }
 
   const snippetMs = party ? computeSnippetPosition(song, party, game.raceTime) : undefined;
   const guessKind = roundGuessKind(party, game.artistOnly, game.yearOnly);

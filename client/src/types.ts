@@ -44,7 +44,7 @@ export type ChaosLevel = 'chill' | 'balanced' | 'chaotic';
 // Party mode: the per-round recipe as clients see it. A hidden mystery
 // multiplier arrives as null and is revealed (a number) on round_result.
 export interface PartyInfo {
-  format: 'classic' | 'race' | 'year';
+  format: 'classic' | 'race' | 'year' | 'choice';
   target: 'title' | 'artist' | 'both';
   event: PartyEvent | null;
   multiplier: number | null;
@@ -53,6 +53,7 @@ export interface PartyInfo {
   finale: boolean;
   duelists: string[];
   restricted: string[];
+  choiceOptions?: string[];
 }
 
 export interface YearResult {

@@ -41,8 +41,10 @@ export interface PlaylistTrackInput {
 
 // How a party round plays out. 'classic' and 'race' reuse those modes' whole
 // flows; 'year' rides the race flow but everyone answers a release year and
-// the closest answer wins.
-export type PartyFormat = 'classic' | 'race' | 'year';
+// the closest answer wins; 'choice' also rides the race flow, but with 4
+// title options shown instead of a text input — tapping one submits its
+// exact text, so scoring is unchanged from a normal race guess.
+export type PartyFormat = 'classic' | 'race' | 'year' | 'choice';
 export type GuessTarget = 'title' | 'artist' | 'both';
 export type PartyEvent =
   | 'double' | 'mystery' | 'steal' | 'snippet' | 'fullhints' | 'blind' | 'outro' | 'underdog';
@@ -67,6 +69,7 @@ export interface PartyConfig {
   // a restricted-but-not-finale round (e.g. 'underdog').
   restrictedIds: string[];
   restrictedNames: string[];
+  choiceOptions?: string[];          // 'choice' format: shuffled title options (correct one included)
 }
 
 // What clients are allowed to see of a PartyConfig (no socketIds, mystery
@@ -81,6 +84,7 @@ export interface PartyClientView {
   finale: boolean;
   duelists: string[];
   restricted: string[];
+  choiceOptions?: string[];
 }
 
 export interface YearResult {
