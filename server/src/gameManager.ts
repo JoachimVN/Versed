@@ -1428,6 +1428,7 @@ function applyChaosHintTap(
     player.fastestCorrectMs = player.fastestCorrectMs === null ? elapsedMs : Math.min(player.fastestCorrectMs, elapsedMs);
     round.scoredSocketIds.add(socketId);
   }
+  recordFinaleRaceWin(game, round, socketId, isFirst);
   return points;
 }
 
