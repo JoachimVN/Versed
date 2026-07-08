@@ -1,4 +1,4 @@
-import { Check, Trophy, X } from 'lucide-react';
+import { Check, Trophy, X, Zap, TrendingUp, Swords } from 'lucide-react';
 import LiquidGlass from 'liquid-glass-react';
 import type { Award, RoundResultEvent } from '../types';
 import { LIQUID_PILL_PROPS } from './liquidGlassPresets';
@@ -10,25 +10,56 @@ const AWARD_LABELS: Record<Award['key'], string> = {
   duelChampion: 'Duel Champion',
 };
 
+// Typed against Award['key'] so a future award key fails type-check here
+// instead of silently rendering a badge with no icon.
+const AWARD_ICONS: Record<Award['key'], typeof Trophy> = {
+  sharpshooter: Trophy,
+  speedDemon: Zap,
+  comebackKid: TrendingUp,
+  duelChampion: Swords,
+};
+
 // Final-screen superlatives — shared by Host and Play so both screens read
 // identically. Ties list every qualifying name rather than picking one.
 export function AwardsStrip({ awards }: Readonly<{ awards: Award[] }>) {
   if (awards.length === 0) return null;
   return (
-    <div className="flex flex-col items-center gap-2 relative z-10">
-      {awards.map(a => (
-        <div
-          key={a.key}
-          className="flex flex-wrap items-center justify-center gap-x-2 gap-y-0.5 rounded-xl px-3 py-2"
-          style={{ background: 'rgba(255,255,255,0.05)', border: '1px solid rgba(255,255,255,0.08)' }}
-        >
-          <span style={{ color: 'rgba(94,234,212,0.9)', fontSize: '0.68rem', fontWeight: 800, letterSpacing: '0.08em', textTransform: 'uppercase' }}>
-            {AWARD_LABELS[a.key]}
-          </span>
-          <span className="text-white/80 text-sm font-semibold">{a.playerNames.join(' & ')}</span>
-          <span className="text-white/40 text-xs">{a.detail}</span>
-        </div>
-      ))}
+    <div
+      className="relative z-10"
+      style={{
+        display: 'grid',
+        gridTemplateColumns: 'repeat(auto-fit, minmax(150px, 1fr))',
+        gap: '8px',
+        width: '100%',
+        maxWidth: '420px',
+        margin: '0 auto',
+      }}
+    >
+      {awards.map(a => {
+        const Icon = AWARD_ICONS[a.key];
+        return (
+          <div
+            key={a.key}
+            className="flex items-start gap-2.5 rounded-xl px-3 py-2.5"
+            style={{ background: 'rgba(255,255,255,0.05)', border: '1px solid rgba(255,255,255,0.08)' }}
+          >
+            <div style={{
+              width: '28px', height: '28px', borderRadius: '50%', flexShrink: 0,
+              background: 'rgba(94,234,212,0.12)',
+              display: 'flex', alignItems: 'center', justifyContent: 'center',
+            }}>
+              <Icon style={{ width: '15px', height: '15px', color: 'rgba(94,234,212,0.9)' }} />
+            </div>
+            <div className="flex flex-col min-w-0">
+              <span style={{ color: 'rgba(94,234,212,0.9)', fontSize: '0.62rem', fontWeight: 800, letterSpacing: '0.07em', textTransform: 'uppercase' }}>
+                {AWARD_LABELS[a.key]}
+              </span>
+              <span className="text-white/80 text-xs font-semibold">{a.playerNames.join(' & ')}</span>
+              <span className="text-white/40 text-[0.68rem]">{a.detail}</span>
+            </div>
+          </div>
+        );
+      })}
     </div>
   );
 }
