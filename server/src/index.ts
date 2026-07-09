@@ -806,7 +806,10 @@ io.on('connection', (socket) => {
           && round.party?.event !== 'blind'
           && (round.party?.event === 'fullhints' || randomInt(4) === 0));
       if (wantArt) {
-        round.hints.push({ label: 'Album art', value: '', imageUrl: coverUrl });
+        // Underdog Boost's cover art is a real, guaranteed assist and is
+        // always shown clear; every other art hint is a teaser that must
+        // stay blurred all the way through guessing, not just betting.
+        round.hints.push({ label: 'Album art', value: '', imageUrl: coverUrl, blurred: round.party?.event !== 'underdog' });
       }
     }
 

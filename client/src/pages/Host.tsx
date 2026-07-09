@@ -2245,18 +2245,8 @@ function BettingView({ game }: Readonly<{ game: HostState }>) {
       {/* Main content */}
       <div className="flex-1 relative flex flex-col items-center justify-center gap-10 px-8 py-4" style={{ zIndex: 2 }}>
 
-        {/* Blurred album art — centered, above timer */}
-        {imageHint?.imageUrl && (
-          <div style={{ width: 180, height: 180, borderRadius: 28, overflow: 'hidden', flexShrink: 0, boxShadow: '0 16px 40px rgba(0,0,0,0.7)', position: 'relative' }}>
-            {/* Inner div extends 30px beyond all edges so blur has real pixels to sample at every boundary */}
-            <div style={{ position: 'absolute', inset: -30, filter: 'blur(8px) brightness(0.6)' }}>
-              <img
-                src={imageHint.imageUrl} alt=""
-                style={{ width: '100%', height: '100%', objectFit: 'cover', display: 'block' }}
-              />
-            </div>
-          </div>
-        )}
+        {/* Album art — centered, above timer */}
+        {imageHint?.imageUrl && <AlbumArtHint hint={imageHint} size={180} radius={28} />}
 
         <PartyBadge party={party} />
 
@@ -2340,22 +2330,45 @@ function usesRaceFlow(mode: HostState['mode'], yearOnly: boolean, party: PartyIn
   return party.format !== 'classic';
 }
 
+// Renders an album-art image hint, blurred as a teaser (per `hint.blurred`,
+// server-driven) or clear (Underdog Boost's real, guaranteed assist) — the
+// flag is explicit so this stays correct regardless of which screen/phase
+// renders it, rather than each caller having to infer which case it is.
+function AlbumArtHint({ hint, size, radius }: Readonly<{ hint: Hint; size: number; radius: number }>) {
+  if (!hint.imageUrl) return null;
+  if (!hint.blurred) {
+    return (
+      <img
+        src={hint.imageUrl} alt=""
+        style={{ width: size, height: size, borderRadius: radius, objectFit: 'cover', boxShadow: '0 8px 24px rgba(0,0,0,0.5)' }}
+      />
+    );
+  }
+  return (
+    <div style={{ width: size, height: size, borderRadius: radius, overflow: 'hidden', flexShrink: 0, boxShadow: '0 16px 40px rgba(0,0,0,0.7)', position: 'relative' }}>
+      {/* Inner div extends 30px beyond all edges so blur has real pixels to sample at every boundary */}
+      <div style={{ position: 'absolute', inset: -30, filter: 'blur(8px) brightness(0.6)' }}>
+        <img
+          src={hint.imageUrl} alt=""
+          style={{ width: '100%', height: '100%', objectFit: 'cover', display: 'block' }}
+        />
+      </div>
+    </div>
+  );
+}
+
 // Race-flow rounds are normally hint-free (the clip itself is the puzzle),
-// but artist-only/year-only rounds and Underdog Boost ask for something the
-// audio can't give away, so those are the only race rounds that ever carry
-// hints here. Underdog's cover-art hint is shown clear (not the classic
-// betting screen's blurred teaser) — it's meant to be a real, strong assist.
+// but artist-only/year-only rounds, Underdog Boost, and classic-flow art
+// hints that carry into the playing/guessing phases are the exceptions.
+// Whether the art hint shows blurred or clear is driven entirely by
+// `hint.blurred` (server-set), not by which round type this is.
 function RaceHintBar({ hints }: Readonly<{ hints: Hint[] }>) {
   const imageHint = hints.find(h => h.imageUrl);
   const textHints = hints.filter(h => !h.imageUrl);
   if (textHints.length === 0 && !imageHint) return null;
   return (
     <div className="flex flex-col items-center gap-3">
-      {imageHint?.imageUrl && (
-        <img
-          src={imageHint.imageUrl} alt="" style={{ width: 96, height: 96, borderRadius: 16, objectFit: 'cover', boxShadow: '0 8px 24px rgba(0,0,0,0.5)' }}
-        />
-      )}
+      {imageHint?.imageUrl && <AlbumArtHint hint={imageHint} size={96} radius={16} />}
       {textHints.length > 0 && (
         <div
           className="flex items-center justify-center gap-6 rounded-2xl"

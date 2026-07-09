@@ -2,6 +2,7 @@ export interface Hint {
   label: string;
   value: string;
   imageUrl?: string;
+  blurred?: boolean; // image hints only: true = teaser (stays blurred through guessing), unset/false = shown clear
 }
 
 export type SongSource = 'library' | 'playlist';
