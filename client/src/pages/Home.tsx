@@ -42,7 +42,7 @@ export default function Home() {
           src={`${import.meta.env.BASE_URL}logo.png`}
           alt={APP_NAME}
           className="w-auto drop-shadow-2xl"
-          style={{ maxHeight: '225px', maxWidth: '100%', marginBottom: '50px', opacity: (leaving || morphing) ? 0 : 1 }}
+          style={{ maxHeight: '225px', maxWidth: '100%', marginBottom: '50px', opacity: (leaving || morphing) ? 0 : 1, willChange: 'opacity' }}
         />
         <p className="text-white/60 text-lg tracking-wide"></p>
       </div>

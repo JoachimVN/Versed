@@ -31,15 +31,24 @@ export function useLogoMorph() {
 
 const DURATION = 520;
 const EASING = 'cubic-bezier(0.65, 0, 0.35, 1)';
+// The real logo sits at opacity:0 for the entire flight, so browsers don't
+// bother compositing it — flipping it visible at the same instant the
+// overlay unmounts can lag a frame or two behind the state change (layer
+// promotion + first paint), which shows as a brief blank flash even though
+// the two are logically in sync. Keeping the overlay mounted, unchanged and
+// pixel-identical, for a short buffer after the reveal absorbs that lag.
+const REMOVE_DELAY = 120;
 
 export function LogoMorphProvider({ children }: Readonly<{ children: React.ReactNode }>) {
   const [rect, setRect] = useState<Rect | null>(null);
   const [animate, setAnimate] = useState(false);
   const [morphing, setMorphing] = useState(false);
   const timerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const removeRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   const beginMorph = useCallback((r: Rect) => {
     if (timerRef.current) clearTimeout(timerRef.current);
+    if (removeRef.current) clearTimeout(removeRef.current);
     setAnimate(false);
     setRect(r);
     setMorphing(true);
@@ -56,8 +65,10 @@ export function LogoMorphProvider({ children }: Readonly<{ children: React.React
         setRect(r);
         timerRef.current = setTimeout(() => {
           setMorphing(false);
-          setRect(null);
-          setAnimate(false);
+          removeRef.current = setTimeout(() => {
+            setRect(null);
+            setAnimate(false);
+          }, REMOVE_DELAY);
         }, DURATION);
       });
     });

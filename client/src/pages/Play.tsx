@@ -761,7 +761,7 @@ function JoinView({ game }: Readonly<{ game: PlayState }>) {
         src={`${import.meta.env.BASE_URL}logo.png`}
         alt={APP_NAME}
         className="w-auto drop-shadow-2xl"
-        style={{ maxHeight: '128px', maxWidth: '100%', opacity: (morphing || leaving) ? 0 : 1 }}
+        style={{ maxHeight: '128px', maxWidth: '100%', opacity: (morphing || leaving) ? 0 : 1, willChange: 'opacity' }}
       />
 
       {savedSession && (
