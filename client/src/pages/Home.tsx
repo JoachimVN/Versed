@@ -1,14 +1,32 @@
-import { useState } from 'react';
+import { useLayoutEffect, useRef, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import LiquidGlass from 'liquid-glass-react';
+import { useLogoMorph } from '../contexts/LogoMorph';
 import { APP_NAME, BACKEND_URL } from '../config';
 
 export default function Home() {
   const navigate = useNavigate();
   const [hovered, setHovered] = useState<'host' | 'join' | null>(null);
   const [leaving, setLeaving] = useState(false);
+  const logoRef = useRef<HTMLImageElement>(null);
+  const { beginMorph, provideTarget, morphing } = useLogoMorph();
+
+  // Mirrors JoinView's arrival handling: only hands off to the overlay if a
+  // morph is already in flight (i.e. we arrived via Play's back button) —
+  // a fresh visit to "/" should show the logo immediately.
+  useLayoutEffect(() => {
+    if (morphing && logoRef.current) {
+      const r = logoRef.current.getBoundingClientRect();
+      provideTarget({ top: r.top, left: r.left, width: r.width, height: r.height });
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   const goToJoin = () => {
+    if (logoRef.current) {
+      const r = logoRef.current.getBoundingClientRect();
+      beginMorph({ top: r.top, left: r.left, width: r.width, height: r.height });
+    }
     setLeaving(true);
     setTimeout(() => navigate('/play'), 220);
   };
@@ -20,10 +38,11 @@ export default function Home() {
     >
       <div className="flex flex-col items-center gap-3">
         <img
+          ref={logoRef}
           src={`${import.meta.env.BASE_URL}logo.png`}
           alt={APP_NAME}
           className="w-auto drop-shadow-2xl"
-          style={{ maxHeight: '225px', maxWidth: '100%', marginBottom: '50px' }}
+          style={{ maxHeight: '225px', maxWidth: '100%', marginBottom: '50px', opacity: (leaving || morphing) ? 0 : 1 }}
         />
         <p className="text-white/60 text-lg tracking-wide"></p>
       </div>

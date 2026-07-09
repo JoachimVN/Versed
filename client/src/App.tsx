@@ -2,6 +2,7 @@ import { useEffect, useRef } from 'react';
 import { BrowserRouter, Routes, Route, useLocation } from 'react-router-dom';
 import { ConfettiBackground, setConfettiSpeedTarget } from './components/ConfettiBackground';
 import { useViewportHeight } from './hooks/useViewportHeight';
+import { LogoMorphProvider } from './contexts/LogoMorph';
 import Home from './pages/Home';
 import Host from './pages/Host';
 import Play from './pages/Play';
@@ -42,6 +43,10 @@ export default function App() {
 
   return (
     <BrowserRouter basename={import.meta.env.BASE_URL.replace(/\/$/, '') || '/'}>
+      {/* LogoMorphProvider lives above Routes (not inside a page) so its
+          overlay logo survives the Home -> Play unmount/mount swap and can
+          animate across it. */}
+      <LogoMorphProvider>
       {/* Background layer: absolutely positioned against #root (sized from
           real document height, see index.css) rather than fixed against the
           viewport — position: fixed elements get visually clipped to the
@@ -90,6 +95,7 @@ export default function App() {
           <Route path="/screenshot" element={<Screenshot />} />
         </Routes>
       </div>
+      </LogoMorphProvider>
     </BrowserRouter>
   );
 }

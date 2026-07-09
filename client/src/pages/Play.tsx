@@ -1,8 +1,9 @@
-import { useState, useEffect, useRef } from 'react';
+import { useState, useEffect, useLayoutEffect, useRef } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { ChevronLeft, ChevronRight, Flame, Pencil } from 'lucide-react';
 import LiquidGlass from 'liquid-glass-react';
 import { socket } from '../socket';
+import { useLogoMorph } from '../contexts/LogoMorph';
 import { RankBadge } from '../components/RankBadge';
 import { useAnimatedScore } from '../hooks/useAnimatedScore';
 import { useKeyboardOpen } from '../hooks/useViewportHeight';
@@ -710,13 +711,40 @@ function JoinView({ game }: Readonly<{ game: PlayState }>) {
   const [nameFocused, setNameFocused] = useState(false);
   const canJoin = cameFromQR ? name.trim().length > 0 : (pin.length === 3 && name.trim().length > 0);
   const keyboardOpen = useKeyboardOpen();
+  const [leaving, setLeaving] = useState(false);
+  const logoRef = useRef<HTMLImageElement>(null);
+  const { beginMorph, provideTarget, morphing } = useLogoMorph();
+
+  // Only hands off to the overlay if a morph is already in flight (i.e. we
+  // arrived via Home's "Join a game" button) — a direct visit to /play
+  // should show its own logo immediately, not wait on a morph that never
+  // started.
+  useLayoutEffect(() => {
+    if (morphing && logoRef.current) {
+      const r = logoRef.current.getBoundingClientRect();
+      provideTarget({ top: r.top, left: r.left, width: r.width, height: r.height });
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  // Mirrors Home's goToJoin in reverse: arms the overlay at this page's
+  // logo, fades the rest of the content out, then lets BackButton navigate
+  // once that's had time to play.
+  const goBack = () => new Promise<void>(resolve => {
+    if (logoRef.current) {
+      const r = logoRef.current.getBoundingClientRect();
+      beginMorph({ top: r.top, left: r.left, width: r.width, height: r.height });
+    }
+    setLeaving(true);
+    setTimeout(resolve, 220);
+  });
 
   return (
     <div
-      className="page-enter relative min-h-screen keyboard-resize"
-      style={{ zIndex: 1, overflowY: 'auto' }}
+      className={`relative min-h-screen keyboard-resize ${leaving ? 'page-exit' : 'page-enter'}`}
+      style={{ zIndex: 1, overflowY: 'auto', pointerEvents: leaving ? 'none' : undefined }}
     >
-      <BackButton />
+      <BackButton beforeNavigate={goBack} />
 
       {/* minHeight (not height) lets this grow past the viewport instead of
           fighting it for space — centered when it fits, top-to-bottom
@@ -729,10 +757,11 @@ function JoinView({ game }: Readonly<{ game: PlayState }>) {
       <div className="flex flex-col items-center p-6 gap-10" style={{ minHeight: '100%', justifyContent: keyboardOpen ? 'flex-start' : 'center' }}>
 
       <img
+        ref={logoRef}
         src={`${import.meta.env.BASE_URL}logo.png`}
         alt={APP_NAME}
         className="w-auto drop-shadow-2xl"
-        style={{ maxHeight: '128px', maxWidth: '100%' }}
+        style={{ maxHeight: '128px', maxWidth: '100%', opacity: (morphing || leaving) ? 0 : 1 }}
       />
 
       {savedSession && (
