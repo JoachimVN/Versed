@@ -51,6 +51,7 @@ export interface PlayState {
   mode: 'classic' | 'race';
   artistOnly: boolean;
   yearOnly: boolean;
+  choiceOptions: string[];
   party: PartyInfo | null;
   artistGuessText: string;
   stealVictims: { name: string; score: number }[] | null;
@@ -124,6 +125,7 @@ function usePlayGame(pinParam?: string): PlayState {
   const modeRef = useRef<'classic' | 'race'>('classic');
   const [artistOnly, setArtistOnly] = useState(false);
   const [yearOnly, setYearOnly] = useState(false);
+  const [choiceOptions, setChoiceOptions] = useState<string[]>([]);
   const [party, setParty] = useState<PartyInfo | null>(null);
   const partyRef = useRef<PartyInfo | null>(null);
   const [artistGuessText, setArtistGuessText] = useState('');
@@ -251,7 +253,7 @@ function usePlayGame(pinParam?: string): PlayState {
     socket.on('round_start', (data: {
       roundIndex: number; total: number;
       hints: Hint[]; bettingTime?: number; endsAt?: number;
-      mode?: 'classic' | 'race'; raceTime?: number; artistOnly?: boolean; yearOnly?: boolean;
+      mode?: 'classic' | 'race'; raceTime?: number; artistOnly?: boolean; yearOnly?: boolean; choiceOptions?: string[];
       party?: PartyInfo;
       bidOptions?: number[]; bidScores?: number[];
       tempo?: number | null;
@@ -282,6 +284,10 @@ function usePlayGame(pinParam?: string): PlayState {
       modeRef.current = roundMode;
       setArtistOnly(data.artistOnly === true);
       setYearOnly(data.yearOnly === true);
+      // Always reset, never conditionally — an omitted/empty payload here
+      // means this round fell back to free text, and a stale previous
+      // round's choice buttons must not survive into it.
+      setChoiceOptions(data.choiceOptions ?? []);
 
       if (roundMode === 'race') {
         setGuesserNames([]);
@@ -611,7 +617,7 @@ function usePlayGame(pinParam?: string): PlayState {
   return {
     phase, pin, name, myName, error, roundIndex, totalRounds, hints,
     timeLeft, timerTotal, bettingTime, bidIndex, bidOptions, bidScores, myBid, guesserNames, lowestBid,
-    guessText, result, myScore, myScoreDelta, myPity, myPityAmount, myStreak, mode, artistOnly, yearOnly, myRacePoints, myRaceTimeMs,
+    guessText, result, myScore, myScoreDelta, myPity, myPityAmount, myStreak, mode, artistOnly, yearOnly, choiceOptions, myRacePoints, myRaceTimeMs,
     party, artistGuessText, stealVictims, stealResult,
     leaderboard, leaderboardDeltas, awards, songPlaying, songTempo, reconnecting, hostReconnecting, savedSession, guessInputRef,
     cameFromQR, newGamePin, rejoinNewGame,
@@ -1467,9 +1473,13 @@ function YearDigitBoxes({ value, focused }: Readonly<{ value: string; focused: b
 }
 
 export function GuessingView({ game }: Readonly<{ game: PlayState }>) {
-  const { phase, timeLeft, timerTotal, myScore, guessText, guessInputRef, setGuessText, submitGuess, submitChoice, submitChaosTap, skipGuess, artistOnly, yearOnly, songPlaying, songTempo, mode, party, hints, artistGuessText, setArtistGuessText } = game;
+  const { phase, timeLeft, timerTotal, myScore, guessText, guessInputRef, setGuessText, submitGuess, submitChoice, submitChaosTap, skipGuess, artistOnly, yearOnly, choiceOptions: gameChoiceOptions, songPlaying, songTempo, mode, party, hints, artistGuessText, setArtistGuessText } = game;
   const isListening = phase === 'watching';
-  const isChoice = party?.format === 'choice';
+  // Covers both Party's 'choice' format (party.choiceOptions) and the
+  // Classic/Race Multiple Choice toggle (game.choiceOptions) — an empty/
+  // undefined array either way means this round fell back to free text.
+  const options = party?.choiceOptions ?? gameChoiceOptions ?? [];
+  const isChoice = options.length > 0;
   const isChaosHints = party?.event === 'chaoshints';
   const target = resolveTarget(party, artistOnly, yearOnly);
   const isYear = target === 'year';
@@ -1482,8 +1492,14 @@ export function GuessingView({ game }: Readonly<{ game: PlayState }>) {
     both: 'Name the song · artist = bonus',
     year: 'Guess the release year',
   }[target];
-  if (isChoice) label = 'Tap the right title';
-  else if (isChaosHints) label = 'One of these is a lie';
+  if (isChoice) {
+    label = {
+      title: 'Tap the right title',
+      artist: 'Tap the right artist',
+      both: 'Tap the right title',
+      year: 'Tap the right year',
+    }[target];
+  } else if (isChaosHints) label = 'One of these is a lie';
   const placeholder = {
     title: 'Type song title…',
     artist: 'Type artist name…',
@@ -1495,7 +1511,7 @@ export function GuessingView({ game }: Readonly<{ game: PlayState }>) {
   if (isChaosHints) {
     guessControl = <ChaosHintButtons hints={hints} onPick={submitChaosTap} />;
   } else if (isChoice) {
-    guessControl = <ChoiceButtons options={party?.choiceOptions ?? []} onPick={submitChoice} />;
+    guessControl = <ChoiceButtons options={options} onPick={submitChoice} />;
   } else if (isYear) {
     guessControl = (
       <div style={{ position: 'relative' }}>

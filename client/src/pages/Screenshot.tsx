@@ -227,6 +227,7 @@ const MOCK_PLAY: PlayState = {
   mode: 'classic',
   artistOnly: false,
   yearOnly: false,
+  choiceOptions: [],
   party: null,
   artistGuessText: '',
   stealVictims: null,
