@@ -74,6 +74,12 @@ interface SavedHostSettings {
   bettingTime: number; guessingTime: number; rounds: number; mode: Mode;
   raceTime: number; raceWinnerOnly: boolean; artistOnly: boolean; yearOnly: boolean; difficulty: Difficulty;
   enabledEvents: PartyEvent[]; chaosLevel: ChaosLevel;
+  // Snapshot of ALL_PARTY_EVENTS as of the last save — lets a future load
+  // tell "event didn't exist yet when this was saved" (auto-enable) apart
+  // from "the host explicitly turned this off" (stay off). Without this, a
+  // newly-added event silently never reaches a returning host, because
+  // `enabledEvents` alone can't distinguish the two cases.
+  knownPartyEvents: PartyEvent[];
 }
 const HOST_SETTINGS_KEY = 'versed_host_settings';
 const MODES: Set<Mode> = new Set(['classic', 'race', 'party']);
@@ -102,16 +108,30 @@ function sanitizeHostSettings(settings: Partial<SavedHostSettings>): Partial<Sav
       ? settings.enabledEvents.filter((e: unknown): e is PartyEvent => PARTY_EVENT_SET.has(e as string))
       : undefined,
     chaosLevel: clampFiniteNumber(settings.chaosLevel, 0, 100) as ChaosLevel | undefined,
+    knownPartyEvents: Array.isArray(settings.knownPartyEvents)
+      ? settings.knownPartyEvents.filter((e: unknown): e is PartyEvent => PARTY_EVENT_SET.has(e as string))
+      : undefined,
   };
 }
 
 function loadSavedHostSettings(): Partial<SavedHostSettings> {
   try {
     const raw = JSON.parse(localStorage.getItem(HOST_SETTINGS_KEY) ?? '{}');
-    return sanitizeHostSettings({
+    const settings = sanitizeHostSettings({
       ...raw,
       chaosLevel: typeof raw.chaosLevel === 'string' ? LEGACY_CHAOS_LEVELS[raw.chaosLevel] : raw.chaosLevel,
     });
+    if (settings.enabledEvents === undefined) return settings;
+    // A save from before this event existed has no knownPartyEvents entry at
+    // all — treat that as an empty known-set, so every currently-valid event
+    // not already enabled gets auto-enabled once. A save that does have
+    // knownPartyEvents only auto-enables events added since that save; an
+    // event the host explicitly turned off (present in knownPartyEvents,
+    // absent from enabledEvents) stays off.
+    const known = new Set(settings.knownPartyEvents ?? []);
+    const newlyAdded = ALL_PARTY_EVENTS.filter(e => !known.has(e) && !settings.enabledEvents!.includes(e));
+    if (newlyAdded.length > 0) settings.enabledEvents = [...settings.enabledEvents, ...newlyAdded];
+    return settings;
   } catch { return {}; }
 }
 
@@ -251,6 +271,10 @@ function useHostGame(): HostState {
       bettingTime: bettingTimeSetting, guessingTime: guessingTimeSetting, rounds: roundsSetting, mode,
       raceTime: raceTimeSetting, raceWinnerOnly, artistOnly, yearOnly, difficulty,
       enabledEvents, chaosLevel,
+      // Snapshot of every event this build knows about, so a future load can
+      // tell newly-added events (auto-enable) apart from ones the host
+      // deliberately turned off (stay off) — see loadSavedHostSettings.
+      knownPartyEvents: ALL_PARTY_EVENTS,
     };
     localStorage.setItem(HOST_SETTINGS_KEY, JSON.stringify(sanitizeHostSettings(toSave)));
   }, [bettingTimeSetting, guessingTimeSetting, roundsSetting, mode, raceTimeSetting, raceWinnerOnly, artistOnly, yearOnly, difficulty, enabledEvents, chaosLevel]);
