@@ -134,6 +134,7 @@ export interface HostState {
   result: RoundResultEvent | null;
   roundDeltas: Record<string, number>;
   roundPity: Record<string, boolean>;
+  roundPityAmount: Record<string, number>;
   leaderboard: LeaderboardEntry[];
   awards: Award[];
   copied: boolean;
@@ -219,6 +220,7 @@ function useHostGame(): HostState {
   const [result, setResult] = useState<RoundResultEvent | null>(null);
   const [roundDeltas, setRoundDeltas] = useState<Record<string, number>>({});
   const [roundPity, setRoundPity] = useState<Record<string, boolean>>({});
+  const [roundPityAmount, setRoundPityAmount] = useState<Record<string, number>>({});
   const [leaderboard, setLeaderboard] = useState<LeaderboardEntry[]>([]);
   const [awards, setAwards] = useState<Award[]>([]);
   const [copied, setCopied] = useState(false);
@@ -481,14 +483,17 @@ function useHostGame(): HostState {
     socket.on('score_update', ({ players: p }: { players: PlayerInfo[] }) => {
       const deltas: Record<string, number> = {};
       const pity: Record<string, boolean> = {};
+      const pityAmount: Record<string, number> = {};
       for (const updated of p) {
         const prev = playersRef.current.find(x => x.name === updated.name);
         deltas[updated.name] = (updated.score ?? 0) - (prev?.score ?? 0);
         pity[updated.name] = updated.pity ?? false;
+        pityAmount[updated.name] = updated.pityAmount ?? 0;
       }
       playersRef.current = p;
       setRoundDeltas(deltas);
       setRoundPity(pity);
+      setRoundPityAmount(pityAmount);
       setPlayers(p);
     });
 
@@ -603,7 +608,7 @@ function useHostGame(): HostState {
   return {
     spotify, phase, pin, players, roundIndex, totalRounds, hints,
     bettingTime, timeLeft, timerTotal, bidCount, countdown, guesserNames, lowestBid, playerBids,
-    result, roundDeltas, roundPity, leaderboard, awards, copied, playProgress, inviteUrl,
+    result, roundDeltas, roundPity, roundPityAmount, leaderboard, awards, copied, playProgress, inviteUrl,
     settingsOpen, bettingTimeSetting, guessingTimeSetting, roundsSetting,
     mode, raceTimeSetting, raceWinnerOnly, artistOnly, yearOnly, difficulty,
     enabledEvents, chaosLevel,
@@ -2560,12 +2565,13 @@ function artistGuessClass(artistCorrect: boolean, titleCorrect: boolean): string
 }
 
 function RevealPlayerRow({
-  player, entry, delta, pity, delay, correct, instant, removePlayer,
+  player, entry, delta, pity, pityAmount, delay, correct, instant, removePlayer,
 }: Readonly<{
   player: PlayerInfo;
   entry?: { guess: string | null; timeMs?: number | null; live?: boolean; artistGuess?: string | null; artistCorrect?: boolean };
   delta: number;
   pity: boolean;
+  pityAmount: number;
   delay: number;
   correct: GuessCorrectness;
   instant: boolean;
@@ -2614,7 +2620,7 @@ function RevealPlayerRow({
         </div>
         {delta > 0 && (
           <p className={`text-sky-400 text-xs tabular-nums shrink-0 transition-opacity duration-500 ${deltaFading ? 'opacity-0' : 'opacity-100'}`}>
-            +{displayDelta > 0 ? displayDelta.toLocaleString() : ''}{pity && ' (pity)'}
+            +{displayDelta > 0 ? displayDelta.toLocaleString() : ''}{pity && ` (+${pityAmount.toLocaleString()} pity)`}
           </p>
         )}
       </div>
@@ -2653,7 +2659,7 @@ function RevealShell({
   isCorrectFor: (player: PlayerInfo) => GuessCorrectness;
   wide?: boolean;
 }>) {
-  const { roundIndex, totalRounds, players, roundDeltas, roundPity, removePlayer, endGame, stealResult, party } = game;
+  const { roundIndex, totalRounds, players, roundDeltas, roundPity, roundPityAmount, removePlayer, endGame, stealResult, party } = game;
   // Every sub-round of the finale duel reports finale:true — the host can't
   // tell from roundIndex/totalRounds alone whether clicking "next" advances
   // to another duel game or actually ends the match, so it gets a neutral
@@ -2700,6 +2706,7 @@ function RevealShell({
               entry={result.playerGuesses?.find(g => g.name === p.name)}
               delta={roundDeltas[p.name] ?? 0}
               pity={roundPity[p.name] ?? false}
+              pityAmount={roundPityAmount[p.name] ?? 0}
               delay={400 + i * 80}
               correct={isCorrectFor(p)}
               instant={instant}

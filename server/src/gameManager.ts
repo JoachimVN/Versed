@@ -1505,7 +1505,8 @@ function scoreYearGuesses(game: Game, round: Round, mult: number, winnerOnly: bo
       if (points > e.player.biggestSwing) e.player.biggestSwing = points;
       round.scoredSocketIds.add(e.id);
     }
-    return { name: e.player.name, guess: e.guess, diff: e.diff, points, pity: round.pityAwardedTo.has(e.id) };
+    const pity = round.pityAwardedTo.has(e.id);
+    return { name: e.player.name, guess: e.guess, diff: e.diff, points, pity, pityAmount: pity ? PITY_BONUS : undefined };
   });
 
   results.sort((a, b) => (a.diff ?? 9999) - (b.diff ?? 9999));
@@ -1549,11 +1550,14 @@ function recordDuelYearWin(game: Game, round: Round): void {
 function finalizeClassicYearWin(game: Game, round: Round, winnerId: string, winnerPoints: number): YearResult[] {
   const actual = Math.floor(round.song.year ?? 0);
   const entries = yearGuessEntries(game, round, actual);
-  const results: YearResult[] = entries.map(e => ({
-    name: e.player.name, guess: e.guess, diff: e.diff,
-    points: e.id === winnerId ? winnerPoints : 0,
-    pity: e.id === winnerId && round.pityAwardedTo.has(winnerId),
-  }));
+  const results: YearResult[] = entries.map(e => {
+    const pity = e.id === winnerId && round.pityAwardedTo.has(winnerId);
+    return {
+      name: e.player.name, guess: e.guess, diff: e.diff,
+      points: e.id === winnerId ? winnerPoints : 0,
+      pity, pityAmount: pity ? PITY_BONUS : undefined,
+    };
+  });
   results.sort((a, b) => (a.diff ?? 9999) - (b.diff ?? 9999));
   round.yearResults = results;
   return round.yearResults;

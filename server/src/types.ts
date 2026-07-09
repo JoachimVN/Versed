@@ -95,6 +95,7 @@ export interface YearResult {
   diff: number | null;
   points: number;
   pity: boolean;
+  pityAmount?: number;              // set alongside pity: true — the flat catch-up amount, so the UI can break it out of `points`
 }
 
 // Bidders grouped by bid value. Tiers are played in ascending bid order: the

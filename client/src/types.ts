@@ -34,6 +34,7 @@ export interface PlayerInfo {
   score?: number;
   streak?: number;
   pity?: boolean;
+  pityAmount?: number;
 }
 
 // Mirrors server/src/types.ts's PartyEvent — kept in sync by hand, no shared
@@ -64,6 +65,7 @@ export interface YearResult {
   diff: number | null;
   points: number;
   pity: boolean;
+  pityAmount?: number;
 }
 
 export interface RoundResultEvent {

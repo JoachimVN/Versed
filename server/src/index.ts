@@ -926,9 +926,10 @@ io.on('connection', (socket) => {
   function emitScoreUpdate(game: GameObj) {
     const pityAwardedTo = game.currentRound?.pityAwardedTo;
     io.to(game.pin).emit('score_update', {
-      players: Array.from(game.players.values()).map(p => ({
-        name: p.name, score: p.score, streak: p.streak, pity: pityAwardedTo?.has(p.socketId) ?? false,
-      })),
+      players: Array.from(game.players.values()).map(p => {
+        const pity = pityAwardedTo?.has(p.socketId) ?? false;
+        return { name: p.name, score: p.score, streak: p.streak, pity, pityAmount: pity ? gm.PITY_BONUS : undefined };
+      }),
     });
   }
 
