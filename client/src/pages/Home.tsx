@@ -28,12 +28,12 @@ export default function Home() {
       beginMorph({ top: r.top, left: r.left, width: r.width, height: r.height });
     }
     setLeaving(true);
-    setTimeout(() => navigate('/play'), 220);
+    setTimeout(() => navigate('/play'), 320);
   };
 
   return (
     <div
-      className={`relative min-h-screen flex flex-col items-center justify-center gap-10 p-6 ${leaving ? 'page-exit' : 'page-enter'}`}
+      className={`relative min-h-screen flex flex-col items-center justify-center gap-10 p-6 ${leaving ? 'page-exit' : (morphing ? 'page-enter-fade' : 'page-enter')}`}
       style={{ zIndex: 1, pointerEvents: leaving ? 'none' : undefined }}
     >
       <div className="flex flex-col items-center gap-3">

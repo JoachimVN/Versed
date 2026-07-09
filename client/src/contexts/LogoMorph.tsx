@@ -29,7 +29,8 @@ export function useLogoMorph() {
   return ctx;
 }
 
-const DURATION = 380;
+const DURATION = 520;
+const EASING = 'cubic-bezier(0.65, 0, 0.35, 1)';
 
 export function LogoMorphProvider({ children }: Readonly<{ children: React.ReactNode }>) {
   const [rect, setRect] = useState<Rect | null>(null);
@@ -79,7 +80,7 @@ export function LogoMorphProvider({ children }: Readonly<{ children: React.React
             zIndex: 50,
             pointerEvents: 'none',
             transition: animate
-              ? `top ${DURATION}ms cubic-bezier(0.16, 1, 0.3, 1), left ${DURATION}ms cubic-bezier(0.16, 1, 0.3, 1), width ${DURATION}ms cubic-bezier(0.16, 1, 0.3, 1), height ${DURATION}ms cubic-bezier(0.16, 1, 0.3, 1)`
+              ? `top ${DURATION}ms ${EASING}, left ${DURATION}ms ${EASING}, width ${DURATION}ms ${EASING}, height ${DURATION}ms ${EASING}`
               : 'none',
           }}
         />

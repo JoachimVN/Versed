@@ -736,12 +736,12 @@ function JoinView({ game }: Readonly<{ game: PlayState }>) {
       beginMorph({ top: r.top, left: r.left, width: r.width, height: r.height });
     }
     setLeaving(true);
-    setTimeout(resolve, 220);
+    setTimeout(resolve, 320);
   });
 
   return (
     <div
-      className={`relative min-h-screen keyboard-resize ${leaving ? 'page-exit' : 'page-enter'}`}
+      className={`relative min-h-screen keyboard-resize ${leaving ? 'page-exit' : (morphing ? 'page-enter-fade' : 'page-enter')}`}
       style={{ zIndex: 1, overflowY: 'auto', pointerEvents: leaving ? 'none' : undefined }}
     >
       <BackButton beforeNavigate={goBack} />
