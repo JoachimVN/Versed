@@ -11,6 +11,14 @@ export function sanitizeToken(value: string | null | undefined): string | null {
   return value && TOKEN_PATTERN.test(value) ? value : null;
 }
 
+function spotifyErrorMessage(data: unknown): string {
+  if (data && typeof data === 'object' && 'message' in data && typeof data.message === 'string') {
+    return data.message;
+  }
+  if (data instanceof Error && data.message) return data.message;
+  return 'Spotify playback failed in this browser. Try reconnecting Spotify or using another browser.';
+}
+
 export function useSpotify() {
   const [accessToken, setAccessToken] = useState<string | null>(null);
   const [refreshToken, setRefreshToken] = useState<string | null>(null);
@@ -20,6 +28,7 @@ export function useSpotify() {
   // allowlisted. So "unauthorized" can only be detected after the fact, by
   // probing the Web API once we have a token.
   const [unauthorized, setUnauthorized] = useState(false);
+  const [playbackError, setPlaybackError] = useState<string | null>(null);
   const playerRef = useRef<import('../types').SpotifyPlayer | null>(null);
   const deviceIdRef = useRef<string | null>(null);
   const accessTokenRef = useRef<string | null>(null);
@@ -39,6 +48,12 @@ export function useSpotify() {
   // arbitrarily old (tokens live 1h), so refresh it right away instead of
   // waiting out the first 50-minute interval.
   const staleTokenRef = useRef(false);
+
+  function reportPlaybackError(label: string, data: unknown) {
+    const message = spotifyErrorMessage(data);
+    console.error(`[Spotify] ${label}:`, data);
+    setPlaybackError(message);
+  }
 
   useEffect(() => {
     // Tokens arrive in the URL fragment (never sent to servers); the query
@@ -115,8 +130,14 @@ export function useSpotify() {
       player.addListener('ready', ({ device_id }: { device_id: string }) => {
         deviceIdRef.current = device_id;
         setPlayerReady(true);
+        setPlaybackError(null);
       });
       player.addListener('not_ready', () => setPlayerReady(false));
+      player.addListener('initialization_error', (data: unknown) => reportPlaybackError('initialization_error', data));
+      player.addListener('authentication_error', (data: unknown) => reportPlaybackError('authentication_error', data));
+      player.addListener('account_error', (data: unknown) => reportPlaybackError('account_error', data));
+      player.addListener('playback_error', (data: unknown) => reportPlaybackError('playback_error', data));
+      player.addListener('autoplay_failed', (data: unknown) => reportPlaybackError('autoplay_failed', data));
       // Keep playback in sync with intent. The SDK can spontaneously pause
       // (buffering) or a queued play command can land late; self-heal both ways.
       player.addListener('player_state_changed', (state: any) => {
@@ -127,12 +148,16 @@ export function useSpotify() {
           // loop the song indefinitely. Only heal genuine buffering pauses.
           const duration = state.track_window?.current_track?.duration_ms;
           const atEnd = duration && state.position >= duration - 500;
-          if (!atEnd) playerRef.current?.resume();
+          if (!atEnd) playerRef.current?.resume().catch(err => reportPlaybackError('resume failed', err));
         } else if (phase === 'stopping' && !state.paused) {
-          playerRef.current?.pause();
+          playerRef.current?.pause().catch(err => reportPlaybackError('pause failed', err));
         }
       });
-      player.connect();
+      player.connect()
+        .then(connected => {
+          if (!connected) reportPlaybackError('connect failed', new Error('Spotify player did not connect.'));
+        })
+        .catch(err => reportPlaybackError('connect failed', err));
       playerRef.current = player;
     };
 
@@ -151,7 +176,11 @@ export function useSpotify() {
   }, [accessToken]);
 
   function activatePlayer() {
-    playerRef.current?.activateElement();
+    try {
+      playerRef.current?.activateElement();
+    } catch (err) {
+      reportPlaybackError('activateElement failed', err);
+    }
   }
 
   function clearStopTimer() {
@@ -161,23 +190,28 @@ export function useSpotify() {
   // Resolve once audio is genuinely playing from near the intended start, so
   // the play window is timed from the audible start rather than the resume()
   // call (which precedes real output by 100-300ms of device/SDK latency).
-  function waitForPlaybackStart(startPositionMs: number): Promise<void> {
+  function waitForPlaybackStart(startPositionMs: number): Promise<boolean> {
     return new Promise((resolve) => {
       let done = false;
-      const finish = () => {
+      const finish = (started: boolean) => {
         if (done) return;
         done = true;
         clearInterval(poll);
         clearTimeout(safety);
-        resolve();
+        resolve(started);
       };
       const poll = setInterval(async () => {
-        const st = await playerRef.current?.getCurrentState();
-        // >start+40ms: past the very start, so audio is really flowing.
-        // <start+1500ms: not the stale position left over from buffering.
-        if (st && !st.paused && st.position > startPositionMs + 40 && st.position < startPositionMs + 1500) finish();
+        try {
+          const st = await playerRef.current?.getCurrentState();
+          // >start+40ms: past the very start, so audio is really flowing.
+          // <start+1500ms: not the stale position left over from buffering.
+          if (st && !st.paused && st.position > startPositionMs + 40 && st.position < startPositionMs + 1500) finish(true);
+        } catch (err) {
+          reportPlaybackError('getCurrentState failed', err);
+          finish(false);
+        }
       }, 20);
-      const safety = setTimeout(finish, 2500);
+      const safety = setTimeout(() => finish(true), 2500);
     });
   }
 
@@ -194,22 +228,29 @@ export function useSpotify() {
     playGenRef.current += 1;
     playStateRef.current = 'preparing';
     preparedPositionRef.current = positionMs;
-    await playerRef.current?.setVolume(0);
-    const res = await fetch(`https://api.spotify.com/v1/me/player/play?device_id=${device}`, {
-      method: 'PUT',
-      headers: {
-        Authorization: `Bearer ${token}`,
-        'Content-Type': 'application/json',
-      },
-      body: JSON.stringify({ uris: [`spotify:track:${trackId}`], position_ms: positionMs }),
-    });
-    if (!res.ok) {
-      const body = await res.text();
-      console.error(`[Spotify] prepare failed ${res.status}:`, body);
+    try {
+      await playerRef.current?.setVolume(0);
+      const res = await fetch(`https://api.spotify.com/v1/me/player/play?device_id=${device}`, {
+        method: 'PUT',
+        headers: {
+          Authorization: `Bearer ${token}`,
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({ uris: [`spotify:track:${trackId}`], position_ms: positionMs }),
+      });
+      if (!res.ok) {
+        const body = await res.text();
+        console.error(`[Spotify] prepare failed ${res.status}:`, body);
+        playStateRef.current = 'idle';
+        return false;
+      }
+      setPlaybackError(null);
+      return true;
+    } catch (err) {
+      reportPlaybackError('prepare failed', err);
       playStateRef.current = 'idle';
       return false;
     }
-    return true;
   }
 
   // Reveal the buffered track from the start and play it for exactly
@@ -227,10 +268,19 @@ export function useSpotify() {
     const gen = playGenRef.current;
     const startPos = preparedPositionRef.current;
     playStateRef.current = 'playing';
-    await playerRef.current?.seek(startPos);
-    await playerRef.current?.setVolume(0.8);
-    await playerRef.current?.resume();
-    await waitForPlaybackStart(startPos);
+    try {
+      await playerRef.current?.seek(startPos);
+      await playerRef.current?.setVolume(0.8);
+      await playerRef.current?.resume();
+      if (!await waitForPlaybackStart(startPos)) {
+        playStateRef.current = 'idle';
+        return false;
+      }
+    } catch (err) {
+      reportPlaybackError('start failed', err);
+      playStateRef.current = 'idle';
+      return false;
+    }
     // Another prepareTrack/pauseTrack started while we were waiting — don't
     // arm a stop timer that would fire at the wrong time.
     if (gen !== playGenRef.current) return false;
@@ -242,18 +292,26 @@ export function useSpotify() {
     clearStopTimer();
     playGenRef.current += 1; // invalidate any in-flight startPrepared
     playStateRef.current = 'stopping';
-    await playerRef.current?.pause();
+    try {
+      await playerRef.current?.pause();
+    } catch (err) {
+      reportPlaybackError('pause failed', err);
+    }
   }
 
   function disconnect() {
     sessionStorage.removeItem('spotify_at');
     sessionStorage.removeItem('spotify_rt');
     accessTokenRef.current = null;
+    playerRef.current?.disconnect();
+    playerRef.current = null;
+    deviceIdRef.current = null;
     setAccessToken(null);
     setRefreshToken(null);
     setPlayerReady(false);
     setUnauthorized(false);
+    setPlaybackError(null);
   }
 
-  return { isConnected: !!accessToken, accessToken, playerReady, unauthorized, prepareTrack, startPrepared, pauseTrack, activatePlayer, disconnect };
+  return { isConnected: !!accessToken, accessToken, playerReady, unauthorized, playbackError, prepareTrack, startPrepared, pauseTrack, activatePlayer, disconnect };
 }

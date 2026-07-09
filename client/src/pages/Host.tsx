@@ -1776,7 +1776,20 @@ function ConnectView({ game }: Readonly<{ game: HostState }>) {
       <BackButton />
       <img src={`${import.meta.env.BASE_URL}logo.png`} alt={APP_NAME} className="w-auto" style={{ maxHeight: '192px', maxWidth: '100%' }} />
       {spotify.isConnected && !spotify.playerReady ? (
-        <p className="text-white/50">Connecting to Spotify...</p>
+        <div className="flex flex-col items-center gap-3 text-center">
+          <p className="text-white/50">Connecting to Spotify...</p>
+          {spotify.playbackError && (
+            <p className="max-w-sm text-red-300 text-sm" aria-live="assertive">
+              {spotify.playbackError} Try Chrome or Edge if Safari keeps blocking playback.
+            </p>
+          )}
+          <button
+            onClick={() => spotify.disconnect()}
+            className="px-4 py-2 rounded-xl border border-white/15 bg-white/5 text-white/70 text-sm font-semibold hover:bg-white/10 hover:text-white transition-colors"
+          >
+            Reconnect Spotify
+          </button>
+        </div>
       ) : (
         <>
           <a
@@ -2195,12 +2208,19 @@ export function LobbyView({ game, fadeOutRef }: Readonly<{ game: HostState; fade
       >
         <img src={`${import.meta.env.BASE_URL}logo.png`} alt={APP_NAME} className="w-auto" style={{ maxHeight: '192px', maxWidth: '100%' }} />
         <span className="text-white/45 text-sm flex items-center gap-2">
-          {spotify.playerReady ? (
+          {spotify.playbackError ? (
+            <><span className="w-2 h-2 rounded-full bg-red-400" />Spotify playback error</>
+          ) : spotify.playerReady ? (
             <><span className="w-2 h-2 rounded-full bg-green-500" />Spotify ready</>
           ) : (
             <><Loader2 className="w-3.5 h-3.5 animate-spin" />Spotify loading...</>
           )}
         </span>
+        {spotify.playbackError && (
+          <p className="max-w-sm text-center text-red-300 text-sm" aria-live="assertive">
+            {spotify.playbackError} Try reconnecting Spotify, or use Chrome/Edge if Safari keeps blocking playback.
+          </p>
+        )}
       </div>
 
       {pin ? (
