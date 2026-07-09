@@ -29,7 +29,7 @@ export function useLogoMorph() {
   return ctx;
 }
 
-const DURATION = 520;
+const DURATION = 800;
 const EASING = 'cubic-bezier(0.65, 0, 0.35, 1)';
 // The real logo sits at opacity:0 for the entire flight, so browsers don't
 // bother compositing it — flipping it visible at the same instant the
