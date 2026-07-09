@@ -914,6 +914,7 @@ function buildRound(game: Game, party?: PartyConfig): Round {
     firstCorrectAt: null,
     correctGuessers: new Set(),
     guessTimes: new Map(),
+    tierStartAt: null,
   };
 }
 
@@ -1000,7 +1001,8 @@ export function addPlayer(game: Game, socketId: string, name: string): Player | 
   const player: Player = {
     socketId, name: name.trim(), score: former?.score ?? 0, streak: former?.streak ?? 0,
     totalCorrect: former?.totalCorrect ?? 0, totalPasses: former?.totalPasses ?? 0,
-    fastestCorrectMs: former?.fastestCorrectMs ?? null, biggestSwing: former?.biggestSwing ?? 0,
+    fastestCorrectMs: former?.fastestCorrectMs ?? null, fastestClassicMs: former?.fastestClassicMs ?? null,
+    biggestSwing: former?.biggestSwing ?? 0,
   };
   game.players.set(socketId, player);
   socketToPin.set(socketId, game.pin);
@@ -1083,7 +1085,8 @@ export function removeSocket(socketId: string): { game: Game; wasHost: boolean }
       game.formerPlayers.set(player.name.toLowerCase(), {
         score: player.score, streak: player.streak,
         totalCorrect: player.totalCorrect, totalPasses: player.totalPasses,
-        fastestCorrectMs: player.fastestCorrectMs, biggestSwing: player.biggestSwing,
+        fastestCorrectMs: player.fastestCorrectMs, fastestClassicMs: player.fastestClassicMs,
+        biggestSwing: player.biggestSwing,
       });
     }
     game.players.delete(socketId);
@@ -1133,6 +1136,9 @@ function applyTier(game: Game, round: Round): TierTurn {
   round.guesserSocketIds = tier.socketIds;
   round.passed = new Set();
   round.earlyGuessers = new Set();
+  // Cleared here (not just at round creation) so a later tier never inherits
+  // an earlier tier's start time if this one's own song_started is delayed.
+  round.tierStartAt = null;
   game.phase = 'playing';
   const guesserNames = tier.socketIds
     .map(id => game.players.get(id)?.name ?? '')
@@ -1204,13 +1210,15 @@ export function recordGuess(
   if (target === 'both' && trimmedArtist) round.artistGuesses.set(socketId, trimmedArtist);
   const guesserName = game.players.get(socketId)?.name ?? '';
 
+  const elapsedMs = Date.now() - (round.tierStartAt ?? Date.now());
+
   if (target === 'year') {
     const guess = parseYearGuess(text);
     const correct = guess !== null && guess === Math.floor(round.song.year ?? 0);
     if (!correct) return failGuess(round, socketId, guesserName);
     const points = Math.round(calcPoints(game, round.lowestBid, round.song.rank) * roundMultiplier(round))
       + pityBonus(currentScores(game), socketId, round);
-    const result = applyClassicWin(game, round, socketId, guesserName, points);
+    const result = applyClassicWin(game, round, socketId, guesserName, points, elapsedMs);
     // The year reveal UI reads exclusively from `yearResults` (never from
     // correct/guesserName/points), so an early exact-match win still needs a
     // results table — everyone else's guess is shown for context, but only
@@ -1225,7 +1233,7 @@ export function recordGuess(
   const basePoints = calcPoints(game, round.lowestBid, round.song.rank);
   const points = Math.round((basePoints + (artistBonus ? basePoints : 0)) * roundMultiplier(round))
     + pityBonus(currentScores(game), socketId, round);
-  return applyClassicWin(game, round, socketId, guesserName, points);
+  return applyClassicWin(game, round, socketId, guesserName, points, elapsedMs);
 }
 
 // A guesser's turn ends without a win — hand them off to "passed" and report
@@ -1242,7 +1250,7 @@ function failGuess(
 // or year target): marks the round answered, pays out, extends the streak,
 // arms a pending steal if this round has one, and ends the round.
 function applyClassicWin(
-  game: Game, round: Round, socketId: string, guesserName: string, points: number,
+  game: Game, round: Round, socketId: string, guesserName: string, points: number, elapsedMs: number,
 ): { correct: true; points: number; guesserName: string; allDone: false } {
   round.answered = true;
   round.correctGuesserName = guesserName;
@@ -1252,6 +1260,8 @@ function applyClassicWin(
   player.totalCorrect += 1;
   if (points > player.biggestSwing) player.biggestSwing = points;
   round.scoredSocketIds.add(socketId);
+  round.guessTimes.set(socketId, elapsedMs);
+  player.fastestClassicMs = player.fastestClassicMs === null ? elapsedMs : Math.min(player.fastestClassicMs, elapsedMs);
   if (round.party?.event === 'steal') {
     round.stealBy = socketId;
     round.stealDone = false;
@@ -1290,6 +1300,16 @@ export function markRaceStarted(game: Game): void {
   if (!round) return;
   round.playStartAt = Date.now();
   game.phase = 'guessing';
+}
+
+// Classic-mode counterpart to markRaceStarted: records when the current
+// tier's clip actually started playing, so recordGuess can measure elapsed
+// time. Guarded so a late song_started after the fallback already fired
+// can't clobber the fallback's own timestamp with a later one.
+export function markTierStarted(game: Game): void {
+  const round = game.currentRound;
+  if (!round || round.tierStartAt !== null) return;
+  round.tierStartAt = Date.now();
 }
 
 function applyRaceCorrectGuess(
@@ -1751,6 +1771,19 @@ export function computeAwards(game: Game): Award[] {
       key: 'fastestGuess',
       playerNames: timed.filter(p => p.fastestCorrectMs === fastestMs).map(p => p.name),
       detail: `${(fastestMs / 1000).toFixed(1)}s`,
+    });
+  }
+
+  // Separate award, not merged with the race-flow one above: classic's
+  // per-tier timing isn't on the same scale as race's shared-clip-start
+  // timing, so comparing them directly would be misleading.
+  const timedClassic = players.filter(p => p.fastestClassicMs !== null);
+  if (timedClassic.length > 0) {
+    const fastestClassicMs = Math.min(...timedClassic.map(p => p.fastestClassicMs!));
+    awards.push({
+      key: 'fastestClassicGuess',
+      playerNames: timedClassic.filter(p => p.fastestClassicMs === fastestClassicMs).map(p => p.name),
+      detail: `${(fastestClassicMs / 1000).toFixed(1)}s`,
     });
   }
 

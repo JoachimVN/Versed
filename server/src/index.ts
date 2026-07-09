@@ -538,6 +538,7 @@ io.on('connection', (socket) => {
       io.to(`player:${game.pin}`).emit('your_turn', { timeLimit: game.raceTime, endsAt });
       game.phaseTimer = setTimeout(() => endRaceRound(game), game.raceTime * 1000);
     } else {
+      gm.markTierStarted(game);
       io.to(`player:${game.pin}`).emit('song_playing');
       game.phaseTimer = setTimeout(() => startGuessingPhase(game), gm.playMsFor(game.currentRound!.lowestBid));
     }
@@ -1011,7 +1012,10 @@ io.on('connection', (socket) => {
     // first runs a countdown (and buffers the track) before playback begins,
     // so allow for that plus the play duration plus slack.
     game.phaseTimer = setTimeout(() => {
-      if (game.phase === 'playing') startGuessingPhase(game);
+      if (game.phase === 'playing') {
+        gm.markTierStarted(game);
+        startGuessingPhase(game);
+      }
     }, durationMs + PLAYBACK_COUNTDOWN_MS + 5000);
   }
 

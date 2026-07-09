@@ -1,11 +1,16 @@
-import { Check, Trophy, X, Zap, TrendingUp, Swords } from 'lucide-react';
+import { Check, Trophy, X, Zap, Timer, TrendingUp, Swords } from 'lucide-react';
 import LiquidGlass from 'liquid-glass-react';
 import type { Award, RoundResultEvent } from '../types';
 import { LIQUID_PILL_PROPS } from './liquidGlassPresets';
 
+// 'fastestGuess' (race-flow timing) and 'fastestClassicGuess' (classic
+// bid/tier timing) are separate awards, not merged into one — the two flows
+// measure elapsed time on different scales (shared clip start vs per-tier
+// start), so a single "fastest" ranking across both would be misleading.
 const AWARD_LABELS: Record<Award['key'], string> = {
   mostCorrect: 'Most Correct',
-  fastestGuess: 'Fastest Guess',
+  fastestGuess: 'Fastest Race Guess',
+  fastestClassicGuess: 'Fastest Classic Guess',
   biggestSwing: 'Biggest Swing',
   finaleWinner: 'Finale Winner',
 };
@@ -15,18 +20,21 @@ const AWARD_LABELS: Record<Award['key'], string> = {
 const AWARD_ICONS: Record<Award['key'], typeof Trophy> = {
   mostCorrect: Trophy,
   fastestGuess: Zap,
+  fastestClassicGuess: Timer,
   biggestSwing: TrendingUp,
   finaleWinner: Swords,
 };
 
 // Each award gets a color already used elsewhere on this same screen, rather
-// than one flat accent for all four: gold matches the 1st-place podium medal,
+// than one flat accent for all five: gold matches the 1st-place podium medal,
 // cyan matches the existing "YOU" highlight, amber matches the 3rd-place
-// medal (fitting for a comeback climbing out of last), and violet is the
-// brand accent used on the podium's CTA button.
+// medal (fitting for a comeback climbing out of last), violet is the brand
+// accent used on the podium's CTA button, and indigo keeps the classic-mode
+// timing award visually distinct from race's cyan.
 const AWARD_COLORS: Record<Award['key'], string> = {
   mostCorrect: '#fbbf24',
   fastestGuess: '#5eead4',
+  fastestClassicGuess: '#818cf8',
   biggestSwing: '#d97706',
   finaleWinner: '#c65fe8',
 };

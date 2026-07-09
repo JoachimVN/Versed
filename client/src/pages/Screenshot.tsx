@@ -170,6 +170,7 @@ const MOCK_LEADERBOARD_LONG: LeaderboardEntry[] = [
 const MOCK_AWARDS: Award[] = [
   { key: 'mostCorrect', playerNames: ['Anna'], detail: '9/10 correct guesses this game, more than anyone else' },
   { key: 'fastestGuess', playerNames: ['John'], detail: '0.8s fastest correct guess' },
+  { key: 'fastestClassicGuess', playerNames: ['Priya'], detail: '1.2s fastest correct guess' },
   { key: 'biggestSwing', playerNames: ['Olivia', 'Marcus'], detail: '+1200 point single-round swing' },
   { key: 'finaleWinner', playerNames: ['Sofia'], detail: 'Won the finale duel' },
 ];

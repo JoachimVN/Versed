@@ -143,6 +143,11 @@ export interface Round {
   firstCorrectAt: number | null;   // epoch ms of first correct guess (decay origin)
   correctGuessers: Set<string>;    // socketIds who guessed correctly in Race
   guessTimes: Map<string, number>; // socketId → ms from playStartAt to correct guess
+  // Classic-mode field. Race's counterpart to playStartAt: epoch ms when the
+  // *current tier's* clip actually started playing, reset to null at the top
+  // of every tier (applyTier) so a later tier never inherits an earlier
+  // tier's timestamp.
+  tierStartAt: number | null;
 }
 
 export interface Player {
@@ -154,14 +159,15 @@ export interface Player {
   // per-round-only tracking) — used to compute end-of-game awards.
   totalCorrect: number;
   totalPasses: number;
-  fastestCorrectMs: number | null; // race-flow only; classic has no per-player timing
+  fastestCorrectMs: number | null; // race-flow (+ chaos hints) only
+  fastestClassicMs: number | null; // classic bid/tier flow only — separate scale, not comparable to fastestCorrectMs
   biggestSwing: number;            // largest single-round point gain
 }
 
 // One end-of-game superlative. Ties share the award rather than picking one
 // name arbitrarily.
 export interface Award {
-  key: 'mostCorrect' | 'fastestGuess' | 'biggestSwing' | 'finaleWinner';
+  key: 'mostCorrect' | 'fastestGuess' | 'fastestClassicGuess' | 'biggestSwing' | 'finaleWinner';
   playerNames: string[];
   detail: string;
 }
@@ -188,7 +194,7 @@ export interface Game {
   // name.toLowerCase() → saved state, restored on rejoin
   formerPlayers: Map<string, {
     score: number; streak: number;
-    totalCorrect: number; totalPasses: number; fastestCorrectMs: number | null; biggestSwing: number;
+    totalCorrect: number; totalPasses: number; fastestCorrectMs: number | null; fastestClassicMs: number | null; biggestSwing: number;
   }>;
   phase: GamePhase;
   roundIndex: number;
