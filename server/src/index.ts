@@ -100,14 +100,25 @@ interface StartGameSettings {
   customPlaylist?: { id?: string; tracks?: PlaylistTrackInput[] };
 }
 
-function applyStartGameSettings(game: Game, s: StartGameSettings | undefined) {
-  if (s?.bettingTime) game.bettingTime = Math.max(5, Math.min(999, Math.round(s.bettingTime)));
-  if (s?.guessingTime) game.guessingTime = Math.max(5, Math.min(999, Math.round(s.guessingTime)));
-  if (s?.totalRounds) game.totalRounds = Math.max(1, Math.min(999, Math.round(s.totalRounds)));
+function clamp(value: number, min: number, max: number): number {
+  return Math.max(min, Math.min(max, value));
+}
+
+function clampRounded(value: number, min: number, max: number): number {
+  return Math.max(min, Math.min(max, Math.round(value)));
+}
+
+function applyTimingSettings(game: Game, s: StartGameSettings | undefined) {
+  if (s?.bettingTime) game.bettingTime = clampRounded(s.bettingTime, 5, 999);
+  if (s?.guessingTime) game.guessingTime = clampRounded(s.guessingTime, 5, 999);
+  if (s?.totalRounds) game.totalRounds = clampRounded(s.totalRounds, 1, 999);
+  if (s?.raceTime) game.raceTime = clampRounded(s.raceTime, 10, 999);
+}
+
+function applyModeSettings(game: Game, s: StartGameSettings | undefined) {
   if (s?.mode === 'race') game.mode = 'race';
   else if (s?.mode === 'party') game.mode = 'party';
   else game.mode = 'classic';
-  if (s?.raceTime) game.raceTime = Math.max(10, Math.min(999, Math.round(s.raceTime)));
 
   // Party picks its own guess target per round, so these game-wide toggles
   // are Classic/Race only — leaving them set under Party would otherwise
@@ -124,21 +135,38 @@ function applyStartGameSettings(game: Game, s: StartGameSettings | undefined) {
   game.artistOnly = !isParty && s?.artistOnly === true;
   // Party has its own 'choice' round type instead of this toggle.
   game.multipleChoice = !isParty && s?.multipleChoice === true;
-  game.difficulty = s?.difficulty === 'easy' || s?.difficulty === 'medium' ? s.difficulty : 'hard';
+}
 
+function applyDifficultySettings(game: Game, s: StartGameSettings | undefined) {
+  game.difficulty = s?.difficulty === 'easy' || s?.difficulty === 'medium' ? s.difficulty : 'hard';
+}
+
+function applyChaosSettings(game: Game, s: StartGameSettings | undefined) {
   game.chaosLevel = typeof s?.chaosLevel === 'number' && Number.isFinite(s.chaosLevel)
-    ? Math.max(0, Math.min(100, s.chaosLevel))
+    ? clamp(s.chaosLevel, 0, 100)
     : 50;
+}
+
+function enabledPartyItems<T extends string>(settings: string[] | undefined, allowed: readonly T[]): Set<T> {
+  if (!Array.isArray(settings)) return new Set(allowed);
+  return new Set(settings.filter((value): value is T => (allowed as readonly string[]).includes(value)));
+}
+
+function applyPartyPoolSettings(game: Game, s: StartGameSettings | undefined) {
   // A missing/non-array setting (never sent, or malformed) falls back to
   // "everything enabled". An explicit array — even filtered down to empty,
   // meaning the host unchecked every event — is respected as-is; the party
   // event picker already treats an empty pool as "always play plain".
-  game.enabledEvents = Array.isArray(s?.enabledEvents)
-    ? new Set(s.enabledEvents.filter((e): e is PartyEvent => (gm.ALL_PARTY_EVENTS as string[]).includes(e)))
-    : new Set(gm.ALL_PARTY_EVENTS);
-  game.enabledRoundTypes = Array.isArray(s?.enabledRoundTypes)
-    ? new Set(s.enabledRoundTypes.filter((t): t is PartyRoundType => (gm.ALL_PARTY_ROUND_TYPES as string[]).includes(t)))
-    : new Set(gm.ALL_PARTY_ROUND_TYPES);
+  game.enabledEvents = enabledPartyItems<PartyEvent>(s?.enabledEvents, gm.ALL_PARTY_EVENTS);
+  game.enabledRoundTypes = enabledPartyItems<PartyRoundType>(s?.enabledRoundTypes, gm.ALL_PARTY_ROUND_TYPES);
+}
+
+function applyStartGameSettings(game: Game, s: StartGameSettings | undefined) {
+  applyTimingSettings(game, s);
+  applyModeSettings(game, s);
+  applyDifficultySettings(game, s);
+  applyChaosSettings(game, s);
+  applyPartyPoolSettings(game, s);
 }
 
 function applySongSource(game: Game, s: StartGameSettings | undefined): { ok: true } | { ok: false; error: string } {

@@ -856,18 +856,44 @@ function choiceFieldValue(song: Song, field: ChoiceField): string | null {
   return song.year != null ? String(Math.floor(song.year)) : null;
 }
 
+function choiceFieldForTarget(target: PartyTarget): ChoiceField {
+  if (target === 'year') return 'year';
+  if (target === 'artist') return 'artist';
+  return 'title';
+}
+
 function pickYearChoiceOptions(song: Song): string[] | undefined {
   if (song.year === null) return undefined;
   const correctYear = Math.floor(song.year);
   const maxYear = Math.max(correctYear, new Date().getFullYear());
+  const offsets = Array.from({ length: YEAR_CHOICE_RADIUS * 2 }, (_, i) => {
+    const offset = i - YEAR_CHOICE_RADIUS;
+    return offset >= 0 ? offset + 1 : offset;
+  });
   const candidates = shuffle(
-    Array.from({ length: YEAR_CHOICE_RADIUS * 2 }, (_, i) => i < YEAR_CHOICE_RADIUS ? i - YEAR_CHOICE_RADIUS : i - YEAR_CHOICE_RADIUS + 1)
+    offsets
       .map(offset => correctYear + offset)
       .filter(year => year >= MIN_CHOICE_YEAR && year <= maxYear),
   );
   const distractors = candidates.slice(0, 3).map(String);
   if (distractors.length < 3) return undefined;
   return shuffle([String(correctYear), ...distractors]);
+}
+
+function choiceDistractorValue(
+  candidate: Song,
+  song: Song,
+  field: ChoiceField,
+  correct: string,
+  distractors: string[],
+): string | null {
+  if (candidate.spotifyTrackId === song.spotifyTrackId) return null;
+  const value = choiceFieldValue(candidate, field);
+  if (value === null) return null;
+  if (textsCollide(value, correct)) return null;
+  if (field === 'artist' && isCorrectArtistGuess(value, song.artist, song.featuredArtists)) return null;
+  if (distractors.some(d => textsCollide(d, value))) return null;
+  return value;
 }
 
 // Multiple Choice's 3 wrong title/artist options are drawn from the same
@@ -890,17 +916,57 @@ function pickChoiceOptions(song: Song, pool: Song[], field: ChoiceField): string
   if (correct === null) return undefined;
   const distractors: string[] = [];
   for (const s of shuffle(pool)) {
-    if (s.spotifyTrackId === song.spotifyTrackId) continue;
-    const value = choiceFieldValue(s, field);
+    const value = choiceDistractorValue(s, song, field, correct, distractors);
     if (value === null) continue;
-    if (textsCollide(value, correct)) continue;
-    if (field === 'artist' && isCorrectArtistGuess(value, song.artist, song.featuredArtists)) continue;
-    if (distractors.some(d => textsCollide(d, value))) continue;
     distractors.push(value);
     if (distractors.length === 3) break;
   }
   if (distractors.length < 3) return undefined;
   return shuffle([correct, ...distractors]);
+}
+
+function maybeApplyPartyChoiceOptions(song: Song, pool: Song[], party: PartyConfig | undefined): void {
+  if (party?.format !== 'choice') return;
+  const choiceOptions = pickChoiceOptions(song, pool, choiceFieldForTarget(party.target));
+  if (choiceOptions) {
+    party.choiceOptions = choiceOptions;
+    return;
+  }
+
+  // Not enough distinct distractors for this round's target — downgrade
+  // to a free-text race round instead of resetting to classic/title, so
+  // an artist-target round (Who Sings It as Multiple Choice) doesn't
+  // silently turn into a title-guessing round. party.target is
+  // deliberately left untouched — that's the whole point of this
+  // fallback over the old "reset everything to classic/title" one.
+  party.format = 'race';
+  party.intro = introFor(party.format, party.target, party.event, party.winnerOnly);
+}
+
+function classicChoiceOptions(game: Game, party: PartyConfig | undefined, song: Song, pool: Song[], target: PartyTarget): string[] | undefined {
+  if (!game.multipleChoice || party) return undefined;
+  return pickChoiceOptions(song, pool, choiceFieldForTarget(target));
+}
+
+function resolveRoundHints(
+  song: Song,
+  pool: Song[],
+  party: PartyConfig | undefined,
+  target: GuessTarget | 'year',
+): { hints: Hint[]; chaosFakeIndex?: number } {
+  const chaosSet = party?.event === 'chaoshints' ? buildChaosHintSet(song, pool) : undefined;
+  if (!party || party.event !== 'chaoshints') {
+    return { hints: buildRoundHints(song, party, target) };
+  }
+  if (chaosSet) return { hints: chaosSet.hints, chaosFakeIndex: chaosSet.fakeIndex };
+
+  // Not enough hint categories (or no decoy song shares one) to build a
+  // believable set — silently downgrade to a plain round, same precedent
+  // as computeSnippetPosition's downgrade for snippet/outro.
+  party.event = null;
+  party.multiplier = 1;
+  party.intro = introFor(party.format, party.target, party.event, party.winnerOnly);
+  return { hints: buildRoundHints(song, party, target) };
 }
 
 // Round selection applies these constraints strictest/most-essential first,
@@ -920,55 +986,18 @@ function buildRound(game: Game, party?: PartyConfig): Round {
 
   const song = pickRandom(pool);
 
-  if (party?.format === 'choice') {
-    const field: ChoiceField = party.target === 'year' ? 'year' : party.target === 'artist' ? 'artist' : 'title';
-    const choiceOptions = pickChoiceOptions(song, pool, field);
-    if (choiceOptions) {
-      party.choiceOptions = choiceOptions;
-    } else {
-      // Not enough distinct distractors for this round's target — downgrade
-      // to a free-text race round instead of resetting to classic/title, so
-      // an artist-target round (Who Sings It as Multiple Choice) doesn't
-      // silently turn into a title-guessing round. party.target is
-      // deliberately left untouched — that's the whole point of this
-      // fallback over the old "reset everything to classic/title" one.
-      party.format = 'race';
-      party.intro = introFor(party.format, party.target, party.event, party.winnerOnly);
-    }
-  }
-
+  maybeApplyPartyChoiceOptions(song, pool, party);
   const snippetMs = party ? computeSnippetPosition(song, party, game.raceTime) : undefined;
   // Resolved after the choice-downgrade block above (which can mutate
   // party.format/party.target) so this never reflects a stale pre-downgrade
   // value — see resolveRoundTarget's own comment.
   const target = resolveRoundTarget(game, party);
-
-  let choiceOptions: string[] | undefined;
-  if (game.multipleChoice && !party) {
-    const field: ChoiceField = target === 'year' ? 'year' : target === 'artist' ? 'artist' : 'title';
-    choiceOptions = pickChoiceOptions(song, pool, field);
-  }
+  const choiceOptions = classicChoiceOptions(game, party, song, pool, target);
 
   // Chaos Hints repurposes the normal `hints` transport to carry its own
   // 4-hint "spot the fake" set instead of the usual guess-along hints —
   // bypasses buildRoundHints entirely for this event.
-  let hints: Hint[];
-  let chaosFakeIndex: number | undefined;
-  const chaosSet = party?.event === 'chaoshints' ? buildChaosHintSet(song, pool) : undefined;
-  if (party?.event === 'chaoshints' && !chaosSet) {
-    // Not enough hint categories (or no decoy song shares one) to build a
-    // believable set — silently downgrade to a plain round, same precedent
-    // as computeSnippetPosition's downgrade for snippet/outro.
-    party.event = null;
-    party.multiplier = 1;
-    party.intro = introFor(party.format, party.target, party.event, party.winnerOnly);
-  }
-  if (chaosSet) {
-    hints = chaosSet.hints;
-    chaosFakeIndex = chaosSet.fakeIndex;
-  } else {
-    hints = buildRoundHints(song, party, target);
-  }
+  const { hints, chaosFakeIndex } = resolveRoundHints(song, pool, party, target);
 
   return {
     song,
