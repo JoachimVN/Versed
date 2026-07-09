@@ -49,7 +49,7 @@ export type ChaosLevel = number;
 // multiplier arrives as null and is revealed (a number) on round_result.
 export interface PartyInfo {
   format: 'classic' | 'race' | 'year' | 'choice';
-  target: 'title' | 'artist' | 'both';
+  target: 'title' | 'artist' | 'both' | 'year';
   event: PartyEvent | null;
   multiplier: number | null;
   winnerOnly: boolean;

@@ -1,6 +1,6 @@
 import { randomInt } from 'node:crypto';
 import {
-  Award, ChaosLevel, Difficulty, Game, GuessTarget, Hint, PartyClientView, PartyConfig, PartyEvent, PartyFormat,
+  Award, ChaosLevel, Difficulty, Game, GuessTarget, Hint, PartyClientView, PartyConfig, PartyEvent, PartyFormat, PartyTarget,
   PartyRoundType, Player, PlaylistTrackInput, Round, Song, YearResult,
 } from './types';
 import { loadSongs } from './songLoader';
@@ -37,6 +37,8 @@ export const YEAR_POINTS_SLOPE = 120;  // …minus this per year off
 export const YEAR_WINNER_BONUS = 500;  // closest answer bonus (split on ties)
 export const PITY_GAP_THRESHOLD = 3000; // leader's lead must exceed this…
 export const PITY_BONUS = 500;          // …for a scorer to get this catch-up bonus
+const YEAR_CHOICE_RADIUS = 10;
+const MIN_CHOICE_YEAR = 1900;
 
 // The tiniest bids ask for so little audio that a clip can land entirely inside
 // a song's near-silent lead-in and reveal nothing — pure bad luck the bidder
@@ -333,7 +335,7 @@ function buildChaosHintSet(song: Song, pool: Song[]): { hints: Hint[]; fakeIndex
 // ─── Party round recipes ─────────────────────────────────────────────────────
 
 function introFor(
-  format: PartyFormat, target: GuessTarget, event: PartyEvent | null, winnerOnly = false,
+  format: PartyFormat, target: PartyTarget, event: PartyEvent | null, winnerOnly = false,
 ): { title: string; tagline: string } {
   if (format === 'year') {
     return {
@@ -343,14 +345,12 @@ function introFor(
         : 'Closest answer wins the round',
     };
   }
-  // Multiple Choice always forces target:'title' (see pickPartyTarget), so
-  // only the flow wording differs here — the event/winnerOnly branches below
-  // still apply normally (an event on a Choice round must still be
-  // announced, not silently dropped).
-  const flow = format === 'classic' ? 'Bid & guess' : format === 'choice' ? 'Tap the right title' : 'Everyone races';
+  const choiceFlow = target === 'year' ? 'Tap the right year' : target === 'artist' ? 'Tap the right artist' : 'Tap the right title';
+  const flow = format === 'classic' ? 'Bid & guess' : format === 'choice' ? choiceFlow : 'Everyone races';
   let goal = 'name the song';
   if (target === 'artist') goal = 'name the artist';
   else if (target === 'both') goal = 'title + artist bonus';
+  else if (target === 'year') goal = 'pick the release year';
   const suffix = winnerOnly ? ' / winner takes all' : '';
   const eventIntros: Record<PartyEvent, { title: string; tag: string }> = {
     double: { title: 'Double Points', tag: 'Everything is worth 2×' },
@@ -390,10 +390,11 @@ function introFor(
 // type, same principle as 'classic'/'race' always staying in buildPartyConfig's
 // format pool below — so this never needs an empty-pool fallback the way
 // pickPartyEvent's genuinely-can-empty pool does.
-function pickPartyTarget(game: Game, format: PartyFormat): GuessTarget {
-  if (format === 'year') return 'title'; // placeholder only — round.target/effectiveTarget resolve to 'year' via format, not this value
-  const pool: [GuessTarget, number][] = [['title', 60]];
+function pickPartyTarget(game: Game, format: PartyFormat): PartyTarget {
+  if (format === 'year') return 'year';
+  const pool: [PartyTarget, number][] = [['title', 60]];
   if (game.enabledRoundTypes.has('artist')) pool.push(['artist', 25]);
+  if (format === 'choice' && game.enabledRoundTypes.has('year')) pool.push(['year', 15]);
   // Double Duty has no slot in a tap-to-answer UI, so it can't combine with
   // Multiple Choice — pickPartyTarget only ever gets called with a 'both'
   // possibility outside format === 'choice'.
@@ -774,7 +775,7 @@ function resolveClassicRaceTarget(game: Game): GuessTarget | 'year' {
 // toggles. Must be called after any Party downgrade block that can mutate
 // party.format/party.target (see buildRound) — never resolved up front.
 function resolveRoundTarget(game: Game, party: PartyConfig | undefined): GuessTarget | 'year' {
-  if (party) return party.format === 'year' ? 'year' : party.target;
+  if (party) return party.target === 'year' || party.format === 'year' ? 'year' : party.target;
   return resolveClassicRaceTarget(game);
 }
 
@@ -852,13 +853,28 @@ type ChoiceField = 'title' | 'artist' | 'year';
 function choiceFieldValue(song: Song, field: ChoiceField): string | null {
   if (field === 'title') return song.title;
   if (field === 'artist') return song.artist;
-  return song.year != null ? String(song.year) : null;
+  return song.year != null ? String(Math.floor(song.year)) : null;
 }
 
-// Multiple Choice's 3 wrong options — drawn from the same (already
-// difficulty/constraint-filtered) pool the round's own song came from, so
-// they're naturally the same difficulty tier. Returns undefined if the pool
-// can't supply 3 safe distractors (a tiny custom playlist), signalling the
+function pickYearChoiceOptions(song: Song): string[] | undefined {
+  if (song.year === null) return undefined;
+  const correctYear = Math.floor(song.year);
+  const maxYear = Math.max(correctYear, new Date().getFullYear());
+  const candidates = shuffle(
+    Array.from({ length: YEAR_CHOICE_RADIUS * 2 }, (_, i) => i < YEAR_CHOICE_RADIUS ? i - YEAR_CHOICE_RADIUS : i - YEAR_CHOICE_RADIUS + 1)
+      .map(offset => correctYear + offset)
+      .filter(year => year >= MIN_CHOICE_YEAR && year <= maxYear),
+  );
+  const distractors = candidates.slice(0, 3).map(String);
+  if (distractors.length < 3) return undefined;
+  return shuffle([String(correctYear), ...distractors]);
+}
+
+// Multiple Choice's 3 wrong title/artist options are drawn from the same
+// (already difficulty/constraint-filtered) pool the round's own song came from,
+// so they're naturally the same difficulty tier. Year options use nearby
+// plausible years instead, so the answer is not just a decade check. Returns
+// undefined if the pool/range can't supply 3 safe distractors, signalling the
 // caller to downgrade the round instead.
 //
 // Title/artist distractors are deduped using the same fuzzy normalization
@@ -869,6 +885,7 @@ function choiceFieldValue(song: Song, field: ChoiceField): string | null {
 // Years use plain exact-match distinctness instead, since year guessing is
 // exact-int, not fuzzy.
 function pickChoiceOptions(song: Song, pool: Song[], field: ChoiceField): string[] | undefined {
+  if (field === 'year') return pickYearChoiceOptions(song);
   const correct = choiceFieldValue(song, field);
   if (correct === null) return undefined;
   const distractors: string[] = [];
@@ -876,13 +893,9 @@ function pickChoiceOptions(song: Song, pool: Song[], field: ChoiceField): string
     if (s.spotifyTrackId === song.spotifyTrackId) continue;
     const value = choiceFieldValue(s, field);
     if (value === null) continue;
-    if (field === 'year') {
-      if (value === correct || distractors.includes(value)) continue;
-    } else {
-      if (textsCollide(value, correct)) continue;
-      if (field === 'artist' && isCorrectArtistGuess(value, song.artist, song.featuredArtists)) continue;
-      if (distractors.some(d => textsCollide(d, value))) continue;
-    }
+    if (textsCollide(value, correct)) continue;
+    if (field === 'artist' && isCorrectArtistGuess(value, song.artist, song.featuredArtists)) continue;
+    if (distractors.some(d => textsCollide(d, value))) continue;
     distractors.push(value);
     if (distractors.length === 3) break;
   }
@@ -897,7 +910,7 @@ function pickChoiceOptions(song: Song, pool: Song[], field: ChoiceField): string
 function buildRound(game: Game, party?: PartyConfig): Round {
   const rawPool = difficultyPool(game);
   const prevSong = game.currentRound?.song;
-  const isYearRound = party ? party.format === 'year' : game.yearOnly;
+  const isYearRound = party ? party.format === 'year' || party.target === 'year' : game.yearOnly;
 
   let pool = restrictToYearPlayable(rawPool, isYearRound);
   pool = avoidImmediateRepeat(pool, prevSong);
@@ -908,7 +921,7 @@ function buildRound(game: Game, party?: PartyConfig): Round {
   const song = pickRandom(pool);
 
   if (party?.format === 'choice') {
-    const field: ChoiceField = party.target === 'artist' ? 'artist' : 'title';
+    const field: ChoiceField = party.target === 'year' ? 'year' : party.target === 'artist' ? 'artist' : 'title';
     const choiceOptions = pickChoiceOptions(song, pool, field);
     if (choiceOptions) {
       party.choiceOptions = choiceOptions;

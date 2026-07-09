@@ -1133,7 +1133,7 @@ function BidSubmittedView({ game }: Readonly<{ game: PlayState }>) {
 // race games use the game-wide artist/year toggles.
 type GuessTarget = 'title' | 'artist' | 'both' | 'year';
 function resolveTarget(party: PartyInfo | null, artistOnly: boolean, yearOnly: boolean): GuessTarget {
-  if (party) return party.format === 'year' ? 'year' : party.target;
+  if (party) return party.format === 'year' || party.target === 'year' ? 'year' : party.target;
   if (yearOnly) return 'year';
   return artistOnly ? 'artist' : 'title';
 }

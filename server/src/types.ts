@@ -43,10 +43,11 @@ export interface PlaylistTrackInput {
 // How a party round plays out. 'classic' and 'race' reuse those modes' whole
 // flows; 'year' rides the race flow but everyone answers a release year and
 // the closest answer wins; 'choice' also rides the race flow, but with 4
-// title options shown instead of a text input — tapping one submits its
-// exact text, so scoring is unchanged from a normal race guess.
+// title/artist/year options shown instead of a text input — tapping one
+// submits its exact text, so scoring is unchanged from a normal race guess.
 export type PartyFormat = 'classic' | 'race' | 'year' | 'choice';
 export type GuessTarget = 'title' | 'artist' | 'both';
+export type PartyTarget = GuessTarget | 'year';
 export type PartyEvent =
   | 'double' | 'mystery' | 'steal' | 'snippet' | 'fullhints' | 'blind' | 'outro' | 'underdog' | 'chaoshints';
 
@@ -63,7 +64,7 @@ export type ChaosLevel = number;
 
 export interface PartyConfig {
   format: PartyFormat;
-  target: GuessTarget;              // what the guess is checked against (ignored for 'year')
+  target: PartyTarget;              // what the guess is checked against ('year' only for choice/year formats)
   event: PartyEvent | null;
   multiplier: number;               // actual value — clients see null while a mystery is unrevealed
   winnerOnly: boolean;               // race/year only: just the winner scores, everyone else gets zero
@@ -76,14 +77,14 @@ export interface PartyConfig {
   // a restricted-but-not-finale round (e.g. 'underdog').
   restrictedIds: string[];
   restrictedNames: string[];
-  choiceOptions?: string[];          // 'choice' format: shuffled title options (correct one included)
+  choiceOptions?: string[];          // 'choice' format: shuffled title/artist/year options (correct one included)
 }
 
 // What clients are allowed to see of a PartyConfig (no socketIds, mystery
 // multiplier hidden until the reveal).
 export interface PartyClientView {
   format: PartyFormat;
-  target: GuessTarget;
+  target: PartyTarget;
   event: PartyEvent | null;
   multiplier: number | null;
   winnerOnly: boolean;

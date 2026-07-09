@@ -1332,8 +1332,8 @@ function EventChipGrid({ enabledEvents, onToggle, onSetAll }: Readonly<{
 // target/scoring variants a party round can roll (distinct from Events
 // above, which are modifiers layered on top of whatever round type is
 // picked). 'both'/Double Duty never combines with 'choice'/Multiple Choice
-// (no UI slot for a second bonus answer), and 'year'/Guess the Year stays
-// its own format — see pickPartyTarget/buildPartyConfig in gameManager.ts.
+// (no UI slot for a second bonus answer), while 'year' can appear either as
+// closest-guess year format or as a multiple-choice year target.
 const ROUND_TYPE_LABELS: Record<PartyRoundType, string> = {
   choice: 'Multiple Choice',
   artist: 'Who Sings It?',
