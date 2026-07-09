@@ -117,6 +117,17 @@ function matchesText(g: string, gRaw: string, candidate: string): boolean {
   return fuzzyMatch(gRaw, normalizeRaw(candidate));
 }
 
+// Two candidate option strings (titles, artist names, ...) collide if they'd
+// read as the same answer under the same normalization/fuzzy tolerance the
+// real guess-checking uses — so a Multiple Choice distractor can never also
+// be a fuzzy-accepted "correct" reading of another option on the same card.
+export function textsCollide(a: string, b: string): boolean {
+  const na = normalize(a);
+  const nb = normalize(b);
+  if (!na || !nb) return false;
+  return na === nb || fuzzyMatch(na, nb) || na.includes(nb) || nb.includes(na);
+}
+
 export function isCorrectArtistGuess(guess: string, artist: string, featuredArtists?: string): boolean {
   const g = normalize(guess);
   const gRaw = normalizeRaw(guess);

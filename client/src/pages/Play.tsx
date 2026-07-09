@@ -46,10 +46,12 @@ export interface PlayState {
   myScore: number;
   myScoreDelta: number;
   myPity: boolean;
+  myPityAmount: number;
   myStreak: number;
   mode: 'classic' | 'race';
   artistOnly: boolean;
   yearOnly: boolean;
+  choiceOptions: string[];
   party: PartyInfo | null;
   artistGuessText: string;
   stealVictims: { name: string; score: number }[] | null;
@@ -117,11 +119,13 @@ function usePlayGame(pinParam?: string): PlayState {
   const myScoreRef = useRef(0);
   const [myScoreDelta, setMyScoreDelta] = useState(0);
   const [myPity, setMyPity] = useState(false);
+  const [myPityAmount, setMyPityAmount] = useState(0);
   const [myStreak, setMyStreak] = useState(0);
   const [mode, setMode] = useState<'classic' | 'race'>('classic');
   const modeRef = useRef<'classic' | 'race'>('classic');
   const [artistOnly, setArtistOnly] = useState(false);
   const [yearOnly, setYearOnly] = useState(false);
+  const [choiceOptions, setChoiceOptions] = useState<string[]>([]);
   const [party, setParty] = useState<PartyInfo | null>(null);
   const partyRef = useRef<PartyInfo | null>(null);
   const [artistGuessText, setArtistGuessText] = useState('');
@@ -249,7 +253,7 @@ function usePlayGame(pinParam?: string): PlayState {
     socket.on('round_start', (data: {
       roundIndex: number; total: number;
       hints: Hint[]; bettingTime?: number; endsAt?: number;
-      mode?: 'classic' | 'race'; raceTime?: number; artistOnly?: boolean; yearOnly?: boolean;
+      mode?: 'classic' | 'race'; raceTime?: number; artistOnly?: boolean; yearOnly?: boolean; choiceOptions?: string[];
       party?: PartyInfo;
       bidOptions?: number[]; bidScores?: number[];
       tempo?: number | null;
@@ -280,6 +284,10 @@ function usePlayGame(pinParam?: string): PlayState {
       modeRef.current = roundMode;
       setArtistOnly(data.artistOnly === true);
       setYearOnly(data.yearOnly === true);
+      // Always reset, never conditionally — an omitted/empty payload here
+      // means this round fell back to free text, and a stale previous
+      // round's choice buttons must not survive into it.
+      setChoiceOptions(data.choiceOptions ?? []);
 
       if (roundMode === 'race') {
         setGuesserNames([]);
@@ -358,11 +366,12 @@ function usePlayGame(pinParam?: string): PlayState {
       setPhase('reveal');
     });
 
-    socket.on('score_update', ({ players }: { players: { name: string; score: number; streak: number; pity?: boolean }[] }) => {
+    socket.on('score_update', ({ players }: { players: { name: string; score: number; streak: number; pity?: boolean; pityAmount?: number }[] }) => {
       const me = players.find(p => p.name === myNameRef.current);
       if (me) {
         setMyScoreDelta(Math.max(0, me.score - myScoreRef.current));
         setMyPity(me.pity ?? false);
+        setMyPityAmount(me.pityAmount ?? 0);
         myScoreRef.current = me.score;
         setMyScore(me.score);
         setMyStreak(me.streak);
@@ -608,7 +617,7 @@ function usePlayGame(pinParam?: string): PlayState {
   return {
     phase, pin, name, myName, error, roundIndex, totalRounds, hints,
     timeLeft, timerTotal, bettingTime, bidIndex, bidOptions, bidScores, myBid, guesserNames, lowestBid,
-    guessText, result, myScore, myScoreDelta, myPity, myStreak, mode, artistOnly, yearOnly, myRacePoints, myRaceTimeMs,
+    guessText, result, myScore, myScoreDelta, myPity, myPityAmount, myStreak, mode, artistOnly, yearOnly, choiceOptions, myRacePoints, myRaceTimeMs,
     party, artistGuessText, stealVictims, stealResult,
     leaderboard, leaderboardDeltas, awards, songPlaying, songTempo, reconnecting, hostReconnecting, savedSession, guessInputRef,
     cameFromQR, newGamePin, rejoinNewGame,
@@ -645,6 +654,14 @@ function usePlayGame(pinParam?: string): PlayState {
 function guessTextClass(guess: string | null, correct: boolean): string {
   if (guess === null) return 'text-white/28 italic';
   return correct ? 'text-green-400' : 'text-white/28 italic';
+}
+
+// The artist guess can be right even when the title guess isn't — that combo
+// scores no bonus, so it gets a muted green (visibly "correct") rather than
+// the full "correct" green, which would wrongly imply it paid out.
+function artistGuessClass(artistCorrect: boolean, titleCorrect: boolean): string {
+  if (!artistCorrect) return 'text-white/28 italic';
+  return titleCorrect ? 'text-green-400' : 'text-green-400/50 italic';
 }
 
 function bidArrowStyle(enabled: boolean, pressed: boolean, hovered: boolean): { bg: string; border: string } {
@@ -1116,7 +1133,7 @@ function BidSubmittedView({ game }: Readonly<{ game: PlayState }>) {
 // race games use the game-wide artist/year toggles.
 type GuessTarget = 'title' | 'artist' | 'both' | 'year';
 function resolveTarget(party: PartyInfo | null, artistOnly: boolean, yearOnly: boolean): GuessTarget {
-  if (party) return party.format === 'year' ? 'year' : party.target;
+  if (party) return party.format === 'year' || party.target === 'year' ? 'year' : party.target;
   if (yearOnly) return 'year';
   return artistOnly ? 'artist' : 'title';
 }
@@ -1456,9 +1473,13 @@ function YearDigitBoxes({ value, focused }: Readonly<{ value: string; focused: b
 }
 
 export function GuessingView({ game }: Readonly<{ game: PlayState }>) {
-  const { phase, timeLeft, timerTotal, myScore, guessText, guessInputRef, setGuessText, submitGuess, submitChoice, submitChaosTap, skipGuess, artistOnly, yearOnly, songPlaying, songTempo, mode, party, hints, artistGuessText, setArtistGuessText } = game;
+  const { phase, timeLeft, timerTotal, myScore, guessText, guessInputRef, setGuessText, submitGuess, submitChoice, submitChaosTap, skipGuess, artistOnly, yearOnly, choiceOptions: gameChoiceOptions, songPlaying, songTempo, mode, party, hints, artistGuessText, setArtistGuessText } = game;
   const isListening = phase === 'watching';
-  const isChoice = party?.format === 'choice';
+  // Covers both Party's 'choice' format (party.choiceOptions) and the
+  // Classic/Race Multiple Choice toggle (game.choiceOptions) — an empty/
+  // undefined array either way means this round fell back to free text.
+  const options = party?.choiceOptions ?? gameChoiceOptions ?? [];
+  const isChoice = options.length > 0;
   const isChaosHints = party?.event === 'chaoshints';
   const target = resolveTarget(party, artistOnly, yearOnly);
   const isYear = target === 'year';
@@ -1471,8 +1492,14 @@ export function GuessingView({ game }: Readonly<{ game: PlayState }>) {
     both: 'Name the song · artist = bonus',
     year: 'Guess the release year',
   }[target];
-  if (isChoice) label = 'Tap the right title';
-  else if (isChaosHints) label = 'One of these is a lie';
+  if (isChoice) {
+    label = {
+      title: 'Tap the right title',
+      artist: 'Tap the right artist',
+      both: 'Tap the right title',
+      year: 'Tap the right year',
+    }[target];
+  } else if (isChaosHints) label = 'One of these is a lie';
   const placeholder = {
     title: 'Type song title…',
     artist: 'Type artist name…',
@@ -1484,7 +1511,7 @@ export function GuessingView({ game }: Readonly<{ game: PlayState }>) {
   if (isChaosHints) {
     guessControl = <ChaosHintButtons hints={hints} onPick={submitChaosTap} />;
   } else if (isChoice) {
-    guessControl = <ChoiceButtons options={party?.choiceOptions ?? []} onPick={submitChoice} />;
+    guessControl = <ChoiceButtons options={options} onPick={submitChoice} />;
   } else if (isYear) {
     guessControl = (
       <div style={{ position: 'relative' }}>
@@ -1791,7 +1818,7 @@ function PlayRevealShell({
   scoreExtra?: React.ReactNode;
   wide?: boolean;
 }>) {
-  const { myScore, myScoreDelta, myPity, myStreak, stealResult } = game;
+  const { myScore, myScoreDelta, myPity, myPityAmount, myStreak, stealResult } = game;
   const revealParty = result.party ?? game.party;
   const finaleResolved = revealParty?.duelProgress?.wins.some(w => w.count >= 2) ?? false;
   const isFinalReveal = game.roundIndex + 1 >= game.totalRounds && (!revealParty?.finale || finaleResolved);
@@ -1826,7 +1853,7 @@ function PlayRevealShell({
         <div style={{ background: 'rgba(255,255,255,0.05)', border: '1px solid rgba(255,255,255,0.08)', borderRadius: '16px', padding: '16px 32px', textAlign: 'center' }}>
           {myScoreDelta > 0 && (
             <p className={`text-sky-400 text-sm font-bold tabular-nums transition-opacity duration-500 ${deltaFading ? 'opacity-0' : 'opacity-100'}`}>
-              +{displayDelta > 0 ? displayDelta.toLocaleString() : ''} pts{myPity && ' (pity)'}
+              +{displayDelta > 0 ? displayDelta.toLocaleString() : ''} pts{myPity && ` (+${myPityAmount.toLocaleString()} pity)`}
             </p>
           )}
           <p className="text-3xl font-black text-white">{displayScore.toLocaleString()}</p>
@@ -1869,7 +1896,7 @@ function YearRevealView({ game, result }: Readonly<{ game: PlayState; result: Ro
       {scorers.map(r => (
         <div key={r.name} className="flex justify-between items-center gap-2">
           <span className={`text-xs min-w-0 truncate ${r.name === myName ? 'text-white font-semibold' : 'text-white/45'}`}>{r.name}</span>
-          <span className="ml-1.5 text-xs text-sky-400 font-semibold tabular-nums shrink-0">+{r.points.toLocaleString()}{r.pity && ' (pity)'}</span>
+          <span className="ml-1.5 text-xs text-sky-400 font-semibold tabular-nums shrink-0">+{r.points.toLocaleString()}{r.pity && ` (+${(r.pityAmount ?? 0).toLocaleString()} pity)`}</span>
         </div>
       ))}
     </div>
@@ -1925,7 +1952,7 @@ export function RevealView({ game, result }: Readonly<{ game: PlayState; result:
                 </span>
               </div>
               {g.artistGuess && (
-                <p className="text-white/28 text-xs italic text-right break-words" style={{ overflowWrap: 'anywhere' }}>
+                <p className={`text-xs italic text-right break-words ${artistGuessClass(!!g.artistCorrect, false)}`} style={{ overflowWrap: 'anywhere' }}>
                   Artist: "{g.artistGuess}"
                 </p>
               )}
@@ -1963,7 +1990,7 @@ export function RevealView({ game, result }: Readonly<{ game: PlayState; result:
               </span>
             </div>
             {g.artistGuess && (
-              <p className="text-white/28 text-xs italic text-right break-words" style={{ overflowWrap: 'anywhere' }}>
+              <p className={`text-xs italic text-right break-words ${artistGuessClass(!!g.artistCorrect, correct)}`} style={{ overflowWrap: 'anywhere' }}>
                 Artist: "{g.artistGuess}"
               </p>
             )}

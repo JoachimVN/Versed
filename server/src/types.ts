@@ -20,6 +20,7 @@ export interface Hint {
   label: string;
   value: string;
   imageUrl?: string;
+  blurred?: boolean; // image hints only: true = teaser (stays blurred through guessing), unset/false = shown clear
 }
 
 export type SongSource = 'library' | 'playlist';
@@ -42,12 +43,20 @@ export interface PlaylistTrackInput {
 // How a party round plays out. 'classic' and 'race' reuse those modes' whole
 // flows; 'year' rides the race flow but everyone answers a release year and
 // the closest answer wins; 'choice' also rides the race flow, but with 4
-// title options shown instead of a text input — tapping one submits its
-// exact text, so scoring is unchanged from a normal race guess.
+// title/artist/year options shown instead of a text input — tapping one
+// submits its exact text, so scoring is unchanged from a normal race guess.
 export type PartyFormat = 'classic' | 'race' | 'year' | 'choice';
 export type GuessTarget = 'title' | 'artist' | 'both';
+export type PartyTarget = GuessTarget | 'year';
 export type PartyEvent =
   | 'double' | 'mystery' | 'steal' | 'snippet' | 'fullhints' | 'blind' | 'outro' | 'underdog' | 'chaoshints';
+
+// Host-togglable Party round-variant ingredients — 'choice' gates the
+// 'choice' PartyFormat, 'year' gates the 'year' PartyFormat, 'artist'/'both'
+// gate those GuessTarget pool entries, and 'winnerOnly' gates the winner-only
+// roll. Distinct from PartyEvent, which only covers modifiers (Mystery,
+// Steal, Snippet, ...) layered on top of whatever round type gets picked.
+export type PartyRoundType = 'choice' | 'artist' | 'both' | 'year' | 'winnerOnly';
 
 // Continuous 0–100 chaos scale. It tunes how often party events fire and how
 // wild mystery's multiplier spread gets; 50 is the balanced default.
@@ -55,7 +64,7 @@ export type ChaosLevel = number;
 
 export interface PartyConfig {
   format: PartyFormat;
-  target: GuessTarget;              // what the guess is checked against (ignored for 'year')
+  target: PartyTarget;              // what the guess is checked against ('year' only for choice/year formats)
   event: PartyEvent | null;
   multiplier: number;               // actual value — clients see null while a mystery is unrevealed
   winnerOnly: boolean;               // race/year only: just the winner scores, everyone else gets zero
@@ -68,14 +77,14 @@ export interface PartyConfig {
   // a restricted-but-not-finale round (e.g. 'underdog').
   restrictedIds: string[];
   restrictedNames: string[];
-  choiceOptions?: string[];          // 'choice' format: shuffled title options (correct one included)
+  choiceOptions?: string[];          // 'choice' format: shuffled title/artist/year options (correct one included)
 }
 
 // What clients are allowed to see of a PartyConfig (no socketIds, mystery
 // multiplier hidden until the reveal).
 export interface PartyClientView {
   format: PartyFormat;
-  target: GuessTarget;
+  target: PartyTarget;
   event: PartyEvent | null;
   multiplier: number | null;
   winnerOnly: boolean;
@@ -95,6 +104,7 @@ export interface YearResult {
   diff: number | null;
   points: number;
   pity: boolean;
+  pityAmount?: number;              // set alongside pity: true — the flat catch-up amount, so the UI can break it out of `points`
 }
 
 // Bidders grouped by bid value. Tiers are played in ascending bid order: the
@@ -109,6 +119,15 @@ export interface Round {
   song: Song;
   hints: Hint[];
   coverUrl?: string;
+  // What this round's guess is checked against — resolved once (in
+  // buildRound) for every round, party or not. The single source of truth
+  // for effectiveTarget(), so reconnects/scoring/hints all agree on one
+  // value for the round's whole lifetime instead of re-deriving it.
+  target: GuessTarget | 'year';
+  // Classic/Race Multiple Choice only — shuffled options for `target`
+  // (titles/artists/years), correct one included. Party rounds keep using
+  // party.choiceOptions instead; this field stays undefined for those.
+  choiceOptions?: string[];
   // Party-mode fields
   party?: PartyConfig;
   snippetMs?: number;               // 'snippet' event: playback starts here instead of 0
@@ -141,6 +160,11 @@ export interface Round {
   firstCorrectAt: number | null;   // epoch ms of first correct guess (decay origin)
   correctGuessers: Set<string>;    // socketIds who guessed correctly in Race
   guessTimes: Map<string, number>; // socketId → ms from playStartAt to correct guess
+  // Classic-mode field. Race's counterpart to playStartAt: epoch ms when the
+  // *current tier's* clip actually started playing, reset to null at the top
+  // of every tier (applyTier) so a later tier never inherits an earlier
+  // tier's timestamp.
+  tierStartAt: number | null;
 }
 
 export interface Player {
@@ -152,14 +176,15 @@ export interface Player {
   // per-round-only tracking) — used to compute end-of-game awards.
   totalCorrect: number;
   totalPasses: number;
-  fastestCorrectMs: number | null; // race-flow only; classic has no per-player timing
+  fastestCorrectMs: number | null; // race-flow (+ chaos hints) only
+  fastestClassicMs: number | null; // classic bid/tier flow only — separate scale, not comparable to fastestCorrectMs
   biggestSwing: number;            // largest single-round point gain
 }
 
 // One end-of-game superlative. Ties share the award rather than picking one
 // name arbitrarily.
 export interface Award {
-  key: 'mostCorrect' | 'fastestGuess' | 'biggestSwing' | 'finaleWinner';
+  key: 'mostCorrect' | 'fastestGuess' | 'fastestClassicGuess' | 'biggestSwing' | 'finaleWinner';
   playerNames: string[];
   detail: string;
 }
@@ -186,7 +211,7 @@ export interface Game {
   // name.toLowerCase() → saved state, restored on rejoin
   formerPlayers: Map<string, {
     score: number; streak: number;
-    totalCorrect: number; totalPasses: number; fastestCorrectMs: number | null; biggestSwing: number;
+    totalCorrect: number; totalPasses: number; fastestCorrectMs: number | null; fastestClassicMs: number | null; biggestSwing: number;
   }>;
   phase: GamePhase;
   roundIndex: number;
@@ -198,8 +223,10 @@ export interface Game {
   raceWinnerOnly: boolean;
   artistOnly: boolean;
   yearOnly: boolean;
+  multipleChoice: boolean;       // classic/race only — party has its own 'choice' round type instead
   difficulty: Difficulty;
   enabledEvents: Set<PartyEvent>; // party mode: which events the host allows into the pool
+  enabledRoundTypes: Set<PartyRoundType>; // party mode: which round-type variants the host allows into the pool
   chaosLevel: ChaosLevel;         // party mode: event frequency + mystery-multiplier spread preset
   duelChampion: string | null;    // party mode: socketId of the finale duel's winner, once resolved
   // Finale best-of-3 duel state — lives on Game (not Round) since it must

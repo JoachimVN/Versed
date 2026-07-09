@@ -202,6 +202,7 @@ function formatBit(party: PartyInfo): string {
 // title case silent made its absence read as ambiguous rather than as
 // "title," especially once the badge also shows during actual guessing.
 function targetBit(party: PartyInfo): string {
+  if (party.target === 'year') return 'GUESS THE YEAR';
   if (party.target === 'artist') return 'NAME THE ARTIST';
   if (party.target === 'both') return 'TITLE + ARTIST';
   return 'NAME THE SONG';

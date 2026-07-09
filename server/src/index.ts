@@ -9,7 +9,7 @@ import dotenv from 'dotenv';
 import authRouter from './spotifyAuth';
 import * as gm from './gameManager';
 import { getAlbumArtUrl } from './albumArt';
-import { Award, Game, PartyEvent, PlaylistTrackInput } from './types';
+import { Award, Game, PartyEvent, PartyRoundType, PlaylistTrackInput } from './types';
 
 dotenv.config();
 gm.initSongs();
@@ -94,20 +94,31 @@ if (process.env.NODE_ENV === 'production') {
 
 interface StartGameSettings {
   bettingTime?: number; guessingTime?: number; totalRounds?: number; mode?: string;
-  raceTime?: number; raceWinnerOnly?: boolean; artistOnly?: boolean; yearOnly?: boolean;
+  raceTime?: number; raceWinnerOnly?: boolean; artistOnly?: boolean; yearOnly?: boolean; multipleChoice?: boolean;
   difficulty?: string; songSource?: string;
-  enabledEvents?: string[]; chaosLevel?: number;
+  enabledEvents?: string[]; enabledRoundTypes?: string[]; chaosLevel?: number;
   customPlaylist?: { id?: string; tracks?: PlaylistTrackInput[] };
 }
 
-function applyStartGameSettings(game: Game, s: StartGameSettings | undefined) {
-  if (s?.bettingTime) game.bettingTime = Math.max(5, Math.min(999, Math.round(s.bettingTime)));
-  if (s?.guessingTime) game.guessingTime = Math.max(5, Math.min(999, Math.round(s.guessingTime)));
-  if (s?.totalRounds) game.totalRounds = Math.max(1, Math.min(999, Math.round(s.totalRounds)));
+function clamp(value: number, min: number, max: number): number {
+  return Math.max(min, Math.min(max, value));
+}
+
+function clampRounded(value: number, min: number, max: number): number {
+  return Math.max(min, Math.min(max, Math.round(value)));
+}
+
+function applyTimingSettings(game: Game, s: StartGameSettings | undefined) {
+  if (s?.bettingTime) game.bettingTime = clampRounded(s.bettingTime, 5, 999);
+  if (s?.guessingTime) game.guessingTime = clampRounded(s.guessingTime, 5, 999);
+  if (s?.totalRounds) game.totalRounds = clampRounded(s.totalRounds, 1, 999);
+  if (s?.raceTime) game.raceTime = clampRounded(s.raceTime, 10, 999);
+}
+
+function applyModeSettings(game: Game, s: StartGameSettings | undefined) {
   if (s?.mode === 'race') game.mode = 'race';
   else if (s?.mode === 'party') game.mode = 'party';
   else game.mode = 'classic';
-  if (s?.raceTime) game.raceTime = Math.max(10, Math.min(999, Math.round(s.raceTime)));
 
   // Party picks its own guess target per round, so these game-wide toggles
   // are Classic/Race only — leaving them set under Party would otherwise
@@ -119,20 +130,43 @@ function applyStartGameSettings(game: Game, s: StartGameSettings | undefined) {
   // or a stale `true` left over from a previous Race game would silently
   // force winner-take-all scoring onto Party's race-format rounds.
   game.raceWinnerOnly = game.mode === 'race' && s?.raceWinnerOnly === true;
-  // Year isn't a title/artist target, so it can't coexist with artist-only.
-  game.artistOnly = !isParty && !game.yearOnly && s?.artistOnly === true;
-  game.difficulty = s?.difficulty === 'easy' || s?.difficulty === 'medium' ? s.difficulty : 'hard';
+  // Artist-only and Year-only can now both be on at once — each round then
+  // independently rolls one of the two (see resolveClassicRaceTarget).
+  game.artistOnly = !isParty && s?.artistOnly === true;
+  // Party has its own 'choice' round type instead of this toggle.
+  game.multipleChoice = !isParty && s?.multipleChoice === true;
+}
 
+function applyDifficultySettings(game: Game, s: StartGameSettings | undefined) {
+  game.difficulty = s?.difficulty === 'easy' || s?.difficulty === 'medium' ? s.difficulty : 'hard';
+}
+
+function applyChaosSettings(game: Game, s: StartGameSettings | undefined) {
   game.chaosLevel = typeof s?.chaosLevel === 'number' && Number.isFinite(s.chaosLevel)
-    ? Math.max(0, Math.min(100, s.chaosLevel))
+    ? clamp(s.chaosLevel, 0, 100)
     : 50;
+}
+
+function enabledPartyItems<T extends string>(settings: string[] | undefined, allowed: readonly T[]): Set<T> {
+  if (!Array.isArray(settings)) return new Set(allowed);
+  return new Set(settings.filter((value): value is T => (allowed as readonly string[]).includes(value)));
+}
+
+function applyPartyPoolSettings(game: Game, s: StartGameSettings | undefined) {
   // A missing/non-array setting (never sent, or malformed) falls back to
   // "everything enabled". An explicit array — even filtered down to empty,
   // meaning the host unchecked every event — is respected as-is; the party
   // event picker already treats an empty pool as "always play plain".
-  game.enabledEvents = Array.isArray(s?.enabledEvents)
-    ? new Set(s.enabledEvents.filter((e): e is PartyEvent => (gm.ALL_PARTY_EVENTS as string[]).includes(e)))
-    : new Set(gm.ALL_PARTY_EVENTS);
+  game.enabledEvents = enabledPartyItems<PartyEvent>(s?.enabledEvents, gm.ALL_PARTY_EVENTS);
+  game.enabledRoundTypes = enabledPartyItems<PartyRoundType>(s?.enabledRoundTypes, gm.ALL_PARTY_ROUND_TYPES);
+}
+
+function applyStartGameSettings(game: Game, s: StartGameSettings | undefined) {
+  applyTimingSettings(game, s);
+  applyModeSettings(game, s);
+  applyDifficultySettings(game, s);
+  applyChaosSettings(game, s);
+  applyPartyPoolSettings(game, s);
 }
 
 function applySongSource(game: Game, s: StartGameSettings | undefined): { ok: true } | { ok: false; error: string } {
@@ -215,8 +249,9 @@ io.on('connection', (socket) => {
       hints: round.hints,
       mode: 'race',
       raceTime: game.raceTime,
-      artistOnly: game.artistOnly,
-      yearOnly: game.yearOnly,
+      artistOnly: round.target === 'artist',
+      yearOnly: round.target === 'year',
+      choiceOptions: round.choiceOptions,
       party: gm.partyView(game, round),
       tempo: round.song.tempo,
     });
@@ -234,8 +269,9 @@ io.on('connection', (socket) => {
         bettingTime: game.bettingTime,
         endsAt: game.phaseEndsAt,
         mode: 'classic',
-        artistOnly: game.artistOnly,
-        yearOnly: game.yearOnly,
+        artistOnly: round.target === 'artist',
+        yearOnly: round.target === 'year',
+        choiceOptions: round.choiceOptions,
         party: gm.partyView(game, round),
         bidOptions: gm.BID_OPTIONS,
         bidScores: gm.bidScoreTable(),
@@ -254,8 +290,9 @@ io.on('connection', (socket) => {
       total: game.totalRounds,
       hints: round.hints,
       mode: 'classic',
-      artistOnly: game.artistOnly,
-      yearOnly: game.yearOnly,
+      artistOnly: round.target === 'artist',
+      yearOnly: round.target === 'year',
+      choiceOptions: round.choiceOptions,
       party: gm.partyView(game, round),
       bidOptions: gm.BID_OPTIONS,
       bidScores: gm.bidScoreTable(),
@@ -538,6 +575,7 @@ io.on('connection', (socket) => {
       io.to(`player:${game.pin}`).emit('your_turn', { timeLimit: game.raceTime, endsAt });
       game.phaseTimer = setTimeout(() => endRaceRound(game), game.raceTime * 1000);
     } else {
+      gm.markTierStarted(game);
       io.to(`player:${game.pin}`).emit('song_playing');
       game.phaseTimer = setTimeout(() => startGuessingPhase(game), gm.playMsFor(game.currentRound!.lowestBid));
     }
@@ -787,7 +825,7 @@ io.on('connection', (socket) => {
     // "spot the fake" set itself, which the round is meaningless without;
     // and Underdog Boost, whose whole point is giving the trailing player(s)
     // a real shot, not just the normal hint-free race odds.
-    const keepHints = (!round.party && (game.artistOnly || game.yearOnly))
+    const keepHints = (!round.party && (round.target === 'artist' || round.target === 'year'))
       || round.party?.event === 'chaoshints' || round.party?.event === 'underdog';
 
     // Prefer the precomputed art from the CSV (Music Popularity Index resolves
@@ -806,7 +844,10 @@ io.on('connection', (socket) => {
           && round.party?.event !== 'blind'
           && (round.party?.event === 'fullhints' || randomInt(4) === 0));
       if (wantArt) {
-        round.hints.push({ label: 'Album art', value: '', imageUrl: coverUrl });
+        // Underdog Boost's cover art is a real, guaranteed assist and is
+        // always shown clear; every other art hint is a teaser that must
+        // stay blurred all the way through guessing, not just betting.
+        round.hints.push({ label: 'Album art', value: '', imageUrl: coverUrl, blurred: round.party?.event !== 'underdog' });
       }
     }
 
@@ -821,8 +862,9 @@ io.on('connection', (socket) => {
         hints: round.hints,
         mode: 'race',
         raceTime: game.raceTime,
-        artistOnly: game.artistOnly,
-        yearOnly: game.yearOnly,
+        artistOnly: round.target === 'artist',
+        yearOnly: round.target === 'year',
+        choiceOptions: round.choiceOptions,
         party,
         tempo: round.song.tempo,
       });
@@ -832,8 +874,9 @@ io.on('connection', (socket) => {
         hints: round.hints,
         mode: 'race',
         raceTime: game.raceTime,
-        artistOnly: game.artistOnly,
-        yearOnly: game.yearOnly,
+        artistOnly: round.target === 'artist',
+        yearOnly: round.target === 'year',
+        choiceOptions: round.choiceOptions,
         party,
         song: {
           title: round.song.title,
@@ -870,8 +913,9 @@ io.on('connection', (socket) => {
       bettingTime: game.bettingTime,
       endsAt: bettingEndsAt,
       mode: 'classic',
-      artistOnly: game.artistOnly,
-      yearOnly: game.yearOnly,
+      artistOnly: round.target === 'artist',
+      yearOnly: round.target === 'year',
+      choiceOptions: round.choiceOptions,
       party,
       // Source of truth for the client's bid picker and its score preview —
       // keeps the UI from drifting out of sync with server-side scoring.
@@ -886,8 +930,9 @@ io.on('connection', (socket) => {
       bettingTime: game.bettingTime,
       endsAt: bettingEndsAt,
       mode: 'classic',
-      artistOnly: game.artistOnly,
-      yearOnly: game.yearOnly,
+      artistOnly: round.target === 'artist',
+      yearOnly: round.target === 'year',
+      choiceOptions: round.choiceOptions,
       party,
       song: {
         title: round.song.title,
@@ -908,13 +953,12 @@ io.on('connection', (socket) => {
       featuredArtists: round.song.featuredArtists,
       year: round.song.year,
       coverUrl: round.coverUrl,
-      // Party rounds carry their own per-round target (title/artist/both),
-      // independent of the game-wide artistOnly toggle classic/race use —
-      // the reveal card's "song was"/"artist was" label has to match
+      // round.target is this round's resolved answer (title/artist/both/year)
+      // — the reveal card's "song was"/"artist was" label has to match
       // whichever one actually decided the guess, or a correct artist-only
       // guess reads as a title mismatch (and vice versa).
-      artistOnly: gm.effectiveTarget(game, round) === 'artist',
-      yearOnly: gm.effectiveTarget(game, round) === 'year',
+      artistOnly: gm.effectiveTarget(round) === 'artist',
+      yearOnly: gm.effectiveTarget(round) === 'year',
       // Reveal payloads always carry the full party config (mystery revealed).
       party: gm.partyView(game, round, true),
       // 'chaoshints' rounds: which hint (already sent as `hints` at
@@ -926,9 +970,10 @@ io.on('connection', (socket) => {
   function emitScoreUpdate(game: GameObj) {
     const pityAwardedTo = game.currentRound?.pityAwardedTo;
     io.to(game.pin).emit('score_update', {
-      players: Array.from(game.players.values()).map(p => ({
-        name: p.name, score: p.score, streak: p.streak, pity: pityAwardedTo?.has(p.socketId) ?? false,
-      })),
+      players: Array.from(game.players.values()).map(p => {
+        const pity = pityAwardedTo?.has(p.socketId) ?? false;
+        return { name: p.name, score: p.score, streak: p.streak, pity, pityAmount: pity ? gm.PITY_BONUS : undefined };
+      }),
     });
   }
 
@@ -938,7 +983,7 @@ io.on('connection', (socket) => {
     gm.finalizeRaceDrafts(game);
     const round = game.currentRound!;
     // Year rounds score in one pass now that every distance is known.
-    if (gm.effectiveTarget(game, round) === 'year') gm.finalizeYearRound(game);
+    if (gm.effectiveTarget(round) === 'year') gm.finalizeYearRound(game);
     game.phase = 'reveal';
     const correctNames = Array.from(round.correctGuessers)
       .map(id => game.players.get(id)?.name ?? '')
@@ -1007,7 +1052,10 @@ io.on('connection', (socket) => {
     // first runs a countdown (and buffers the track) before playback begins,
     // so allow for that plus the play duration plus slack.
     game.phaseTimer = setTimeout(() => {
-      if (game.phase === 'playing') startGuessingPhase(game);
+      if (game.phase === 'playing') {
+        gm.markTierStarted(game);
+        startGuessingPhase(game);
+      }
     }, durationMs + PLAYBACK_COUNTDOWN_MS + 5000);
   }
 
@@ -1018,7 +1066,7 @@ io.on('connection', (socket) => {
     const round = game.currentRound!;
     if (game.phaseTimer) clearTimeout(game.phaseTimer);
     game.phase = 'reveal';
-    if (gm.effectiveTarget(game, round) === 'year') gm.finalizeClassicYearRound(game);
+    if (gm.effectiveTarget(round) === 'year') gm.finalizeClassicYearRound(game);
     io.to(game.pin).emit('round_result', {
       correct: false,
       guesserName: null,

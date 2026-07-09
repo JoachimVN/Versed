@@ -2,6 +2,7 @@ export interface Hint {
   label: string;
   value: string;
   imageUrl?: string;
+  blurred?: boolean; // image hints only: true = teaser (stays blurred through guessing), unset/false = shown clear
 }
 
 export type SongSource = 'library' | 'playlist';
@@ -24,7 +25,7 @@ export interface LeaderboardEntry {
 
 // End-of-game superlative — mirrors server/src/types.ts's Award.
 export interface Award {
-  key: 'mostCorrect' | 'fastestGuess' | 'biggestSwing' | 'finaleWinner';
+  key: 'mostCorrect' | 'fastestGuess' | 'fastestClassicGuess' | 'biggestSwing' | 'finaleWinner';
   playerNames: string[];
   detail: string;
 }
@@ -34,18 +35,21 @@ export interface PlayerInfo {
   score?: number;
   streak?: number;
   pity?: boolean;
+  pityAmount?: number;
 }
 
 // Mirrors server/src/types.ts's PartyEvent — kept in sync by hand, no shared
 // import between the two workspaces.
 export type PartyEvent = 'double' | 'mystery' | 'steal' | 'snippet' | 'fullhints' | 'blind' | 'outro' | 'underdog' | 'chaoshints';
+// Mirrors server/src/types.ts's PartyRoundType.
+export type PartyRoundType = 'choice' | 'artist' | 'both' | 'year' | 'winnerOnly';
 export type ChaosLevel = number;
 
 // Party mode: the per-round recipe as clients see it. A hidden mystery
 // multiplier arrives as null and is revealed (a number) on round_result.
 export interface PartyInfo {
   format: 'classic' | 'race' | 'year' | 'choice';
-  target: 'title' | 'artist' | 'both';
+  target: 'title' | 'artist' | 'both' | 'year';
   event: PartyEvent | null;
   multiplier: number | null;
   winnerOnly: boolean;
@@ -64,6 +68,7 @@ export interface YearResult {
   diff: number | null;
   points: number;
   pity: boolean;
+  pityAmount?: number;
 }
 
 export interface RoundResultEvent {
@@ -79,7 +84,7 @@ export interface RoundResultEvent {
   artistOnly?: boolean;
   yearOnly?: boolean;
   correctGuessers?: string[];
-  playerGuesses?: { name: string; guess: string | null; timeMs?: number | null; live?: boolean; artistGuess?: string | null }[];
+  playerGuesses?: { name: string; guess: string | null; timeMs?: number | null; live?: boolean; artistGuess?: string | null; artistCorrect?: boolean }[];
   party?: PartyInfo;
   yearResults?: YearResult[];
   stealPending?: string;

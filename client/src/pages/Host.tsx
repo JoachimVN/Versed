@@ -21,7 +21,7 @@ import { AudioBars } from '../components/AudioBars';
 import { LIQUID_CARD_PROPS, LIQUID_PILL_PROPS } from '../components/liquidGlassPresets';
 import { APP_NAME, BACKEND_URL, RACE_TIME } from '../config';
 import { commonPhaseAnnouncement } from '../utils/phaseAnnouncement';
-import type { Award, ChaosLevel, Hint, LeaderboardEntry, PartyEvent, PartyInfo, PlayerInfo, PlaylistTrackInput, RoundResultEvent, SongSource } from '../types';
+import type { Award, ChaosLevel, Hint, LeaderboardEntry, PartyEvent, PartyInfo, PartyRoundType, PlayerInfo, PlaylistTrackInput, RoundResultEvent, SongSource } from '../types';
 
 type Phase = 'connect' | 'lobby' | 'betting' | 'playing' | 'guessing' | 'reveal' | 'leaderboard' | 'finished';
 type Mode = 'classic' | 'race' | 'party';
@@ -72,14 +72,26 @@ type PlaylistPicker = ReturnType<typeof usePlaylistPicker>;
 // bad/missing value, so a corrupt or stale entry just falls back to defaults.
 interface SavedHostSettings {
   bettingTime: number; guessingTime: number; rounds: number; mode: Mode;
-  raceTime: number; raceWinnerOnly: boolean; artistOnly: boolean; yearOnly: boolean; difficulty: Difficulty;
+  raceTime: number; raceWinnerOnly: boolean; artistOnly: boolean; yearOnly: boolean; multipleChoice: boolean; difficulty: Difficulty;
   enabledEvents: PartyEvent[]; chaosLevel: ChaosLevel;
+  // Snapshot of ALL_PARTY_EVENTS as of the last save — lets a future load
+  // tell "event didn't exist yet when this was saved" (auto-enable) apart
+  // from "the host explicitly turned this off" (stay off). Without this, a
+  // newly-added event silently never reaches a returning host, because
+  // `enabledEvents` alone can't distinguish the two cases.
+  knownPartyEvents: PartyEvent[];
+  enabledRoundTypes: PartyRoundType[];
+  // Same "newly-added vs. explicitly-disabled" backfill as knownPartyEvents,
+  // tracked independently since round types and events are separate pools.
+  knownPartyRoundTypes: PartyRoundType[];
 }
 const HOST_SETTINGS_KEY = 'versed_host_settings';
 const MODES: Set<Mode> = new Set(['classic', 'race', 'party']);
 const DIFFICULTIES: Set<Difficulty> = new Set(['easy', 'medium', 'hard']);
 export const ALL_PARTY_EVENTS: PartyEvent[] = ['double', 'mystery', 'steal', 'snippet', 'fullhints', 'blind', 'outro', 'underdog', 'chaoshints'];
 const PARTY_EVENT_SET: Set<string> = new Set(ALL_PARTY_EVENTS);
+export const ALL_PARTY_ROUND_TYPES: PartyRoundType[] = ['choice', 'artist', 'both', 'year', 'winnerOnly'];
+const PARTY_ROUND_TYPE_SET: Set<string> = new Set(ALL_PARTY_ROUND_TYPES);
 const LEGACY_CHAOS_LEVELS: Record<string, ChaosLevel> = { chill: 0, balanced: 50, chaotic: 100 };
 
 function clampFiniteNumber(value: unknown, min: number, max: number): number | undefined {
@@ -97,21 +109,49 @@ function sanitizeHostSettings(settings: Partial<SavedHostSettings>): Partial<Sav
     raceWinnerOnly: typeof settings.raceWinnerOnly === 'boolean' ? settings.raceWinnerOnly : undefined,
     artistOnly: typeof settings.artistOnly === 'boolean' ? settings.artistOnly : undefined,
     yearOnly: typeof settings.yearOnly === 'boolean' ? settings.yearOnly : undefined,
+    multipleChoice: typeof settings.multipleChoice === 'boolean' ? settings.multipleChoice : undefined,
     difficulty: DIFFICULTIES.has(settings.difficulty as Difficulty) ? settings.difficulty : undefined,
     enabledEvents: Array.isArray(settings.enabledEvents)
       ? settings.enabledEvents.filter((e: unknown): e is PartyEvent => PARTY_EVENT_SET.has(e as string))
       : undefined,
     chaosLevel: clampFiniteNumber(settings.chaosLevel, 0, 100) as ChaosLevel | undefined,
+    knownPartyEvents: Array.isArray(settings.knownPartyEvents)
+      ? settings.knownPartyEvents.filter((e: unknown): e is PartyEvent => PARTY_EVENT_SET.has(e as string))
+      : undefined,
+    enabledRoundTypes: Array.isArray(settings.enabledRoundTypes)
+      ? settings.enabledRoundTypes.filter((t: unknown): t is PartyRoundType => PARTY_ROUND_TYPE_SET.has(t as string))
+      : undefined,
+    knownPartyRoundTypes: Array.isArray(settings.knownPartyRoundTypes)
+      ? settings.knownPartyRoundTypes.filter((t: unknown): t is PartyRoundType => PARTY_ROUND_TYPE_SET.has(t as string))
+      : undefined,
   };
 }
 
 function loadSavedHostSettings(): Partial<SavedHostSettings> {
   try {
     const raw = JSON.parse(localStorage.getItem(HOST_SETTINGS_KEY) ?? '{}');
-    return sanitizeHostSettings({
+    const settings = sanitizeHostSettings({
       ...raw,
       chaosLevel: typeof raw.chaosLevel === 'string' ? LEGACY_CHAOS_LEVELS[raw.chaosLevel] : raw.chaosLevel,
     });
+    // Legacy saves do not have enough history to tell whether an absent event
+    // (or round type) was new or explicitly disabled, so preserve the saved
+    // enabled set as-is when there's no "known" snapshot to diff against.
+    // enabledEvents/knownPartyEvents and enabledRoundTypes/knownPartyRoundTypes
+    // backfill independently — one pool's history doesn't gate the other's.
+    if (settings.enabledEvents !== undefined && settings.knownPartyEvents !== undefined) {
+      const known = new Set(settings.knownPartyEvents);
+      const enabledEvents = settings.enabledEvents;
+      const newlyAdded = ALL_PARTY_EVENTS.filter(e => !known.has(e) && !enabledEvents.includes(e));
+      if (newlyAdded.length > 0) settings.enabledEvents = [...settings.enabledEvents, ...newlyAdded];
+    }
+    if (settings.enabledRoundTypes !== undefined && settings.knownPartyRoundTypes !== undefined) {
+      const known = new Set(settings.knownPartyRoundTypes);
+      const enabledRoundTypes = settings.enabledRoundTypes;
+      const newlyAdded = ALL_PARTY_ROUND_TYPES.filter(t => !known.has(t) && !enabledRoundTypes.includes(t));
+      if (newlyAdded.length > 0) settings.enabledRoundTypes = [...settings.enabledRoundTypes, ...newlyAdded];
+    }
+    return settings;
   } catch { return {}; }
 }
 
@@ -134,6 +174,7 @@ export interface HostState {
   result: RoundResultEvent | null;
   roundDeltas: Record<string, number>;
   roundPity: Record<string, boolean>;
+  roundPityAmount: Record<string, number>;
   leaderboard: LeaderboardEntry[];
   awards: Award[];
   copied: boolean;
@@ -148,8 +189,10 @@ export interface HostState {
   raceWinnerOnly: boolean;
   artistOnly: boolean;
   yearOnly: boolean;
+  multipleChoice: boolean;
   difficulty: Difficulty;
   enabledEvents: PartyEvent[];
+  enabledRoundTypes: PartyRoundType[];
   chaosLevel: ChaosLevel;
   songSource: SongSource;
   customPlaylists: CustomPlaylist[];
@@ -157,6 +200,14 @@ export interface HostState {
   playlistPickerOpen: boolean;
   startError: string | null;
   party: PartyInfo | null;
+  // The current round's actually-resolved target/options, from host_round_start
+  // — distinct from the artistOnly/yearOnly/multipleChoice settings-panel
+  // drafts above, which only reflect what the host currently has selected for
+  // the *next* game, not what this round already rolled (they can differ once
+  // a round's target is randomized rather than static for the whole game).
+  roundArtistOnly: boolean;
+  roundYearOnly: boolean;
+  roundChoiceOptions: string[];
   stealResult: { thief: string; victim: string; amount: number; skipped?: boolean } | null;
   answeredCount: number;
   reconnecting: boolean;
@@ -173,9 +224,12 @@ export interface HostState {
   setRaceWinnerOnly: (v: boolean) => void;
   setArtistOnly: (v: boolean) => void;
   setYearOnly: (v: boolean) => void;
+  setMultipleChoice: (v: boolean) => void;
   setDifficulty: (v: Difficulty) => void;
   toggleEvent: (e: PartyEvent) => void;
   setEnabledEvents: (events: PartyEvent[]) => void;
+  toggleRoundType: (t: PartyRoundType) => void;
+  setEnabledRoundTypes: (types: PartyRoundType[]) => void;
   setChaosLevel: (v: ChaosLevel) => void;
   setSongSource: (v: SongSource) => void;
   addPlaylist: (p: CustomPlaylist) => void;
@@ -219,6 +273,7 @@ function useHostGame(): HostState {
   const [result, setResult] = useState<RoundResultEvent | null>(null);
   const [roundDeltas, setRoundDeltas] = useState<Record<string, number>>({});
   const [roundPity, setRoundPity] = useState<Record<string, boolean>>({});
+  const [roundPityAmount, setRoundPityAmount] = useState<Record<string, number>>({});
   const [leaderboard, setLeaderboard] = useState<LeaderboardEntry[]>([]);
   const [awards, setAwards] = useState<Award[]>([]);
   const [copied, setCopied] = useState(false);
@@ -232,8 +287,10 @@ function useHostGame(): HostState {
   const [raceWinnerOnly, setRaceWinnerOnly] = useState(savedSettings.raceWinnerOnly ?? false);
   const [artistOnly, setArtistOnly] = useState(savedSettings.artistOnly ?? false);
   const [yearOnly, setYearOnly] = useState(savedSettings.yearOnly ?? false);
+  const [multipleChoice, setMultipleChoice] = useState(savedSettings.multipleChoice ?? false);
   const [difficulty, setDifficulty] = useState<Difficulty>(savedSettings.difficulty ?? 'hard');
   const [enabledEvents, setEnabledEvents] = useState<PartyEvent[]>(savedSettings.enabledEvents ?? ALL_PARTY_EVENTS);
+  const [enabledRoundTypes, setEnabledRoundTypes] = useState<PartyRoundType[]>(savedSettings.enabledRoundTypes ?? ALL_PARTY_ROUND_TYPES);
   const [chaosLevel, setChaosLevel] = useState<ChaosLevel>(savedSettings.chaosLevel ?? 50);
   // Not persisted in SavedHostSettings, deliberately: a reload can't restore
   // the actual fetched track data, so a restored 'playlist' flag with no
@@ -247,16 +304,28 @@ function useHostGame(): HostState {
   useEffect(() => {
     const toSave: SavedHostSettings = {
       bettingTime: bettingTimeSetting, guessingTime: guessingTimeSetting, rounds: roundsSetting, mode,
-      raceTime: raceTimeSetting, raceWinnerOnly, artistOnly, yearOnly, difficulty,
+      raceTime: raceTimeSetting, raceWinnerOnly, artistOnly, yearOnly, multipleChoice, difficulty,
       enabledEvents, chaosLevel,
+      // Snapshot of every event/round type this build knows about, so a
+      // future load can tell newly-added ones (auto-enable) apart from ones
+      // the host deliberately turned off (stay off) — see loadSavedHostSettings.
+      knownPartyEvents: ALL_PARTY_EVENTS,
+      enabledRoundTypes,
+      knownPartyRoundTypes: ALL_PARTY_ROUND_TYPES,
     };
     localStorage.setItem(HOST_SETTINGS_KEY, JSON.stringify(sanitizeHostSettings(toSave)));
-  }, [bettingTimeSetting, guessingTimeSetting, roundsSetting, mode, raceTimeSetting, raceWinnerOnly, artistOnly, yearOnly, difficulty, enabledEvents, chaosLevel]);
+  }, [bettingTimeSetting, guessingTimeSetting, roundsSetting, mode, raceTimeSetting, raceWinnerOnly, artistOnly, yearOnly, multipleChoice, difficulty, enabledEvents, enabledRoundTypes, chaosLevel]);
 
   const toggleEvent = (e: PartyEvent) => {
     setEnabledEvents(prev => (prev.includes(e) ? prev.filter(x => x !== e) : [...prev, e]));
   };
+  const toggleRoundType = (t: PartyRoundType) => {
+    setEnabledRoundTypes(prev => (prev.includes(t) ? prev.filter(x => x !== t) : [...prev, t]));
+  };
   const [party, setParty] = useState<PartyInfo | null>(null);
+  const [roundArtistOnly, setRoundArtistOnly] = useState(false);
+  const [roundYearOnly, setRoundYearOnly] = useState(false);
+  const [roundChoiceOptions, setRoundChoiceOptions] = useState<string[]>([]);
   const [stealResult, setStealResult] = useState<{ thief: string; victim: string; amount: number; skipped?: boolean } | null>(null);
   const [answeredCount, setAnsweredCount] = useState(0);
   const [reconnecting, setReconnecting] = useState(false);
@@ -380,7 +449,7 @@ function useHostGame(): HostState {
     socket.on('host_round_start', (data: {
       roundIndex: number; total: number; hints: Hint[];
       bettingTime?: number; song: SongInfo; mode?: 'classic' | 'race'; raceTime?: number;
-      party?: PartyInfo;
+      party?: PartyInfo; artistOnly?: boolean; yearOnly?: boolean; choiceOptions?: string[];
     }) => {
       setRoundIndex(data.roundIndex);
       setTotalRounds(data.total);
@@ -391,6 +460,12 @@ function useHostGame(): HostState {
       setResult(null);
       setAnsweredCount(0);
       setParty(data.party ?? null);
+      // Round-scoped, not the settings-panel draft — reset every round so a
+      // fallen-back-to-free-text round doesn't keep a stale previous round's
+      // choice buttons (see roundArtistOnly/roundYearOnly/roundChoiceOptions).
+      setRoundArtistOnly(data.artistOnly === true);
+      setRoundYearOnly(data.yearOnly === true);
+      setRoundChoiceOptions(data.choiceOptions ?? []);
       setStealResult(null);
       setSongTempo(data.song.tempo ?? null);
       if (data.mode === 'race') {
@@ -481,14 +556,17 @@ function useHostGame(): HostState {
     socket.on('score_update', ({ players: p }: { players: PlayerInfo[] }) => {
       const deltas: Record<string, number> = {};
       const pity: Record<string, boolean> = {};
+      const pityAmount: Record<string, number> = {};
       for (const updated of p) {
         const prev = playersRef.current.find(x => x.name === updated.name);
         deltas[updated.name] = (updated.score ?? 0) - (prev?.score ?? 0);
         pity[updated.name] = updated.pity ?? false;
+        pityAmount[updated.name] = updated.pityAmount ?? 0;
       }
       playersRef.current = p;
       setRoundDeltas(deltas);
       setRoundPity(pity);
+      setRoundPityAmount(pityAmount);
       setPlayers(p);
     });
 
@@ -548,8 +626,8 @@ function useHostGame(): HostState {
     socket.emit('start_game', {
       settings: {
         bettingTime: bettingTimeSetting, guessingTime: guessingTimeSetting,
-        totalRounds: roundsSetting, mode, raceTime: raceTimeSetting, raceWinnerOnly, artistOnly, yearOnly,
-        difficulty, songSource, enabledEvents, chaosLevel,
+        totalRounds: roundsSetting, mode, raceTime: raceTimeSetting, raceWinnerOnly, artistOnly, yearOnly, multipleChoice,
+        difficulty, songSource, enabledEvents, enabledRoundTypes, chaosLevel,
         customPlaylist: songSource === 'playlist' && customPlaylists.length > 0
           ? {
             id: customPlaylists.map(p => p.id).join(','),
@@ -603,17 +681,17 @@ function useHostGame(): HostState {
   return {
     spotify, phase, pin, players, roundIndex, totalRounds, hints,
     bettingTime, timeLeft, timerTotal, bidCount, countdown, guesserNames, lowestBid, playerBids,
-    result, roundDeltas, roundPity, leaderboard, awards, copied, playProgress, inviteUrl,
+    result, roundDeltas, roundPity, roundPityAmount, leaderboard, awards, copied, playProgress, inviteUrl,
     settingsOpen, bettingTimeSetting, guessingTimeSetting, roundsSetting,
-    mode, raceTimeSetting, raceWinnerOnly, artistOnly, yearOnly, difficulty,
-    enabledEvents, chaosLevel,
+    mode, raceTimeSetting, raceWinnerOnly, artistOnly, yearOnly, multipleChoice, difficulty,
+    enabledEvents, enabledRoundTypes, chaosLevel,
     songSource, customPlaylists, playlistPicker, playlistPickerOpen, startError,
-    party, stealResult, answeredCount,
+    party, roundArtistOnly, roundYearOnly, roundChoiceOptions, stealResult, answeredCount,
     reconnecting, reconnectingCount: reconnectingNames.size, gameExpired, songPlaying, songTempo,
     toggleSettings: () => setSettingsOpen(o => !o),
     setBettingTimeSetting, setGuessingTimeSetting, setRoundsSetting,
-    setMode, setRaceTimeSetting, setRaceWinnerOnly, setArtistOnly, setYearOnly, setDifficulty,
-    toggleEvent, setEnabledEvents, setChaosLevel,
+    setMode, setRaceTimeSetting, setRaceWinnerOnly, setArtistOnly, setYearOnly, setMultipleChoice, setDifficulty,
+    toggleEvent, setEnabledEvents, toggleRoundType, setEnabledRoundTypes, setChaosLevel,
     setSongSource,
     addPlaylist: (p: CustomPlaylist) => setCustomPlaylists(list => list.some(x => x.id === p.id) ? list : [...list, p]),
     removePlaylist: (id: string) => setCustomPlaylists(list => list.filter(p => p.id !== id)),
@@ -699,31 +777,17 @@ function BidTimeline({ bids, lowestBid }: Readonly<{ bids: { name: string; bid: 
 
 function SettingsPanel({ game, open }: Readonly<{ game: HostState; open: boolean }>) {
   const {
-    mode, bettingTimeSetting, guessingTimeSetting, roundsSetting, raceTimeSetting, raceWinnerOnly, artistOnly, yearOnly, difficulty,
-    enabledEvents, chaosLevel,
+    mode, bettingTimeSetting, guessingTimeSetting, roundsSetting, raceTimeSetting, raceWinnerOnly, artistOnly, yearOnly, multipleChoice, difficulty,
+    enabledEvents, enabledRoundTypes, chaosLevel,
     songSource, customPlaylists,
-    setBettingTimeSetting, setGuessingTimeSetting, setRoundsSetting, setRaceTimeSetting, setRaceWinnerOnly, setArtistOnly, setYearOnly, setDifficulty,
-    toggleEvent, setEnabledEvents, setChaosLevel,
+    setBettingTimeSetting, setGuessingTimeSetting, setRoundsSetting, setRaceTimeSetting, setRaceWinnerOnly, setArtistOnly, setYearOnly, setMultipleChoice, setDifficulty,
+    toggleEvent, setEnabledEvents, toggleRoundType, setEnabledRoundTypes, setChaosLevel,
     setSongSource, openPlaylistPicker, removePlaylist,
     toggleSettings,
   } = game;
   const panelRef = useRef<HTMLDialogElement>(null);
   useEscapeKey(toggleSettings, open);
   useFocusTrap(panelRef, open);
-  // "Guess the year" has no single title/artist answer, so it can't run
-  // alongside "Artist only" — picking it clears that. It can still run
-  // alongside "Winner only" in Race mode (that just restricts year scoring
-  // to the closest guess).
-  const toggleYearOnly = () => {
-    const next = !yearOnly;
-    setYearOnly(next);
-    if (next) setArtistOnly(false);
-  };
-  const toggleArtistOnly = () => {
-    const next = !artistOnly;
-    setArtistOnly(next);
-    if (next) setYearOnly(false);
-  };
   return (
     <dialog
       ref={panelRef}
@@ -807,15 +871,15 @@ function SettingsPanel({ game, open }: Readonly<{ game: HostState; open: boolean
             apply to classic and race. */}
         {mode !== 'party' && (
           <div className="px-5 pb-4 space-y-4" style={{ borderTop: '1px solid rgba(255,255,255,0.07)', paddingTop: '16px' }}>
-            {/* "Winner only" (Race) works fine alongside "Guess the year" —
-                it just restricts scoring to the closest guess. "Artist only"
-                is a genuine conflict (year isn't a title/artist target), so
-                it's kept visible-but-disabled rather than hidden/cleared. */}
             {mode === 'race' && (
               <ToggleRow label="Winner only" value={raceWinnerOnly} onToggle={() => setRaceWinnerOnly(!raceWinnerOnly)} />
             )}
-            <ToggleRow label="Artist only" value={artistOnly} disabled={yearOnly} onToggle={toggleArtistOnly} />
-            <ToggleRow label="Guess the year" value={yearOnly} onToggle={toggleYearOnly} />
+            {/* Both can now be on at once — each round then independently
+                rolls artist or year as its target, rather than asking one
+                fixed target for the whole game. */}
+            <ToggleRow label="Artist only" value={artistOnly} onToggle={() => setArtistOnly(!artistOnly)} />
+            <ToggleRow label="Guess the year" value={yearOnly} onToggle={() => setYearOnly(!yearOnly)} />
+            <ToggleRow label="Multiple Choice" value={multipleChoice} onToggle={() => setMultipleChoice(!multipleChoice)} />
           </div>
         )}
 
@@ -823,6 +887,7 @@ function SettingsPanel({ game, open }: Readonly<{ game: HostState; open: boolean
           <div className="px-5 pb-4 space-y-4" style={{ borderTop: '1px solid rgba(255,255,255,0.07)', paddingTop: '16px' }}>
             <ChaosLevelRow value={chaosLevel} onChange={setChaosLevel} disabled={enabledEvents.length === 0} />
             <EventChipGrid enabledEvents={enabledEvents} onToggle={toggleEvent} onSetAll={setEnabledEvents} />
+            <RoundTypeChipGrid enabledRoundTypes={enabledRoundTypes} onToggle={toggleRoundType} onSetAll={setEnabledRoundTypes} />
           </div>
         )}
       </div>
@@ -1257,6 +1322,123 @@ function EventChipGrid({ enabledEvents, onToggle, onSetAll }: Readonly<{
         })}
       </div>
       <p id="event-caption" aria-live="polite" style={{ color: captionColor, fontSize: '0.7rem', lineHeight: 1.4, minHeight: '2.1rem' }}>
+        {caption}
+      </p>
+    </div>
+  );
+}
+
+// Human labels/descriptions for the Round Types checklist — the format/
+// target/scoring variants a party round can roll (distinct from Events
+// above, which are modifiers layered on top of whatever round type is
+// picked). 'both'/Double Duty never combines with 'choice'/Multiple Choice
+// (no UI slot for a second bonus answer), while 'year' can appear either as
+// closest-guess year format or as a multiple-choice year target.
+const ROUND_TYPE_LABELS: Record<PartyRoundType, string> = {
+  choice: 'Multiple Choice',
+  artist: 'Who Sings It?',
+  both: 'Double Duty',
+  year: 'Guess the Year',
+  winnerOnly: 'Winner Takes All',
+};
+const ROUND_TYPE_DESCRIPTIONS: Record<PartyRoundType, string> = {
+  choice: 'Tap the right answer from 4 options',
+  artist: 'Name the artist instead of the title',
+  both: 'Name the title — bonus for the artist too',
+  year: 'Closest release-year guess wins the round',
+  winnerOnly: 'Only the round winner scores — everyone else gets zero',
+};
+
+function RoundTypeChipGrid({ enabledRoundTypes, onToggle, onSetAll }: Readonly<{
+  enabledRoundTypes: PartyRoundType[]; onToggle: (t: PartyRoundType) => void; onSetAll: (types: PartyRoundType[]) => void;
+}>) {
+  const [hoveredType, setHoveredType] = useState<PartyRoundType | null>(null);
+  const [focusedType, setFocusedType] = useState<PartyRoundType | null>(null);
+  const [selectedType, setSelectedType] = useState<PartyRoundType | null>(null);
+  const shownType = hoveredType ?? focusedType ?? selectedType;
+
+  const setAll = (types: PartyRoundType[]) => {
+    onSetAll(types);
+    setSelectedType(null);
+  };
+
+  let caption: string;
+  if (shownType) {
+    caption = ROUND_TYPE_DESCRIPTIONS[shownType];
+  } else if (enabledRoundTypes.length === 0) {
+    caption = 'No round types selected. Party rounds will play as plain classic/race rounds.';
+  } else {
+    caption = 'Tap or hover a round type for details.';
+  }
+
+  return (
+    <div className="space-y-2">
+      <div className="flex items-center justify-between">
+        <span style={{ color: 'rgba(255,255,255,0.5)', fontSize: '0.875rem' }}>Round Types</span>
+        <div className="flex items-center" style={{ gap: '6px', fontSize: '0.7rem' }}>
+          <button
+            type="button"
+            onClick={() => setAll(ALL_PARTY_ROUND_TYPES)}
+            style={{ background: 'none', border: 'none', padding: 0, cursor: 'pointer', color: 'rgba(255,255,255,0.4)', transition: 'color 0.15s' }}
+            onMouseEnter={e => { e.currentTarget.style.color = 'rgba(255,255,255,0.75)'; }}
+            onMouseLeave={e => { e.currentTarget.style.color = 'rgba(255,255,255,0.4)'; }}
+          >
+            All
+          </button>
+          <span style={{ color: 'rgba(255,255,255,0.25)' }}>·</span>
+          <button
+            type="button"
+            onClick={() => setAll([])}
+            style={{ background: 'none', border: 'none', padding: 0, cursor: 'pointer', color: 'rgba(255,255,255,0.4)', transition: 'color 0.15s' }}
+            onMouseEnter={e => { e.currentTarget.style.color = 'rgba(255,255,255,0.75)'; }}
+            onMouseLeave={e => { e.currentTarget.style.color = 'rgba(255,255,255,0.4)'; }}
+          >
+            None
+          </button>
+        </div>
+      </div>
+      <div className="grid" style={{ gridTemplateColumns: '1fr 1fr', gap: '8px' }}>
+        {ALL_PARTY_ROUND_TYPES.map(t => {
+          const on = enabledRoundTypes.includes(t);
+          return (
+            <button
+              key={t}
+              type="button"
+              aria-pressed={on}
+              aria-describedby="round-type-caption"
+              onClick={() => { onToggle(t); setSelectedType(t); }}
+              onMouseEnter={() => setHoveredType(t)}
+              onMouseLeave={() => setHoveredType(null)}
+              onFocus={() => setFocusedType(t)}
+              onBlur={() => setFocusedType(null)}
+              style={{
+                borderRadius: '10px',
+                minHeight: '46px',
+                padding: '6px 10px',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                fontSize: '0.78rem',
+                fontWeight: on ? 600 : 400,
+                textAlign: 'center',
+                lineHeight: 1.25,
+                cursor: 'pointer',
+                color: on ? 'white' : 'rgba(255,255,255,0.5)',
+                backdropFilter: 'blur(10px) saturate(130%)',
+                background: on
+                  ? 'linear-gradient(135deg, rgba(0,128,126,0.22), rgba(52,39,88,0.26) 55%, rgba(110,32,155,0.32))'
+                  : 'rgba(255,255,255,0.03)',
+                border: '1px solid rgba(255,255,255,0.06)',
+                boxShadow: on ? 'inset 0 1px 0 rgba(255,255,255,0.16)' : 'inset 0 1px 0 rgba(255,255,255,0.04)',
+                transition: 'background 0.2s ease, border-color 0.2s ease, color 0.2s ease, box-shadow 0.2s ease',
+              }}
+            >
+              {ROUND_TYPE_LABELS[t]}
+            </button>
+          );
+        })}
+      </div>
+      <p id="round-type-caption" aria-live="polite" style={{ color: 'rgba(255,255,255,0.4)', fontSize: '0.7rem', lineHeight: 1.4, minHeight: '2.1rem' }}>
         {caption}
       </p>
     </div>
@@ -1747,7 +1929,20 @@ function ConnectView({ game }: Readonly<{ game: HostState }>) {
       <BackButton />
       <img src={`${import.meta.env.BASE_URL}logo.png`} alt={APP_NAME} className="w-auto" style={{ maxHeight: '192px', maxWidth: '100%' }} />
       {spotify.isConnected && !spotify.playerReady ? (
-        <p className="text-white/50">Connecting to Spotify...</p>
+        <div className="flex flex-col items-center gap-3 text-center">
+          <p className="text-white/50">Connecting to Spotify...</p>
+          {spotify.playbackError && (
+            <p className="max-w-sm text-red-300 text-sm" aria-live="assertive">
+              {spotify.playbackError} Try Chrome or Edge if Safari keeps blocking playback.
+            </p>
+          )}
+          <button
+            onClick={() => spotify.disconnect()}
+            className="px-4 py-2 rounded-xl border border-white/15 bg-white/5 text-white/70 text-sm font-semibold hover:bg-white/10 hover:text-white transition-colors"
+          >
+            Reconnect Spotify
+          </button>
+        </div>
       ) : (
         <>
           <a
@@ -2150,6 +2345,14 @@ export function LobbyView({ game, fadeOutRef }: Readonly<{ game: HostState; fade
     await fadeOut();
     startGame();
   };
+  let spotifyStatus: React.ReactNode;
+  if (spotify.playbackError) {
+    spotifyStatus = <><span className="w-2 h-2 rounded-full bg-red-400" />Spotify playback error</>;
+  } else if (spotify.playerReady) {
+    spotifyStatus = <><span className="w-2 h-2 rounded-full bg-green-500" />Spotify ready</>;
+  } else {
+    spotifyStatus = <><Loader2 className="w-3.5 h-3.5 animate-spin" />Spotify loading...</>;
+  }
 
   return (
     <div className="min-h-screen relative flex flex-col overflow-hidden">
@@ -2166,12 +2369,13 @@ export function LobbyView({ game, fadeOutRef }: Readonly<{ game: HostState; fade
       >
         <img src={`${import.meta.env.BASE_URL}logo.png`} alt={APP_NAME} className="w-auto" style={{ maxHeight: '192px', maxWidth: '100%' }} />
         <span className="text-white/45 text-sm flex items-center gap-2">
-          {spotify.playerReady ? (
-            <><span className="w-2 h-2 rounded-full bg-green-500" />Spotify ready</>
-          ) : (
-            <><Loader2 className="w-3.5 h-3.5 animate-spin" />Spotify loading...</>
-          )}
+          {spotifyStatus}
         </span>
+        {spotify.playbackError && (
+          <p className="max-w-sm text-center text-red-300 text-sm" aria-live="assertive">
+            {spotify.playbackError} Try reconnecting Spotify, or use Chrome/Edge if Safari keeps blocking playback.
+          </p>
+        )}
       </div>
 
       {pin ? (
@@ -2240,18 +2444,8 @@ function BettingView({ game }: Readonly<{ game: HostState }>) {
       {/* Main content */}
       <div className="flex-1 relative flex flex-col items-center justify-center gap-10 px-8 py-4" style={{ zIndex: 2 }}>
 
-        {/* Blurred album art — centered, above timer */}
-        {imageHint?.imageUrl && (
-          <div style={{ width: 180, height: 180, borderRadius: 28, overflow: 'hidden', flexShrink: 0, boxShadow: '0 16px 40px rgba(0,0,0,0.7)', position: 'relative' }}>
-            {/* Inner div extends 30px beyond all edges so blur has real pixels to sample at every boundary */}
-            <div style={{ position: 'absolute', inset: -30, filter: 'blur(8px) brightness(0.6)' }}>
-              <img
-                src={imageHint.imageUrl} alt=""
-                style={{ width: '100%', height: '100%', objectFit: 'cover', display: 'block' }}
-              />
-            </div>
-          </div>
-        )}
+        {/* Album art — centered, above timer */}
+        {imageHint?.imageUrl && <AlbumArtHint hint={imageHint} size={180} radius={28} />}
 
         <PartyBadge party={party} />
 
@@ -2335,22 +2529,45 @@ function usesRaceFlow(mode: HostState['mode'], yearOnly: boolean, party: PartyIn
   return party.format !== 'classic';
 }
 
+// Renders an album-art image hint, blurred as a teaser (per `hint.blurred`,
+// server-driven) or clear (Underdog Boost's real, guaranteed assist) — the
+// flag is explicit so this stays correct regardless of which screen/phase
+// renders it, rather than each caller having to infer which case it is.
+function AlbumArtHint({ hint, size, radius }: Readonly<{ hint: Hint; size: number; radius: number }>) {
+  if (!hint.imageUrl) return null;
+  if (!hint.blurred) {
+    return (
+      <img
+        src={hint.imageUrl} alt=""
+        style={{ width: size, height: size, borderRadius: radius, objectFit: 'cover', boxShadow: '0 8px 24px rgba(0,0,0,0.5)' }}
+      />
+    );
+  }
+  return (
+    <div style={{ width: size, height: size, borderRadius: radius, overflow: 'hidden', flexShrink: 0, boxShadow: '0 16px 40px rgba(0,0,0,0.7)', position: 'relative' }}>
+      {/* Inner div extends 30px beyond all edges so blur has real pixels to sample at every boundary */}
+      <div style={{ position: 'absolute', inset: -30, filter: 'blur(8px) brightness(0.6)' }}>
+        <img
+          src={hint.imageUrl} alt=""
+          style={{ width: '100%', height: '100%', objectFit: 'cover', display: 'block' }}
+        />
+      </div>
+    </div>
+  );
+}
+
 // Race-flow rounds are normally hint-free (the clip itself is the puzzle),
-// but artist-only/year-only rounds and Underdog Boost ask for something the
-// audio can't give away, so those are the only race rounds that ever carry
-// hints here. Underdog's cover-art hint is shown clear (not the classic
-// betting screen's blurred teaser) — it's meant to be a real, strong assist.
+// but artist-only/year-only rounds, Underdog Boost, and classic-flow art
+// hints that carry into the playing/guessing phases are the exceptions.
+// Whether the art hint shows blurred or clear is driven entirely by
+// `hint.blurred` (server-set), not by which round type this is.
 function RaceHintBar({ hints }: Readonly<{ hints: Hint[] }>) {
   const imageHint = hints.find(h => h.imageUrl);
   const textHints = hints.filter(h => !h.imageUrl);
   if (textHints.length === 0 && !imageHint) return null;
   return (
     <div className="flex flex-col items-center gap-3">
-      {imageHint?.imageUrl && (
-        <img
-          src={imageHint.imageUrl} alt="" style={{ width: 96, height: 96, borderRadius: 16, objectFit: 'cover', boxShadow: '0 8px 24px rgba(0,0,0,0.5)' }}
-        />
-      )}
+      {imageHint?.imageUrl && <AlbumArtHint hint={imageHint} size={96} radius={16} />}
       {textHints.length > 0 && (
         <div
           className="flex items-center justify-center gap-6 rounded-2xl"
@@ -2408,13 +2625,16 @@ function ChoiceOptionsBar({ options }: Readonly<{ options?: string[] }>) {
 }
 
 export function PlayingView({ game }: Readonly<{ game: HostState }>) {
-  const { roundIndex, totalRounds, countdown, guesserNames, lowestBid, playerBids, timeLeft, timerTotal, mode, yearOnly, hints, answeredCount, players, skipTurn, endGame, party, songPlaying, songTempo } = game;
+  const { roundIndex, totalRounds, countdown, guesserNames, lowestBid, playerBids, timeLeft, timerTotal, mode, roundYearOnly, roundChoiceOptions, hints, answeredCount, players, skipTurn, endGame, party, songPlaying, songTempo } = game;
   // Party rounds that aren't classic-format arrive with an empty bid state and
   // behave exactly like race rounds on this screen. "Guess the year" rides
   // the race flow even in Classic mode — but only outside Party, which picks
-  // its own per-round target and ignores this game-wide toggle.
-  const isRace = usesRaceFlow(mode, yearOnly, party);
-  const isYear = party ? party.format === 'year' : yearOnly;
+  // its own per-round target. roundYearOnly is this round's actually-resolved
+  // value (from host_round_start), not the settings-panel draft — those can
+  // differ once a round's target is randomized rather than static for the
+  // whole game.
+  const isRace = usesRaceFlow(mode, roundYearOnly, party);
+  const isYear = party ? party.format === 'year' : roundYearOnly;
   // Finale duelists or (for underdog rounds) the trailing player(s) — the
   // only ones actually guessing this round, if either applies.
   let restrictedNames: string[] | null = null;
@@ -2433,7 +2653,7 @@ export function PlayingView({ game }: Readonly<{ game: HostState }>) {
         <p className="text-white/45 text-sm">Round {roundIndex + 1}/{totalRounds}</p>
         <PartyBadge party={party} />
         <RaceHintBar hints={hints} />
-        <ChoiceOptionsBar options={party?.choiceOptions} />
+        <ChoiceOptionsBar options={party?.choiceOptions ?? roundChoiceOptions} />
 
         <div className="liquid-btn relative" style={{ width: 'min(77vw, 527px)', height: countdown === null ? '340px' : '306px' }}>
           <LiquidGlass
@@ -2495,9 +2715,11 @@ export function PlayingView({ game }: Readonly<{ game: HostState }>) {
 }
 
 function GuessingView({ game }: Readonly<{ game: HostState }>) {
-  const { roundIndex, totalRounds, guesserNames, lowestBid, playerBids, timeLeft, timerTotal, mode, yearOnly, hints, party, skipTurn, endGame } = game;
-  const isRace = mode === 'race' || (party === null && yearOnly) || (party !== null && party.format !== 'classic');
-  const isYear = party ? party.format === 'year' : yearOnly;
+  const { roundIndex, totalRounds, guesserNames, lowestBid, playerBids, timeLeft, timerTotal, mode, roundYearOnly, roundChoiceOptions, hints, party, skipTurn, endGame } = game;
+  // roundYearOnly is this round's resolved value, not the settings-panel
+  // draft — see PlayingView's comment above for why that distinction matters.
+  const isRace = mode === 'race' || (party === null && roundYearOnly) || (party !== null && party.format !== 'classic');
+  const isYear = party ? party.format === 'year' : roundYearOnly;
   const accent = roundAccent(isRace, isYear);
   // Bidders who placed a bid this round but aren't in the current tier —
   // if everyone bid the same (or there's only one player), there's no one
@@ -2511,7 +2733,7 @@ function GuessingView({ game }: Readonly<{ game: HostState }>) {
         <p className="text-white/45 text-sm">Round {roundIndex + 1}/{totalRounds}</p>
         <PartyBadge party={party} />
         <RaceHintBar hints={hints} />
-        <ChoiceOptionsBar options={party?.choiceOptions} />
+        <ChoiceOptionsBar options={party?.choiceOptions ?? roundChoiceOptions} />
 
         <div className="liquid-btn relative" style={{ width: '310px', height: '420px' }}>
           <LiquidGlass
@@ -2551,13 +2773,22 @@ function GuessingView({ game }: Readonly<{ game: HostState }>) {
 
 type GuessCorrectness = 'none' | 'correct' | 'exact';
 
+// The artist guess can be right even when the title guess isn't — that combo
+// scores no bonus, so it gets a muted green (visibly "correct") rather than
+// the full "correct" green, which would wrongly imply it paid out.
+function artistGuessClass(artistCorrect: boolean, titleCorrect: boolean): string {
+  if (!artistCorrect) return 'text-white/40';
+  return titleCorrect ? 'text-green-400' : 'text-green-400/50';
+}
+
 function RevealPlayerRow({
-  player, entry, delta, pity, delay, correct, instant, removePlayer,
+  player, entry, delta, pity, pityAmount, delay, correct, instant, removePlayer,
 }: Readonly<{
   player: PlayerInfo;
-  entry?: { guess: string | null; timeMs?: number | null; live?: boolean; artistGuess?: string | null };
+  entry?: { guess: string | null; timeMs?: number | null; live?: boolean; artistGuess?: string | null; artistCorrect?: boolean };
   delta: number;
   pity: boolean;
+  pityAmount: number;
   delay: number;
   correct: GuessCorrectness;
   instant: boolean;
@@ -2606,7 +2837,7 @@ function RevealPlayerRow({
         </div>
         {delta > 0 && (
           <p className={`text-sky-400 text-xs tabular-nums shrink-0 transition-opacity duration-500 ${deltaFading ? 'opacity-0' : 'opacity-100'}`}>
-            +{displayDelta > 0 ? displayDelta.toLocaleString() : ''}{pity && ' (pity)'}
+            +{displayDelta > 0 ? displayDelta.toLocaleString() : ''}{pity && ` (+${pityAmount.toLocaleString()} pity)`}
           </p>
         )}
       </div>
@@ -2624,7 +2855,7 @@ function RevealPlayerRow({
           <p className="text-white/60 text-xs tabular-nums shrink-0">{displayScore.toLocaleString()}</p>
         </div>
         {entry?.artistGuess && (
-          <p className="text-white/40 text-xs break-words" style={{ overflowWrap: 'anywhere' }}>
+          <p className={`text-xs break-words ${artistGuessClass(!!entry.artistCorrect, correct !== 'none')}`} style={{ overflowWrap: 'anywhere' }}>
             Artist: "{entry.artistGuess}"
           </p>
         )}
@@ -2645,7 +2876,7 @@ function RevealShell({
   isCorrectFor: (player: PlayerInfo) => GuessCorrectness;
   wide?: boolean;
 }>) {
-  const { roundIndex, totalRounds, players, roundDeltas, roundPity, removePlayer, endGame, stealResult, party } = game;
+  const { roundIndex, totalRounds, players, roundDeltas, roundPity, roundPityAmount, removePlayer, endGame, stealResult, party } = game;
   // Every sub-round of the finale duel reports finale:true — the host can't
   // tell from roundIndex/totalRounds alone whether clicking "next" advances
   // to another duel game or actually ends the match, so it gets a neutral
@@ -2692,6 +2923,7 @@ function RevealShell({
               entry={result.playerGuesses?.find(g => g.name === p.name)}
               delta={roundDeltas[p.name] ?? 0}
               pity={roundPity[p.name] ?? false}
+              pityAmount={roundPityAmount[p.name] ?? 0}
               delay={400 + i * 80}
               correct={isCorrectFor(p)}
               instant={instant}
