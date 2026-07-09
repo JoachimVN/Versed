@@ -1,4 +1,4 @@
-import { createContext, useCallback, useContext, useRef, useState } from 'react';
+import { createContext, useCallback, useContext, useMemo, useRef, useState } from 'react';
 
 interface Rect {
   top: number;
@@ -54,28 +54,45 @@ export function LogoMorphProvider({ children }: Readonly<{ children: React.React
     setMorphing(true);
   }, []);
 
-  const provideTarget = useCallback((r: Rect) => {
-    // Two rAFs: the first lets the browser commit the overlay at its start
-    // rect with transitions off, the second flips transitions on and moves
-    // to the target — without this split there's no "from" state for the
-    // transition to interpolate away from.
-    requestAnimationFrame(() => {
-      requestAnimationFrame(() => {
-        setAnimate(true);
-        setRect(r);
-        timerRef.current = setTimeout(() => {
-          setMorphing(false);
-          removeRef.current = setTimeout(() => {
-            setRect(null);
-            setAnimate(false);
-          }, REMOVE_DELAY);
-        }, DURATION);
-      });
-    });
+  const scheduleRemoval = useCallback(() => {
+    removeRef.current = setTimeout(() => {
+      setRect(null);
+      setAnimate(false);
+    }, REMOVE_DELAY);
   }, []);
 
+  const finishMorph = useCallback(() => {
+    setMorphing(false);
+    scheduleRemoval();
+  }, [scheduleRemoval]);
+
+  const animateToTarget = useCallback(
+    (r: Rect) => {
+      setAnimate(true);
+      setRect(r);
+      timerRef.current = setTimeout(finishMorph, DURATION);
+    },
+    [finishMorph]
+  );
+
+  const provideTarget = useCallback(
+    (r: Rect) => {
+      // Two rAFs: the first lets the browser commit the overlay at its start
+      // rect with transitions off, the second flips transitions on and moves
+      // to the target — without this split there's no "from" state for the
+      // transition to interpolate away from.
+      requestAnimationFrame(() => requestAnimationFrame(() => animateToTarget(r)));
+    },
+    [animateToTarget]
+  );
+
+  const value = useMemo(
+    () => ({ beginMorph, provideTarget, morphing }),
+    [beginMorph, provideTarget, morphing]
+  );
+
   return (
-    <LogoMorphContext.Provider value={{ beginMorph, provideTarget, morphing }}>
+    <LogoMorphContext.Provider value={value}>
       {children}
       {rect && (
         <img
