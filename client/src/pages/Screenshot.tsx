@@ -247,6 +247,7 @@ const MOCK_PLAY: PlayState = {
   setPin: noop, setName: noop, setBidIndex: noop, setGuessText: noop, setArtistGuessText: noop,
   submitStealVictim: noop, skipSteal: noop, join: noop, rejoinSaved: noop, submitBid: noop,
   submitGuess: noop, submitChoice: noop, submitChaosTap: noop, skipGuess: noop, newGamePin: null, rejoinNewGame: noop, renamePlayer: noop,
+  waitingTransitionPending: false, completeWaitingTransition: noop,
 };
 
 const MOCK_PLAY_GUESSING: PlayState = {

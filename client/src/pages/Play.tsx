@@ -86,6 +86,8 @@ export interface PlayState {
   newGamePin: string | null;
   rejoinNewGame: () => void;
   renamePlayer: (newName: string) => void;
+  waitingTransitionPending: boolean;
+  completeWaitingTransition: () => void;
 }
 
 function usePlayGame(pinParam?: string): PlayState {
@@ -145,6 +147,12 @@ function usePlayGame(pinParam?: string): PlayState {
   const [hostReconnecting, setHostReconnecting] = useState(false);
   const [newGamePin, setNewGamePin] = useState<string | null>(null);
   const newGamePinRef = useRef<string | null>(null);
+  // Purely a visual-transition flag for the LogoMorph handoff between the
+  // join card and the waiting card — never a source of truth for game state.
+  // completeWaitingTransition() only ever moves phase 'join' -> 'waiting', so
+  // a faster server event (e.g. the host starting the round mid-transition)
+  // can't be clobbered by this firing late.
+  const [waitingTransitionPending, setWaitingTransitionPending] = useState(false);
   const [savedSession, setSavedSession] = useState<{ pin: string; name: string } | null>(() => {
     try { return JSON.parse(localStorage.getItem('versed_session') ?? 'null'); }
     catch { return null; }
@@ -229,6 +237,7 @@ function usePlayGame(pinParam?: string): PlayState {
             setSavedSession(null);
             localStorage.removeItem('versed_session');
             setError('Game has ended.');
+            setWaitingTransitionPending(false);
             setPhase('join');
           }
         });
@@ -259,6 +268,9 @@ function usePlayGame(pinParam?: string): PlayState {
       bidOptions?: number[]; bidScores?: number[];
       tempo?: number | null;
     }) => {
+      // A round starting is authoritative — it must win over a still-in-flight
+      // waiting-screen morph transition, not get overwritten by it landing late.
+      setWaitingTransitionPending(false);
       setRoundIndex(data.roundIndex);
       setTotalRounds(data.total);
       setHints(data.hints);
@@ -432,6 +444,7 @@ function usePlayGame(pinParam?: string): PlayState {
       setHostReconnecting(false);
       stopCountdown();
       setError('Host disconnected.');
+      setWaitingTransitionPending(false);
       setPhase('join');
     });
 
@@ -440,6 +453,7 @@ function usePlayGame(pinParam?: string): PlayState {
       setSavedSession(null);
       localStorage.removeItem('versed_session');
       setError('You were removed from the lobby.');
+      setWaitingTransitionPending(false);
       setPhase('join');
     });
 
@@ -480,7 +494,8 @@ function usePlayGame(pinParam?: string): PlayState {
     socket.emit('join_game', { pin: p, name: n }, ({ success, error: e }: { success?: boolean; error?: string }) => {
       if (e) { setError(e); return; }
       if (success) {
-        myNameRef.current = n; pinRef.current = p; setMyName(n); setPhase('waiting');
+        myNameRef.current = n; pinRef.current = p; setMyName(n);
+        setWaitingTransitionPending(true);
         const session = { pin: p, name: n };
         setSavedSession(session);
         localStorage.setItem('versed_session', JSON.stringify(session));
@@ -499,8 +514,16 @@ function usePlayGame(pinParam?: string): PlayState {
         localStorage.removeItem('versed_session');
         return;
       }
-      if (success) { myNameRef.current = n; pinRef.current = p; setMyName(n); setPin(p); setName(n); setPhase('waiting'); }
+      if (success) { myNameRef.current = n; pinRef.current = p; setMyName(n); setPin(p); setName(n); setWaitingTransitionPending(true); }
     });
+  };
+
+  // Only ever moves phase 'join' -> 'waiting' — if a server event (e.g. the
+  // host starting the round) already moved phase on while the morph
+  // transition was still in flight, this is a no-op rather than a regression.
+  const completeWaitingTransition = () => {
+    setWaitingTransitionPending(false);
+    setPhase(p => (p === 'join' ? 'waiting' : p));
   };
 
   const submitBid = () => {
@@ -649,6 +672,7 @@ function usePlayGame(pinParam?: string): PlayState {
     socket.emit('update_guess_draft', { text: v, artistText: artistGuessTextRef.current });
   },
     join, rejoinSaved, submitBid, submitGuess, submitChoice, submitChaosTap, skipGuess, renamePlayer,
+    waitingTransitionPending, completeWaitingTransition,
   };
 }
 
@@ -742,6 +766,44 @@ function JoinView({ game }: Readonly<{ game: PlayState }>) {
     setLeaving(true);
     setTimeout(resolve, 320);
   });
+
+  // Forward counterpart of goBack: once join_game (or a saved-session
+  // rejoin) has actually succeeded server-side, arm the same overlay/fade
+  // handoff so the logo carries continuously into the waiting card instead
+  // of two independent fades. completeWaitingTransition() is guarded to only
+  // ever move phase 'join' -> 'waiting', so it's safe to let this run even
+  // if a faster server event (e.g. an instant host start) has already moved
+  // the game on by the time the timer fires.
+  const waitingTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  useEffect(() => {
+    if (!game.waitingTransitionPending) return;
+    if (reducedMotion || !logoRef.current) {
+      game.completeWaitingTransition();
+      return;
+    }
+    const r = logoRef.current.getBoundingClientRect();
+    beginMorph({ top: r.top, left: r.left, width: r.width, height: r.height });
+    setLeaving(true);
+    waitingTimerRef.current = setTimeout(() => {
+      waitingTimerRef.current = null;
+      game.completeWaitingTransition();
+    }, 320);
+    return () => {
+      if (!waitingTimerRef.current) return;
+      // The transition was cancelled mid-flight (a server event reset the
+      // pending flag before our own timer fired — e.g. the host disconnected
+      // during the handoff) — resolve the overlay in place instead of
+      // leaving it, and the shared `morphing` flag, stranded forever.
+      clearTimeout(waitingTimerRef.current);
+      waitingTimerRef.current = null;
+      setLeaving(false);
+      if (logoRef.current) {
+        const cur = logoRef.current.getBoundingClientRect();
+        provideTarget({ top: cur.top, left: cur.left, width: cur.width, height: cur.height });
+      }
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [game.waitingTransitionPending]);
 
   return (
     <div
@@ -917,9 +979,20 @@ function JoinView({ game }: Readonly<{ game: PlayState }>) {
 function WaitingView({ game }: Readonly<{ game: PlayState }>) {
   const [editing, setEditing] = useState(false);
   const [draftName, setDraftName] = useState('');
-  const [visible, setVisible] = useState(false);
+  const logoRef = useRef<HTMLImageElement>(null);
+  const { provideTarget, morphing } = useLogoMorph();
 
-  useEffect(() => { const t = setTimeout(() => setVisible(true), 40); return () => clearTimeout(t); }, []);
+  // Arrival side of JoinView's forward hand-off: only engages if a morph is
+  // already in flight (i.e. the player just joined) — landing here directly
+  // (e.g. dev reload mid-phase) shows its own logo immediately instead of
+  // waiting on a morph that never started.
+  useLayoutEffect(() => {
+    if (morphing && logoRef.current) {
+      const r = logoRef.current.getBoundingClientRect();
+      provideTarget({ top: r.top, left: r.left, width: r.width, height: r.height });
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   const startEdit = () => { setDraftName(game.myName); setEditing(true); };
   const cancelEdit = () => setEditing(false);
@@ -943,27 +1016,44 @@ function WaitingView({ game }: Readonly<{ game: PlayState }>) {
 
       {/* Content */}
       <div
-        className="relative flex flex-col items-center justify-center min-h-screen gap-10 p-6"
-        style={{ zIndex: 2, transition: 'opacity 0.5s ease, transform 0.5s ease', opacity: visible ? 1 : 0, transform: visible ? 'translateY(0)' : 'translateY(16px)' }}
+        className={`relative flex flex-col items-center justify-center min-h-screen gap-10 p-6 ${morphing ? 'page-enter-morph' : 'page-enter'}`}
+        style={{ zIndex: 2 }}
       >
         <BackButton />
-        <img src={`${import.meta.env.BASE_URL}logo.png`} alt={APP_NAME} className="w-auto drop-shadow-2xl" style={{ maxHeight: '168px', maxWidth: '100%' }} />
+        <img
+          ref={logoRef}
+          src={`${import.meta.env.BASE_URL}logo.png`}
+          alt={APP_NAME}
+          className="w-auto drop-shadow-2xl"
+          style={{ maxHeight: '168px', maxWidth: '100%', opacity: morphing ? 0 : 1, willChange: 'opacity' }}
+        />
 
-        <div className="liquid-btn relative" style={{ width: '310px', height: '330px' }}>
+        <div className="liquid-btn glass-tint-purple relative" style={{ width: '310px', height: '330px' }}>
           <LiquidGlass
-            style={{ position: 'absolute', top: '50%', left: '50%' }}
+            style={{
+              position: 'absolute', top: '50%', left: '50%',
+              animationName: 'cardGlowPulse', animationDuration: '4.2s', animationTimingFunction: 'ease-in-out', animationIterationCount: 'infinite',
+            }}
             {...LIQUID_CARD_PROPS}
             padding="24px 28px"
           >
-            <div style={{ width: '254px', minHeight: '220px', display: 'flex', flexDirection: 'column', alignItems: 'center' }}>
+            <div style={{ position: 'relative', width: '254px', minHeight: '220px', display: 'flex', flexDirection: 'column', alignItems: 'center' }}>
+              {/* Soft accent wash echoing the heading's gradient, spanning the
+                  full glass box (content + padding) the way Home's button
+                  overlays do — the card had no inset tint layer before this. */}
+              <div style={{
+                position: 'absolute', inset: '-24px -28px', borderRadius: '20px', pointerEvents: 'none',
+                background: 'linear-gradient(to bottom left, rgba(158,18,204,0.09) 0%, transparent 55%), linear-gradient(to top right, rgba(0,238,232,0.07) 0%, transparent 55%)',
+              }} />
               <span style={{
+                position: 'relative',
                 fontSize: '1.95rem', fontFamily: "'Montserrat', sans-serif", fontWeight: 900, letterSpacing: '0.08em', textTransform: 'uppercase',
                 background: 'linear-gradient(to bottom left, rgba(158,18,204,0.45) 0%, transparent 55%), linear-gradient(to top right, rgba(0,238,232,0.45) 0%, transparent 55%), #fff',
                 WebkitBackgroundClip: 'text', WebkitTextFillColor: 'transparent', backgroundClip: 'text',
               }}>
                 You're in!
               </span>
-              <div style={{ flex: 1, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', gap: '10px', width: '100%' }}>
+              <div style={{ position: 'relative', flex: 1, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', gap: '10px', width: '100%' }}>
                 <span style={{ color: 'rgba(255,255,255,0.45)', fontSize: '0.6rem', letterSpacing: '0.14em', textTransform: 'uppercase' }}>
                   Playing as
                 </span>
@@ -993,12 +1083,29 @@ function WaitingView({ game }: Readonly<{ game: PlayState }>) {
                   </button>
                 )}
               </div>
-              <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '8px', width: '100%' }}>
+              <div style={{ position: 'relative', display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '10px', width: '100%' }}>
                 <div style={{ width: '100%', height: '1px', background: 'rgba(255,255,255,0.07)', marginBottom: '4px' }} />
-                <div style={{ display: 'flex', gap: '6px' }}>
-                  {[0, 1, 2].map(i => (
-                    <div key={i} style={{ width: '6px', height: '6px', borderRadius: '50%', background: 'rgba(0,166,163,0.8)', animationName: 'dotBounce', animationDuration: '1.4s', animationTimingFunction: 'ease-in-out', animationIterationCount: 'infinite', animationDelay: `${i * 0.18}s` }} />
-                  ))}
+                {/* Spinning vinyl record — "the record's spinning, waiting for
+                    the needle to drop" reads truer for this idle moment than
+                    a generic loader, and ties into the app's music theme
+                    without implying a song is actually playing yet. */}
+                <div
+                  aria-hidden="true"
+                  style={{
+                    position: 'relative', width: '34px', height: '34px', borderRadius: '50%',
+                    background: `
+                      radial-gradient(circle at 34% 28%, rgba(255,255,255,0.22), transparent 40%),
+                      repeating-radial-gradient(circle, rgba(255,255,255,0.09) 0px, rgba(255,255,255,0.09) 1px, transparent 1.5px, transparent 4px),
+                      radial-gradient(circle, #1c1c28 0%, #0b0b12 72%)
+                    `,
+                    boxShadow: '0 0 0 1px rgba(255,255,255,0.08) inset, 0 2px 8px rgba(0,0,0,0.4)',
+                    animationName: 'vinylSpin', animationDuration: '3.6s', animationTimingFunction: 'linear', animationIterationCount: 'infinite',
+                  }}
+                >
+                  <div style={{
+                    position: 'absolute', top: '50%', left: '50%', width: '9px', height: '9px', borderRadius: '50%',
+                    background: 'rgba(158,18,204,0.85)', transform: 'translate(-50%, -50%)', boxShadow: '0 0 6px rgba(158,18,204,0.6)',
+                  }} />
                 </div>
                 <span style={{ color: 'rgba(255,255,255,0.45)', fontSize: '0.72rem', letterSpacing: '0.03em' }}>
                   Waiting for host to start…

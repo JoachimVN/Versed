@@ -190,6 +190,14 @@ select:focus-visible,
   40%            { transform: translateY(-6px); opacity: 1; }
 }
 
+/* Slow continuous rotation for the "waiting for host" vinyl-record spinner
+   on Play's WaitingView — a record spinning in place, waiting for the
+   needle to drop. */
+@keyframes vinylSpin {
+  from { transform: rotate(0deg); }
+  to   { transform: rotate(360deg); }
+}
+
 @keyframes audioBar {
   0%, 100% { transform: scaleY(0.2); }
   50%       { transform: scaleY(1); }
@@ -251,6 +259,15 @@ select:focus-visible,
 @keyframes markerGlowPulseGreen {
   0%, 100% { box-shadow: 0 0 0 0 rgba(74,222,128,0.5); }
   50%       { box-shadow: 0 0 0 6px rgba(74,222,128,0); }
+}
+
+/* Idle "breathing" glow for Play's waiting-room card — animates the
+   LiquidGlass wrapper's own `filter` (not `box-shadow`, which the
+   .glass-tint-* rules above already own via !important on the library's
+   internal ring spans) so it composes cleanly alongside that tint. */
+@keyframes cardGlowPulse {
+  0%, 100% { filter: drop-shadow(0 0 10px rgba(158,18,204,0.18)) drop-shadow(0 0 18px rgba(0,238,232,0.08)); }
+  50%       { filter: drop-shadow(0 0 18px rgba(158,18,204,0.32)) drop-shadow(0 0 26px rgba(0,238,232,0.16)); }
 }
 
 /* Most of the animations above are set via inline `style.animation` (audio
