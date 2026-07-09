@@ -1,6 +1,8 @@
 import { useSearchParams } from 'react-router-dom';
-import { PlayingView, RevealView, LobbyView } from './Host';
-import type { HostState } from './Host';
+import { PlayingView } from './host/PlayingView';
+import { RevealView } from './host/RevealView';
+import { LobbyView } from './host/LobbyView';
+import type { HostState } from './host/useHostGame';
 import { WatchingView } from './play/WatchingView';
 import { GuessingView } from './play/GuessingView';
 import { WaitingView } from './play/WaitingView';
