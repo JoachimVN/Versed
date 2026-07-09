@@ -2936,7 +2936,7 @@ function RevealPlayerRow({
         </div>
         {entry?.artistGuess && (
           <p className={`text-xs break-words ${artistGuessClass(!!entry.artistCorrect, correct !== 'none')}`} style={{ overflowWrap: 'anywhere' }}>
-            Artist: "{entry.artistGuess}"
+            "{entry.artistGuess}"
           </p>
         )}
       </div>

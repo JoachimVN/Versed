@@ -1953,7 +1953,7 @@ export function RevealView({ game, result }: Readonly<{ game: PlayState; result:
               </div>
               {g.artistGuess && (
                 <p className={`text-xs italic text-right break-words ${artistGuessClass(!!g.artistCorrect, false)}`} style={{ overflowWrap: 'anywhere' }}>
-                  Artist: "{g.artistGuess}"
+                  "{g.artistGuess}"
                 </p>
               )}
             </div>
@@ -1991,7 +1991,7 @@ export function RevealView({ game, result }: Readonly<{ game: PlayState; result:
             </div>
             {g.artistGuess && (
               <p className={`text-xs italic text-right break-words ${artistGuessClass(!!g.artistCorrect, correct)}`} style={{ overflowWrap: 'anywhere' }}>
-                Artist: "{g.artistGuess}"
+                "{g.artistGuess}"
               </p>
             )}
           </div>
