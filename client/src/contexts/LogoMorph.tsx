@@ -1,4 +1,4 @@
-import { createContext, useCallback, useContext, useMemo, useRef, useState } from 'react';
+import { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState } from 'react';
 
 interface Rect {
   top: number;
@@ -19,6 +19,10 @@ interface LogoMorphApi {
    *  The arriving page should keep its real logo hidden during this window
    *  so it doesn't show alongside the overlay mid-flight. */
   morphing: boolean;
+  /** Lets callers skip the coordinated exit delay when the OS asks for less
+   *  motion. CSS shortens the visual transitions too, but it cannot shorten
+   *  JavaScript navigation timers. */
+  reducedMotion: boolean;
 }
 
 const LogoMorphContext = createContext<LogoMorphApi | null>(null);
@@ -43,8 +47,20 @@ export function LogoMorphProvider({ children }: Readonly<{ children: React.React
   const [rect, setRect] = useState<Rect | null>(null);
   const [animate, setAnimate] = useState(false);
   const [morphing, setMorphing] = useState(false);
+  const [reducedMotion, setReducedMotion] = useState(
+    () => globalThis.matchMedia?.('(prefers-reduced-motion: reduce)').matches ?? false
+  );
   const timerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const removeRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  useEffect(() => {
+    const media = globalThis.matchMedia?.('(prefers-reduced-motion: reduce)');
+    if (!media) return;
+    const update = () => setReducedMotion(media.matches);
+    update();
+    media.addEventListener('change', update);
+    return () => media.removeEventListener('change', update);
+  }, []);
 
   const beginMorph = useCallback((r: Rect) => {
     if (timerRef.current) clearTimeout(timerRef.current);
@@ -87,8 +103,8 @@ export function LogoMorphProvider({ children }: Readonly<{ children: React.React
   );
 
   const value = useMemo(
-    () => ({ beginMorph, provideTarget, morphing }),
-    [beginMorph, provideTarget, morphing]
+    () => ({ beginMorph, provideTarget, morphing, reducedMotion }),
+    [beginMorph, provideTarget, morphing, reducedMotion]
   );
 
   return (

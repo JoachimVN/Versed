@@ -713,7 +713,7 @@ function JoinView({ game }: Readonly<{ game: PlayState }>) {
   const keyboardOpen = useKeyboardOpen();
   const [leaving, setLeaving] = useState(false);
   const logoRef = useRef<HTMLImageElement>(null);
-  const { beginMorph, provideTarget, morphing } = useLogoMorph();
+  const { beginMorph, provideTarget, morphing, reducedMotion } = useLogoMorph();
 
   // Only hands off to the overlay if a morph is already in flight (i.e. we
   // arrived via Home's "Join a game" button) — a direct visit to /play
@@ -731,6 +731,10 @@ function JoinView({ game }: Readonly<{ game: PlayState }>) {
   // logo, fades the rest of the content out, then lets BackButton navigate
   // once that's had time to play.
   const goBack = () => new Promise<void>(resolve => {
+    if (reducedMotion) {
+      resolve();
+      return;
+    }
     if (logoRef.current) {
       const r = logoRef.current.getBoundingClientRect();
       beginMorph({ top: r.top, left: r.left, width: r.width, height: r.height });
@@ -741,7 +745,7 @@ function JoinView({ game }: Readonly<{ game: PlayState }>) {
 
   return (
     <div
-      className={`relative min-h-screen keyboard-resize ${leaving ? 'page-exit' : (morphing ? 'page-enter-fade' : 'page-enter')}`}
+      className={`relative min-h-screen keyboard-resize ${leaving ? 'page-exit' : (morphing ? 'page-enter-morph' : 'page-enter')}`}
       style={{ zIndex: 1, overflowY: 'auto', pointerEvents: leaving ? 'none' : undefined }}
     >
       <BackButton beforeNavigate={goBack} />

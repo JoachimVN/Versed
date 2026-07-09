@@ -167,21 +167,17 @@ select:focus-visible,
   animation: pageExit 0.32s cubic-bezier(0.4, 0, 0.2, 1) forwards;
 }
 
-/* Fade-only variant of .page-enter, used instead of it when a page mounts
-   as the destination of a LogoMorph (see contexts/LogoMorph.tsx). The morph
-   overlay measures this page's logo position synchronously on mount, before
-   .page-enter's translateY(12px) -> 0 slide has played out — handing it a
-   stale, pre-slide target rect. Landing the overlay on that rect and then
-   letting the slide finish afterward made the logo visibly hop the last
-   ~12px once the overlay handed off. Dropping the slide for morph arrivals
-   removes the conflict; the logo already gets its own flight animation via
-   the overlay, so it doesn't need the generic slide too. */
+/* Fade-only arrival for a LogoMorph destination (see
+   contexts/LogoMorph.tsx). The logo target is measured before this animation
+   begins, so it must not translate. Delaying the rest of the page until the
+   logo is well into its flight turns the route swap into one continuous
+   gesture: logo first, then the destination UI resolves beneath it. */
 @keyframes pageEnterFade {
   from { opacity: 0; }
   to   { opacity: 1; }
 }
-.page-enter-fade {
-  animation: pageEnterFade 0.4s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+.page-enter-morph {
+  animation: pageEnterFade 0.46s cubic-bezier(0.16, 1, 0.3, 1) 0.28s both;
 }
 
 @keyframes fadeIn {
