@@ -1,4 +1,5 @@
 import { useState, useEffect, useLayoutEffect, useRef } from 'react';
+import type { CSSProperties } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { ChevronLeft, ChevronRight, Flame, Pencil } from 'lucide-react';
 import LiquidGlass from 'liquid-glass-react';
@@ -15,7 +16,7 @@ import { RoundIntro, PartyBadge, PartyRevealExtras } from '../components/RoundIn
 import { BackButton } from '../components/BackButton';
 import { CircularTimer, timerColor } from '../components/CircularTimer';
 import { AudioBars } from '../components/AudioBars';
-import { LIQUID_CARD_PROPS, LIQUID_PILL_PROPS } from '../components/liquidGlassPresets';
+import { LIQUID_CARD_PROPS, LIQUID_PILL_PROPS, LIQUID_LABEL_PROPS } from '../components/liquidGlassPresets';
 import { APP_NAME, BID_OPTIONS } from '../config';
 import { commonPhaseAnnouncement } from '../utils/phaseAnnouncement';
 import type { Award, Hint, LeaderboardEntry, PartyInfo, RoundResultEvent } from '../types';
@@ -976,11 +977,12 @@ function JoinView({ game }: Readonly<{ game: PlayState }>) {
   );
 }
 
-function WaitingView({ game }: Readonly<{ game: PlayState }>) {
+export function WaitingView({ game }: Readonly<{ game: PlayState }>) {
   const [editing, setEditing] = useState(false);
   const [draftName, setDraftName] = useState('');
+  const [leaving, setLeaving] = useState(false);
   const logoRef = useRef<HTMLImageElement>(null);
-  const { provideTarget, morphing } = useLogoMorph();
+  const { beginMorph, provideTarget, morphing, reducedMotion } = useLogoMorph();
 
   // Arrival side of JoinView's forward hand-off: only engages if a morph is
   // already in flight (i.e. the player just joined) — landing here directly
@@ -993,6 +995,22 @@ function WaitingView({ game }: Readonly<{ game: PlayState }>) {
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
+
+  // Mirrors JoinView's goBack: arms the overlay at this page's logo, fades
+  // the rest of the content out, then lets BackButton navigate once that's
+  // had time to play.
+  const goBack = () => new Promise<void>(resolve => {
+    if (reducedMotion) {
+      resolve();
+      return;
+    }
+    if (logoRef.current) {
+      const r = logoRef.current.getBoundingClientRect();
+      beginMorph({ top: r.top, left: r.left, width: r.width, height: r.height });
+    }
+    setLeaving(true);
+    setTimeout(resolve, 320);
+  });
 
   const startEdit = () => { setDraftName(game.myName); setEditing(true); };
   const cancelEdit = () => setEditing(false);
@@ -1016,104 +1034,180 @@ function WaitingView({ game }: Readonly<{ game: PlayState }>) {
 
       {/* Content */}
       <div
-        className={`relative flex flex-col items-center justify-center min-h-screen gap-10 p-6 ${morphing ? 'page-enter-morph' : 'page-enter'}`}
-        style={{ zIndex: 2 }}
+        className={`relative flex flex-col items-center justify-center min-h-screen gap-8 p-6 ${leaving ? 'page-exit' : (morphing ? 'page-enter-morph' : 'page-enter')}`}
+        style={{ zIndex: 2, pointerEvents: leaving ? 'none' : undefined }}
       >
-        <BackButton />
+        <BackButton beforeNavigate={goBack} />
         <img
           ref={logoRef}
           src={`${import.meta.env.BASE_URL}logo.png`}
           alt={APP_NAME}
           className="w-auto drop-shadow-2xl"
-          style={{ maxHeight: '168px', maxWidth: '100%', opacity: morphing ? 0 : 1, willChange: 'opacity' }}
+          style={{ maxHeight: '140px', maxWidth: '100%', opacity: (morphing || leaving) ? 0 : 1, willChange: 'opacity' }}
         />
 
-        <div className="liquid-btn glass-tint-purple relative" style={{ width: '310px', height: '330px' }}>
-          <LiquidGlass
+        {/* The vinyl record IS the card: a big spinning grooved disc with a
+            static circular glass "label" fixed at its center, like a record
+            label sitting on the vinyl. --disc-size drives every proportional
+            child size below in pure CSS, so the whole assembly stays in
+            proportion as the disc shrinks to fit narrow viewports. */}
+        <div
+          style={{
+            position: 'relative',
+            width: 'min(360px, calc(100vw - 2rem))',
+            aspectRatio: '1',
+            '--disc-size': 'min(360px, calc(100vw - 2rem))',
+          } as CSSProperties}
+        >
+          {/* Vinyl material — three layers, deliberately split:
+              1) the grooved surface, which spins. A pure ring pattern is
+                 radially symmetric and would look identical at every
+                 rotation — two off-center streaks are baked in here so the
+                 spin actually reads as motion instead of a frozen texture.
+              2) a fixed sheen + corner shadow + rim, which does NOT spin —
+                 a real light source reflecting off a turning disc stays put
+                 relative to the viewer, it doesn't orbit with the grooves.
+              3) a dark tint sitting between the vinyl and the glass, so the
+                 glass reads as a more opaque, frosted pane over the record
+                 rather than a clear window onto it. */}
+          <div
+            aria-hidden="true"
             style={{
-              position: 'absolute', top: '50%', left: '50%',
-              animationName: 'cardGlowPulse', animationDuration: '4.2s', animationTimingFunction: 'ease-in-out', animationIterationCount: 'infinite',
+              position: 'absolute', inset: 0, borderRadius: '50%',
+              background: `
+                radial-gradient(ellipse 12% 32% at 76% 32%, rgba(255,255,255,0.32), transparent 70%),
+                radial-gradient(ellipse 9% 24% at 24% 68%, rgba(255,255,255,0.20), transparent 70%),
+                repeating-radial-gradient(circle, rgba(255,255,255,0.05) 0px, rgba(255,255,255,0.05) 1px, transparent 2.5px, transparent 8px),
+                radial-gradient(circle, #201c2c 0%, #0e0c16 55%, #030204 100%)
+              `,
+              animationName: 'vinylSpin', animationDuration: '7s', animationTimingFunction: 'linear', animationIterationCount: 'infinite',
             }}
-            {...LIQUID_CARD_PROPS}
-            padding="24px 28px"
+          />
+          <div
+            aria-hidden="true"
+            style={{
+              position: 'absolute', inset: 0, borderRadius: '50%', pointerEvents: 'none',
+              background: `
+                conic-gradient(from 205deg at 28% 24%, transparent 0deg, rgba(255,255,255,0.20) 20deg, transparent 46deg),
+                radial-gradient(circle at 76% 82%, rgba(0,0,0,0.42), transparent 55%)
+              `,
+              boxShadow: '0 0 0 1px rgba(255,255,255,0.09) inset, 0 10px 36px rgba(0,0,0,0.55), 0 0 70px rgba(158,18,204,0.10)',
+            }}
+          />
+          <div
+            aria-hidden="true"
+            style={{ position: 'absolute', inset: 0, borderRadius: '50%', background: 'rgba(8,7,14,0.18)', pointerEvents: 'none' }}
+          />
+
+          {/* Circular glass label — sized to cover the whole disc, like a
+              liquid-glass pane laid directly over the vinyl surface. A
+              sibling of the grooves layer (not nested inside it), so this
+              text never rotates. */}
+          <div
+            className="liquid-btn glass-tint-purple relative"
+            style={{ position: 'absolute', inset: 0 }}
           >
-            <div style={{ position: 'relative', width: '254px', minHeight: '220px', display: 'flex', flexDirection: 'column', alignItems: 'center' }}>
-              {/* Soft accent wash echoing the heading's gradient, spanning the
-                  full glass box (content + padding) the way Home's button
-                  overlays do — the card had no inset tint layer before this. */}
+            <LiquidGlass
+              style={{
+                position: 'absolute', top: '50%', left: '50%',
+                animationName: 'cardGlowPulse', animationDuration: '4.2s', animationTimingFunction: 'ease-in-out', animationIterationCount: 'infinite',
+              }}
+              {...LIQUID_LABEL_PROPS}
+              padding="calc(var(--disc-size) * 0.07)"
+            >
               <div style={{
-                position: 'absolute', inset: '-24px -28px', borderRadius: '20px', pointerEvents: 'none',
-                background: 'linear-gradient(to bottom left, rgba(158,18,204,0.09) 0%, transparent 55%), linear-gradient(to top right, rgba(0,238,232,0.07) 0%, transparent 55%)',
-              }} />
-              <span style={{
                 position: 'relative',
-                fontSize: '1.95rem', fontFamily: "'Montserrat', sans-serif", fontWeight: 900, letterSpacing: '0.08em', textTransform: 'uppercase',
-                background: 'linear-gradient(to bottom left, rgba(158,18,204,0.45) 0%, transparent 55%), linear-gradient(to top right, rgba(0,238,232,0.45) 0%, transparent 55%), #fff',
-                WebkitBackgroundClip: 'text', WebkitTextFillColor: 'transparent', backgroundClip: 'text',
+                width: 'calc(var(--disc-size) * 0.82)', aspectRatio: '1',
+                display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', gap: '10px',
               }}>
-                You're in!
-              </span>
-              <div style={{ position: 'relative', flex: 1, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', gap: '10px', width: '100%' }}>
-                <span style={{ color: 'rgba(255,255,255,0.45)', fontSize: '0.6rem', letterSpacing: '0.14em', textTransform: 'uppercase' }}>
-                  Playing as
+                {/* Soft accent wash echoing the heading's gradient, spanning
+                    the full glass circle the way Home's button overlays do. */}
+                <div style={{
+                  position: 'absolute', inset: 'calc(var(--disc-size) * -0.07)', borderRadius: '50%', pointerEvents: 'none',
+                  background: 'linear-gradient(to bottom left, rgba(158,18,204,0.09) 0%, transparent 55%), linear-gradient(to top right, rgba(0,238,232,0.07) 0%, transparent 55%)',
+                }} />
+                <span style={{
+                  position: 'relative',
+                  fontSize: 'clamp(0.95rem, 3.6vw, 1.2rem)', fontFamily: "'Montserrat', sans-serif", fontWeight: 900, letterSpacing: '0.06em', textTransform: 'uppercase',
+                  background: 'linear-gradient(to bottom left, rgba(158,18,204,0.45) 0%, transparent 55%), linear-gradient(to top right, rgba(0,238,232,0.45) 0%, transparent 55%), #fff',
+                  WebkitBackgroundClip: 'text', WebkitTextFillColor: 'transparent', backgroundClip: 'text',
+                }}>
+                  You're in!
                 </span>
                 {editing ? (
                   <>
                     <input
                       autoFocus
                       type="text"
+                      aria-label="Your name"
                       value={draftName}
                       onChange={e => setDraftName(e.target.value)}
                       onKeyDown={e => { if (e.key === 'Enter') confirmEdit(); else if (e.key === 'Escape') cancelEdit(); }}
                       onBlur={confirmEdit}
                       maxLength={20}
                       style={{
+                        position: 'relative',
                         background: 'none', border: 'none', borderBottom: '1px solid rgba(255,255,255,0.25)',
-                        color: 'white', fontSize: '1.5rem', fontWeight: 800, textAlign: 'center',
-                        outline: 'none', width: '100%', letterSpacing: '-0.01em',
+                        color: 'white', fontSize: 'clamp(1.15rem, 5vw, 1.55rem)', fontWeight: 800, textAlign: 'center',
+                        outline: 'none', width: '82%', letterSpacing: '-0.01em',
                         padding: '2px 0 4px', fontFamily: 'inherit',
+                        overflow: 'hidden', textOverflow: 'ellipsis',
                       }}
                     />
-                    {game.error && <p style={{ color: '#f87171', fontSize: '0.7rem' }} aria-live="assertive">{game.error}</p>}
+                    {game.error && <p style={{ position: 'relative', color: '#f87171', fontSize: '0.65rem' }} aria-live="assertive">{game.error}</p>}
                   </>
                 ) : (
-                  <button onClick={startEdit} style={{ display: 'flex', alignItems: 'center', gap: '7px', background: 'none', border: 'none', cursor: 'pointer', color: 'white', fontSize: '1.5rem', fontWeight: 800, letterSpacing: '-0.01em' }}>
-                    {game.myName}
-                    <Pencil style={{ width: '14px', height: '14px', color: 'rgba(255,255,255,0.45)', flexShrink: 0 }} />
+                  <button
+                    onClick={startEdit}
+                    aria-label="Edit your name"
+                    style={{
+                      position: 'relative', maxWidth: '85%',
+                      display: 'flex', alignItems: 'center', gap: '6px',
+                      background: 'none', border: 'none', cursor: 'pointer', color: 'white',
+                      fontSize: 'clamp(1.15rem, 5vw, 1.55rem)', fontWeight: 800, letterSpacing: '-0.01em',
+                    }}
+                  >
+                    <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{game.myName}</span>
+                    <Pencil style={{ width: '13px', height: '13px', color: 'rgba(255,255,255,0.45)', flexShrink: 0 }} />
                   </button>
                 )}
               </div>
-              <div style={{ position: 'relative', display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '10px', width: '100%' }}>
-                <div style={{ width: '100%', height: '1px', background: 'rgba(255,255,255,0.07)', marginBottom: '4px' }} />
-                {/* Spinning vinyl record — "the record's spinning, waiting for
-                    the needle to drop" reads truer for this idle moment than
-                    a generic loader, and ties into the app's music theme
-                    without implying a song is actually playing yet. */}
-                <div
-                  aria-hidden="true"
-                  style={{
-                    position: 'relative', width: '34px', height: '34px', borderRadius: '50%',
-                    background: `
-                      radial-gradient(circle at 34% 28%, rgba(255,255,255,0.22), transparent 40%),
-                      repeating-radial-gradient(circle, rgba(255,255,255,0.09) 0px, rgba(255,255,255,0.09) 1px, transparent 1.5px, transparent 4px),
-                      radial-gradient(circle, #1c1c28 0%, #0b0b12 72%)
-                    `,
-                    boxShadow: '0 0 0 1px rgba(255,255,255,0.08) inset, 0 2px 8px rgba(0,0,0,0.4)',
-                    animationName: 'vinylSpin', animationDuration: '3.6s', animationTimingFunction: 'linear', animationIterationCount: 'infinite',
-                  }}
-                >
-                  <div style={{
-                    position: 'absolute', top: '50%', left: '50%', width: '9px', height: '9px', borderRadius: '50%',
-                    background: 'rgba(158,18,204,0.85)', transform: 'translate(-50%, -50%)', boxShadow: '0 0 6px rgba(158,18,204,0.6)',
-                  }} />
-                </div>
-                <span style={{ color: 'rgba(255,255,255,0.45)', fontSize: '0.72rem', letterSpacing: '0.03em' }}>
-                  Waiting for host to start…
-                </span>
-              </div>
-            </div>
-          </LiquidGlass>
+            </LiquidGlass>
+          </div>
+
+          {/* Tonearm accent — rendered last so it sits on top of the glass,
+              resting near the disc's edge, "waiting for the needle to
+              drop". Static, no motion; purely decorative flavor. */}
+          <div
+            aria-hidden="true"
+            style={{
+              position: 'absolute', top: '-4%', right: '2%', width: '32%', height: '32%',
+              transformOrigin: 'top right',
+              transform: 'rotate(30deg)',
+              pointerEvents: 'none',
+            }}
+          >
+            <div style={{
+              position: 'absolute', top: 0, right: '14%', width: '3px', height: '80%',
+              background: 'linear-gradient(to bottom, rgba(255,255,255,0.32), rgba(255,255,255,0.1))',
+              borderRadius: '2px',
+            }} />
+            <div style={{
+              position: 'absolute', bottom: '16%', right: 'calc(14% - 7px)', width: '17px', height: '17px', borderRadius: '4px',
+              background: 'linear-gradient(135deg, rgba(255,255,255,0.35), rgba(255,255,255,0.08))',
+              boxShadow: '0 2px 6px rgba(0,0,0,0.4)',
+            }} />
+          </div>
         </div>
+
+        <span
+          style={{
+            color: 'rgba(255,255,255,0.5)', fontSize: '0.75rem', letterSpacing: '0.03em',
+            animationName: 'waitingPulse', animationDuration: '2.6s', animationTimingFunction: 'ease-in-out', animationIterationCount: 'infinite',
+          }}
+        >
+          Waiting for host to start…
+        </span>
       </div>
     </div>
   );

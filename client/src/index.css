@@ -270,6 +270,14 @@ select:focus-visible,
   50%       { filter: drop-shadow(0 0 18px rgba(158,18,204,0.32)) drop-shadow(0 0 26px rgba(0,238,232,0.16)); }
 }
 
+/* Idle pulse for the "Waiting for host to start…" caption beneath Play's
+   waiting-room vinyl — a small secondary motion cue so the big disc doesn't
+   have to double as the only sign anything is "live". */
+@keyframes waitingPulse {
+  0%, 100% { opacity: 0.45; }
+  50%       { opacity: 0.8; }
+}
+
 /* Most of the animations above are set via inline `style.animation` (audio
    bars, dot loaders, marker celebrations), so overriding them per-keyframe
    here wouldn't win against inline styles — collapsing the sub-properties

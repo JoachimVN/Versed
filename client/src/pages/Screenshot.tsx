@@ -1,7 +1,7 @@
 import { useSearchParams } from 'react-router-dom';
 import { PlayingView, RevealView, LobbyView } from './Host';
 import type { HostState } from './Host';
-import { WatchingView, GuessingView } from './Play';
+import { WatchingView, GuessingView, WaitingView } from './Play';
 import type { PlayState } from './Play';
 import { RoundIntro } from '../components/RoundIntro';
 import { FinalResultsView } from '../components/FinalResults';
@@ -279,6 +279,7 @@ export default function Screenshot() {
   if (v === 'reveal')  return <RevealView game={MOCK_HOST_REVEAL} result={MOCK_RESULT} instant />;
   if (v === 'year')    return <RevealView game={MOCK_HOST_YEAR_REVEAL} result={MOCK_RESULT_YEAR} instant />;
   if (v === 'watching') return <WatchingView game={MOCK_PLAY} />;
+  if (v === 'waiting') return <WaitingView game={{ ...MOCK_PLAY, phase: 'waiting', myName: 'Joachim' }} />;
   if (v === 'guessing') return <GuessingView game={MOCK_PLAY_GUESSING} />;
   if (v === 'year-guessing') return <GuessingView game={MOCK_PLAY_YEAR_GUESSING} />;
   if (v === 'lobby') return <LobbyView game={MOCK_HOST_LOBBY} />;
