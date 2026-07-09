@@ -345,8 +345,13 @@ function introFor(
         : 'Closest answer wins the round',
     };
   }
-  const choiceFlow = target === 'year' ? 'Tap the right year' : target === 'artist' ? 'Tap the right artist' : 'Tap the right title';
-  const flow = format === 'classic' ? 'Bid & guess' : format === 'choice' ? choiceFlow : 'Everyone races';
+  let choiceFlow = 'Tap the right title';
+  if (target === 'year') choiceFlow = 'Tap the right year';
+  else if (target === 'artist') choiceFlow = 'Tap the right artist';
+
+  let flow = 'Everyone races';
+  if (format === 'classic') flow = 'Bid & guess';
+  else if (format === 'choice') flow = choiceFlow;
   let goal = 'name the song';
   if (target === 'artist') goal = 'name the artist';
   else if (target === 'both') goal = 'title + artist bonus';
@@ -955,7 +960,7 @@ function resolveRoundHints(
   target: GuessTarget | 'year',
 ): { hints: Hint[]; chaosFakeIndex?: number } {
   const chaosSet = party?.event === 'chaoshints' ? buildChaosHintSet(song, pool) : undefined;
-  if (!party || party.event !== 'chaoshints') {
+  if (party?.event !== 'chaoshints') {
     return { hints: buildRoundHints(song, party, target) };
   }
   if (chaosSet) return { hints: chaosSet.hints, chaosFakeIndex: chaosSet.fakeIndex };

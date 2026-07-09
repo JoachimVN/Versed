@@ -1,9 +1,8 @@
-import React, { useState, useEffect, useRef, useMemo } from 'react';
+import React, { useState, useEffect, useRef, useMemo, useId } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Check, Loader2, Copy, Settings, Flame, Coins, Clock, PartyPopper, Volume2, VolumeX, ShieldAlert } from 'lucide-react';
 import LiquidGlass from 'liquid-glass-react';
-import QRCodeLib from 'react-qr-code';
-const QRCode = QRCodeLib as unknown as React.FC<{ value: string; size?: number }>;
+import qrcode from 'qrcode-generator';
 import { socket } from '../socket';
 import { useSpotify } from '../hooks/useSpotify';
 import { usePlaylistPicker, resolvePlaylistInput, PlaylistFetchError, PlaylistSummary, MIN_PLAYLIST_TRACKS, MAX_PLAYLIST_TRACKS } from '../hooks/usePlaylistPicker';
@@ -895,11 +894,81 @@ function SettingsPanel({ game, open }: Readonly<{ game: HostState; open: boolean
   );
 }
 
+const QR_SIZE = 148;
+const QR_CENTER_MARK_RATIO = 0.28;
+const QR_CENTER_MARK_EXTRA_MODULES = 1;
+const QR_CENTER_ICON_RATIO = 0.8;
+
+function GradientQRCode({ value, size, title, iconUrl }: Readonly<{ value: string; size: number; title: string; iconUrl: string }>) {
+  const gradientId = useId();
+  const qr = useMemo(() => {
+    qrcode.stringToBytes = (s: string) => Array.from(new TextEncoder().encode(s));
+    const nextQr = qrcode(0, 'H');
+    nextQr.addData(value);
+    nextQr.make();
+    return nextQr;
+  }, [value]);
+  const moduleCount = qr.getModuleCount();
+  const centerSize = Math.max(7, Math.floor(moduleCount * QR_CENTER_MARK_RATIO)) + QR_CENTER_MARK_EXTRA_MODULES * 2;
+  const centerStart = Math.floor((moduleCount - centerSize) / 2);
+  const centerEnd = centerStart + centerSize;
+  const iconSize = centerSize * QR_CENTER_ICON_RATIO;
+  const iconInset = (centerSize - iconSize) / 2;
+  const modules = [];
+
+  for (let row = 0; row < moduleCount; row += 1) {
+    for (let col = 0; col < moduleCount; col += 1) {
+      if (!qr.isDark(row, col)) continue;
+      if (row >= centerStart && row < centerEnd && col >= centerStart && col < centerEnd) continue;
+      modules.push(
+        <rect
+          key={`${row}-${col}`}
+          x={col}
+          y={row}
+          width="1"
+          height="1"
+        />
+      );
+    }
+  }
+
+  return (
+    <svg width={size} height={size} viewBox={`0 0 ${moduleCount} ${moduleCount}`} role="img" aria-label={title}>
+      <title>{title}</title>
+      <defs>
+        <linearGradient id={gradientId} x1="0" y1={moduleCount} x2={moduleCount} y2="0" gradientUnits="userSpaceOnUse">
+          <stop offset="0%" stopColor="#00b8ad" />
+          <stop offset="48%" stopColor="#116d92" />
+          <stop offset="100%" stopColor="#b115e6" />
+        </linearGradient>
+      </defs>
+      <rect width={moduleCount} height={moduleCount} fill="#ffffff" />
+      <g fill={`url(#${gradientId})`} shapeRendering="crispEdges">{modules}</g>
+      <rect
+        x={centerStart}
+        y={centerStart}
+        width={centerSize}
+        height={centerSize}
+        fill={`url(#${gradientId})`}
+      />
+      <image
+        href={iconUrl}
+        x={centerStart + iconInset}
+        y={centerStart + iconInset}
+        width={iconSize}
+        height={iconSize}
+        preserveAspectRatio="xMidYMid meet"
+      />
+    </svg>
+  );
+}
+
 function JoinCard({ pin, copied, copyInvite }: Readonly<{ pin: string; copied: boolean; copyInvite: () => void }>) {
   const searchParams = new URLSearchParams(globalThis.location.search);
   const isScreenshot = searchParams.has('v');
   const baseUrl = isScreenshot ? 'https://joavn.dev/versed' : `${globalThis.location.origin}${import.meta.env.BASE_URL}`.replace(/\/$/, '');
   const qrUrl = isScreenshot ? `https://joavn.dev/versed/play/${pin}` : `${globalThis.location.origin}${import.meta.env.BASE_URL}play/${pin}`;
+  const iconUrl = `${import.meta.env.BASE_URL}icon.svg`;
 
   return (
     <div className="w-full max-w-md bg-white/5 rounded-2xl p-5">
@@ -923,8 +992,19 @@ function JoinCard({ pin, copied, copyInvite }: Readonly<{ pin: string; copied: b
             {copied ? 'Copied!' : 'Copy invite link'}
           </button>
         </div>
-        <div className="p-2 bg-white rounded-xl shrink-0">
-          <QRCode value={qrUrl} size={148} />
+        <div
+          className="relative shrink-0 rounded-2xl p-2.5 shadow-lg"
+          style={{
+            background: '#ffffff',
+            boxShadow: '0 18px 45px rgba(0, 0, 0, 0.28), inset 0 0 0 1px rgba(255, 255, 255, 0.72)',
+          }}
+        >
+          <GradientQRCode
+            value={qrUrl}
+            size={QR_SIZE}
+            title={`Join ${APP_NAME} game ${pin}`}
+            iconUrl={iconUrl}
+          />
         </div>
       </div>
     </div>
