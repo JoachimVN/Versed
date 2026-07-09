@@ -1,5 +1,5 @@
-import { useState, useEffect, useLayoutEffect, useRef } from 'react';
-import type { CSSProperties } from 'react';
+import { useState, useEffect, useLayoutEffect, useRef, useCallback } from 'react';
+import type { CSSProperties, RefObject } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { ChevronLeft, ChevronRight, Flame, Pencil } from 'lucide-react';
 import LiquidGlass from 'liquid-glass-react';
@@ -729,6 +729,99 @@ function BidArrow({ direction, enabled, onClick }: Readonly<{ direction: 'left' 
 
 // ─── Phase views ─────────────────────────────────────────────────────────────
 
+type MorphRect = { top: number; left: number; width: number; height: number };
+type BeginMorph = (rect: MorphRect) => void;
+type ProvideTarget = (rect: MorphRect) => void;
+
+// Shared by every logo-morph page transition (JoinView/WaitingView's back
+// navigation): arms the overlay at this page's own logo, fades the rest of
+// the content out, then resolves once that fade has had time to play so
+// BackButton can navigate.
+function useMorphBack(
+  logoRef: RefObject<HTMLImageElement | null>,
+  setLeaving: (v: boolean) => void,
+  beginMorph: BeginMorph,
+  reducedMotion: boolean,
+) {
+  return useCallback(() => new Promise<void>(resolve => {
+    if (reducedMotion) {
+      resolve();
+      return;
+    }
+    if (logoRef.current) {
+      const r = logoRef.current.getBoundingClientRect();
+      beginMorph({ top: r.top, left: r.left, width: r.width, height: r.height });
+    }
+    setLeaving(true);
+    setTimeout(resolve, 320);
+    // logoRef/setLeaving/beginMorph are all stable across renders (ref,
+    // setState, and the memoized context value respectively).
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }), [reducedMotion]);
+}
+
+// The transition was cancelled mid-flight (a server event reset the pending
+// flag before the waiting-transition timer fired — e.g. the host
+// disconnected during the handoff) — resolve the overlay in place instead
+// of leaving it, and the shared `morphing` flag, stranded forever.
+function cancelPendingWaitingTransition(
+  timerRef: RefObject<ReturnType<typeof setTimeout> | null>,
+  logoRef: RefObject<HTMLImageElement | null>,
+  setLeaving: (v: boolean) => void,
+  provideTarget: ProvideTarget,
+) {
+  if (!timerRef.current) return;
+  clearTimeout(timerRef.current);
+  timerRef.current = null;
+  setLeaving(false);
+  if (logoRef.current) {
+    const cur = logoRef.current.getBoundingClientRect();
+    provideTarget({ top: cur.top, left: cur.left, width: cur.width, height: cur.height });
+  }
+}
+
+// Forward counterpart of useMorphBack, specific to JoinView: once join_game
+// (or a saved-session rejoin) has actually succeeded server-side, arm the
+// same overlay/fade handoff so the logo carries continuously into the
+// waiting card instead of two independent fades. completeWaitingTransition()
+// is guarded to only ever move phase 'join' -> 'waiting', so it's safe to
+// let this run even if a faster server event (e.g. an instant host start)
+// has already moved the game on by the time the timer fires.
+function useWaitingTransitionMorph(
+  game: PlayState,
+  logoRef: RefObject<HTMLImageElement | null>,
+  setLeaving: (v: boolean) => void,
+  beginMorph: BeginMorph,
+  provideTarget: ProvideTarget,
+  reducedMotion: boolean,
+) {
+  const timerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  useEffect(() => {
+    if (!game.waitingTransitionPending) return;
+    if (reducedMotion || !logoRef.current) {
+      game.completeWaitingTransition();
+      return;
+    }
+    const r = logoRef.current.getBoundingClientRect();
+    beginMorph({ top: r.top, left: r.left, width: r.width, height: r.height });
+    setLeaving(true);
+    timerRef.current = setTimeout(() => {
+      timerRef.current = null;
+      game.completeWaitingTransition();
+    }, 320);
+    return () => cancelPendingWaitingTransition(timerRef, logoRef, setLeaving, provideTarget);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [game.waitingTransitionPending]);
+}
+
+// Both page-morph screens (JoinView/WaitingView) drive their outermost
+// class off the same leaving/morphing pair — leaving always wins since it
+// means the user is navigating away, regardless of an in-flight arrival morph.
+function pageTransitionClass(leaving: boolean, morphing: boolean): string {
+  if (leaving) return 'page-exit';
+  return morphing ? 'page-enter-morph' : 'page-enter';
+}
+
 function JoinView({ game }: Readonly<{ game: PlayState }>) {
   const { pin, name, error, savedSession, cameFromQR, setPin, setName, join, rejoinSaved } = game;
   const [joinHovered, setJoinHovered] = useState(false);
@@ -752,63 +845,14 @@ function JoinView({ game }: Readonly<{ game: PlayState }>) {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  // Mirrors Home's goToJoin in reverse: arms the overlay at this page's
-  // logo, fades the rest of the content out, then lets BackButton navigate
-  // once that's had time to play.
-  const goBack = () => new Promise<void>(resolve => {
-    if (reducedMotion) {
-      resolve();
-      return;
-    }
-    if (logoRef.current) {
-      const r = logoRef.current.getBoundingClientRect();
-      beginMorph({ top: r.top, left: r.left, width: r.width, height: r.height });
-    }
-    setLeaving(true);
-    setTimeout(resolve, 320);
-  });
+  // Mirrors Home's goToJoin in reverse.
+  const goBack = useMorphBack(logoRef, setLeaving, beginMorph, reducedMotion);
 
-  // Forward counterpart of goBack: once join_game (or a saved-session
-  // rejoin) has actually succeeded server-side, arm the same overlay/fade
-  // handoff so the logo carries continuously into the waiting card instead
-  // of two independent fades. completeWaitingTransition() is guarded to only
-  // ever move phase 'join' -> 'waiting', so it's safe to let this run even
-  // if a faster server event (e.g. an instant host start) has already moved
-  // the game on by the time the timer fires.
-  const waitingTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
-  useEffect(() => {
-    if (!game.waitingTransitionPending) return;
-    if (reducedMotion || !logoRef.current) {
-      game.completeWaitingTransition();
-      return;
-    }
-    const r = logoRef.current.getBoundingClientRect();
-    beginMorph({ top: r.top, left: r.left, width: r.width, height: r.height });
-    setLeaving(true);
-    waitingTimerRef.current = setTimeout(() => {
-      waitingTimerRef.current = null;
-      game.completeWaitingTransition();
-    }, 320);
-    return () => {
-      if (!waitingTimerRef.current) return;
-      // The transition was cancelled mid-flight (a server event reset the
-      // pending flag before our own timer fired — e.g. the host disconnected
-      // during the handoff) — resolve the overlay in place instead of
-      // leaving it, and the shared `morphing` flag, stranded forever.
-      clearTimeout(waitingTimerRef.current);
-      waitingTimerRef.current = null;
-      setLeaving(false);
-      if (logoRef.current) {
-        const cur = logoRef.current.getBoundingClientRect();
-        provideTarget({ top: cur.top, left: cur.left, width: cur.width, height: cur.height });
-      }
-    };
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [game.waitingTransitionPending]);
+  useWaitingTransitionMorph(game, logoRef, setLeaving, beginMorph, provideTarget, reducedMotion);
 
   return (
     <div
-      className={`relative min-h-screen keyboard-resize ${leaving ? 'page-exit' : (morphing ? 'page-enter-morph' : 'page-enter')}`}
+      className={`relative min-h-screen keyboard-resize ${pageTransitionClass(leaving, morphing)}`}
       style={{ zIndex: 1, overflowY: 'auto', pointerEvents: leaving ? 'none' : undefined }}
     >
       <BackButton beforeNavigate={goBack} />
@@ -996,21 +1040,8 @@ export function WaitingView({ game }: Readonly<{ game: PlayState }>) {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  // Mirrors JoinView's goBack: arms the overlay at this page's logo, fades
-  // the rest of the content out, then lets BackButton navigate once that's
-  // had time to play.
-  const goBack = () => new Promise<void>(resolve => {
-    if (reducedMotion) {
-      resolve();
-      return;
-    }
-    if (logoRef.current) {
-      const r = logoRef.current.getBoundingClientRect();
-      beginMorph({ top: r.top, left: r.left, width: r.width, height: r.height });
-    }
-    setLeaving(true);
-    setTimeout(resolve, 320);
-  });
+  // Mirrors JoinView's goBack.
+  const goBack = useMorphBack(logoRef, setLeaving, beginMorph, reducedMotion);
 
   const startEdit = () => { setDraftName(game.myName); setEditing(true); };
   const cancelEdit = () => setEditing(false);
@@ -1034,7 +1065,7 @@ export function WaitingView({ game }: Readonly<{ game: PlayState }>) {
 
       {/* Content */}
       <div
-        className={`relative flex flex-col items-center justify-center min-h-screen gap-8 p-6 ${leaving ? 'page-exit' : (morphing ? 'page-enter-morph' : 'page-enter')}`}
+        className={`relative flex flex-col items-center justify-center min-h-screen gap-8 p-6 ${pageTransitionClass(leaving, morphing)}`}
         style={{ zIndex: 2, pointerEvents: leaving ? 'none' : undefined }}
       >
         <BackButton beforeNavigate={goBack} />
