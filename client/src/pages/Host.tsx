@@ -122,14 +122,12 @@ function loadSavedHostSettings(): Partial<SavedHostSettings> {
       chaosLevel: typeof raw.chaosLevel === 'string' ? LEGACY_CHAOS_LEVELS[raw.chaosLevel] : raw.chaosLevel,
     });
     if (settings.enabledEvents === undefined) return settings;
-    // A save from before this event existed has no knownPartyEvents entry at
-    // all — treat that as an empty known-set, so every currently-valid event
-    // not already enabled gets auto-enabled once. A save that does have
-    // knownPartyEvents only auto-enables events added since that save; an
-    // event the host explicitly turned off (present in knownPartyEvents,
-    // absent from enabledEvents) stays off.
-    const known = new Set(settings.knownPartyEvents ?? []);
-    const newlyAdded = ALL_PARTY_EVENTS.filter(e => !known.has(e) && !settings.enabledEvents!.includes(e));
+    // Legacy saves do not have enough history to tell whether an absent event
+    // was new or explicitly disabled, so preserve the saved enabled set.
+    if (settings.knownPartyEvents === undefined) return settings;
+    const known = new Set(settings.knownPartyEvents);
+    const enabledEvents = settings.enabledEvents;
+    const newlyAdded = ALL_PARTY_EVENTS.filter(e => !known.has(e) && !enabledEvents.includes(e));
     if (newlyAdded.length > 0) settings.enabledEvents = [...settings.enabledEvents, ...newlyAdded];
     return settings;
   } catch { return {}; }
@@ -2192,6 +2190,14 @@ export function LobbyView({ game, fadeOutRef }: Readonly<{ game: HostState; fade
     await fadeOut();
     startGame();
   };
+  let spotifyStatus: React.ReactNode;
+  if (spotify.playbackError) {
+    spotifyStatus = <><span className="w-2 h-2 rounded-full bg-red-400" />Spotify playback error</>;
+  } else if (spotify.playerReady) {
+    spotifyStatus = <><span className="w-2 h-2 rounded-full bg-green-500" />Spotify ready</>;
+  } else {
+    spotifyStatus = <><Loader2 className="w-3.5 h-3.5 animate-spin" />Spotify loading...</>;
+  }
 
   return (
     <div className="min-h-screen relative flex flex-col overflow-hidden">
@@ -2208,13 +2214,7 @@ export function LobbyView({ game, fadeOutRef }: Readonly<{ game: HostState; fade
       >
         <img src={`${import.meta.env.BASE_URL}logo.png`} alt={APP_NAME} className="w-auto" style={{ maxHeight: '192px', maxWidth: '100%' }} />
         <span className="text-white/45 text-sm flex items-center gap-2">
-          {spotify.playbackError ? (
-            <><span className="w-2 h-2 rounded-full bg-red-400" />Spotify playback error</>
-          ) : spotify.playerReady ? (
-            <><span className="w-2 h-2 rounded-full bg-green-500" />Spotify ready</>
-          ) : (
-            <><Loader2 className="w-3.5 h-3.5 animate-spin" />Spotify loading...</>
-          )}
+          {spotifyStatus}
         </span>
         {spotify.playbackError && (
           <p className="max-w-sm text-center text-red-300 text-sm" aria-live="assertive">

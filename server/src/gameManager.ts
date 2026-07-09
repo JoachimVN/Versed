@@ -1308,7 +1308,7 @@ export function markRaceStarted(game: Game): void {
 // can't clobber the fallback's own timestamp with a later one.
 export function markTierStarted(game: Game): void {
   const round = game.currentRound;
-  if (!round || round.tierStartAt !== null) return;
+  if (round?.tierStartAt !== null) return;
   round.tierStartAt = Date.now();
 }
 
