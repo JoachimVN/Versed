@@ -6,11 +6,17 @@ import { APP_NAME, BACKEND_URL } from '../config';
 export default function Home() {
   const navigate = useNavigate();
   const [hovered, setHovered] = useState<'host' | 'join' | null>(null);
+  const [leaving, setLeaving] = useState(false);
+
+  const goToJoin = () => {
+    setLeaving(true);
+    setTimeout(() => navigate('/play'), 220);
+  };
 
   return (
     <div
-      className="page-enter relative min-h-screen flex flex-col items-center justify-center gap-10 p-6"
-      style={{ zIndex: 1 }}
+      className={`relative min-h-screen flex flex-col items-center justify-center gap-10 p-6 ${leaving ? 'page-exit' : 'page-enter'}`}
+      style={{ zIndex: 1, pointerEvents: leaving ? 'none' : undefined }}
     >
       <div className="flex flex-col items-center gap-3">
         <img
@@ -29,7 +35,7 @@ export default function Home() {
           style={{ width: '310px', height: '64px', borderRadius: '100px', background: 'rgba(0,0,0,0.001)' }}
           onMouseEnter={() => setHovered('join')}
           onMouseLeave={() => setHovered(null)}
-          onClick={() => navigate('/play')}
+          onClick={goToJoin}
         >
           <LiquidGlass
             style={{
