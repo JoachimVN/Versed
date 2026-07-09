@@ -29,6 +29,14 @@ cd client && npx tsc --noEmit
 cd server && npx tsc --noEmit
 ```
 
+## Workflow
+
+- **Branches**: day-to-day work lands on `dev`. PRs go `dev` → `main`, but only open one when asked. Never commit directly to `main`.
+- **Commits**: one logical change per commit — never batch unrelated fixes/features together. Match the existing `git log` message style.
+- **Verification split**: the user playtests the game manually (multiplayer/audio/timing can't be verified statically). When they say a change is verified, typecheck → commit → push without re-verifying. `tsc --noEmit` in the affected workspace is the shipping gate.
+- **Skills**: `/ship` (typecheck + chunked commits + push to dev), `/screenshots` (regenerate `docs/screenshots/` locally instead of waiting for the CI bot), `/playtest` (triage a pasted bug list from a play session into per-fix commits).
+- **Screenshots CI**: PRs touching `client/src/**` trigger `.github/workflows/screenshots.yml`, which pushes a `chore: update screenshots [skip ci]` commit to the branch — pull before assuming the branch is up to date after a PR.
+
 ## Architecture
 
 Versed is a real-time multiplayer music guessing game. One player is the **host** (needs Spotify Premium), the rest are **players** who join via PIN.
