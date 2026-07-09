@@ -647,6 +647,14 @@ function guessTextClass(guess: string | null, correct: boolean): string {
   return correct ? 'text-green-400' : 'text-white/28 italic';
 }
 
+// The artist guess can be right even when the title guess isn't — that combo
+// scores no bonus, so it gets a muted green (visibly "correct") rather than
+// the full "correct" green, which would wrongly imply it paid out.
+function artistGuessClass(artistCorrect: boolean, titleCorrect: boolean): string {
+  if (!artistCorrect) return 'text-white/28 italic';
+  return titleCorrect ? 'text-green-400' : 'text-green-400/50 italic';
+}
+
 function bidArrowStyle(enabled: boolean, pressed: boolean, hovered: boolean): { bg: string; border: string } {
   if (!enabled) return { bg: 'rgba(255,255,255,0.03)', border: '1px solid rgba(255,255,255,0.04)' };
   if (pressed) return { bg: 'rgba(158,18,204,0.28)', border: '1px solid rgba(158,18,204,0.5)' };
@@ -1925,7 +1933,7 @@ export function RevealView({ game, result }: Readonly<{ game: PlayState; result:
                 </span>
               </div>
               {g.artistGuess && (
-                <p className="text-white/28 text-xs italic text-right break-words" style={{ overflowWrap: 'anywhere' }}>
+                <p className={`text-xs italic text-right break-words ${artistGuessClass(!!g.artistCorrect, false)}`} style={{ overflowWrap: 'anywhere' }}>
                   Artist: "{g.artistGuess}"
                 </p>
               )}
@@ -1963,7 +1971,7 @@ export function RevealView({ game, result }: Readonly<{ game: PlayState; result:
               </span>
             </div>
             {g.artistGuess && (
-              <p className="text-white/28 text-xs italic text-right break-words" style={{ overflowWrap: 'anywhere' }}>
+              <p className={`text-xs italic text-right break-words ${artistGuessClass(!!g.artistCorrect, correct)}`} style={{ overflowWrap: 'anywhere' }}>
                 Artist: "{g.artistGuess}"
               </p>
             )}

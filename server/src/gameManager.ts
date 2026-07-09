@@ -1656,26 +1656,35 @@ export function updateLiveDraft(game: Game, socketId: string, text: string, arti
   if (artistText !== undefined) round.liveArtistDrafts.set(socketId, artistText);
 }
 
-export function getRoundGuesses(game: Game): { name: string; guess: string | null; timeMs: number | null; live?: boolean; artistGuess?: string | null }[] {
+// Artist-guess correctness is computed independently of the title guess and
+// scoring: `checkGuess`'s artistBonus is gated on the title also being right
+// (it only exists to double the score), so it can't be reused here — a
+// player can have the right artist and the wrong title, and the reveal still
+// needs to show that artist guess as correct.
+export function getRoundGuesses(game: Game): { name: string; guess: string | null; timeMs: number | null; live?: boolean; artistGuess?: string | null; artistCorrect?: boolean }[] {
   const round = game.currentRound;
   if (!round) return [];
-  const results: { name: string; guess: string | null; timeMs: number | null; live?: boolean; artistGuess?: string | null }[] = [];
+  const results: { name: string; guess: string | null; timeMs: number | null; live?: boolean; artistGuess?: string | null; artistCorrect?: boolean }[] = [];
   for (const [id, player] of game.players) {
     if (!player.name) continue;
     if (round.guesses.has(id)) {
+      const artistGuess = round.artistGuesses.get(id) ?? null;
       results.push({
         name: player.name,
         guess: round.guesses.get(id) ?? null,
         timeMs: round.guessTimes.get(id) ?? null,
-        artistGuess: round.artistGuesses.get(id) ?? null,
+        artistGuess,
+        artistCorrect: artistGuess ? isCorrectArtistGuess(artistGuess, round.song.artist, round.song.featuredArtists) : undefined,
       });
       continue;
     }
     const draft = round.liveDrafts.get(id)?.trim();
     if (draft) {
+      const artistGuess = round.liveArtistDrafts.get(id)?.trim() || null;
       results.push({
         name: player.name, guess: draft, timeMs: null, live: true,
-        artistGuess: round.liveArtistDrafts.get(id)?.trim() || null,
+        artistGuess,
+        artistCorrect: artistGuess ? isCorrectArtistGuess(artistGuess, round.song.artist, round.song.featuredArtists) : undefined,
       });
     }
   }

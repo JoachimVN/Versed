@@ -2551,11 +2551,19 @@ function GuessingView({ game }: Readonly<{ game: HostState }>) {
 
 type GuessCorrectness = 'none' | 'correct' | 'exact';
 
+// The artist guess can be right even when the title guess isn't — that combo
+// scores no bonus, so it gets a muted green (visibly "correct") rather than
+// the full "correct" green, which would wrongly imply it paid out.
+function artistGuessClass(artistCorrect: boolean, titleCorrect: boolean): string {
+  if (!artistCorrect) return 'text-white/40';
+  return titleCorrect ? 'text-green-400' : 'text-green-400/50';
+}
+
 function RevealPlayerRow({
   player, entry, delta, pity, delay, correct, instant, removePlayer,
 }: Readonly<{
   player: PlayerInfo;
-  entry?: { guess: string | null; timeMs?: number | null; live?: boolean; artistGuess?: string | null };
+  entry?: { guess: string | null; timeMs?: number | null; live?: boolean; artistGuess?: string | null; artistCorrect?: boolean };
   delta: number;
   pity: boolean;
   delay: number;
@@ -2624,7 +2632,7 @@ function RevealPlayerRow({
           <p className="text-white/60 text-xs tabular-nums shrink-0">{displayScore.toLocaleString()}</p>
         </div>
         {entry?.artistGuess && (
-          <p className="text-white/40 text-xs break-words" style={{ overflowWrap: 'anywhere' }}>
+          <p className={`text-xs break-words ${artistGuessClass(!!entry.artistCorrect, correct !== 'none')}`} style={{ overflowWrap: 'anywhere' }}>
             Artist: "{entry.artistGuess}"
           </p>
         )}

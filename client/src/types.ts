@@ -79,7 +79,7 @@ export interface RoundResultEvent {
   artistOnly?: boolean;
   yearOnly?: boolean;
   correctGuessers?: string[];
-  playerGuesses?: { name: string; guess: string | null; timeMs?: number | null; live?: boolean; artistGuess?: string | null }[];
+  playerGuesses?: { name: string; guess: string | null; timeMs?: number | null; live?: boolean; artistGuess?: string | null; artistCorrect?: boolean }[];
   party?: PartyInfo;
   yearResults?: YearResult[];
   stealPending?: string;
