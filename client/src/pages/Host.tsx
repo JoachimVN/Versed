@@ -2584,9 +2584,9 @@ function BettingView({ game }: Readonly<{ game: HostState }>) {
       <div className="relative flex flex-col justify-center items-center gap-2 pb-7" style={{ zIndex: 2 }}>
         <button
           onClick={skipTurn}
-          style={{ background: 'none', border: 'none', color: 'rgba(255,255,255,0.28)', fontSize: '0.75rem', cursor: 'pointer', transition: 'color 0.2s ease' }}
-          onMouseEnter={e => { (e.currentTarget as HTMLElement).style.color = 'rgba(255,255,255,0.4)'; }}
-          onMouseLeave={e => { (e.currentTarget as HTMLElement).style.color = 'rgba(255,255,255,0.28)'; }}
+          style={{ background: 'none', border: 'none', color: 'rgba(255,255,255,0.2)', fontSize: '0.75rem', cursor: 'pointer', transition: 'color 0.2s ease' }}
+          onMouseEnter={e => { (e.currentTarget as HTMLElement).style.color = 'rgba(255,255,255,0.32)'; }}
+          onMouseLeave={e => { (e.currentTarget as HTMLElement).style.color = 'rgba(255,255,255,0.2)'; }}
         >
           Skip round
         </button>
@@ -2784,7 +2784,7 @@ export function PlayingView({ game }: Readonly<{ game: HostState }>) {
         </div>
 
         <div className="flex flex-col items-center gap-2 mt-2">
-          <button onClick={skipTurn} className="text-white/28 text-xs hover:text-white/50 transition-colors">
+          <button onClick={skipTurn} className="text-white/20 text-xs hover:text-white/35 transition-colors">
             Skip round
           </button>
           <EndGameButton endGame={endGame} />
@@ -2936,7 +2936,7 @@ function RevealPlayerRow({
         </div>
         {entry?.artistGuess && (
           <p className={`text-xs break-words ${artistGuessClass(!!entry.artistCorrect, correct !== 'none')}`} style={{ overflowWrap: 'anywhere' }}>
-            Artist: "{entry.artistGuess}"
+            "{entry.artistGuess}"
           </p>
         )}
       </div>
