@@ -1,8 +1,10 @@
 import { useSearchParams } from 'react-router-dom';
 import { PlayingView, RevealView, LobbyView } from './Host';
 import type { HostState } from './Host';
-import { WatchingView, GuessingView, WaitingView } from './Play';
-import type { PlayState } from './Play';
+import { WatchingView } from './play/WatchingView';
+import { GuessingView } from './play/GuessingView';
+import { WaitingView } from './play/WaitingView';
+import type { PlayState } from './play/usePlayGame';
 import { RoundIntro } from '../components/RoundIntro';
 import { FinalResultsView } from '../components/FinalResults';
 import { PillButton } from '../components/RevealShared';
