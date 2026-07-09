@@ -55,6 +55,49 @@ export function useSpotify() {
     setPlaybackError(message);
   }
 
+  // Keep playback in sync with intent. The SDK can spontaneously pause
+  // (buffering) or a queued play command can land late; self-heal both ways.
+  function handlePlayerStateChanged(state: any) {
+    if (!state) return;
+    const phase = playStateRef.current;
+    if (phase === 'playing' && state.paused) {
+      // Don't auto-resume if the track reached its natural end — that would
+      // loop the song indefinitely. Only heal genuine buffering pauses.
+      const duration = state.track_window?.current_track?.duration_ms;
+      const atEnd = duration && state.position >= duration - 500;
+      if (!atEnd) playerRef.current?.resume().catch((err: unknown) => reportPlaybackError('resume failed', err));
+    } else if (phase === 'stopping' && !state.paused) {
+      playerRef.current?.pause().catch((err: unknown) => reportPlaybackError('pause failed', err));
+    }
+  }
+
+  function initPlayer() {
+    const g = globalThis as Window & typeof globalThis;
+    const player = new g.Spotify.Player({
+      name: 'Versed',
+      getOAuthToken: (cb) => cb(accessTokenRef.current ?? ''),
+      volume: 0.8,
+    });
+    player.addListener('ready', ({ device_id }: { device_id: string }) => {
+      deviceIdRef.current = device_id;
+      setPlayerReady(true);
+      setPlaybackError(null);
+    });
+    player.addListener('not_ready', () => setPlayerReady(false));
+    player.addListener('initialization_error', (data: unknown) => reportPlaybackError('initialization_error', data));
+    player.addListener('authentication_error', (data: unknown) => reportPlaybackError('authentication_error', data));
+    player.addListener('account_error', (data: unknown) => reportPlaybackError('account_error', data));
+    player.addListener('playback_error', (data: unknown) => reportPlaybackError('playback_error', data));
+    player.addListener('autoplay_failed', (data: unknown) => reportPlaybackError('autoplay_failed', data));
+    player.addListener('player_state_changed', handlePlayerStateChanged);
+    player.connect()
+      .then(connected => {
+        if (!connected) reportPlaybackError('connect failed', new Error('Spotify player did not connect.'));
+      })
+      .catch(err => reportPlaybackError('connect failed', err));
+    playerRef.current = player;
+  }
+
   useEffect(() => {
     // Tokens arrive in the URL fragment (never sent to servers); the query
     // string is still checked as a fallback for older deployed servers.
@@ -119,47 +162,6 @@ export function useSpotify() {
   useEffect(() => {
     if (!accessToken) return;
     if (sdkLoaded && playerRef.current) return;
-
-    const initPlayer = () => {
-      const g = globalThis as Window & typeof globalThis;
-      const player = new g.Spotify.Player({
-        name: 'Versed',
-        getOAuthToken: (cb) => cb(accessTokenRef.current ?? ''),
-        volume: 0.8,
-      });
-      player.addListener('ready', ({ device_id }: { device_id: string }) => {
-        deviceIdRef.current = device_id;
-        setPlayerReady(true);
-        setPlaybackError(null);
-      });
-      player.addListener('not_ready', () => setPlayerReady(false));
-      player.addListener('initialization_error', (data: unknown) => reportPlaybackError('initialization_error', data));
-      player.addListener('authentication_error', (data: unknown) => reportPlaybackError('authentication_error', data));
-      player.addListener('account_error', (data: unknown) => reportPlaybackError('account_error', data));
-      player.addListener('playback_error', (data: unknown) => reportPlaybackError('playback_error', data));
-      player.addListener('autoplay_failed', (data: unknown) => reportPlaybackError('autoplay_failed', data));
-      // Keep playback in sync with intent. The SDK can spontaneously pause
-      // (buffering) or a queued play command can land late; self-heal both ways.
-      player.addListener('player_state_changed', (state: any) => {
-        if (!state) return;
-        const phase = playStateRef.current;
-        if (phase === 'playing' && state.paused) {
-          // Don't auto-resume if the track reached its natural end — that would
-          // loop the song indefinitely. Only heal genuine buffering pauses.
-          const duration = state.track_window?.current_track?.duration_ms;
-          const atEnd = duration && state.position >= duration - 500;
-          if (!atEnd) playerRef.current?.resume().catch(err => reportPlaybackError('resume failed', err));
-        } else if (phase === 'stopping' && !state.paused) {
-          playerRef.current?.pause().catch(err => reportPlaybackError('pause failed', err));
-        }
-      });
-      player.connect()
-        .then(connected => {
-          if (!connected) reportPlaybackError('connect failed', new Error('Spotify player did not connect.'));
-        })
-        .catch(err => reportPlaybackError('connect failed', err));
-      playerRef.current = player;
-    };
 
     const g = globalThis as Window & typeof globalThis;
     if (g.Spotify) {
