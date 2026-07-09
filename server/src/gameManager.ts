@@ -1,11 +1,11 @@
 import { randomInt } from 'node:crypto';
 import {
   Award, ChaosLevel, Difficulty, Game, GuessTarget, Hint, PartyClientView, PartyConfig, PartyEvent, PartyFormat,
-  Player, PlaylistTrackInput, Round, Song, YearResult,
+  PartyRoundType, Player, PlaylistTrackInput, Round, Song, YearResult,
 } from './types';
 import { loadSongs } from './songLoader';
 import { adaptPlaylistTracks } from './customSongPool';
-import { isCorrectGuess, isCorrectArtistGuess } from './fuzzyMatch';
+import { isCorrectGuess, isCorrectArtistGuess, textsCollide } from './fuzzyMatch';
 
 // Below this, rounds start repeating tracks (TOTAL_ROUNDS below) — the client
 // warns the host but still allows starting, so this isn't a hard floor here.
@@ -386,9 +386,19 @@ function introFor(
     : { title: 'Classic Round', tagline: 'Bid low, score high' };
 }
 
-function pickPartyTarget(format: PartyFormat): GuessTarget {
-  if (format === 'year' || format === 'choice') return 'title';
-  return pickWeighted<GuessTarget>([['title', 60], ['artist', 25], ['both', 15]]);
+// 'title' always stays in the pool unconditionally — it's the baseline round
+// type, same principle as 'classic'/'race' always staying in buildPartyConfig's
+// format pool below — so this never needs an empty-pool fallback the way
+// pickPartyEvent's genuinely-can-empty pool does.
+function pickPartyTarget(game: Game, format: PartyFormat): GuessTarget {
+  if (format === 'year') return 'title'; // placeholder only — round.target/effectiveTarget resolve to 'year' via format, not this value
+  const pool: [GuessTarget, number][] = [['title', 60]];
+  if (game.enabledRoundTypes.has('artist')) pool.push(['artist', 25]);
+  // Double Duty has no slot in a tap-to-answer UI, so it can't combine with
+  // Multiple Choice — pickPartyTarget only ever gets called with a 'both'
+  // possibility outside format === 'choice'.
+  if (format !== 'choice' && game.enabledRoundTypes.has('both')) pool.push(['both', 15]);
+  return pickWeighted(pool);
 }
 
 // Every party event that exists — the default "everything on" set for a new
@@ -396,6 +406,11 @@ function pickPartyTarget(format: PartyFormat): GuessTarget {
 export const ALL_PARTY_EVENTS: PartyEvent[] = [
   'double', 'mystery', 'steal', 'snippet', 'fullhints', 'blind', 'outro', 'underdog', 'chaoshints',
 ];
+
+// Every party round-type variant that exists — same "default everything on,
+// validate host-supplied lists against this" role as ALL_PARTY_EVENTS, but
+// for the format/target/winnerOnly pool instead of event modifiers.
+export const ALL_PARTY_ROUND_TYPES: PartyRoundType[] = ['choice', 'artist', 'both', 'year', 'winnerOnly'];
 
 // Interpolate from 80% plain rounds at Chill through 60% at Balanced to 40%
 // at Chaotic. Every slider position therefore affects the actual frequency.
@@ -494,16 +509,23 @@ function buildPartyConfig(game: Game): PartyConfig {
   }
 
   const prev = game.currentRound?.party;
-  let format = pickWeighted<PartyFormat>([['classic', 40], ['race', 35], ['year', 15], ['choice', 10]]);
+  // 'classic'/'race' always stay unconditional in the pool — same principle
+  // as pickPartyTarget's 'title' — so disabling every round type just falls
+  // back to plain classic/race rounds (events still layer on top), no
+  // explicit empty-pool branch needed the way pickPartyEvent's pool needs one.
+  const formatPool: [PartyFormat, number][] = [['classic', 40], ['race', 35]];
+  if (game.enabledRoundTypes.has('year')) formatPool.push(['year', 15]);
+  if (game.enabledRoundTypes.has('choice')) formatPool.push(['choice', 10]);
+  let format = pickWeighted<PartyFormat>(formatPool);
   if (format === 'year' && prev?.format === 'year') format = 'race';
 
-  const target = pickPartyTarget(format);
+  const target = pickPartyTarget(game, format);
   const event = pickPartyEvent(game, format, prev?.event);
   const multiplier = eventMultiplier(game, event);
   // Only race/year formats can go winner-only — classic already has its own
   // bid/tier stakes, and stacking this on top would just zero out everyone
   // but the lowest bidder.
-  const winnerOnly = format !== 'classic' && randomInt(0, 100) < 25;
+  const winnerOnly = format !== 'classic' && game.enabledRoundTypes.has('winnerOnly') && randomInt(0, 100) < 25;
 
   const restricted = event === 'underdog' ? trailingPlayers(game) : { ids: [], names: [] };
 
@@ -518,6 +540,11 @@ function buildPartyConfig(game: Game): PartyConfig {
 // random pick — game 1 is a classic bid/tier round, game 2 a race, game 3
 // (and any replay of it — see finalizeYearRound) a year decider. Each still
 // rolls its own normal event/multiplier, just like a regular round.
+// Deliberately ignores enabledRoundTypes: the finale is a fixed, curated
+// sequence by design, not a draw from the host's round-type pool — it never
+// calls pickPartyTarget and always hardcodes target: 'title'/winnerOnly:
+// false below, so it plays out the same finale regardless of which round
+// types the host has disabled.
 const DUEL_FORMAT_SEQUENCE: PartyFormat[] = ['classic', 'race', 'year'];
 
 function buildDuelSubRoundConfig(game: Game): PartyConfig {
@@ -583,13 +610,12 @@ function roundMultiplier(round: Round): number {
   return round.party?.multiplier ?? 1;
 }
 
-// What this round's guess is checked against. Party rounds carry it per-round;
-// classic/race games fall back to the game-wide artistOnly toggle.
-type EffectiveTarget = GuessTarget | 'year';
-export function effectiveTarget(game: Game, round: Round): EffectiveTarget {
-  if (round.party) return round.party.format === 'year' ? 'year' : round.party.target;
-  if (game.yearOnly) return 'year';
-  return game.artistOnly ? 'artist' : 'title';
+// What this round's guess is checked against — resolved once per round (see
+// resolveRoundTarget, called from buildRound) and stored on round.target, so
+// every consumer — scoring, hints, reconnect resends — reads the same value
+// for the round's whole lifetime instead of re-deriving it.
+export function effectiveTarget(round: Round): GuessTarget | 'year' {
+  return round.target;
 }
 
 function checkGuess(
@@ -729,14 +755,27 @@ function computeSnippetPosition(song: Song, party: PartyConfig, raceTimeSec: num
   return undefined;
 }
 
+// Classic/race's per-round target: both toggles alone are each a fixed
+// target for the whole game, but the user's own framing for combining them
+// is "the rounds switch between artist/year" — so with both on, each round
+// independently rolls one of the two, rather than asking for both at once.
+function resolveClassicRaceTarget(game: Game): GuessTarget | 'year' {
+  if (game.yearOnly && game.artistOnly) return pickWeighted<'artist' | 'year'>([['artist', 50], ['year', 50]]);
+  if (game.yearOnly) return 'year';
+  if (game.artistOnly) return 'artist';
+  return 'title';
+}
+
 // What's actually being guessed this round — decides which hints would give
-// the answer away outright, and which "other" fact is safe (and useful) to
-// surface instead. Party rounds carry their own per-round target/format;
-// classic/race games fall back to the game-wide toggles.
-function roundGuessKind(party: PartyConfig | undefined, artistOnly: boolean, yearOnly: boolean): GuessTarget | 'year' {
+// the answer away outright, which "other" fact is safe to surface instead,
+// and (stored as round.target by the caller) what scoring checks the guess
+// against for the round's whole lifetime. Party rounds carry their own
+// per-round target/format; classic/race games roll from the game-wide
+// toggles. Must be called after any Party downgrade block that can mutate
+// party.format/party.target (see buildRound) — never resolved up front.
+function resolveRoundTarget(game: Game, party: PartyConfig | undefined): GuessTarget | 'year' {
   if (party) return party.format === 'year' ? 'year' : party.target;
-  if (yearOnly) return 'year';
-  return artistOnly ? 'artist' : 'title';
+  return resolveClassicRaceTarget(game);
 }
 
 // Honours 'blind' (no hints) and 'fullhints' (every hint) party events, then
@@ -808,13 +847,12 @@ function avoidRecentArtists(game: Game, pool: Song[], rawPoolSize: number): Song
   return notRecentArtist.length > 0 ? notRecentArtist : pool;
 }
 
-// Two titles that would make an ambiguous pair of options — exact match or
-// one a substring of the other (case-insensitive) — so a "wrong" option can
-// never actually also be a fair reading of the real title.
-function titlesCollide(a: string, b: string): boolean {
-  const na = a.trim().toLowerCase();
-  const nb = b.trim().toLowerCase();
-  return na === nb || na.includes(nb) || nb.includes(na);
+type ChoiceField = 'title' | 'artist' | 'year';
+
+function choiceFieldValue(song: Song, field: ChoiceField): string | null {
+  if (field === 'title') return song.title;
+  if (field === 'artist') return song.artist;
+  return song.year != null ? String(song.year) : null;
 }
 
 // Multiple Choice's 3 wrong options — drawn from the same (already
@@ -822,11 +860,34 @@ function titlesCollide(a: string, b: string): boolean {
 // they're naturally the same difficulty tier. Returns undefined if the pool
 // can't supply 3 safe distractors (a tiny custom playlist), signalling the
 // caller to downgrade the round instead.
-function pickChoiceOptions(song: Song, pool: Song[]): string[] | undefined {
-  const candidates = pool.filter(s => s.spotifyTrackId !== song.spotifyTrackId && !titlesCollide(s.title, song.title));
-  if (candidates.length < 3) return undefined;
-  const distractors = shuffle(candidates).slice(0, 3).map(s => s.title);
-  return shuffle([song.title, ...distractors]);
+//
+// Title/artist distractors are deduped using the same fuzzy normalization
+// isCorrectGuess/isCorrectArtistGuess score against, both against the correct
+// answer AND against each other — a naive "just exclude the correct value"
+// check would let two songs sharing a year, or two spellings of one artist,
+// slip in as two "different" wrong options that actually read the same.
+// Years use plain exact-match distinctness instead, since year guessing is
+// exact-int, not fuzzy.
+function pickChoiceOptions(song: Song, pool: Song[], field: ChoiceField): string[] | undefined {
+  const correct = choiceFieldValue(song, field);
+  if (correct === null) return undefined;
+  const distractors: string[] = [];
+  for (const s of shuffle(pool)) {
+    if (s.spotifyTrackId === song.spotifyTrackId) continue;
+    const value = choiceFieldValue(s, field);
+    if (value === null) continue;
+    if (field === 'year') {
+      if (value === correct || distractors.includes(value)) continue;
+    } else {
+      if (textsCollide(value, correct)) continue;
+      if (field === 'artist' && isCorrectArtistGuess(value, song.artist, song.featuredArtists)) continue;
+      if (distractors.some(d => textsCollide(d, value))) continue;
+    }
+    distractors.push(value);
+    if (distractors.length === 3) break;
+  }
+  if (distractors.length < 3) return undefined;
+  return shuffle([correct, ...distractors]);
 }
 
 // Round selection applies these constraints strictest/most-essential first,
@@ -847,26 +908,33 @@ function buildRound(game: Game, party?: PartyConfig): Round {
   const song = pickRandom(pool);
 
   if (party?.format === 'choice') {
-    const choiceOptions = pickChoiceOptions(song, pool);
+    const field: ChoiceField = party.target === 'artist' ? 'artist' : 'title';
+    const choiceOptions = pickChoiceOptions(song, pool, field);
     if (choiceOptions) {
       party.choiceOptions = choiceOptions;
     } else {
-      // Not enough distinct titles in this pool for 3 real distractors —
-      // silently fall back to a plain classic round, same precedent as
-      // computeSnippetPosition's downgrade for snippet/outro.
-      party.format = 'classic';
-      party.target = 'title';
-      party.event = null;
-      party.multiplier = 1;
-      party.winnerOnly = false;
-      party.restrictedIds = [];
-      party.restrictedNames = [];
+      // Not enough distinct distractors for this round's target — downgrade
+      // to a free-text race round instead of resetting to classic/title, so
+      // an artist-target round (Who Sings It as Multiple Choice) doesn't
+      // silently turn into a title-guessing round. party.target is
+      // deliberately left untouched — that's the whole point of this
+      // fallback over the old "reset everything to classic/title" one.
+      party.format = 'race';
       party.intro = introFor(party.format, party.target, party.event, party.winnerOnly);
     }
   }
 
   const snippetMs = party ? computeSnippetPosition(song, party, game.raceTime) : undefined;
-  const guessKind = roundGuessKind(party, game.artistOnly, game.yearOnly);
+  // Resolved after the choice-downgrade block above (which can mutate
+  // party.format/party.target) so this never reflects a stale pre-downgrade
+  // value — see resolveRoundTarget's own comment.
+  const target = resolveRoundTarget(game, party);
+
+  let choiceOptions: string[] | undefined;
+  if (game.multipleChoice && !party) {
+    const field: ChoiceField = target === 'year' ? 'year' : target === 'artist' ? 'artist' : 'title';
+    choiceOptions = pickChoiceOptions(song, pool, field);
+  }
 
   // Chaos Hints repurposes the normal `hints` transport to carry its own
   // 4-hint "spot the fake" set instead of the usual guess-along hints —
@@ -886,12 +954,14 @@ function buildRound(game: Game, party?: PartyConfig): Round {
     hints = chaosSet.hints;
     chaosFakeIndex = chaosSet.fakeIndex;
   } else {
-    hints = buildRoundHints(song, party, guessKind);
+    hints = buildRoundHints(song, party, target);
   }
 
   return {
     song,
     hints,
+    target,
+    choiceOptions,
     party,
     snippetMs,
     chaosFakeIndex,
@@ -944,8 +1014,10 @@ export function createGame(hostSocketId: string, preferredPin?: string): Game {
     raceWinnerOnly: false,
     artistOnly: false,
     yearOnly: false,
+    multipleChoice: false,
     difficulty: 'hard',
     enabledEvents: new Set(ALL_PARTY_EVENTS),
+    enabledRoundTypes: new Set(ALL_PARTY_ROUND_TYPES),
     chaosLevel: 50,
     duelChampion: null,
     duelActive: false,
@@ -1205,7 +1277,7 @@ export function recordGuess(
   if (round.answered || round.passed.has(socketId)) return null;
 
   round.guesses.set(socketId, text);
-  const target = effectiveTarget(game, round);
+  const target = effectiveTarget(round);
   const trimmedArtist = artistText?.trim();
   if (target === 'both' && trimmedArtist) round.artistGuesses.set(socketId, trimmedArtist);
   const guesserName = game.players.get(socketId)?.name ?? '';
@@ -1388,7 +1460,7 @@ export function recordRaceGuess(
   round.passed.add(socketId);
   const participants = raceParticipants(game, round);
 
-  const target = effectiveTarget(game, round);
+  const target = effectiveTarget(round);
   if (target === 'year') {
     // Year answers are only scored once the round ends and every distance is
     // known — see finalizeYearRound.

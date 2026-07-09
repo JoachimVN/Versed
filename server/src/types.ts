@@ -50,6 +50,13 @@ export type GuessTarget = 'title' | 'artist' | 'both';
 export type PartyEvent =
   | 'double' | 'mystery' | 'steal' | 'snippet' | 'fullhints' | 'blind' | 'outro' | 'underdog' | 'chaoshints';
 
+// Host-togglable Party round-variant ingredients — 'choice' gates the
+// 'choice' PartyFormat, 'year' gates the 'year' PartyFormat, 'artist'/'both'
+// gate those GuessTarget pool entries, and 'winnerOnly' gates the winner-only
+// roll. Distinct from PartyEvent, which only covers modifiers (Mystery,
+// Steal, Snippet, ...) layered on top of whatever round type gets picked.
+export type PartyRoundType = 'choice' | 'artist' | 'both' | 'year' | 'winnerOnly';
+
 // Continuous 0–100 chaos scale. It tunes how often party events fire and how
 // wild mystery's multiplier spread gets; 50 is the balanced default.
 export type ChaosLevel = number;
@@ -111,6 +118,15 @@ export interface Round {
   song: Song;
   hints: Hint[];
   coverUrl?: string;
+  // What this round's guess is checked against — resolved once (in
+  // buildRound) for every round, party or not. The single source of truth
+  // for effectiveTarget(), so reconnects/scoring/hints all agree on one
+  // value for the round's whole lifetime instead of re-deriving it.
+  target: GuessTarget | 'year';
+  // Classic/Race Multiple Choice only — shuffled options for `target`
+  // (titles/artists/years), correct one included. Party rounds keep using
+  // party.choiceOptions instead; this field stays undefined for those.
+  choiceOptions?: string[];
   // Party-mode fields
   party?: PartyConfig;
   snippetMs?: number;               // 'snippet' event: playback starts here instead of 0
@@ -206,8 +222,10 @@ export interface Game {
   raceWinnerOnly: boolean;
   artistOnly: boolean;
   yearOnly: boolean;
+  multipleChoice: boolean;       // classic/race only — party has its own 'choice' round type instead
   difficulty: Difficulty;
   enabledEvents: Set<PartyEvent>; // party mode: which events the host allows into the pool
+  enabledRoundTypes: Set<PartyRoundType>; // party mode: which round-type variants the host allows into the pool
   chaosLevel: ChaosLevel;         // party mode: event frequency + mystery-multiplier spread preset
   duelChampion: string | null;    // party mode: socketId of the finale duel's winner, once resolved
   // Finale best-of-3 duel state — lives on Game (not Round) since it must

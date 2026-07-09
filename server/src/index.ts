@@ -9,7 +9,7 @@ import dotenv from 'dotenv';
 import authRouter from './spotifyAuth';
 import * as gm from './gameManager';
 import { getAlbumArtUrl } from './albumArt';
-import { Award, Game, PartyEvent, PlaylistTrackInput } from './types';
+import { Award, Game, PartyEvent, PartyRoundType, PlaylistTrackInput } from './types';
 
 dotenv.config();
 gm.initSongs();
@@ -94,9 +94,9 @@ if (process.env.NODE_ENV === 'production') {
 
 interface StartGameSettings {
   bettingTime?: number; guessingTime?: number; totalRounds?: number; mode?: string;
-  raceTime?: number; raceWinnerOnly?: boolean; artistOnly?: boolean; yearOnly?: boolean;
+  raceTime?: number; raceWinnerOnly?: boolean; artistOnly?: boolean; yearOnly?: boolean; multipleChoice?: boolean;
   difficulty?: string; songSource?: string;
-  enabledEvents?: string[]; chaosLevel?: number;
+  enabledEvents?: string[]; enabledRoundTypes?: string[]; chaosLevel?: number;
   customPlaylist?: { id?: string; tracks?: PlaylistTrackInput[] };
 }
 
@@ -119,8 +119,11 @@ function applyStartGameSettings(game: Game, s: StartGameSettings | undefined) {
   // or a stale `true` left over from a previous Race game would silently
   // force winner-take-all scoring onto Party's race-format rounds.
   game.raceWinnerOnly = game.mode === 'race' && s?.raceWinnerOnly === true;
-  // Year isn't a title/artist target, so it can't coexist with artist-only.
-  game.artistOnly = !isParty && !game.yearOnly && s?.artistOnly === true;
+  // Artist-only and Year-only can now both be on at once — each round then
+  // independently rolls one of the two (see resolveClassicRaceTarget).
+  game.artistOnly = !isParty && s?.artistOnly === true;
+  // Party has its own 'choice' round type instead of this toggle.
+  game.multipleChoice = !isParty && s?.multipleChoice === true;
   game.difficulty = s?.difficulty === 'easy' || s?.difficulty === 'medium' ? s.difficulty : 'hard';
 
   game.chaosLevel = typeof s?.chaosLevel === 'number' && Number.isFinite(s.chaosLevel)
@@ -133,6 +136,9 @@ function applyStartGameSettings(game: Game, s: StartGameSettings | undefined) {
   game.enabledEvents = Array.isArray(s?.enabledEvents)
     ? new Set(s.enabledEvents.filter((e): e is PartyEvent => (gm.ALL_PARTY_EVENTS as string[]).includes(e)))
     : new Set(gm.ALL_PARTY_EVENTS);
+  game.enabledRoundTypes = Array.isArray(s?.enabledRoundTypes)
+    ? new Set(s.enabledRoundTypes.filter((t): t is PartyRoundType => (gm.ALL_PARTY_ROUND_TYPES as string[]).includes(t)))
+    : new Set(gm.ALL_PARTY_ROUND_TYPES);
 }
 
 function applySongSource(game: Game, s: StartGameSettings | undefined): { ok: true } | { ok: false; error: string } {
@@ -215,8 +221,9 @@ io.on('connection', (socket) => {
       hints: round.hints,
       mode: 'race',
       raceTime: game.raceTime,
-      artistOnly: game.artistOnly,
-      yearOnly: game.yearOnly,
+      artistOnly: round.target === 'artist',
+      yearOnly: round.target === 'year',
+      choiceOptions: round.choiceOptions,
       party: gm.partyView(game, round),
       tempo: round.song.tempo,
     });
@@ -234,8 +241,9 @@ io.on('connection', (socket) => {
         bettingTime: game.bettingTime,
         endsAt: game.phaseEndsAt,
         mode: 'classic',
-        artistOnly: game.artistOnly,
-        yearOnly: game.yearOnly,
+        artistOnly: round.target === 'artist',
+        yearOnly: round.target === 'year',
+        choiceOptions: round.choiceOptions,
         party: gm.partyView(game, round),
         bidOptions: gm.BID_OPTIONS,
         bidScores: gm.bidScoreTable(),
@@ -254,8 +262,9 @@ io.on('connection', (socket) => {
       total: game.totalRounds,
       hints: round.hints,
       mode: 'classic',
-      artistOnly: game.artistOnly,
-      yearOnly: game.yearOnly,
+      artistOnly: round.target === 'artist',
+      yearOnly: round.target === 'year',
+      choiceOptions: round.choiceOptions,
       party: gm.partyView(game, round),
       bidOptions: gm.BID_OPTIONS,
       bidScores: gm.bidScoreTable(),
@@ -788,7 +797,7 @@ io.on('connection', (socket) => {
     // "spot the fake" set itself, which the round is meaningless without;
     // and Underdog Boost, whose whole point is giving the trailing player(s)
     // a real shot, not just the normal hint-free race odds.
-    const keepHints = (!round.party && (game.artistOnly || game.yearOnly))
+    const keepHints = (!round.party && (round.target === 'artist' || round.target === 'year'))
       || round.party?.event === 'chaoshints' || round.party?.event === 'underdog';
 
     // Prefer the precomputed art from the CSV (Music Popularity Index resolves
@@ -825,8 +834,9 @@ io.on('connection', (socket) => {
         hints: round.hints,
         mode: 'race',
         raceTime: game.raceTime,
-        artistOnly: game.artistOnly,
-        yearOnly: game.yearOnly,
+        artistOnly: round.target === 'artist',
+        yearOnly: round.target === 'year',
+        choiceOptions: round.choiceOptions,
         party,
         tempo: round.song.tempo,
       });
@@ -836,8 +846,9 @@ io.on('connection', (socket) => {
         hints: round.hints,
         mode: 'race',
         raceTime: game.raceTime,
-        artistOnly: game.artistOnly,
-        yearOnly: game.yearOnly,
+        artistOnly: round.target === 'artist',
+        yearOnly: round.target === 'year',
+        choiceOptions: round.choiceOptions,
         party,
         song: {
           title: round.song.title,
@@ -874,8 +885,9 @@ io.on('connection', (socket) => {
       bettingTime: game.bettingTime,
       endsAt: bettingEndsAt,
       mode: 'classic',
-      artistOnly: game.artistOnly,
-      yearOnly: game.yearOnly,
+      artistOnly: round.target === 'artist',
+      yearOnly: round.target === 'year',
+      choiceOptions: round.choiceOptions,
       party,
       // Source of truth for the client's bid picker and its score preview —
       // keeps the UI from drifting out of sync with server-side scoring.
@@ -890,8 +902,9 @@ io.on('connection', (socket) => {
       bettingTime: game.bettingTime,
       endsAt: bettingEndsAt,
       mode: 'classic',
-      artistOnly: game.artistOnly,
-      yearOnly: game.yearOnly,
+      artistOnly: round.target === 'artist',
+      yearOnly: round.target === 'year',
+      choiceOptions: round.choiceOptions,
       party,
       song: {
         title: round.song.title,
@@ -912,13 +925,12 @@ io.on('connection', (socket) => {
       featuredArtists: round.song.featuredArtists,
       year: round.song.year,
       coverUrl: round.coverUrl,
-      // Party rounds carry their own per-round target (title/artist/both),
-      // independent of the game-wide artistOnly toggle classic/race use —
-      // the reveal card's "song was"/"artist was" label has to match
+      // round.target is this round's resolved answer (title/artist/both/year)
+      // — the reveal card's "song was"/"artist was" label has to match
       // whichever one actually decided the guess, or a correct artist-only
       // guess reads as a title mismatch (and vice versa).
-      artistOnly: gm.effectiveTarget(game, round) === 'artist',
-      yearOnly: gm.effectiveTarget(game, round) === 'year',
+      artistOnly: gm.effectiveTarget(round) === 'artist',
+      yearOnly: gm.effectiveTarget(round) === 'year',
       // Reveal payloads always carry the full party config (mystery revealed).
       party: gm.partyView(game, round, true),
       // 'chaoshints' rounds: which hint (already sent as `hints` at
@@ -943,7 +955,7 @@ io.on('connection', (socket) => {
     gm.finalizeRaceDrafts(game);
     const round = game.currentRound!;
     // Year rounds score in one pass now that every distance is known.
-    if (gm.effectiveTarget(game, round) === 'year') gm.finalizeYearRound(game);
+    if (gm.effectiveTarget(round) === 'year') gm.finalizeYearRound(game);
     game.phase = 'reveal';
     const correctNames = Array.from(round.correctGuessers)
       .map(id => game.players.get(id)?.name ?? '')
@@ -1026,7 +1038,7 @@ io.on('connection', (socket) => {
     const round = game.currentRound!;
     if (game.phaseTimer) clearTimeout(game.phaseTimer);
     game.phase = 'reveal';
-    if (gm.effectiveTarget(game, round) === 'year') gm.finalizeClassicYearRound(game);
+    if (gm.effectiveTarget(round) === 'year') gm.finalizeClassicYearRound(game);
     io.to(game.pin).emit('round_result', {
       correct: false,
       guesserName: null,
