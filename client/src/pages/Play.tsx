@@ -1047,40 +1047,47 @@ export function WaitingView({ game }: Readonly<{ game: PlayState }>) {
         />
 
         {/* The vinyl record IS the card: a big spinning grooved disc with a
-            static circular glass "label" fixed at its center, like a record
-            label sitting on the vinyl. --disc-size drives every proportional
-            child size below in pure CSS, so the whole assembly stays in
-            proportion as the disc shrinks to fit narrow viewports. */}
+            smaller static circular glass "label" fixed at its center, like a
+            real record label sitting on the vinyl. --disc-size and
+            --label-size drive every proportional child size below in pure
+            CSS, so the whole assembly stays in proportion as the disc
+            shrinks to fit narrow viewports. The label is deliberately sized
+            well under the disc (not a full inset:0 cover) — the grooved ring
+            left visible around it is what actually reads as "vinyl" instead
+            of a plain dark blob. */}
         <div
           style={{
             position: 'relative',
             width: 'min(360px, calc(100vw - 2rem))',
             aspectRatio: '1',
             '--disc-size': 'min(360px, calc(100vw - 2rem))',
+            '--label-size': 'calc(var(--disc-size) * 0.6)',
           } as CSSProperties}
         >
           {/* Vinyl material — three layers, deliberately split:
-              1) the grooved surface, which spins. A pure ring pattern is
-                 radially symmetric and would look identical at every
-                 rotation — two off-center streaks are baked in here so the
-                 spin actually reads as motion instead of a frozen texture.
-              2) a fixed sheen + corner shadow + rim, which does NOT spin —
-                 a real light source reflecting off a turning disc stays put
-                 relative to the viewer, it doesn't orbit with the grooves.
-              3) a dark tint sitting between the vinyl and the glass, so the
-                 glass reads as a more opaque, frosted pane over the record
-                 rather than a clear window onto it. */}
+              1) the grooved surface. Static — the spin lives on the glass
+                 label assembly below instead (see there for why). Real vinyl
+                 grooves are far too fine to render as individually countable
+                 rings without reading as a cheap "target/bullseye" pattern —
+                 so this is a single very tight, very low-contrast repeating
+                 ring, closer to a brushed texture than a bullseye.
+              2) a fixed soft gloss sheen + corner shadow. A blurred
+                 elliptical highlight reads as glossy plastic; a hard conic
+                 wedge reads as flat/cheap, so this avoids conic-gradient
+                 entirely.
+              3) a dark tint scoped to the label footprint only (not the
+                 whole disc), so the glass reads as an opaque, frosted pane
+                 over the record without dimming the visible groove ring. */}
           <div
             aria-hidden="true"
             style={{
               position: 'absolute', inset: 0, borderRadius: '50%',
               background: `
-                radial-gradient(ellipse 12% 32% at 76% 32%, rgba(255,255,255,0.32), transparent 70%),
-                radial-gradient(ellipse 9% 24% at 24% 68%, rgba(255,255,255,0.20), transparent 70%),
-                repeating-radial-gradient(circle, rgba(255,255,255,0.05) 0px, rgba(255,255,255,0.05) 1px, transparent 2.5px, transparent 8px),
-                radial-gradient(circle, #201c2c 0%, #0e0c16 55%, #030204 100%)
+                radial-gradient(ellipse 14% 36% at 78% 26%, rgba(255,255,255,0.20), transparent 72%),
+                radial-gradient(ellipse 10% 26% at 20% 74%, rgba(255,255,255,0.13), transparent 72%),
+                repeating-radial-gradient(circle, rgba(255,255,255,0.05) 0px, rgba(255,255,255,0.05) 1px, transparent 2px, transparent 4px),
+                radial-gradient(circle, #2a2438 0%, #171225 42%, #0a0812 74%, #030204 100%)
               `,
-              animationName: 'vinylSpin', animationDuration: '7s', animationTimingFunction: 'linear', animationIterationCount: 'infinite',
             }}
           />
           <div
@@ -1088,24 +1095,36 @@ export function WaitingView({ game }: Readonly<{ game: PlayState }>) {
             style={{
               position: 'absolute', inset: 0, borderRadius: '50%', pointerEvents: 'none',
               background: `
-                conic-gradient(from 205deg at 28% 24%, transparent 0deg, rgba(255,255,255,0.20) 20deg, transparent 46deg),
-                radial-gradient(circle at 76% 82%, rgba(0,0,0,0.42), transparent 55%)
+                radial-gradient(ellipse 50% 32% at 30% 18%, rgba(255,255,255,0.16), transparent 72%),
+                radial-gradient(circle at 74% 82%, rgba(0,0,0,0.4), transparent 55%)
               `,
-              boxShadow: '0 0 0 1px rgba(255,255,255,0.09) inset, 0 10px 36px rgba(0,0,0,0.55), 0 0 70px rgba(158,18,204,0.10)',
+              boxShadow: '0 0 0 1px rgba(255,255,255,0.09) inset, 0 12px 40px rgba(0,0,0,0.55), 0 0 55px rgba(158,18,204,0.14), 0 0 85px rgba(0,238,232,0.05)',
             }}
           />
           <div
             aria-hidden="true"
-            style={{ position: 'absolute', inset: 0, borderRadius: '50%', background: 'rgba(8,7,14,0.18)', pointerEvents: 'none' }}
+            style={{
+              position: 'absolute', top: '50%', left: '50%', width: 'calc(var(--label-size) * 1.06)', height: 'calc(var(--label-size) * 1.06)',
+              transform: 'translate(-50%, -50%)', borderRadius: '50%', pointerEvents: 'none',
+              background: 'rgba(8,7,14,0.5)',
+              boxShadow: '0 8px 24px rgba(0,0,0,0.5)',
+            }}
           />
 
-          {/* Circular glass label — sized to cover the whole disc, like a
-              liquid-glass pane laid directly over the vinyl surface. A
-              sibling of the grooves layer (not nested inside it), so this
-              text never rotates. */}
+          {/* Circular glass label — sized well under the disc (see note
+              above), like a liquid-glass pane laid directly over the vinyl
+              surface. This is what actually spins (the grooves don't) — the
+              glass's own refraction/sheen reads as motion far better than a
+              highlight sweeping around static grooves did. Its content div
+              below counter-rotates at the same rate so the spin cancels out
+              for the text/name, which stays upright and readable. */}
           <div
             className="liquid-btn glass-tint-purple relative"
-            style={{ position: 'absolute', inset: 0 }}
+            style={{
+              position: 'absolute', top: '50%', left: '50%', width: 'var(--label-size)', height: 'var(--label-size)',
+              transform: 'translate(-50%, -50%)',
+              animationName: 'vinylLabelSpin', animationDuration: '7s', animationTimingFunction: 'linear', animationIterationCount: 'infinite',
+            }}
           >
             <LiquidGlass
               style={{
@@ -1113,90 +1132,81 @@ export function WaitingView({ game }: Readonly<{ game: PlayState }>) {
                 animationName: 'cardGlowPulse', animationDuration: '4.2s', animationTimingFunction: 'ease-in-out', animationIterationCount: 'infinite',
               }}
               {...LIQUID_LABEL_PROPS}
-              padding="calc(var(--disc-size) * 0.07)"
+              padding="calc(var(--label-size) * 0.09)"
             >
               <div style={{
                 position: 'relative',
-                width: 'calc(var(--disc-size) * 0.82)', aspectRatio: '1',
+                width: 'calc(var(--label-size) * 0.82)', aspectRatio: '1',
                 display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', gap: '10px',
               }}>
                 {/* Soft accent wash echoing the heading's gradient, spanning
-                    the full glass circle the way Home's button overlays do. */}
+                    the full glass circle the way Home's button overlays do.
+                    Two corner-anchored radial glows rather than a linear
+                    wash — a linear-gradient's cutoff reads as a hard diagonal
+                    edge/wedge at this opacity, while a radial one fades out
+                    smoothly in every direction. No counter-rotation here —
+                    it's a backdrop, not text, so it spins along with the
+                    glass around it. */}
                 <div style={{
-                  position: 'absolute', inset: 'calc(var(--disc-size) * -0.07)', borderRadius: '50%', pointerEvents: 'none',
-                  background: 'linear-gradient(to bottom left, rgba(158,18,204,0.09) 0%, transparent 55%), linear-gradient(to top right, rgba(0,238,232,0.07) 0%, transparent 55%)',
+                  position: 'absolute', inset: 'calc(var(--label-size) * -0.09)', borderRadius: '50%', pointerEvents: 'none',
+                  background: 'radial-gradient(circle at 15% 85%, rgba(158,18,204,0.17) 0%, rgba(158,18,204,0.06) 45%, transparent 100%), radial-gradient(circle at 85% 15%, rgba(0,238,232,0.14) 0%, rgba(0,238,232,0.05) 45%, transparent 100%)',
                 }} />
-                <span style={{
+                {/* Text/name UI counter-rotates at the same rate as the
+                    parent label's spin, canceling it out so this stays
+                    upright and readable while the glass around it turns. */}
+                <div style={{
                   position: 'relative',
-                  fontSize: 'clamp(0.95rem, 3.6vw, 1.2rem)', fontFamily: "'Montserrat', sans-serif", fontWeight: 900, letterSpacing: '0.06em', textTransform: 'uppercase',
-                  background: 'linear-gradient(to bottom left, rgba(158,18,204,0.45) 0%, transparent 55%), linear-gradient(to top right, rgba(0,238,232,0.45) 0%, transparent 55%), #fff',
-                  WebkitBackgroundClip: 'text', WebkitTextFillColor: 'transparent', backgroundClip: 'text',
+                  display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', gap: '10px',
+                  animationName: 'vinylLabelSpinCounter', animationDuration: '7s', animationTimingFunction: 'linear', animationIterationCount: 'infinite',
                 }}>
-                  You're in!
-                </span>
-                {editing ? (
-                  <>
-                    <input
-                      autoFocus
-                      type="text"
-                      aria-label="Your name"
-                      value={draftName}
-                      onChange={e => setDraftName(e.target.value)}
-                      onKeyDown={e => { if (e.key === 'Enter') confirmEdit(); else if (e.key === 'Escape') cancelEdit(); }}
-                      onBlur={confirmEdit}
-                      maxLength={20}
+                  <span style={{
+                    position: 'relative',
+                    fontSize: 'clamp(0.95rem, 3.6vw, 1.2rem)', fontFamily: "'Montserrat', sans-serif", fontWeight: 900, letterSpacing: '0.06em', textTransform: 'uppercase',
+                    background: 'linear-gradient(to bottom left, rgba(158,18,204,0.45) 0%, transparent 55%), linear-gradient(to top right, rgba(0,238,232,0.45) 0%, transparent 55%), #fff',
+                    WebkitBackgroundClip: 'text', WebkitTextFillColor: 'transparent', backgroundClip: 'text',
+                  }}>
+                    You're in!
+                  </span>
+                  {editing ? (
+                    <>
+                      <input
+                        autoFocus
+                        type="text"
+                        aria-label="Your name"
+                        value={draftName}
+                        onChange={e => setDraftName(e.target.value)}
+                        onKeyDown={e => { if (e.key === 'Enter') confirmEdit(); else if (e.key === 'Escape') cancelEdit(); }}
+                        onBlur={confirmEdit}
+                        maxLength={20}
+                        style={{
+                          position: 'relative',
+                          background: 'none', border: 'none', borderBottom: '1px solid rgba(255,255,255,0.25)',
+                          color: 'white', fontSize: 'clamp(1.15rem, 5vw, 1.55rem)', fontWeight: 800, textAlign: 'center',
+                          outline: 'none', width: '82%', letterSpacing: '-0.01em',
+                          padding: '2px 0 4px', fontFamily: 'inherit',
+                          overflow: 'hidden', textOverflow: 'ellipsis', lineHeight: 1.3,
+                        }}
+                      />
+                      {game.error && <p style={{ position: 'relative', color: '#f87171', fontSize: '0.65rem' }} aria-live="assertive">{game.error}</p>}
+                    </>
+                  ) : (
+                    <button
+                      onClick={startEdit}
+                      aria-label="Edit your name"
                       style={{
-                        position: 'relative',
-                        background: 'none', border: 'none', borderBottom: '1px solid rgba(255,255,255,0.25)',
-                        color: 'white', fontSize: 'clamp(1.15rem, 5vw, 1.55rem)', fontWeight: 800, textAlign: 'center',
-                        outline: 'none', width: '82%', letterSpacing: '-0.01em',
-                        padding: '2px 0 4px', fontFamily: 'inherit',
-                        overflow: 'hidden', textOverflow: 'ellipsis',
+                        position: 'relative', maxWidth: '85%',
+                        display: 'flex', alignItems: 'center', gap: '6px',
+                        background: 'none', border: 'none', cursor: 'pointer', color: 'white',
+                        fontSize: 'clamp(1.15rem, 5vw, 1.55rem)', fontWeight: 800, letterSpacing: '-0.01em',
                       }}
-                    />
-                    {game.error && <p style={{ position: 'relative', color: '#f87171', fontSize: '0.65rem' }} aria-live="assertive">{game.error}</p>}
-                  </>
-                ) : (
-                  <button
-                    onClick={startEdit}
-                    aria-label="Edit your name"
-                    style={{
-                      position: 'relative', maxWidth: '85%',
-                      display: 'flex', alignItems: 'center', gap: '6px',
-                      background: 'none', border: 'none', cursor: 'pointer', color: 'white',
-                      fontSize: 'clamp(1.15rem, 5vw, 1.55rem)', fontWeight: 800, letterSpacing: '-0.01em',
-                    }}
-                  >
-                    <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{game.myName}</span>
-                    <Pencil style={{ width: '13px', height: '13px', color: 'rgba(255,255,255,0.45)', flexShrink: 0 }} />
-                  </button>
-                )}
+                    >
+                      <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', lineHeight: 1.3 }}>{game.myName}</span>
+                      <Pencil style={{ width: '13px', height: '13px', color: 'rgba(255,255,255,0.45)', flexShrink: 0 }} />
+                    </button>
+                  )}
+                </div>
               </div>
             </LiquidGlass>
-          </div>
-
-          {/* Tonearm accent — rendered last so it sits on top of the glass,
-              resting near the disc's edge, "waiting for the needle to
-              drop". Static, no motion; purely decorative flavor. */}
-          <div
-            aria-hidden="true"
-            style={{
-              position: 'absolute', top: '-4%', right: '2%', width: '32%', height: '32%',
-              transformOrigin: 'top right',
-              transform: 'rotate(30deg)',
-              pointerEvents: 'none',
-            }}
-          >
-            <div style={{
-              position: 'absolute', top: 0, right: '14%', width: '3px', height: '80%',
-              background: 'linear-gradient(to bottom, rgba(255,255,255,0.32), rgba(255,255,255,0.1))',
-              borderRadius: '2px',
-            }} />
-            <div style={{
-              position: 'absolute', bottom: '16%', right: 'calc(14% - 7px)', width: '17px', height: '17px', borderRadius: '4px',
-              background: 'linear-gradient(135deg, rgba(255,255,255,0.35), rgba(255,255,255,0.08))',
-              boxShadow: '0 2px 6px rgba(0,0,0,0.4)',
-            }} />
           </div>
         </div>
 

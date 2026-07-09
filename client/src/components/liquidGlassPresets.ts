@@ -32,7 +32,7 @@ export const LIQUID_LABEL_PROPS = {
   // already-blurred page background CARD/PILL sit over), so a much higher
   // blur is needed to read as frosted glass rather than a window straight
   // onto the grooves.
-  blurAmount: 0.22,
+  blurAmount: 0.48,
   saturation: 130,
   aberrationIntensity: 1.5,
   elasticity: 0.08,

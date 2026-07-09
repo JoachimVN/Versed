@@ -190,12 +190,25 @@ select:focus-visible,
   40%            { transform: translateY(-6px); opacity: 1; }
 }
 
-/* Slow continuous rotation for the "waiting for host" vinyl-record spinner
-   on Play's WaitingView — a record spinning in place, waiting for the
-   needle to drop. */
-@keyframes vinylSpin {
+/* Slow continuous rotation for Play's WaitingView vinyl. Only the glass
+   label assembly spins (not the grooved disc under it) — its own
+   refraction/sheen reads as motion more convincingly than a highlight
+   sweeping around static grooves did. Restates the element's own static
+   translate(-50%,-50%) alongside the rotation, per the same rule as
+   markerCelebrate above: an animated `transform` always wins over the
+   static inline one, so without this the label would snap to its
+   unshifted top-left corner once the animation takes hold. */
+@keyframes vinylLabelSpin {
+  from { transform: translate(-50%, -50%) rotate(0deg); }
+  to   { transform: translate(-50%, -50%) rotate(360deg); }
+}
+/* Applied to the label's text/content div, one level further in, at the
+   same duration and the opposite direction — cancels the parent's spin so
+   the name/text stays upright and readable while the glass around it
+   visibly turns. */
+@keyframes vinylLabelSpinCounter {
   from { transform: rotate(0deg); }
-  to   { transform: rotate(360deg); }
+  to   { transform: rotate(-360deg); }
 }
 
 @keyframes audioBar {
