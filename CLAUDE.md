@@ -23,11 +23,21 @@ npm run dev -w server      # tsx watch, hot-reloads on :3001
 npm run build -w server    # tsc + copies src/data/ to dist/
 ```
 
-There are no tests. TypeScript type-checking is the main correctness check:
+TypeScript type-checking is the main correctness check:
 ```bash
 cd client && npx tsc --noEmit
 cd server && npx tsc --noEmit
 ```
+
+The server has a vitest suite covering the pure logic (`npm test -w server`): `fuzzyMatch.test.ts` is a characterization suite of guess-matching behavior — most cases lock in past playtest bug fixes, so a failure there usually means an old bug is coming back — and `scoring.test.ts` covers the bid ladder and race scoring. Add a case whenever a playtest finds a matching/scoring bug. Test files are excluded from the tsc build.
+
+## Workflow
+
+- **Branches**: day-to-day work lands on `dev`. PRs go `dev` → `main`, but only open one when asked. Never commit directly to `main`.
+- **Commits**: one logical change per commit — never batch unrelated fixes/features together. Match the existing `git log` message style.
+- **Verification split**: the user playtests the game manually (multiplayer/audio/timing can't be verified statically). When they say a change is verified, typecheck → commit → push without re-verifying. `tsc --noEmit` in the affected workspace is the shipping gate.
+- **Skills**: `/ship` (typecheck + chunked commits + push to dev), `/screenshots` (regenerate `docs/screenshots/` locally instead of waiting for the CI bot), `/playtest` (triage a pasted bug list from a play session into per-fix commits).
+- **Screenshots CI**: PRs touching `client/src/**` trigger `.github/workflows/screenshots.yml`, which pushes a `chore: update screenshots [skip ci]` commit to the branch — pull before assuming the branch is up to date after a PR.
 
 ## Architecture
 

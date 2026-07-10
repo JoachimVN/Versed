@@ -1,8 +1,12 @@
 import { useSearchParams } from 'react-router-dom';
-import { PlayingView, RevealView, LobbyView } from './Host';
-import type { HostState } from './Host';
-import { WatchingView, GuessingView } from './Play';
-import type { PlayState } from './Play';
+import { PlayingView } from './host/PlayingView';
+import { RevealView } from './host/RevealView';
+import { LobbyView } from './host/LobbyView';
+import type { HostState } from './host/useHostGame';
+import { WatchingView } from './play/WatchingView';
+import { GuessingView } from './play/GuessingView';
+import { WaitingView } from './play/WaitingView';
+import type { PlayState } from './play/usePlayGame';
 import { RoundIntro } from '../components/RoundIntro';
 import { FinalResultsView } from '../components/FinalResults';
 import { PillButton } from '../components/RevealShared';
@@ -247,6 +251,7 @@ const MOCK_PLAY: PlayState = {
   setPin: noop, setName: noop, setBidIndex: noop, setGuessText: noop, setArtistGuessText: noop,
   submitStealVictim: noop, skipSteal: noop, join: noop, rejoinSaved: noop, submitBid: noop,
   submitGuess: noop, submitChoice: noop, submitChaosTap: noop, skipGuess: noop, newGamePin: null, rejoinNewGame: noop, renamePlayer: noop,
+  waitingTransitionPending: false, completeWaitingTransition: noop,
 };
 
 const MOCK_PLAY_GUESSING: PlayState = {
@@ -278,6 +283,7 @@ export default function Screenshot() {
   if (v === 'reveal')  return <RevealView game={MOCK_HOST_REVEAL} result={MOCK_RESULT} instant />;
   if (v === 'year')    return <RevealView game={MOCK_HOST_YEAR_REVEAL} result={MOCK_RESULT_YEAR} instant />;
   if (v === 'watching') return <WatchingView game={MOCK_PLAY} />;
+  if (v === 'waiting') return <WaitingView game={{ ...MOCK_PLAY, phase: 'waiting', myName: 'Joachim' }} />;
   if (v === 'guessing') return <GuessingView game={MOCK_PLAY_GUESSING} />;
   if (v === 'year-guessing') return <GuessingView game={MOCK_PLAY_YEAR_GUESSING} />;
   if (v === 'lobby') return <LobbyView game={MOCK_HOST_LOBBY} />;

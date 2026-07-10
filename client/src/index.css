@@ -167,21 +167,17 @@ select:focus-visible,
   animation: pageExit 0.32s cubic-bezier(0.4, 0, 0.2, 1) forwards;
 }
 
-/* Fade-only variant of .page-enter, used instead of it when a page mounts
-   as the destination of a LogoMorph (see contexts/LogoMorph.tsx). The morph
-   overlay measures this page's logo position synchronously on mount, before
-   .page-enter's translateY(12px) -> 0 slide has played out — handing it a
-   stale, pre-slide target rect. Landing the overlay on that rect and then
-   letting the slide finish afterward made the logo visibly hop the last
-   ~12px once the overlay handed off. Dropping the slide for morph arrivals
-   removes the conflict; the logo already gets its own flight animation via
-   the overlay, so it doesn't need the generic slide too. */
+/* Fade-only arrival for a LogoMorph destination (see
+   contexts/LogoMorph.tsx). The logo target is measured before this animation
+   begins, so it must not translate. Delaying the rest of the page until the
+   logo is well into its flight turns the route swap into one continuous
+   gesture: logo first, then the destination UI resolves beneath it. */
 @keyframes pageEnterFade {
   from { opacity: 0; }
   to   { opacity: 1; }
 }
-.page-enter-fade {
-  animation: pageEnterFade 0.4s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+.page-enter-morph {
+  animation: pageEnterFade 0.46s cubic-bezier(0.16, 1, 0.3, 1) 0.28s both;
 }
 
 @keyframes fadeIn {
@@ -192,6 +188,27 @@ select:focus-visible,
 @keyframes dotBounce {
   0%, 80%, 100% { transform: translateY(0); opacity: 0.35; }
   40%            { transform: translateY(-6px); opacity: 1; }
+}
+
+/* Slow continuous rotation for Play's WaitingView vinyl. Only the glass
+   label assembly spins (not the grooved disc under it) — its own
+   refraction/sheen reads as motion more convincingly than a highlight
+   sweeping around static grooves did. Restates the element's own static
+   translate(-50%,-50%) alongside the rotation, per the same rule as
+   markerCelebrate above: an animated `transform` always wins over the
+   static inline one, so without this the label would snap to its
+   unshifted top-left corner once the animation takes hold. */
+@keyframes vinylLabelSpin {
+  from { transform: translate(-50%, -50%) rotate(0deg); }
+  to   { transform: translate(-50%, -50%) rotate(360deg); }
+}
+/* Applied to the label's text/content div, one level further in, at the
+   same duration and the opposite direction — cancels the parent's spin so
+   the name/text stays upright and readable while the glass around it
+   visibly turns. */
+@keyframes vinylLabelSpinCounter {
+  from { transform: rotate(0deg); }
+  to   { transform: rotate(-360deg); }
 }
 
 @keyframes audioBar {
@@ -255,6 +272,23 @@ select:focus-visible,
 @keyframes markerGlowPulseGreen {
   0%, 100% { box-shadow: 0 0 0 0 rgba(74,222,128,0.5); }
   50%       { box-shadow: 0 0 0 6px rgba(74,222,128,0); }
+}
+
+/* Idle "breathing" glow for Play's waiting-room card — animates the
+   LiquidGlass wrapper's own `filter` (not `box-shadow`, which the
+   .glass-tint-* rules above already own via !important on the library's
+   internal ring spans) so it composes cleanly alongside that tint. */
+@keyframes cardGlowPulse {
+  0%, 100% { filter: drop-shadow(0 0 10px rgba(158,18,204,0.18)) drop-shadow(0 0 18px rgba(0,238,232,0.08)); }
+  50%       { filter: drop-shadow(0 0 18px rgba(158,18,204,0.32)) drop-shadow(0 0 26px rgba(0,238,232,0.16)); }
+}
+
+/* Idle pulse for the "Waiting for host to start…" caption beneath Play's
+   waiting-room vinyl — a small secondary motion cue so the big disc doesn't
+   have to double as the only sign anything is "live". */
+@keyframes waitingPulse {
+  0%, 100% { opacity: 0.45; }
+  50%       { opacity: 0.8; }
 }
 
 /* Most of the animations above are set via inline `style.animation` (audio

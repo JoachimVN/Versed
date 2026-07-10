@@ -9,7 +9,7 @@ export default function Home() {
   const [hovered, setHovered] = useState<'host' | 'join' | null>(null);
   const [leaving, setLeaving] = useState(false);
   const logoRef = useRef<HTMLImageElement>(null);
-  const { beginMorph, provideTarget, morphing } = useLogoMorph();
+  const { beginMorph, provideTarget, morphing, reducedMotion } = useLogoMorph();
 
   // Mirrors JoinView's arrival handling: only hands off to the overlay if a
   // morph is already in flight (i.e. we arrived via Play's back button) —
@@ -23,6 +23,10 @@ export default function Home() {
   }, []);
 
   const goToJoin = () => {
+    if (reducedMotion) {
+      navigate('/play');
+      return;
+    }
     if (logoRef.current) {
       const r = logoRef.current.getBoundingClientRect();
       beginMorph({ top: r.top, left: r.left, width: r.width, height: r.height });
@@ -31,9 +35,13 @@ export default function Home() {
     setTimeout(() => navigate('/play'), 320);
   };
 
+  let pageAnimClass = 'page-enter';
+  if (leaving) pageAnimClass = 'page-exit';
+  else if (morphing) pageAnimClass = 'page-enter-morph';
+
   return (
     <div
-      className={`relative min-h-screen flex flex-col items-center justify-center gap-10 p-6 ${leaving ? 'page-exit' : (morphing ? 'page-enter-fade' : 'page-enter')}`}
+      className={`relative min-h-screen flex flex-col items-center justify-center gap-10 p-6 ${pageAnimClass}`}
       style={{ zIndex: 1, pointerEvents: leaving ? 'none' : undefined }}
     >
       <div className="flex flex-col items-center gap-3">

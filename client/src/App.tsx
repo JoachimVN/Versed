@@ -1,12 +1,15 @@
-import { useEffect, useRef } from 'react';
+import { lazy, Suspense, useEffect, useRef } from 'react';
 import { BrowserRouter, Routes, Route, useLocation } from 'react-router-dom';
 import { ConfettiBackground, setConfettiSpeedTarget } from './components/ConfettiBackground';
 import { useViewportHeight } from './hooks/useViewportHeight';
 import { LogoMorphProvider } from './contexts/LogoMorph';
 import Home from './pages/Home';
-import Host from './pages/Host';
-import Play from './pages/Play';
-import Screenshot from './pages/Screenshot';
+
+// Route-level code splitting: a player's phone never downloads the host's
+// Spotify/QR/settings code and vice versa. Home stays eager (landing page).
+const Host = lazy(() => import('./pages/Host'));
+const Play = lazy(() => import('./pages/Play'));
+const Screenshot = lazy(() => import('./pages/Screenshot'));
 
 function RouteTracker() {
   const location = useLocation();
@@ -40,6 +43,12 @@ function RouteTracker() {
 
 export default function App() {
   useViewportHeight();
+
+  // Warm the Play chunk right after first paint: the Home -> Play logo morph
+  // must not stall on a chunk fetch when someone joins via PIN/QR.
+  useEffect(() => {
+    void import('./pages/Play');
+  }, []);
 
   return (
     <BrowserRouter basename={import.meta.env.BASE_URL.replace(/\/$/, '') || '/'}>
@@ -87,13 +96,17 @@ export default function App() {
           overshooting past it. */}
       <div style={{ position: 'fixed', top: 'env(safe-area-inset-top, 0px)', left: 0, right: 0, height: 'var(--app-height, 100vh)' }}>
         <RouteTracker />
-        <Routes>
-          <Route path="/" element={<Home />} />
-          <Route path="/host" element={<Host />} />
-          <Route path="/play" element={<Play />} />
-          <Route path="/play/:pin" element={<Play />} />
-          <Route path="/screenshot" element={<Screenshot />} />
-        </Routes>
+        {/* Fallback is null: the app background above keeps painting while a
+            route chunk loads, which reads as a beat of quiet, not a spinner. */}
+        <Suspense fallback={null}>
+          <Routes>
+            <Route path="/" element={<Home />} />
+            <Route path="/host" element={<Host />} />
+            <Route path="/play" element={<Play />} />
+            <Route path="/play/:pin" element={<Play />} />
+            <Route path="/screenshot" element={<Screenshot />} />
+          </Routes>
+        </Suspense>
       </div>
       </LogoMorphProvider>
     </BrowserRouter>
