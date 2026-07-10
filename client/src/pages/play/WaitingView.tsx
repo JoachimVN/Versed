@@ -9,7 +9,10 @@ import { APP_NAME } from '../../config';
 import { setHomeBackgroundTarget } from '../../utils/homeBackgroundTransition';
 import type { PlayState } from './usePlayGame';
 
-const BACKGROUND_FADE_MS = 1000;
+// Home is already brought to the foreground as soon as Back is pressed, so a
+// shorter hand-off keeps the return responsive while leaving time for the
+// waiting content's exit animation to complete.
+const BACKGROUND_FADE_MS = 500;
 const PAGE_EXIT_MS = 320;
 
 export function WaitingView({ game }: Readonly<{ game: PlayState }>) {
@@ -50,7 +53,7 @@ export function WaitingView({ game }: Readonly<{ game: PlayState }>) {
     if (navigateTimerRef.current) clearTimeout(navigateTimerRef.current);
   }, []);
 
-  // Let the background finish its one-second fade before the route changes.
+  // Let the background settle briefly before the route changes.
   // Arm the logo overlay immediately so it remains visible above that entire
   // dissolve; the rest of the content leaves in the final 320ms, then Home
   // supplies the overlay's destination as soon as its layout is available.
