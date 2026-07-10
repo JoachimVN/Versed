@@ -63,7 +63,15 @@ export default function App() {
           non-scrolling page like ours, which cut this off at the keyboard's
           edge instead of extending behind it. Absolute positioning isn't
           subject to that quirk. */}
-      <div className="absolute inset-0" style={{ background: '#080812' }}>
+      <div
+        className="absolute inset-0"
+        style={{
+          background: '#080812',
+          opacity: 'var(--home-background-opacity, 1)',
+          transition: 'opacity var(--home-background-fade-duration, 1s) ease',
+          zIndex: 'var(--home-background-z-index, 0)',
+        }}
+      >
         <ConfettiBackground />
         <div
           className="absolute inset-0 pointer-events-none"

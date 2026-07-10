@@ -1,4 +1,4 @@
-import { useState, useLayoutEffect, useRef } from 'react';
+import { useState, useEffect, useCallback, useLayoutEffect, useRef } from 'react';
 import type { CSSProperties } from 'react';
 import { Pencil } from 'lucide-react';
 import LiquidGlass from 'liquid-glass-react';
@@ -6,14 +6,21 @@ import { useLogoMorph } from '../../contexts/LogoMorph';
 import { BackButton } from '../../components/BackButton';
 import { LIQUID_LABEL_PROPS } from '../../components/liquidGlassPresets';
 import { APP_NAME } from '../../config';
+import { setHomeBackgroundTarget } from '../../utils/homeBackgroundTransition';
 import type { PlayState } from './usePlayGame';
-import { useMorphBack, pageTransitionClass } from './morph';
+
+const BACKGROUND_FADE_MS = 1000;
+const PAGE_EXIT_MS = 320;
 
 export function WaitingView({ game }: Readonly<{ game: PlayState }>) {
   const [editing, setEditing] = useState(false);
   const [draftName, setDraftName] = useState('');
   const [leaving, setLeaving] = useState(false);
+  const [backgroundLeaving, setBackgroundLeaving] = useState(false);
   const logoRef = useRef<HTMLImageElement>(null);
+  const backPromiseRef = useRef<Promise<void> | null>(null);
+  const pageExitTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const navigateTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const { beginMorph, provideTarget, morphing, reducedMotion } = useLogoMorph();
 
   // Arrival side of JoinView's forward hand-off: only engages if a morph is
@@ -28,8 +35,47 @@ export function WaitingView({ game }: Readonly<{ game: PlayState }>) {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  // Mirrors JoinView's goBack.
-  const goBack = useMorphBack(logoRef, setLeaving, beginMorph, reducedMotion);
+  // Home's ambient background belongs to App, outside this phase. Crossfade
+  // the whole composited layer so its confetti, spotlight, scrim, and blur
+  // always move together.
+  useEffect(() => {
+    setHomeBackgroundTarget(false, false, reducedMotion);
+    return () => {
+      setHomeBackgroundTarget(true, false, reducedMotion);
+    };
+  }, [reducedMotion]);
+
+  useEffect(() => () => {
+    if (pageExitTimerRef.current) clearTimeout(pageExitTimerRef.current);
+    if (navigateTimerRef.current) clearTimeout(navigateTimerRef.current);
+  }, []);
+
+  // Let the background finish its one-second fade before the route changes.
+  // Arm the logo overlay immediately so it remains visible above that entire
+  // dissolve; the rest of the content leaves in the final 320ms, then Home
+  // supplies the overlay's destination as soon as its layout is available.
+  const goBack = useCallback(() => {
+    if (reducedMotion) return Promise.resolve();
+    if (backPromiseRef.current) return backPromiseRef.current;
+
+    backPromiseRef.current = new Promise<void>(resolve => {
+      if (logoRef.current) {
+        const r = logoRef.current.getBoundingClientRect();
+        beginMorph({ top: r.top, left: r.left, width: r.width, height: r.height });
+      }
+      setBackgroundLeaving(true);
+      setHomeBackgroundTarget(true, true);
+      pageExitTimerRef.current = setTimeout(() => {
+        pageExitTimerRef.current = null;
+        setLeaving(true);
+      }, BACKGROUND_FADE_MS - PAGE_EXIT_MS);
+      navigateTimerRef.current = setTimeout(() => {
+        navigateTimerRef.current = null;
+        resolve();
+      }, BACKGROUND_FADE_MS);
+    });
+    return backPromiseRef.current;
+  }, [beginMorph, reducedMotion]);
 
   const startEdit = () => { setDraftName(game.myName); setEditing(true); };
   const cancelEdit = () => setEditing(false);
@@ -38,23 +84,37 @@ export function WaitingView({ game }: Readonly<{ game: PlayState }>) {
     game.renamePlayer(draftName);
     setEditing(false);
   };
+  const backgroundTransitionClass = [
+    'waiting-background',
+    reducedMotion ? 'waiting-background-reduced' : '',
+    backgroundLeaving ? 'waiting-background-held' : '',
+  ].filter(Boolean).join(' ');
+  let contentTransitionClass = 'page-enter';
+  if (leaving) contentTransitionClass = 'page-exit';
+  else if (backgroundLeaving) contentTransitionClass = '';
+  else if (morphing) contentTransitionClass = 'page-enter-morph';
 
   return (
     <div className="relative min-h-screen overflow-hidden">
-      {/* Background */}
-      <img
-        src={`${import.meta.env.BASE_URL}background2.svg`}
-        alt=""
+      {/* These layers fade in while Play's join-only purple glow fades out,
+          avoiding the abrupt background swap that used to happen as soon as
+          the waiting phase mounted. */}
+      <div
+        className={backgroundTransitionClass}
         aria-hidden="true"
-        style={{ position: 'fixed', inset: 0, width: '100%', height: '100%', objectFit: 'cover', zIndex: 0, transform: 'rotate(180deg)' }}
-      />
-      {/* Blur + dark scrim */}
-      <div style={{ position: 'fixed', inset: 0, zIndex: 1, background: 'rgba(5,5,14,0.80)', backdropFilter: 'blur(28px)' }} />
+      >
+        <img
+          src={`${import.meta.env.BASE_URL}background2.svg`}
+          alt=""
+          style={{ width: '100%', height: '100%', objectFit: 'cover', transform: 'rotate(180deg)' }}
+        />
+        <div className="waiting-background-scrim" />
+      </div>
 
       {/* Content */}
       <div
-        className={`relative flex flex-col items-center justify-center min-h-screen gap-8 p-6 ${pageTransitionClass(leaving, morphing)}`}
-        style={{ zIndex: 2, pointerEvents: leaving ? 'none' : undefined }}
+        className={`relative flex flex-col items-center justify-center min-h-screen gap-8 p-6 ${contentTransitionClass}`}
+        style={{ zIndex: 3, pointerEvents: backgroundLeaving ? 'none' : undefined }}
       >
         <BackButton beforeNavigate={goBack} />
         <img
