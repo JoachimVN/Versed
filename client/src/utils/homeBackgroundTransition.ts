@@ -14,7 +14,8 @@ export function setHomeBackgroundTarget(visible: boolean, immediate = false) {
 
 export function setWaitingBackgroundTarget(visible: boolean, immediate = false) {
   const root = document.documentElement;
-  root.style.setProperty('--waiting-background-fade-duration', immediate ? '0ms' : (visible ? '1s' : '500ms'));
+  const fadeDuration = immediate ? '0ms' : visible ? '1s' : '500ms';
+  root.style.setProperty('--waiting-background-fade-duration', fadeDuration);
   root.style.setProperty('--waiting-background-opacity', visible ? '1' : '0');
 }
 
