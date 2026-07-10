@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from 'react';
+import { useLayoutEffect, useRef, useState } from 'react';
 import type { Hint, PartyInfo, RoundResultEvent } from '../types';
 import { useEscapeKey } from '../hooks/useEscapeKey';
 import { useFocusTrap } from '../hooks/useFocusTrap';
@@ -15,7 +15,9 @@ export const INTRO_MS = 4000;
 export function RoundIntro({ party, roundKey, dismissible = true }: Readonly<{ party: PartyInfo | null; roundKey: number; dismissible?: boolean }>) {
   const [visible, setVisible] = useState(false);
 
-  useEffect(() => {
+  // Arm the announcement before the browser paints the new round screen.
+  // A normal effect leaves one frame where hints can be visible underneath.
+  useLayoutEffect(() => {
     if (!party) return;
     setVisible(true);
     const t = setTimeout(() => setVisible(false), INTRO_MS);

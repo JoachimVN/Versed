@@ -497,7 +497,12 @@ export function usePlayGame(pinParam?: string): PlayState {
         localStorage.removeItem('versed_session');
         return;
       }
-      if (success) { myNameRef.current = n; pinRef.current = p; setMyName(n); setPin(p); setName(n); setWaitingTransitionPending(true); }
+      if (success) {
+        myNameRef.current = n;
+        pinRef.current = p;
+        setMyName(n);
+        setWaitingTransitionPending(true);
+      }
     });
   };
 
