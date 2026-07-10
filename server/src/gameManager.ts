@@ -447,28 +447,15 @@ function pickPartyEvent(game: Game, format: PartyFormat, prevEvent: PartyEvent |
   return pickWeighted(filtered);
 }
 
-// Mystery weights at the three labelled anchors. Intermediate slider values
-// linearly interpolate every weight, rather than snapping to a hidden preset.
-const MYSTERY_MULTIPLIERS = [1.5, 2, 3, 4, 5, 10] as const;
-const MYSTERY_WEIGHT_ANCHORS = {
-  chill: [40, 35, 20, 5, 0, 0],
-  balanced: [27, 27, 27, 12, 5, 2],
-  chaotic: [12, 16, 17, 20, 18, 17],
-} as const;
+// Mystery multiplier weights — fixed regardless of chaos slider position, so
+// the slider only controls how often events happen, not how big they pay.
+const MYSTERY_WEIGHTS: [number, number][] = [
+  [1.5, 27], [2, 27], [3, 27], [4, 12], [5, 5], [10, 2],
+];
 
-function mysteryWeights(chaosLevel: ChaosLevel): [number, number][] {
-  const lower = chaosLevel <= 50 ? MYSTERY_WEIGHT_ANCHORS.chill : MYSTERY_WEIGHT_ANCHORS.balanced;
-  const upper = chaosLevel <= 50 ? MYSTERY_WEIGHT_ANCHORS.balanced : MYSTERY_WEIGHT_ANCHORS.chaotic;
-  const progress = chaosLevel <= 50 ? chaosLevel / 50 : (chaosLevel - 50) / 50;
-  return MYSTERY_MULTIPLIERS.map((multiplier, index) => [
-    multiplier,
-    lower[index] + (upper[index] - lower[index]) * progress,
-  ]);
-}
-
-function eventMultiplier(game: Game, event: PartyEvent | null): number {
+function eventMultiplier(event: PartyEvent | null): number {
   if (event === 'double') return 2;
-  if (event === 'mystery') return pickWeighted(mysteryWeights(game.chaosLevel));
+  if (event === 'mystery') return pickWeighted(MYSTERY_WEIGHTS);
   // The "boost" in Underdog Boost — a real payout bump on top of exclusive
   // access to the round, not just first dibs at the normal rate.
   if (event === 'underdog') return 1.5;
@@ -548,7 +535,7 @@ function buildPartyConfig(game: Game): PartyConfig {
 
   const target = pickPartyTarget(game, format);
   const event = pickPartyEvent(game, format, prev?.event);
-  const multiplier = eventMultiplier(game, event);
+  const multiplier = eventMultiplier(event);
   // Only race/year formats can go winner-only — classic already has its own
   // bid/tier stakes, and stacking this on top would just zero out everyone
   // but the lowest bidder.
@@ -584,7 +571,7 @@ function buildDuelSubRoundConfig(game: Game): PartyConfig {
 
   const prev = game.currentRound?.party;
   const event = pickPartyEvent(game, format, prev?.event);
-  const multiplier = eventMultiplier(game, event);
+  const multiplier = eventMultiplier(event);
 
   const gameNum = game.duelSubRoundIndex + 1;
   const gameLabel = gameNum > DUEL_FORMAT_SEQUENCE.length
