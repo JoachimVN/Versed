@@ -539,7 +539,12 @@ function buildPartyConfig(game: Game): PartyConfig {
   // rather than handing pickWeighted an empty pool.
   if (formatPool.length === 0) formatPool.push(['classic', 1]);
   let format = pickWeighted<PartyFormat>(formatPool);
-  if (format === 'year' && prev?.format === 'year') format = 'race';
+  // Avoid two Guess the Year rounds back to back — reroll among whatever
+  // else the host has enabled rather than assuming 'race' is available.
+  if (format === 'year' && prev?.format === 'year') {
+    const nonYearPool = formatPool.filter(([f]) => f !== 'year');
+    format = nonYearPool.length > 0 ? pickWeighted<PartyFormat>(nonYearPool) : 'year';
+  }
 
   const target = pickPartyTarget(game, format);
   const event = pickPartyEvent(game, format, prev?.event);
