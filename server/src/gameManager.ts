@@ -391,10 +391,10 @@ function introFor(
     : { title: 'Classic Round', tagline: 'Bid low, score high' };
 }
 
-// 'title' always stays in the pool unconditionally — it's the baseline round
-// type, same principle as 'classic'/'race' always staying in buildPartyConfig's
-// format pool below — so this never needs an empty-pool fallback the way
-// pickPartyEvent's genuinely-can-empty pool does.
+// 'title' always stays in the pool unconditionally — it's the baseline
+// guess target, available no matter which round types the host disables —
+// so this never needs an empty-pool fallback the way pickPartyEvent's
+// genuinely-can-empty pool does.
 function pickPartyTarget(game: Game, format: PartyFormat): PartyTarget {
   if (format === 'year') return 'year';
   const pool: [PartyTarget, number][] = [['title', 60]];
@@ -416,7 +416,7 @@ export const ALL_PARTY_EVENTS: PartyEvent[] = [
 // Every party round-type variant that exists — same "default everything on,
 // validate host-supplied lists against this" role as ALL_PARTY_EVENTS, but
 // for the format/target/winnerOnly pool instead of event modifiers.
-export const ALL_PARTY_ROUND_TYPES: PartyRoundType[] = ['choice', 'artist', 'both', 'year', 'winnerOnly'];
+export const ALL_PARTY_ROUND_TYPES: PartyRoundType[] = ['classic', 'race', 'choice', 'artist', 'both', 'year', 'winnerOnly'];
 
 // Interpolate from 80% plain rounds at Chill through 60% at Balanced to 40%
 // at Chaotic. Every slider position therefore affects the actual frequency.
@@ -508,20 +508,36 @@ function buildPartyConfig(game: Game): PartyConfig {
   }
 
   if (game.roundIndex === 0) {
+    // Prefer the plainest enabled format so the warm-up stays a gentle
+    // intro rather than opening on Guess the Year or Multiple Choice — but
+    // still respect a host who's disabled Classic/Race outright.
+    const warmupFormat: PartyFormat = game.enabledRoundTypes.has('classic') ? 'classic'
+      : game.enabledRoundTypes.has('race') ? 'race'
+      : game.enabledRoundTypes.has('year') ? 'year'
+      : game.enabledRoundTypes.has('choice') ? 'choice'
+      : 'classic';
+    const warmupTagline: Record<PartyFormat, string> = {
+      classic: 'A classic round to get going',
+      race: 'A race round to get going',
+      year: 'Guess the year to get going',
+      choice: 'A multiple-choice round to get going',
+    };
     return {
-      ...plain, format: 'classic', target: 'title', event: null, multiplier: 1, winnerOnly: false,
-      intro: { title: 'Warm-Up', tagline: 'A classic round to get going' },
+      ...plain, format: warmupFormat, target: warmupFormat === 'year' ? 'year' : 'title',
+      event: null, multiplier: 1, winnerOnly: false,
+      intro: { title: 'Warm-Up', tagline: warmupTagline[warmupFormat] },
     };
   }
 
   const prev = game.currentRound?.party;
-  // 'classic'/'race' always stay unconditional in the pool — same principle
-  // as pickPartyTarget's 'title' — so disabling every round type just falls
-  // back to plain classic/race rounds (events still layer on top), no
-  // explicit empty-pool branch needed the way pickPartyEvent's pool needs one.
-  const formatPool: [PartyFormat, number][] = [['classic', 40], ['race', 35]];
+  const formatPool: [PartyFormat, number][] = [];
+  if (game.enabledRoundTypes.has('classic')) formatPool.push(['classic', 40]);
+  if (game.enabledRoundTypes.has('race')) formatPool.push(['race', 35]);
   if (game.enabledRoundTypes.has('year')) formatPool.push(['year', 15]);
   if (game.enabledRoundTypes.has('choice')) formatPool.push(['choice', 10]);
+  // The host disabled every format — fall back to a plain classic round
+  // rather than handing pickWeighted an empty pool.
+  if (formatPool.length === 0) formatPool.push(['classic', 1]);
   let format = pickWeighted<PartyFormat>(formatPool);
   if (format === 'year' && prev?.format === 'year') format = 'race';
 
