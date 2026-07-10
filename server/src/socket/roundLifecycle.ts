@@ -222,7 +222,7 @@ export function endRaceRound(game: Game) {
 }
 
 export function closeBettingAndPlay(game: Game) {
-  if (!game || game.phase !== 'betting') return;
+  if (game?.phase !== 'betting') return;
   const round = game.currentRound!;
   const result = gm.closeBetting(game);
   if (!result) {
@@ -306,7 +306,7 @@ export function advanceTierOrReveal(game: Game) {
 }
 
 export function startGuessingPhase(game: Game) {
-  if (!game || game.phase !== 'playing') return;
+  if (game?.phase !== 'playing') return;
   const round = game.currentRound!;
   const guesserSocketIds = round.guesserSocketIds;
   const guesserNames = guesserSocketIds
