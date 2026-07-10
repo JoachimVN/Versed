@@ -1,0 +1,4 @@
+interface:
+  display_name: "Versed Screenshots"
+  short_description: "Regenerate and verify Versed documentation screenshots"
+  default_prompt: "Use $screenshots to regenerate and verify the Versed documentation screenshots."

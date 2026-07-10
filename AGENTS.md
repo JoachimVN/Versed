@@ -21,17 +21,19 @@ npm run build -w client        # Type-check and build the client
 npm run build -w server        # Type-check/build server and copy song data
 ```
 
-There is currently no automated test suite. Use TypeScript checks and the full
-build as the primary validation:
+The server has Vitest characterization suites for fuzzy matching and scoring.
+Use the narrowest relevant test and TypeScript checks during development, then
+the full build when changes affect both workspaces or production output:
 
 ```bash
 cd client && npx tsc --noEmit
 cd server && npx tsc --noEmit
+npm test -w server
 npm run build
 ```
 
-Run the narrowest relevant checks during development, then run the full build
-before handing off changes that affect both workspaces or production output.
+Add a regression case when a playtest exposes a fuzzy-matching or scoring bug.
+Test files are excluded from the server TypeScript build.
 
 ## Repository layout
 
@@ -97,6 +99,11 @@ Railway builds both workspaces and starts the server, which serves the client
 build in production. The health endpoint is `/api/health`. Changes to build
 output, static serving, CORS, OAuth redirects, or environment handling should be
 checked against `railway.toml` and the portfolio sync workflow/script.
+
+PRs touching `client/src/**` run `.github/workflows/screenshots.yml`. Use the
+repo-local `screenshots` skill in `.agents/skills/screenshots/` to regenerate
+and visually check `docs/screenshots/` before CI when a UI change affects the
+documented screens.
 
 ## Git and change hygiene
 
