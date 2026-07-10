@@ -56,36 +56,73 @@ export default function App() {
           overlay logo survives the Home -> Play unmount/mount swap and can
           animate across it. */}
       <LogoMorphProvider>
-      {/* Background layer: absolutely positioned against #root (sized from
+      {/* Background layers: absolutely positioned against #root (sized from
           real document height, see index.css) rather than fixed against the
           viewport — position: fixed elements get visually clipped to the
           shrunk visual viewport by iOS Safari when the keyboard opens on a
           non-scrolling page like ours, which cut this off at the keyboard's
           edge instead of extending behind it. Absolute positioning isn't
           subject to that quirk. */}
+      <div className="absolute inset-0" style={{ background: '#080812', zIndex: 0 }} />
+      <div
+        className="waiting-background"
+        aria-hidden="true"
+      >
+        <img
+          src={`${import.meta.env.BASE_URL}background2.svg`}
+          alt=""
+          style={{ width: '100%', height: '100%', objectFit: 'cover', transform: 'rotate(180deg)' }}
+        />
+      </div>
+      {/* Persistent effects layer. Waiting keeps this exact canvas and
+          spotlight, but changes the overlay treatment and stops recycling
+          particles so the existing confetti naturally drains away. */}
       <div
         className="absolute inset-0"
         style={{
-          background: '#080812',
           opacity: 'var(--home-background-opacity, 1)',
           transition: 'opacity var(--home-background-fade-duration, 1s) ease',
-          zIndex: 'var(--home-background-z-index, 0)',
+          zIndex: 1,
         }}
       >
-        <ConfettiBackground />
+        <div
+          className="absolute inset-0 pointer-events-none"
+          style={{
+            zIndex: 'var(--confetti-layer-z-index, 0)',
+            opacity: 'var(--confetti-layer-opacity, 1)',
+            transition: 'opacity var(--ambient-surface-duration, 500ms) ease',
+          }}
+        >
+          <ConfettiBackground />
+        </div>
+        <div
+          className="absolute inset-0 pointer-events-none"
+          style={{
+            zIndex: 3,
+            opacity: 'var(--confetti-treatment-opacity, 0)',
+            background: 'rgba(5,5,14,0.35)',
+            backdropFilter: 'blur(5px)',
+            WebkitBackdropFilter: 'blur(5px)',
+            transition: 'opacity var(--ambient-surface-duration, 500ms) ease',
+          }}
+        />
         <div
           className="absolute inset-0 pointer-events-none"
           style={{
             background: 'radial-gradient(ellipse 48% 105% at 50% -5%, rgba(198,36,255,0.3) 0%, rgba(158,18,204,0.05) 55%, transparent 80%)',
+            // Keep the spotlight explicitly beneath the Waiting overlay so
+            // its darkening and backdrop blur are applied to the purple glow
+            // as well as the artwork.
             zIndex: 0,
           }}
         />
         <div
           className="absolute inset-0 pointer-events-none"
           style={{
-            background: 'rgba(8,8,18,0.7)',
-            backdropFilter: 'blur(2px)',
-            WebkitBackdropFilter: 'blur(6px)',
+            background: 'var(--ambient-overlay-color, rgba(8,8,18,0.7))',
+            backdropFilter: 'blur(var(--ambient-overlay-blur, 2px))',
+            WebkitBackdropFilter: 'blur(var(--ambient-overlay-webkit-blur, 6px))',
+            transition: 'background var(--ambient-surface-duration, 500ms) ease, backdrop-filter var(--ambient-surface-duration, 500ms) ease, -webkit-backdrop-filter var(--ambient-surface-duration, 500ms) ease',
             zIndex: 0,
           }}
         />
@@ -102,7 +139,7 @@ export default function App() {
           which subtracts both the top offset consumed here and the bottom
           inset, so they land flush with the safe area instead of
           overshooting past it. */}
-      <div style={{ position: 'fixed', top: 'env(safe-area-inset-top, 0px)', left: 0, right: 0, height: 'var(--app-height, 100vh)' }}>
+      <div style={{ position: 'fixed', top: 'env(safe-area-inset-top, 0px)', left: 0, right: 0, height: 'var(--app-height, 100vh)', zIndex: 2 }}>
         <RouteTracker />
         {/* Fallback is null: the app background above keeps painting while a
             route chunk loads, which reads as a beat of quiet, not a spinner. */}

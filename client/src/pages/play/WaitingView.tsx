@@ -6,7 +6,6 @@ import { useLogoMorph } from '../../contexts/LogoMorph';
 import { BackButton } from '../../components/BackButton';
 import { LIQUID_LABEL_PROPS } from '../../components/liquidGlassPresets';
 import { APP_NAME } from '../../config';
-import { setHomeBackgroundTarget } from '../../utils/homeBackgroundTransition';
 import type { PlayState } from './usePlayGame';
 
 // Home is already brought to the foreground as soon as Back is pressed, so a
@@ -15,7 +14,10 @@ import type { PlayState } from './usePlayGame';
 const BACKGROUND_FADE_MS = 500;
 const PAGE_EXIT_MS = 320;
 
-export function WaitingView({ game }: Readonly<{ game: PlayState }>) {
+export function WaitingView({
+  game,
+  leaveBackground,
+}: Readonly<{ game: PlayState; leaveBackground: () => void }>) {
   const [editing, setEditing] = useState(false);
   const [draftName, setDraftName] = useState('');
   const [leaving, setLeaving] = useState(false);
@@ -38,16 +40,6 @@ export function WaitingView({ game }: Readonly<{ game: PlayState }>) {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  // Home's ambient background belongs to App, outside this phase. Crossfade
-  // the whole composited layer so its confetti, spotlight, scrim, and blur
-  // always move together.
-  useEffect(() => {
-    setHomeBackgroundTarget(false, false, reducedMotion);
-    return () => {
-      setHomeBackgroundTarget(true, false, reducedMotion);
-    };
-  }, [reducedMotion]);
-
   useEffect(() => () => {
     if (pageExitTimerRef.current) clearTimeout(pageExitTimerRef.current);
     if (navigateTimerRef.current) clearTimeout(navigateTimerRef.current);
@@ -67,7 +59,7 @@ export function WaitingView({ game }: Readonly<{ game: PlayState }>) {
         beginMorph({ top: r.top, left: r.left, width: r.width, height: r.height });
       }
       setBackgroundLeaving(true);
-      setHomeBackgroundTarget(true, true);
+      leaveBackground();
       pageExitTimerRef.current = setTimeout(() => {
         pageExitTimerRef.current = null;
         setLeaving(true);
@@ -78,7 +70,7 @@ export function WaitingView({ game }: Readonly<{ game: PlayState }>) {
       }, BACKGROUND_FADE_MS);
     });
     return backPromiseRef.current;
-  }, [beginMorph, reducedMotion]);
+  }, [beginMorph, leaveBackground, reducedMotion]);
 
   const startEdit = () => { setDraftName(game.myName); setEditing(true); };
   const cancelEdit = () => setEditing(false);
@@ -87,11 +79,6 @@ export function WaitingView({ game }: Readonly<{ game: PlayState }>) {
     game.renamePlayer(draftName);
     setEditing(false);
   };
-  const backgroundTransitionClass = [
-    'waiting-background',
-    reducedMotion ? 'waiting-background-reduced' : '',
-    backgroundLeaving ? 'waiting-background-held' : '',
-  ].filter(Boolean).join(' ');
   let contentTransitionClass = 'page-enter';
   if (leaving) contentTransitionClass = 'page-exit';
   else if (backgroundLeaving) contentTransitionClass = '';
@@ -99,21 +86,6 @@ export function WaitingView({ game }: Readonly<{ game: PlayState }>) {
 
   return (
     <div className="relative min-h-screen overflow-hidden">
-      {/* These layers fade in while Play's join-only purple glow fades out,
-          avoiding the abrupt background swap that used to happen as soon as
-          the waiting phase mounted. */}
-      <div
-        className={backgroundTransitionClass}
-        aria-hidden="true"
-      >
-        <img
-          src={`${import.meta.env.BASE_URL}background2.svg`}
-          alt=""
-          style={{ width: '100%', height: '100%', objectFit: 'cover', transform: 'rotate(180deg)' }}
-        />
-        <div className="waiting-background-scrim" />
-      </div>
-
       {/* Content */}
       <div
         className={`relative flex flex-col items-center justify-center min-h-screen gap-8 p-6 ${contentTransitionClass}`}

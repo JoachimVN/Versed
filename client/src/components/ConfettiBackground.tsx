@@ -47,9 +47,28 @@ function makeParticle(W: number, H: number, scattered = false, rand: () => numbe
 // Module-level speed so any component can nudge it without React re-renders.
 let _speedTarget = 1;
 let _currentSpeed = 1;
+let _respawning = true;
+let _restoreFieldVersion = 0;
 
 export function setConfettiSpeedTarget(speed: number) {
   _speedTarget = speed;
+}
+
+// The app-level canvas stays mounted across Home, Join, and Waiting. Turning
+// recycling off lets the particles that are already visible finish falling
+// out of view without introducing any new ones; turning it back on makes the
+// same canvas resume its normal continuous field.
+export function setConfettiRespawning(enabled: boolean) {
+  _respawning = enabled;
+}
+
+// Used when Waiting returns to Home. Particles still on screen keep their
+// exact positions; only slots that have already drained below the viewport
+// are scattered back into view so Home's full field is present during the
+// transition rather than arriving from above afterward.
+export function restoreConfettiField() {
+  _respawning = true;
+  _restoreFieldVersion++;
 }
 
 export function ConfettiBackground({ burst = false, persistAfterBurst = false, speedMultiplier = 1 }: Readonly<{ burst?: boolean; persistAfterBurst?: boolean; speedMultiplier?: number }>) {
@@ -100,6 +119,7 @@ export function ConfettiBackground({ burst = false, persistAfterBurst = false, s
     let frameCount = 0;
     let fpsWindowStart = performance.now();
     let burstStartTime = burst ? performance.now() : 0;
+    let restoreFieldVersion = _restoreFieldVersion;
 
     const resetTiming = () => {
       last = performance.now();
@@ -146,7 +166,17 @@ export function ConfettiBackground({ burst = false, persistAfterBurst = false, s
         p.x += p.vx * dt * _currentSpeed;
         p.y += p.vy * dt * _currentSpeed;
         p.rot += p.rotV * dt * _currentSpeed;
-        if (p.y > H + 30 && !burst) Object.assign(p, makeParticle(W, H, false));
+        if (p.y > H + 30 && !burst && _respawning) {
+          Object.assign(p, makeParticle(W, H, false));
+        }
+      }
+    };
+
+    const restoreDrainedParticles = () => {
+      if (restoreFieldVersion === _restoreFieldVersion) return;
+      restoreFieldVersion = _restoreFieldVersion;
+      for (const p of particles) {
+        if (p.y > H + 30) Object.assign(p, makeParticle(W, H, true));
       }
     };
 
@@ -157,6 +187,8 @@ export function ConfettiBackground({ burst = false, persistAfterBurst = false, s
       last = now;
 
       if (updateFrameRate(now)) return;
+
+      restoreDrainedParticles();
 
       if (burst) {
         updateBurst(now);

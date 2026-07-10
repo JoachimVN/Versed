@@ -180,43 +180,18 @@ select:focus-visible,
   animation: pageEnterFade 0.46s cubic-bezier(0.16, 1, 0.3, 1) 0.28s both;
 }
 
-/* Join owns a purple glow rather than a full artwork background. Fade the
-   waiting art in rather than swapping the background abruptly. */
+/* App-level waiting artwork. It stays below the persistent confetti,
+   spotlight, and overlay layers, while its opacity is controlled by the
+   Waiting atmosphere controller across JoinView -> WaitingView. */
 .waiting-background {
-  position: fixed;
+  position: absolute;
   inset: 0;
   z-index: 0;
   overflow: hidden;
   pointer-events: none;
   will-change: opacity;
-  animation: waitingBackgroundEnter 1s ease both;
-}
-
-.waiting-background-scrim {
-  position: absolute;
-  inset: 0;
-  background: rgba(5, 5, 14, 0.80);
-  backdrop-filter: blur(28px);
-  -webkit-backdrop-filter: blur(28px);
-}
-
-/* Used in addition to the media query so a runtime preference change picked
-   up by LogoMorph also bypasses this transition immediately. */
-.waiting-background-reduced {
-  animation: none;
-}
-
-/* Home's complete ambient layer crossfades above this one on Back. Keep the
-   waiting artwork stable underneath so there is no mid-transition dimming or
-   mismatch between its art and scrim. */
-.waiting-background-held {
-  animation: none;
-  opacity: 1;
-}
-
-@keyframes waitingBackgroundEnter {
-  from { opacity: 0; }
-  to   { opacity: 1; }
+  opacity: var(--waiting-background-opacity, 0);
+  transition: opacity var(--waiting-background-fade-duration, 1s) ease;
 }
 
 @keyframes fadeIn {
