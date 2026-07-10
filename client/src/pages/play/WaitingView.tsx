@@ -43,10 +43,10 @@ export function WaitingView({ game }: Readonly<{ game: PlayState }>) {
     <div className="relative min-h-screen overflow-hidden">
       {/* Background */}
       <img
-        src={`${import.meta.env.BASE_URL}background.svg`}
+        src={`${import.meta.env.BASE_URL}background2.svg`}
         alt=""
         aria-hidden="true"
-        style={{ position: 'fixed', inset: 0, width: '100%', height: '100%', objectFit: 'cover', zIndex: 0 }}
+        style={{ position: 'fixed', inset: 0, width: '100%', height: '100%', objectFit: 'cover', zIndex: 0, transform: 'rotate(180deg)' }}
       />
       {/* Blur + dark scrim */}
       <div style={{ position: 'fixed', inset: 0, zIndex: 1, background: 'rgba(5,5,14,0.80)', backdropFilter: 'blur(28px)' }} />
