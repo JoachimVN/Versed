@@ -23,11 +23,13 @@ npm run dev -w server      # tsx watch, hot-reloads on :3001
 npm run build -w server    # tsc + copies src/data/ to dist/
 ```
 
-There are no tests. TypeScript type-checking is the main correctness check:
+TypeScript type-checking is the main correctness check:
 ```bash
 cd client && npx tsc --noEmit
 cd server && npx tsc --noEmit
 ```
+
+The server has a vitest suite covering the pure logic (`npm test -w server`): `fuzzyMatch.test.ts` is a characterization suite of guess-matching behavior — most cases lock in past playtest bug fixes, so a failure there usually means an old bug is coming back — and `scoring.test.ts` covers the bid ladder and race scoring. Add a case whenever a playtest finds a matching/scoring bug. Test files are excluded from the tsc build.
 
 ## Workflow
 
