@@ -1,7 +1,7 @@
 import { useState, useEffect, useCallback, useLayoutEffect, useRef } from 'react';
 import type { CSSProperties } from 'react';
 import { Pencil } from 'lucide-react';
-import LiquidGlass from 'liquid-glass-react';
+import LiquidGlass from '../../components/StableLiquidGlass';
 import { useLogoMorph } from '../../contexts/LogoMorph';
 import { BackButton } from '../../components/BackButton';
 import { LIQUID_LABEL_PROPS } from '../../components/liquidGlassPresets';
@@ -27,6 +27,7 @@ export function WaitingView({
   const pageExitTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const navigateTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const { beginMorph, provideTarget, morphing, reducedMotion } = useLogoMorph();
+  const arrivedViaMorph = useRef(morphing).current;
 
   // Arrival side of JoinView's forward hand-off: only engages if a morph is
   // already in flight (i.e. the player just joined) — landing here directly
@@ -82,7 +83,7 @@ export function WaitingView({
   let contentTransitionClass = 'page-enter';
   if (leaving) contentTransitionClass = 'page-exit';
   else if (backgroundLeaving) contentTransitionClass = '';
-  else if (morphing) contentTransitionClass = 'page-enter-morph';
+  else if (arrivedViaMorph) contentTransitionClass = 'page-enter-morph';
 
   return (
     <div className="relative min-h-screen overflow-hidden">
@@ -96,6 +97,8 @@ export function WaitingView({
           ref={logoRef}
           src={`${import.meta.env.BASE_URL}logo.png`}
           alt={APP_NAME}
+          width={2560}
+          height={1000}
           className="w-auto drop-shadow-2xl"
           style={{ maxHeight: '140px', maxWidth: '100%', opacity: (morphing || leaving) ? 0 : 1, willChange: 'opacity' }}
         />

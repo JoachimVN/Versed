@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react';
 import { Check, Loader2 } from 'lucide-react';
-import LiquidGlass from 'liquid-glass-react';
+import LiquidGlass from '../../components/StableLiquidGlass';
 import { resolvePlaylistInput, PlaylistFetchError, PlaylistSummary, MAX_PLAYLIST_TRACKS } from '../../hooks/usePlaylistPicker';
 import { LIQUID_CARD_PROPS } from '../../components/liquidGlassPresets';
 import { BACKEND_URL } from '../../config';

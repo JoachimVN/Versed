@@ -115,6 +115,8 @@ export function LogoMorphProvider({ children }: Readonly<{ children: React.React
           src={`${import.meta.env.BASE_URL}logo.png`}
           alt=""
           aria-hidden="true"
+          width={2560}
+          height={1000}
           style={{
             position: 'fixed',
             top: rect.top,

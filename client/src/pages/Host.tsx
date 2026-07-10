@@ -1,7 +1,7 @@
 import { useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Clock } from 'lucide-react';
-import LiquidGlass from 'liquid-glass-react';
+import LiquidGlass from '../components/StableLiquidGlass';
 import { useEscapeKey } from '../hooks/useEscapeKey';
 import { useFocusTrap } from '../hooks/useFocusTrap';
 import { RoundIntro } from '../components/RoundIntro';

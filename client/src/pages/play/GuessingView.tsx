@@ -1,5 +1,5 @@
 import { useState, useEffect, useRef } from 'react';
-import LiquidGlass from 'liquid-glass-react';
+import LiquidGlass from '../../components/StableLiquidGlass';
 import { useEscapeKey } from '../../hooks/useEscapeKey';
 import { useFocusTrap } from '../../hooks/useFocusTrap';
 import { PartyBadge } from '../../components/RoundIntro';

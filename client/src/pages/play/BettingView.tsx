@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { ChevronLeft, ChevronRight } from 'lucide-react';
-import LiquidGlass from 'liquid-glass-react';
+import LiquidGlass from '../../components/StableLiquidGlass';
 import { PartyBadge } from '../../components/RoundIntro';
 import { timerColor } from '../../components/CircularTimer';
 import { LIQUID_PILL_PROPS } from '../../components/liquidGlassPresets';

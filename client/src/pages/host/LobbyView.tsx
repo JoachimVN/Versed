@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { Loader2, Settings, Flame, Coins, PartyPopper, Volume2, VolumeX } from 'lucide-react';
-import LiquidGlass from 'liquid-glass-react';
+import LiquidGlass from '../../components/StableLiquidGlass';
 import { MIN_PLAYLIST_TRACKS } from '../../hooks/usePlaylistPicker';
 import { BackButton } from '../../components/BackButton';
 import { LIQUID_PILL_PROPS } from '../../components/liquidGlassPresets';
@@ -388,7 +388,7 @@ export function LobbyView({ game, fadeOutRef }: Readonly<{ game: HostState; fade
         className="flex flex-col items-center gap-6 p-6 transition-transform duration-500 ease-out"
         style={{ transform: pin ? 'translateY(0)' : 'translateY(30vh)' }}
       >
-        <img src={`${import.meta.env.BASE_URL}logo.png`} alt={APP_NAME} className="w-auto" style={{ maxHeight: '192px', maxWidth: '100%' }} />
+        <img src={`${import.meta.env.BASE_URL}logo.png`} alt={APP_NAME} width={2560} height={1000} className="w-auto" style={{ maxHeight: '192px', maxWidth: '100%' }} />
         <span className="text-white/45 text-sm flex items-center gap-2">
           {spotifyStatus}
         </span>

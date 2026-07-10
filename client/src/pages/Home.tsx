@@ -1,6 +1,6 @@
 import { useLayoutEffect, useRef, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import LiquidGlass from 'liquid-glass-react';
+import LiquidGlass from '../components/StableLiquidGlass';
 import { useLogoMorph } from '../contexts/LogoMorph';
 import { APP_NAME, BACKEND_URL } from '../config';
 
@@ -10,6 +10,10 @@ export default function Home() {
   const [leaving, setLeaving] = useState(false);
   const logoRef = useRef<HTMLImageElement>(null);
   const { beginMorph, provideTarget, morphing, reducedMotion } = useLogoMorph();
+  // Capture the arrival mode once. Using the live `morphing` flag for the
+  // page class made Home switch to .page-enter when the logo flight ended,
+  // which started a fresh 12px slide after the overlay had already landed.
+  const arrivedViaMorph = useRef(morphing).current;
 
   // Mirrors JoinView's arrival handling: only hands off to the overlay if a
   // morph is already in flight (i.e. we arrived via Play's back button) —
@@ -37,7 +41,7 @@ export default function Home() {
 
   let pageAnimClass = 'page-enter';
   if (leaving) pageAnimClass = 'page-exit';
-  else if (morphing) pageAnimClass = 'page-enter-morph';
+  else if (arrivedViaMorph) pageAnimClass = 'page-enter-morph';
 
   return (
     <div
@@ -49,6 +53,8 @@ export default function Home() {
           ref={logoRef}
           src={`${import.meta.env.BASE_URL}logo.png`}
           alt={APP_NAME}
+          width={2560}
+          height={1000}
           className="w-auto drop-shadow-2xl"
           style={{ maxHeight: '225px', maxWidth: '100%', marginBottom: '50px', opacity: (leaving || morphing) ? 0 : 1, willChange: 'opacity' }}
         />

@@ -104,10 +104,11 @@ export function useWaitingTransitionMorph(
   }, [game.waitingTransitionPending]);
 }
 
-// Both page-morph screens (JoinView/WaitingView) drive their outermost
-// class off the same leaving/morphing pair — leaving always wins since it
-// means the user is navigating away, regardless of an in-flight arrival morph.
-export function pageTransitionClass(leaving: boolean, morphing: boolean): string {
+// Both page-morph screens drive their outermost class from the arrival mode
+// captured at mount. Do not pass the live morphing flag here: when that flag
+// turns false at landing, swapping to .page-enter would start its translate
+// animation late and move the page out from under the settled logo overlay.
+export function pageTransitionClass(leaving: boolean, arrivedViaMorph: boolean): string {
   if (leaving) return 'page-exit';
-  return morphing ? 'page-enter-morph' : 'page-enter';
+  return arrivedViaMorph ? 'page-enter-morph' : 'page-enter';
 }

@@ -1,5 +1,5 @@
 import { useNavigate } from 'react-router-dom';
-import LiquidGlass from 'liquid-glass-react';
+import LiquidGlass from '../../components/StableLiquidGlass';
 import { RankBadge } from '../../components/RankBadge';
 import { useAnimatedScore } from '../../hooks/useAnimatedScore';
 import { FinalResultsView } from '../../components/FinalResults';

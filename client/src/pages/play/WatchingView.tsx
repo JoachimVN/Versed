@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react';
 import { Flame } from 'lucide-react';
-import LiquidGlass from 'liquid-glass-react';
+import LiquidGlass from '../../components/StableLiquidGlass';
 import { PartyBadge } from '../../components/RoundIntro';
 import { AudioBars } from '../../components/AudioBars';
 import type { PartyInfo } from '../../types';
