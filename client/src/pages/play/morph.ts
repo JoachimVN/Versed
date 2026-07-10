@@ -38,14 +38,17 @@ export function useMorphBack(
 // disconnected during the handoff) — resolve the overlay in place instead
 // of leaving it, and the shared `morphing` flag, stranded forever.
 export function cancelPendingWaitingTransition(
-  timerRef: RefObject<ReturnType<typeof setTimeout> | null>,
+  pageExitTimerRef: RefObject<ReturnType<typeof setTimeout> | null>,
+  transitionTimerRef: RefObject<ReturnType<typeof setTimeout> | null>,
   logoRef: RefObject<HTMLImageElement | null>,
   setLeaving: (v: boolean) => void,
   provideTarget: ProvideTarget,
 ) {
-  if (!timerRef.current) return;
-  clearTimeout(timerRef.current);
-  timerRef.current = null;
+  if (!pageExitTimerRef.current && !transitionTimerRef.current) return;
+  if (pageExitTimerRef.current) clearTimeout(pageExitTimerRef.current);
+  if (transitionTimerRef.current) clearTimeout(transitionTimerRef.current);
+  pageExitTimerRef.current = null;
+  transitionTimerRef.current = null;
   setLeaving(false);
   if (logoRef.current) {
     const cur = logoRef.current.getBoundingClientRect();
@@ -68,7 +71,8 @@ export function useWaitingTransitionMorph(
   provideTarget: ProvideTarget,
   reducedMotion: boolean,
 ) {
-  const timerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const pageExitTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const transitionTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   useEffect(() => {
     if (!game.waitingTransitionPending) return;
     if (reducedMotion || !logoRef.current) {
@@ -77,20 +81,34 @@ export function useWaitingTransitionMorph(
     }
     const r = logoRef.current.getBoundingClientRect();
     beginMorph({ top: r.top, left: r.left, width: r.width, height: r.height });
-    setLeaving(true);
-    timerRef.current = setTimeout(() => {
-      timerRef.current = null;
+    // Match Waiting -> Home's choreography: start the background crossfade
+    // first, then let the Join content leave during the final 320ms. This
+    // keeps the source screen present while the destination settles beneath
+    // it instead of cutting to an empty dark frame before Waiting mounts.
+    pageExitTimerRef.current = setTimeout(() => {
+      pageExitTimerRef.current = null;
+      setLeaving(true);
+    }, 180);
+    transitionTimerRef.current = setTimeout(() => {
+      transitionTimerRef.current = null;
       game.completeWaitingTransition();
-    }, 320);
-    return () => cancelPendingWaitingTransition(timerRef, logoRef, setLeaving, provideTarget);
+    }, 500);
+    return () => cancelPendingWaitingTransition(
+      pageExitTimerRef,
+      transitionTimerRef,
+      logoRef,
+      setLeaving,
+      provideTarget,
+    );
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [game.waitingTransitionPending]);
 }
 
-// Both page-morph screens (JoinView/WaitingView) drive their outermost
-// class off the same leaving/morphing pair — leaving always wins since it
-// means the user is navigating away, regardless of an in-flight arrival morph.
-export function pageTransitionClass(leaving: boolean, morphing: boolean): string {
+// Both page-morph screens drive their outermost class from the arrival mode
+// captured at mount. Do not pass the live morphing flag here: when that flag
+// turns false at landing, swapping to .page-enter would start its translate
+// animation late and move the page out from under the settled logo overlay.
+export function pageTransitionClass(leaving: boolean, arrivedViaMorph: boolean): string {
   if (leaving) return 'page-exit';
-  return morphing ? 'page-enter-morph' : 'page-enter';
+  return arrivedViaMorph ? 'page-enter-morph' : 'page-enter';
 }

@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import { useParams } from 'react-router-dom';
 import { RoundIntro } from '../components/RoundIntro';
 import { commonPhaseAnnouncement } from '../utils/phaseAnnouncement';
@@ -7,6 +7,7 @@ import type { RoundResultEvent } from '../types';
 import { usePlayGame } from './play/usePlayGame';
 import type { Phase } from './play/usePlayGame';
 import { JoinView } from './play/JoinView';
+import { WaitingAtmosphere } from './play/WaitingAtmosphere';
 import { WaitingView } from './play/WaitingView';
 import { BettingView, BidSubmittedView } from './play/BettingView';
 import { WatchingView } from './play/WatchingView';
@@ -39,6 +40,9 @@ export default function Play() {
   const imGuessing = guesserNames.includes(myName);
   const isJoin = phase === 'join';
   const showsGuessInput = phase === 'guessing' || (phase === 'watching' && imGuessing);
+  const showWaitingBackground = phase === 'waiting' || game.waitingTransitionPending;
+  const [waitingBackgroundLeaving, setWaitingBackgroundLeaving] = useState(false);
+  const leaveWaitingBackground = useCallback(() => setWaitingBackgroundLeaving(true), []);
 
   // Fade the glow in after mount, out when leaving join phase.
   const [glowMounted, setGlowMounted] = useState(false);
@@ -51,7 +55,7 @@ export default function Play() {
     <div
       className="relative"
       style={isJoin ? undefined : {
-        background: '#080812',
+        ...(phase === 'waiting' ? {} : { background: '#080812' }),
         height: 'var(--app-height, 100vh)',
         minHeight: 'var(--app-height, 100vh)',
         ...(showsGuessInput ? { transition: 'height 0.25s ease, min-height 0.25s ease' } : {}),
@@ -61,14 +65,17 @@ export default function Play() {
         className="fixed inset-0 pointer-events-none"
         style={{
           background: 'radial-gradient(ellipse 80% 55% at 50% 115%, rgba(134,6,189,0.26) 0%, rgba(60,44,102,0.10) 45%, transparent 65%)',
-          opacity: glowMounted && isJoin ? 1 : 0,
+          opacity: glowMounted && isJoin && !game.waitingTransitionPending ? 1 : 0,
           transition: 'opacity 0.45s ease',
           zIndex: 0,
         }}
       />
+      {showWaitingBackground && <WaitingAtmosphere leaving={waitingBackgroundLeaving} />}
       <div aria-live="polite" className="sr-only">{phaseAnnouncement(phase, result)}</div>
       {phase === 'join' && <JoinView game={game} />}
-      {phase === 'waiting' && <WaitingView game={game} />}
+      {phase === 'waiting' && (
+        <WaitingView game={game} leaveBackground={leaveWaitingBackground} />
+      )}
       {phase === 'betting' && <BettingView game={game} />}
       {phase === 'bid_submitted' && <BidSubmittedView game={game} />}
       {phase === 'watching' && !imGuessing && <WatchingView game={game} />}

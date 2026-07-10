@@ -96,8 +96,21 @@ select:focus-visible,
   transition: height 0.25s ease, min-height 0.25s ease;
 }
 
+/* liquid-glass-react initializes at a hard-coded 270x69, then measures its
+   content after the first paint and transitions every property for 200ms.
+   StableLiquidGlass hides that incorrect first geometry until the measured
+   render has committed. display:contents preserves the library's absolute
+   positioning against the existing .liquid-btn frame. */
+.liquid-glass-stabilizer {
+  display: contents;
+}
+.liquid-glass-stabilizer[data-ready='false'] > * {
+  visibility: hidden !important;
+  transition: none !important;
+}
+
 /* Hide LiquidGlass hover glow divs that cause white circle artifact in Chrome */
-.liquid-btn > :nth-child(n+6) {
+.liquid-btn > .liquid-glass-stabilizer > :nth-child(n+6) {
   display: none !important;
 }
 
@@ -109,20 +122,20 @@ select:focus-visible,
    cursor-tracking sheen (driven by its internal mouseOffset state) intact.
    Shared across every "wide pill" glass CTA (Home, Play join, Host lobby
    start buttons) so they all pick up the same treatment per accent color. */
-.glass-tint-teal > :nth-child(4),
-.glass-tint-teal > :nth-child(5) {
+.glass-tint-teal > .liquid-glass-stabilizer > :nth-child(4),
+.glass-tint-teal > .liquid-glass-stabilizer > :nth-child(5) {
   box-shadow: 0 0 0 1px rgba(0,166,163,0.35) inset, 0 1px 4px rgba(0,0,0,0.35) !important;
 }
-.glass-tint-purple > :nth-child(4),
-.glass-tint-purple > :nth-child(5) {
+.glass-tint-purple > .liquid-glass-stabilizer > :nth-child(4),
+.glass-tint-purple > .liquid-glass-stabilizer > :nth-child(5) {
   box-shadow: 0 0 0 1px rgba(158,18,204,0.35) inset, 0 1px 4px rgba(0,0,0,0.35) !important;
 }
-.glass-tint-orange > :nth-child(4),
-.glass-tint-orange > :nth-child(5) {
+.glass-tint-orange > .liquid-glass-stabilizer > :nth-child(4),
+.glass-tint-orange > .liquid-glass-stabilizer > :nth-child(5) {
   box-shadow: 0 0 0 1px rgba(220,80,10,0.35) inset, 0 1px 4px rgba(0,0,0,0.35) !important;
 }
-.glass-tint-cyan > :nth-child(4),
-.glass-tint-cyan > :nth-child(5) {
+.glass-tint-cyan > .liquid-glass-stabilizer > :nth-child(4),
+.glass-tint-cyan > .liquid-glass-stabilizer > :nth-child(5) {
   box-shadow: 0 0 0 1px rgba(0,238,232,0.35) inset, 0 1px 4px rgba(0,0,0,0.35) !important;
 }
 
@@ -180,6 +193,20 @@ select:focus-visible,
   animation: pageEnterFade 0.46s cubic-bezier(0.16, 1, 0.3, 1) 0.28s both;
 }
 
+/* App-level waiting artwork. It stays below the persistent confetti,
+   spotlight, and overlay layers, while its opacity is controlled by the
+   Waiting atmosphere controller across JoinView -> WaitingView. */
+.waiting-background {
+  position: absolute;
+  inset: 0;
+  z-index: 0;
+  overflow: hidden;
+  pointer-events: none;
+  will-change: opacity;
+  opacity: var(--waiting-background-opacity, 0);
+  transition: opacity var(--waiting-background-fade-duration, 1s) ease;
+}
+
 @keyframes fadeIn {
   from { opacity: 0; }
   to   { opacity: 1; }
@@ -190,17 +217,23 @@ select:focus-visible,
   40%            { transform: translateY(-6px); opacity: 1; }
 }
 
-/* Slow continuous rotation for Play's WaitingView vinyl. Only the glass
-   label assembly spins (not the grooved disc under it) — its own
-   refraction/sheen reads as motion more convincingly than a highlight
-   sweeping around static grooves did. Restates the element's own static
-   translate(-50%,-50%) alongside the rotation, per the same rule as
+/* Slow continuous rotation for Play's WaitingView vinyl. The glass label
+   assembly and the grooved disc surface spin together at the same rate,
+   like a rigid record; the sheen/vignette layers stay static because the
+   light source doesn't rotate with the record. Restates the element's own
+   static translate(-50%,-50%) alongside the rotation, per the same rule as
    markerCelebrate above: an animated `transform` always wins over the
    static inline one, so without this the label would snap to its
    unshifted top-left corner once the animation takes hold. */
 @keyframes vinylLabelSpin {
   from { transform: translate(-50%, -50%) rotate(0deg); }
   to   { transform: translate(-50%, -50%) rotate(360deg); }
+}
+/* Same spin for the disc surface itself, which is positioned with inset:0
+   rather than a centering translate, so it needs a plain rotate. */
+@keyframes vinylDiscSpin {
+  from { transform: rotate(0deg); }
+  to   { transform: rotate(360deg); }
 }
 /* Applied to the label's text/content div, one level further in, at the
    same duration and the opposite direction — cancels the parent's spin so

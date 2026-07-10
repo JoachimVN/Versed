@@ -1,5 +1,5 @@
 import { Check, Trophy, X, Zap, Timer, TrendingUp, Swords } from 'lucide-react';
-import LiquidGlass from 'liquid-glass-react';
+import LiquidGlass from './StableLiquidGlass';
 import type { Award, RoundResultEvent } from '../types';
 import { LIQUID_PILL_PROPS } from './liquidGlassPresets';
 

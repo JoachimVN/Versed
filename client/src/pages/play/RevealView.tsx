@@ -1,5 +1,5 @@
 import { Flame } from 'lucide-react';
-import LiquidGlass from 'liquid-glass-react';
+import LiquidGlass from '../../components/StableLiquidGlass';
 import { useAnimatedScore } from '../../hooks/useAnimatedScore';
 import { FinalRoundAnswerContent, NoOneGotItCardContent, GotItCardContent, YearTimelineContent } from '../../components/RevealShared';
 import { PartyRevealExtras } from '../../components/RoundIntro';

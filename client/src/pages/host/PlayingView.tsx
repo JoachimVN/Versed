@@ -1,4 +1,4 @@
-import LiquidGlass from 'liquid-glass-react';
+import LiquidGlass from '../../components/StableLiquidGlass';
 import { PartyBadge } from '../../components/RoundIntro';
 import { CircularTimer } from '../../components/CircularTimer';
 import { AudioBars } from '../../components/AudioBars';

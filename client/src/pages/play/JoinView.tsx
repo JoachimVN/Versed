@@ -1,5 +1,5 @@
 import { useState, useLayoutEffect, useRef } from 'react';
-import LiquidGlass from 'liquid-glass-react';
+import LiquidGlass from '../../components/StableLiquidGlass';
 import { useLogoMorph } from '../../contexts/LogoMorph';
 import { useKeyboardOpen } from '../../hooks/useViewportHeight';
 import { BackButton } from '../../components/BackButton';
@@ -18,6 +18,7 @@ export function JoinView({ game }: Readonly<{ game: PlayState }>) {
   const [leaving, setLeaving] = useState(false);
   const logoRef = useRef<HTMLImageElement>(null);
   const { beginMorph, provideTarget, morphing, reducedMotion } = useLogoMorph();
+  const arrivedViaMorph = useRef(morphing).current;
 
   // Only hands off to the overlay if a morph is already in flight (i.e. we
   // arrived via Home's "Join a game" button) — a direct visit to /play
@@ -38,7 +39,7 @@ export function JoinView({ game }: Readonly<{ game: PlayState }>) {
 
   return (
     <div
-      className={`relative min-h-screen keyboard-resize ${pageTransitionClass(leaving, morphing)}`}
+      className={`relative min-h-screen keyboard-resize ${pageTransitionClass(leaving, arrivedViaMorph)}`}
       style={{ zIndex: 1, overflowY: 'auto', pointerEvents: leaving ? 'none' : undefined }}
     >
       <BackButton beforeNavigate={goBack} />
@@ -57,6 +58,8 @@ export function JoinView({ game }: Readonly<{ game: PlayState }>) {
         ref={logoRef}
         src={`${import.meta.env.BASE_URL}logo.png`}
         alt={APP_NAME}
+        width={2560}
+        height={1000}
         className="w-auto drop-shadow-2xl"
         style={{ maxHeight: '128px', maxWidth: '100%', opacity: (morphing || leaving) ? 0 : 1, willChange: 'opacity' }}
       />
