@@ -213,8 +213,18 @@ export function ConfettiBackground({ burst = false, persistAfterBurst = false, s
     };
 
     const onResize = () => {
-      W = canvas.clientWidth;
-      H = canvas.clientHeight;
+      const newW = canvas.clientWidth;
+      const newH = canvas.clientHeight;
+      if (W > 0 && H > 0) {
+        const scaleX = newW / W;
+        const scaleY = newH / H;
+        for (const p of particles) {
+          p.x *= scaleX;
+          p.y *= scaleY;
+        }
+      }
+      W = newW;
+      H = newH;
       canvas.width = W;
       canvas.height = H;
     };
