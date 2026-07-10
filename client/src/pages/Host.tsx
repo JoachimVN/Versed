@@ -1,7 +1,8 @@
-import { useRef } from 'react';
+import { useCallback, useRef, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Clock } from 'lucide-react';
 import LiquidGlass from '../components/StableLiquidGlass';
+import { useLogoMorph } from '../contexts/LogoMorph';
 import { useEscapeKey } from '../hooks/useEscapeKey';
 import { useFocusTrap } from '../hooks/useFocusTrap';
 import { RoundIntro } from '../components/RoundIntro';
@@ -21,6 +22,9 @@ import { FullScreenDialog } from './host/dialogs';
 
 export type { HostState } from './host/useHostGame';
 
+const HOME_TRANSITION_MS = 500;
+const PAGE_EXIT_MS = 320;
+
 // Screen-reader narration of major phase changes — the screen itself swaps
 // components wholesale on each transition, which gives sighted players a
 // visual cue but nothing a screen reader announces on its own.
@@ -39,21 +43,55 @@ function phaseAnnouncement(phase: Phase, result: RoundResultEvent | null): strin
 export default function Host() {
   const game = useHostGame();
   const navigate = useNavigate();
+  const { reducedMotion } = useLogoMorph();
   const { phase, result, reconnecting, reconnectingCount, gameExpired } = game;
+  const [leaving, setLeaving] = useState(false);
   const gameExpiredRef = useRef<HTMLDialogElement>(null);
-  const lobbyFadeOutRef = useRef<(() => Promise<void>) | null>(null);
-  // Awaited so the fade actually finishes before navigate() unmounts the
-  // lobby (and its AudioContext) out from under it.
-  const goHome = async () => { await lobbyFadeOutRef.current?.(); navigate('/'); };
+  const lobbyHomeTransitionRef = useRef<(() => Promise<void>) | null>(null);
+  const homeTransitionRef = useRef<Promise<void> | null>(null);
+
+  const beforeGoHome = useCallback(() => {
+    if (homeTransitionRef.current) return homeTransitionRef.current;
+
+    homeTransitionRef.current = (async () => {
+      const lobbyTransition = lobbyHomeTransitionRef.current?.() ?? Promise.resolve();
+      if (reducedMotion) {
+        await lobbyTransition;
+        return;
+      }
+
+      // Match Waiting -> Home: keep the source screen present while the
+      // lobby audio recedes, then run the page exit during the final 320ms.
+      await new Promise(resolve => setTimeout(resolve, HOME_TRANSITION_MS - PAGE_EXIT_MS));
+      setLeaving(true);
+      await Promise.all([
+        lobbyTransition,
+        new Promise(resolve => setTimeout(resolve, PAGE_EXIT_MS)),
+      ]);
+    })();
+
+    return homeTransitionRef.current;
+  }, [reducedMotion]);
+
+  const goHome = useCallback(async () => {
+    await beforeGoHome();
+    navigate('/');
+  }, [beforeGoHome, navigate]);
   useEscapeKey(goHome, gameExpired);
   useFocusTrap(gameExpiredRef, gameExpired);
 
   return (
-    <div className="relative">
+    <div className={`relative ${leaving ? 'page-exit' : 'page-enter'}`} style={{ pointerEvents: leaving ? 'none' : undefined }}>
       <div aria-live="polite" className="sr-only">{phaseAnnouncement(phase, result)}</div>
       <RoundIntro party={game.party} roundKey={game.roundIndex} />
       {phase === 'connect' && <ConnectView game={game} />}
-      {phase === 'lobby' && <LobbyView game={game} fadeOutRef={lobbyFadeOutRef} />}
+      {phase === 'lobby' && (
+        <LobbyView
+          game={game}
+          beforeGoHome={beforeGoHome}
+          homeTransitionRef={lobbyHomeTransitionRef}
+        />
+      )}
       {phase === 'betting' && <BettingView game={game} />}
       {phase === 'playing' && <PlayingView game={game} />}
       {phase === 'guessing' && <GuessingView game={game} />}

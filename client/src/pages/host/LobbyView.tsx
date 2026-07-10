@@ -1,6 +1,7 @@
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { Loader2, Settings, Flame, Coins, PartyPopper, Volume2, VolumeX } from 'lucide-react';
 import LiquidGlass from '../../components/StableLiquidGlass';
+import { useLogoMorph } from '../../contexts/LogoMorph';
 import { MIN_PLAYLIST_TRACKS } from '../../hooks/usePlaylistPicker';
 import { BackButton } from '../../components/BackButton';
 import { LIQUID_PILL_PROPS } from '../../components/liquidGlassPresets';
@@ -263,15 +264,15 @@ function useLobbyMusic(muffled: boolean) {
   // wait for it first instead of cutting the music off mid-fade. Sweeps the
   // lowpass filter down in lockstep with the volume so the music seems to
   // recede into the distance rather than just going quiet in place.
-  const fadeOut = async () => {
+  const fadeOut = async (durationMs = 800) => {
     const ctx = ctxRef.current;
     const filter = filterRef.current;
     if (ctx && filter) {
       filter.frequency.cancelScheduledValues(ctx.currentTime);
       filter.frequency.setValueAtTime(filter.frequency.value, ctx.currentTime);
-      filter.frequency.exponentialRampToValueAtTime(120, ctx.currentTime + 0.8);
+      filter.frequency.exponentialRampToValueAtTime(120, ctx.currentTime + durationMs / 1000);
     }
-    await rampGain(0, 800);
+    await rampGain(0, durationMs);
     sourceRef.current?.stop();
   };
 
@@ -329,7 +330,15 @@ function MuteButton({ muted, toggleMute }: Readonly<{ muted: boolean; toggleMute
   );
 }
 
-export function LobbyView({ game, fadeOutRef }: Readonly<{ game: HostState; fadeOutRef?: React.RefObject<(() => Promise<void>) | null> }>) {
+export function LobbyView({
+  game,
+  beforeGoHome,
+  homeTransitionRef,
+}: Readonly<{
+  game: HostState;
+  beforeGoHome?: () => Promise<void>;
+  homeTransitionRef?: React.RefObject<(() => Promise<void>) | null>;
+}>) {
   const {
     spotify, pin, players, createGame, startGame, mode, settingsOpen, toggleSettings, setMode, removePlayer,
     gameExpired, playlistPickerOpen, songSource, customPlaylists, startError,
@@ -339,11 +348,25 @@ export function LobbyView({ game, fadeOutRef }: Readonly<{ game: HostState; fade
   const playlistLow = songSource === 'playlist' && playlistTrackCount > 0 && playlistTrackCount < MIN_PLAYLIST_TRACKS;
   const [lobbyVisible, setLobbyVisible] = useState(false);
   const { fadeOut, muted, toggleMute } = useLobbyMusic(gameExpired);
+  const { beginMorph, morphing, reducedMotion } = useLogoMorph();
+  const logoRef = useRef<HTMLImageElement>(null);
   const startingRef = useRef(false);
 
-  // Exposes fadeOut to the "Go home" button on the game-expired dialog, which
-  // lives outside this component (it overlays every phase, not just lobby).
-  useEffect(() => { if (fadeOutRef) fadeOutRef.current = fadeOut; });
+  const prepareHomeTransition = useCallback(async () => {
+    if (!reducedMotion && logoRef.current) {
+      const rect = logoRef.current.getBoundingClientRect();
+      beginMorph({ top: rect.top, left: rect.left, width: rect.width, height: rect.height });
+    }
+    await fadeOut(500);
+  }, [beginMorph, fadeOut, reducedMotion]);
+
+  // Host owns navigation so Back, Escape, and the expired-game action all
+  // share one transition and navigate exactly once.
+  useEffect(() => {
+    if (!homeTransitionRef) return;
+    homeTransitionRef.current = prepareHomeTransition;
+    return () => { homeTransitionRef.current = null; };
+  }, [homeTransitionRef, prepareHomeTransition]);
 
   useEffect(() => {
     if (!pin) { setLobbyVisible(false); return; }
@@ -377,7 +400,7 @@ export function LobbyView({ game, fadeOutRef }: Readonly<{ game: HostState; fade
 
   return (
     <div className="min-h-screen relative flex flex-col overflow-hidden">
-      <BackButton zIndex={10} beforeNavigate={fadeOut} />
+      <BackButton zIndex={10} beforeNavigate={beforeGoHome ?? fadeOut} />
       <SettingsButton settingsOpen={settingsOpen} toggleSettings={toggleSettings} />
       <MuteButton muted={muted} toggleMute={toggleMute} />
 
@@ -388,7 +411,15 @@ export function LobbyView({ game, fadeOutRef }: Readonly<{ game: HostState; fade
         className="flex flex-col items-center gap-6 p-6 transition-transform duration-500 ease-out"
         style={{ transform: pin ? 'translateY(0)' : 'translateY(30vh)' }}
       >
-        <img src={`${import.meta.env.BASE_URL}logo.png`} alt={APP_NAME} width={2560} height={1000} className="w-auto" style={{ maxHeight: '192px', maxWidth: '100%' }} />
+        <img
+          ref={logoRef}
+          src={`${import.meta.env.BASE_URL}logo.png`}
+          alt={APP_NAME}
+          width={2560}
+          height={1000}
+          className="w-auto"
+          style={{ maxHeight: '192px', maxWidth: '100%', opacity: morphing ? 0 : 1, willChange: 'opacity' }}
+        />
         <span className="text-white/45 text-sm flex items-center gap-2">
           {spotifyStatus}
         </span>
