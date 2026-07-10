@@ -190,17 +190,23 @@ select:focus-visible,
   40%            { transform: translateY(-6px); opacity: 1; }
 }
 
-/* Slow continuous rotation for Play's WaitingView vinyl. Only the glass
-   label assembly spins (not the grooved disc under it) — its own
-   refraction/sheen reads as motion more convincingly than a highlight
-   sweeping around static grooves did. Restates the element's own static
-   translate(-50%,-50%) alongside the rotation, per the same rule as
+/* Slow continuous rotation for Play's WaitingView vinyl. The glass label
+   assembly and the grooved disc surface spin together at the same rate,
+   like a rigid record; the sheen/vignette layers stay static because the
+   light source doesn't rotate with the record. Restates the element's own
+   static translate(-50%,-50%) alongside the rotation, per the same rule as
    markerCelebrate above: an animated `transform` always wins over the
    static inline one, so without this the label would snap to its
    unshifted top-left corner once the animation takes hold. */
 @keyframes vinylLabelSpin {
   from { transform: translate(-50%, -50%) rotate(0deg); }
   to   { transform: translate(-50%, -50%) rotate(360deg); }
+}
+/* Same spin for the disc surface itself, which is positioned with inset:0
+   rather than a centering translate, so it needs a plain rotate. */
+@keyframes vinylDiscSpin {
+  from { transform: rotate(0deg); }
+  to   { transform: rotate(360deg); }
 }
 /* Applied to the label's text/content div, one level further in, at the
    same duration and the opposite direction — cancels the parent's spin so

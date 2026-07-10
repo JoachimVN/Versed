@@ -84,29 +84,44 @@ export function WaitingView({ game }: Readonly<{ game: PlayState }>) {
           } as CSSProperties}
         >
           {/* Vinyl material — three layers, deliberately split:
-              1) the grooved surface. Static — the spin lives on the glass
-                 label assembly below instead (see there for why). Real vinyl
-                 grooves are far too fine to render as individually countable
-                 rings without reading as a cheap "target/bullseye" pattern —
-                 so this is a single very tight, very low-contrast repeating
-                 ring, closer to a brushed texture than a bullseye.
-              2) a fixed soft gloss sheen + corner shadow. A blurred
-                 elliptical highlight reads as glossy plastic; a hard conic
-                 wedge reads as flat/cheap, so this avoids conic-gradient
-                 entirely.
-              3) a dark tint scoped to the label footprint only (not the
-                 whole disc), so the glass reads as an opaque, frosted pane
-                 over the record without dimming the visible groove ring. */}
+              1) the grooved surface. Spins with the label (same 7s linear —
+                 they're one rigid record). A perfectly radially-symmetric
+                 pattern is invisible when rotated, so the rotation is made
+                 visible the way it is on a real record: the groove/ring
+                 pattern is drawn very slightly off-center (spinning it
+                 produces the classic pressing wobble) and a whisper-faint
+                 conic irregularity breaks the angular symmetry. Near-black
+                 base (blurred white blobs on a lighter base read as glossy
+                 plastic, which is exactly the look to avoid), with two kinds
+                 of ring detail: a very tight, very low-contrast repeating
+                 groove texture (closer to brushed metal than a bullseye —
+                 real grooves are too fine to draw countable rings), and a
+                 few faint wider rings at fixed radii, the track-separation
+                 gaps a real pressing has. closest-side sizing so 100% = the
+                 disc edge.
+              2) the light response, static — the light source doesn't rotate
+                 with the record. Two low-opacity conic sheen "wings" 180°
+                 apart, masked to the groove ring only — that's how light
+                 actually reflects across groove ridges (anisotropic, radial)
+                 rather than pooling in one blurry hotspot like plastic. Soft
+                 multi-stop ramps, so no hard wedge edges. The corner
+                 vignette and edge/glow shadows live on a static sibling for
+                 the same reason.
+              3) a dark tint under the label footprint, fading out past the
+                 label edge — reads as the smooth "dead wax" area between
+                 label and grooves, and keeps the glass looking like an
+                 opaque frosted pane without dimming the groove ring. */}
           <div
             aria-hidden="true"
             style={{
               position: 'absolute', inset: 0, borderRadius: '50%',
               background: `
-                radial-gradient(ellipse 14% 36% at 78% 26%, rgba(255,255,255,0.20), transparent 72%),
-                radial-gradient(ellipse 10% 26% at 20% 74%, rgba(255,255,255,0.13), transparent 72%),
-                repeating-radial-gradient(circle, rgba(255,255,255,0.05) 0px, rgba(255,255,255,0.05) 1px, transparent 2px, transparent 4px),
-                radial-gradient(circle, #2a2438 0%, #171225 42%, #0a0812 74%, #030204 100%)
+                conic-gradient(from 0deg, transparent 0deg, rgba(255,255,255,0.022) 70deg, transparent 130deg, rgba(255,255,255,0.014) 205deg, transparent 250deg, rgba(255,255,255,0.025) 305deg, transparent 360deg),
+                radial-gradient(circle closest-side at 50.7% 49.6%, transparent 0 67.5%, rgba(255,255,255,0.05) 68%, transparent 68.8%, transparent 77.5%, rgba(255,255,255,0.05) 78%, transparent 78.8%, transparent 86.5%, rgba(255,255,255,0.05) 87%, transparent 87.8%, transparent 100%),
+                repeating-radial-gradient(circle at 50.7% 49.6%, rgba(255,255,255,0.04) 0px, rgba(255,255,255,0.04) 1px, transparent 1.5px, transparent 3px),
+                radial-gradient(circle closest-side, #1d1926 0%, #121019 45%, #0a0810 78%, #050408 96%, #010102 100%)
               `,
+              animationName: 'vinylDiscSpin', animationDuration: '7s', animationTimingFunction: 'linear', animationIterationCount: 'infinite',
             }}
           />
           <div
@@ -114,29 +129,41 @@ export function WaitingView({ game }: Readonly<{ game: PlayState }>) {
             style={{
               position: 'absolute', inset: 0, borderRadius: '50%', pointerEvents: 'none',
               background: `
-                radial-gradient(ellipse 50% 32% at 30% 18%, rgba(255,255,255,0.16), transparent 72%),
-                radial-gradient(circle at 74% 82%, rgba(0,0,0,0.4), transparent 55%)
+                conic-gradient(from 12deg,
+                  transparent 0deg, transparent 22deg,
+                  rgba(255,255,255,0.05) 46deg, rgba(255,255,255,0.10) 60deg, rgba(255,255,255,0.05) 74deg,
+                  transparent 98deg, transparent 202deg,
+                  rgba(255,255,255,0.05) 226deg, rgba(255,255,255,0.10) 240deg, rgba(255,255,255,0.05) 254deg,
+                  transparent 278deg, transparent 360deg)
               `,
-              boxShadow: '0 0 0 1px rgba(255,255,255,0.09) inset, 0 12px 40px rgba(0,0,0,0.55), 0 0 55px rgba(158,18,204,0.14), 0 0 85px rgba(0,238,232,0.05)',
+              WebkitMaskImage: 'radial-gradient(circle closest-side, transparent 0 58%, black 68% 94%, transparent 100%)',
+              maskImage: 'radial-gradient(circle closest-side, transparent 0 58%, black 68% 94%, transparent 100%)',
             }}
           />
           <div
             aria-hidden="true"
             style={{
-              position: 'absolute', top: '50%', left: '50%', width: 'calc(var(--label-size) * 1.06)', height: 'calc(var(--label-size) * 1.06)',
+              position: 'absolute', inset: 0, borderRadius: '50%', pointerEvents: 'none',
+              background: 'radial-gradient(circle at 74% 82%, rgba(0,0,0,0.4), transparent 55%)',
+              boxShadow: '0 0 0 1px rgba(255,255,255,0.07) inset, 0 12px 40px rgba(0,0,0,0.55), 0 0 55px rgba(158,18,204,0.14), 0 0 85px rgba(0,238,232,0.05)',
+            }}
+          />
+          <div
+            aria-hidden="true"
+            style={{
+              position: 'absolute', top: '50%', left: '50%', width: 'calc(var(--label-size) * 1.16)', height: 'calc(var(--label-size) * 1.16)',
               transform: 'translate(-50%, -50%)', borderRadius: '50%', pointerEvents: 'none',
-              background: 'rgba(8,7,14,0.5)',
+              background: 'radial-gradient(circle closest-side, rgba(8,7,14,0.55) 0 80%, rgba(8,7,14,0) 100%)',
               boxShadow: '0 8px 24px rgba(0,0,0,0.5)',
             }}
           />
 
           {/* Circular glass label — sized well under the disc (see note
               above), like a liquid-glass pane laid directly over the vinyl
-              surface. This is what actually spins (the grooves don't) — the
-              glass's own refraction/sheen reads as motion far better than a
-              highlight sweeping around static grooves did. Its content div
-              below counter-rotates at the same rate so the spin cancels out
-              for the text/name, which stays upright and readable. */}
+              surface. Spins at the same 7s rate as the disc surface, so the
+              two read as one rigid record. Its content div below
+              counter-rotates at the same rate so the spin cancels out for
+              the text/name, which stays upright and readable. */}
           <div
             className="liquid-btn glass-tint-purple relative"
             style={{
