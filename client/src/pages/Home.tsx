@@ -35,9 +35,13 @@ export default function Home() {
     setTimeout(() => navigate('/play'), 320);
   };
 
+  let pageAnimClass = 'page-enter';
+  if (leaving) pageAnimClass = 'page-exit';
+  else if (morphing) pageAnimClass = 'page-enter-morph';
+
   return (
     <div
-      className={`relative min-h-screen flex flex-col items-center justify-center gap-10 p-6 ${leaving ? 'page-exit' : (morphing ? 'page-enter-morph' : 'page-enter')}`}
+      className={`relative min-h-screen flex flex-col items-center justify-center gap-10 p-6 ${pageAnimClass}`}
       style={{ zIndex: 1, pointerEvents: leaving ? 'none' : undefined }}
     >
       <div className="flex flex-col items-center gap-3">
