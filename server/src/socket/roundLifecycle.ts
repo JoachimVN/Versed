@@ -2,7 +2,7 @@ import { randomInt } from 'node:crypto';
 import * as gm from '../gameManager';
 import { getAlbumArtUrl } from '../albumArt';
 import { Game, Round } from '../types';
-import { io, PLAYBACK_COUNTDOWN_MS } from './context';
+import { getIo, PLAYBACK_COUNTDOWN_MS } from './context';
 
 // Does the current round run the everyone-at-once race flow? True for race
 // games and for every non-classic party round (race, year, finale).
@@ -21,7 +21,7 @@ export function maybeOfferSteal(game: Game) {
   if (!round?.stealBy || round.stealDone) return;
   const victims = gm.stealCandidates(game, round.stealBy);
   if (victims.length === 0) { round.stealDone = true; return; }
-  io.to(round.stealBy).emit('choose_steal', { victims });
+  getIo().to(round.stealBy).emit('choose_steal', { victims });
 }
 
 export function stealPendingName(game: Game, round: Round): string | undefined {
@@ -73,7 +73,7 @@ export async function beginRound(game: Game) {
     game.phase = 'playing';
     game.phaseEndsAt = null;
 
-    io.to(`player:${game.pin}`).emit('round_start', {
+    getIo().to(`player:${game.pin}`).emit('round_start', {
       roundIndex: game.roundIndex,
       total: game.totalRounds,
       hints: round.hints,
@@ -85,7 +85,7 @@ export async function beginRound(game: Game) {
       party,
       tempo: round.song.tempo,
     });
-    io.to(`host:${game.pin}`).emit('host_round_start', {
+    getIo().to(`host:${game.pin}`).emit('host_round_start', {
       roundIndex: game.roundIndex,
       total: game.totalRounds,
       hints: round.hints,
@@ -103,7 +103,7 @@ export async function beginRound(game: Game) {
       },
     });
 
-    io.to(`host:${game.pin}`).emit('play_song', {
+    getIo().to(`host:${game.pin}`).emit('play_song', {
       trackId: round.song.spotifyTrackId,
       durationMs: game.raceTime * 1000,
       countdownMs: PLAYBACK_COUNTDOWN_MS,
@@ -123,7 +123,7 @@ export async function beginRound(game: Game) {
   const bettingEndsAt = Date.now() + game.bettingTime * 1000;
   game.phaseEndsAt = bettingEndsAt;
 
-  io.to(`player:${game.pin}`).emit('round_start', {
+  getIo().to(`player:${game.pin}`).emit('round_start', {
     roundIndex: game.roundIndex,
     total: game.totalRounds,
     hints: round.hints,
@@ -140,7 +140,7 @@ export async function beginRound(game: Game) {
     bidScores: gm.bidScoreTable(),
     tempo: round.song.tempo,
   });
-  io.to(`host:${game.pin}`).emit('host_round_start', {
+  getIo().to(`host:${game.pin}`).emit('host_round_start', {
     roundIndex: game.roundIndex,
     total: game.totalRounds,
     hints: round.hints,
@@ -186,7 +186,7 @@ export function songFields(game: Game, round: Round) {
 
 export function emitScoreUpdate(game: Game) {
   const pityAwardedTo = game.currentRound?.pityAwardedTo;
-  io.to(game.pin).emit('score_update', {
+  getIo().to(game.pin).emit('score_update', {
     players: Array.from(game.players.values()).map(p => {
       const pity = pityAwardedTo?.has(p.socketId) ?? false;
       return { name: p.name, score: p.score, streak: p.streak, pity, pityAmount: pity ? gm.PITY_BONUS : undefined };
@@ -205,7 +205,7 @@ export function endRaceRound(game: Game) {
   const correctNames = Array.from(round.correctGuessers)
     .map(id => game.players.get(id)?.name ?? '')
     .filter(Boolean);
-  io.to(game.pin).emit('round_result', {
+  getIo().to(game.pin).emit('round_result', {
     correct: round.correctGuessers.size > 0,
     guesserName: null,
     mode: 'race',
@@ -230,7 +230,7 @@ export function closeBettingAndPlay(game: Game) {
     // stays in 'betting' and a stale bid could re-trigger this round.
     game.phase = 'reveal';
     game.phaseEndsAt = null;
-    io.to(game.pin).emit('round_result', {
+    getIo().to(game.pin).emit('round_result', {
       correct: false,
       guesserName: null,
       ...songFields(game, round),
@@ -256,9 +256,9 @@ export function playTier(
   const playerBids = Array.from(round.bids.entries())
     .map(([id, bid]) => ({ name: game.players.get(id)?.name ?? '', bid }))
     .filter(b => b.name);
-  io.to(game.pin).emit('betting_closed', { lowestBid, guesserNames, playerBids });
+  getIo().to(game.pin).emit('betting_closed', { lowestBid, guesserNames, playerBids });
   const durationMs = gm.playMsFor(lowestBid);
-  io.to(`host:${game.pin}`).emit('play_song', {
+  getIo().to(`host:${game.pin}`).emit('play_song', {
     trackId: round.song.spotifyTrackId,
     durationMs,
     countdownMs: PLAYBACK_COUNTDOWN_MS,
@@ -284,7 +284,7 @@ export function revealRound(game: Game) {
   if (game.phaseTimer) clearTimeout(game.phaseTimer);
   game.phase = 'reveal';
   if (gm.effectiveTarget(round) === 'year') gm.finalizeClassicYearRound(game);
-  io.to(game.pin).emit('round_result', {
+  getIo().to(game.pin).emit('round_result', {
     correct: false,
     guesserName: null,
     ...songFields(game, round),
@@ -317,11 +317,11 @@ export function startGuessingPhase(game: Game) {
   game.phase = 'guessing';
   const guessingEndsAt = Date.now() + game.guessingTime * 1000;
   game.phaseEndsAt = guessingEndsAt;
-  io.to(game.pin).emit('guessing_start', { guesserNames, timeLimit: game.guessingTime, endsAt: guessingEndsAt });
+  getIo().to(game.pin).emit('guessing_start', { guesserNames, timeLimit: game.guessingTime, endsAt: guessingEndsAt });
   for (const sid of guesserSocketIds) {
     // Skip players who already got their turn early — don't reset their timer
     if (!round.earlyGuessers.has(sid)) {
-      io.to(sid).emit('your_turn', { timeLimit: game.guessingTime, endsAt: guessingEndsAt });
+      getIo().to(sid).emit('your_turn', { timeLimit: game.guessingTime, endsAt: guessingEndsAt });
     }
   }
 
@@ -333,7 +333,7 @@ export function startGuessingPhase(game: Game) {
     // one last look before moving the round on.
     const auto = gm.finalizeGuessDrafts(game);
     if (auto) {
-      io.to(game.pin).emit('round_result', {
+      getIo().to(game.pin).emit('round_result', {
         correct: true,
         guesserName: auto.guesserName,
         ...songFields(game, round),

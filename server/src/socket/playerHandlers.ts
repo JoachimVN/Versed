@@ -1,6 +1,6 @@
 import { Socket } from 'socket.io';
 import * as gm from '../gameManager';
-import { io, playerDisconnectTimers } from './context';
+import { getIo, playerDisconnectTimers } from './context';
 import { syncState } from './sync';
 import { raceFlow, endRaceRound, closeBettingAndPlay, advanceTierOrReveal, songFields, stealPendingName, emitScoreUpdate, maybeOfferSteal } from './roundLifecycle';
 
@@ -34,10 +34,10 @@ export function registerPlayerHandlers(socket: Socket) {
         callback({ success: true });
         if (game.phase === 'lobby') {
           const players = Array.from(game.players.values()).map(p => ({ name: p.name, score: p.score, streak: p.streak }));
-          io.to(`host:${pin}`).emit('player_joined', { players });
+          getIo().to(`host:${pin}`).emit('player_joined', { players });
         } else {
           syncState(socket, game);
-          io.to(`host:${pin}`).emit('player_reconnected', { name: rejoined.name, score: rejoined.score, streak: rejoined.streak });
+          getIo().to(`host:${pin}`).emit('player_reconnected', { name: rejoined.name, score: rejoined.score, streak: rejoined.streak });
         }
         return;
       }
@@ -50,7 +50,7 @@ export function registerPlayerHandlers(socket: Socket) {
       callback({ success: true });
 
       const players = Array.from(game.players.values()).map(p => ({ name: p.name, score: p.score, streak: p.streak }));
-      io.to(`host:${pin}`).emit('player_joined', { players });
+      getIo().to(`host:${pin}`).emit('player_joined', { players });
 
       // New player joining an in-progress game — sync them to the current phase.
       if (game.phase !== 'lobby') syncState(socket, game);
@@ -65,7 +65,7 @@ export function registerPlayerHandlers(socket: Socket) {
     if (!player) return callback({ error: 'Name already taken' });
     callback({ success: true });
     const players = Array.from(game.players.values()).map(p => ({ name: p.name, score: p.score, streak: p.streak }));
-    io.to(`host:${game.pin}`).emit('player_joined', { players });
+    getIo().to(`host:${game.pin}`).emit('player_joined', { players });
   });
 
   // ── Player: rejoin after reconnect ─────────────────────────────────────────
@@ -88,7 +88,7 @@ export function registerPlayerHandlers(socket: Socket) {
     socket.join(`player:${pin}`);
     callback?.({ ok: true });
     syncState(socket, game);
-    io.to(`host:${pin}`).emit('player_reconnected', { name: player.name, score: player.score, streak: player.streak });
+    getIo().to(`host:${pin}`).emit('player_reconnected', { name: player.name, score: player.score, streak: player.streak });
   });
 
   // ── Player: submit bid ─────────────────────────────────────────────────────
@@ -103,7 +103,7 @@ export function registerPlayerHandlers(socket: Socket) {
     const totalBidders = round.party?.finale
       ? round.party.duelistIds.filter(id => game.players.has(id)).length
       : game.players.size;
-    io.to(`host:${game.pin}`).emit('bid_received', {
+    getIo().to(`host:${game.pin}`).emit('bid_received', {
       bidCount: round.bids.size,
       totalPlayers: totalBidders,
     });
@@ -125,7 +125,7 @@ export function registerPlayerHandlers(socket: Socket) {
       const r = gm.recordRaceGuess(game, socket.id, text, artistText);
       if (!r) return callback?.({ correct: false });
       callback?.({ correct: r.correct, points: r.points, timeMs: r.elapsedMs });
-      io.to(`host:${game.pin}`).emit('answer_received', {
+      getIo().to(`host:${game.pin}`).emit('answer_received', {
         answered: game.currentRound!.passed.size,
         total: game.players.size,
       });
@@ -142,7 +142,7 @@ export function registerPlayerHandlers(socket: Socket) {
     if (result.correct) {
       if (game.phaseTimer) clearTimeout(game.phaseTimer);
       game.phase = 'reveal';
-      io.to(game.pin).emit('round_result', {
+      getIo().to(game.pin).emit('round_result', {
         correct: true,
         guesserName: result.guesserName,
         ...songFields(game, round),
@@ -168,7 +168,7 @@ export function registerPlayerHandlers(socket: Socket) {
     const r = gm.recordChaosHintTap(game, socket.id, index);
     if (!r) return callback?.({ correct: false });
     callback?.({ correct: r.correct, points: r.points, timeMs: r.elapsedMs });
-    io.to(`host:${game.pin}`).emit('answer_received', {
+    getIo().to(`host:${game.pin}`).emit('answer_received', {
       answered: game.currentRound!.passed.size,
       total: game.players.size,
     });
@@ -181,7 +181,7 @@ export function registerPlayerHandlers(socket: Socket) {
     if (!game) return;
     const result = gm.executeSteal(game, socket.id, name);
     if (!result) return;
-    io.to(game.pin).emit('steal_result', result);
+    getIo().to(game.pin).emit('steal_result', result);
     emitScoreUpdate(game);
   });
 
@@ -191,7 +191,7 @@ export function registerPlayerHandlers(socket: Socket) {
     if (!game) return;
     const result = gm.skipSteal(game, socket.id);
     if (!result) return;
-    io.to(game.pin).emit('steal_result', { thief: result.thief, victim: '', amount: 0, skipped: true });
+    getIo().to(game.pin).emit('steal_result', { thief: result.thief, victim: '', amount: 0, skipped: true });
   });
 
   // ── Player: live guess draft (not yet submitted) ──────────────────────────
@@ -209,7 +209,7 @@ export function registerPlayerHandlers(socket: Socket) {
     if (raceFlow(game)) {
       const r = gm.skipRaceGuess(game, socket.id);
       if (!r) return;
-      io.to(`host:${game.pin}`).emit('answer_received', {
+      getIo().to(`host:${game.pin}`).emit('answer_received', {
         answered: game.currentRound!.passed.size,
         total: game.players.size,
       });

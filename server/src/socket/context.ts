@@ -1,8 +1,9 @@
 import { Server } from 'socket.io';
 
-// Set once at startup by index.ts; every socket module reads this live binding.
-export let io: Server;
+// Set once at startup by index.ts; every socket module reads it via getIo().
+let io: Server;
 export function setIo(server: Server) { io = server; }
+export function getIo(): Server { return io; }
 
 // Countdown shown on the host before a song plays, used to buffer the track.
 export const PLAYBACK_COUNTDOWN_MS = 3000;

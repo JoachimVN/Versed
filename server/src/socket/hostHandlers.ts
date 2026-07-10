@@ -1,7 +1,7 @@
 import { Socket } from 'socket.io';
 import * as gm from '../gameManager';
 import { Award } from '../types';
-import { io, hostDisconnectTimers, playerDisconnectTimers } from './context';
+import { getIo, hostDisconnectTimers, playerDisconnectTimers } from './context';
 import { StartGameSettings, applyStartGameSettings, applySongSource } from './settings';
 import { beginRound, raceFlow, endRaceRound, startGuessingPhase, closeBettingAndPlay, revealRound, advanceTierOrReveal } from './roundLifecycle';
 
@@ -62,12 +62,12 @@ export function registerHostHandlers(socket: Socket) {
 
     // Notify players still subscribed to the old room (Socket.IO rooms persist
     // independently of game state, so the emit reaches them before they leave).
-    io.to(`player:${oldPin}`).emit('game_restarted', { newPin: newGame.pin });
+    getIo().to(`player:${oldPin}`).emit('game_restarted', { newPin: newGame.pin });
 
     // Then evict them from the rooms: the new game reuses the PIN, so anyone
     // lingering would otherwise receive events for a game they haven't joined.
     // Pressing "Play Again" re-joins the rooms via the normal join_game path.
-    io.in(`player:${oldPin}`).socketsLeave([oldPin, `player:${oldPin}`]);
+    getIo().in(`player:${oldPin}`).socketsLeave([oldPin, `player:${oldPin}`]);
 
     socket.leave(oldPin);
     socket.leave(`host:${oldPin}`);
@@ -101,7 +101,7 @@ export function registerHostHandlers(socket: Socket) {
     socket.join(pin);
     socket.join(`host:${pin}`);
     gm.updateSocketPin(socket.id, pin);
-    io.to(game.pin).emit('host_reconnected');
+    getIo().to(game.pin).emit('host_reconnected');
 
     // After a reload mid-round, the safest resume point is the between-rounds
     // leaderboard: abandon the round in flight and park everyone there.
@@ -109,7 +109,7 @@ export function registerHostHandlers(socket: Socket) {
       if (game.phaseTimer) clearTimeout(game.phaseTimer);
       game.phaseEndsAt = null;
       game.phase = 'leaderboard';
-      io.to(`player:${pin}`).emit('leaderboard', { leaderboard: gm.getLeaderboard(game) });
+      getIo().to(`player:${pin}`).emit('leaderboard', { leaderboard: gm.getLeaderboard(game) });
     }
 
     callback({
@@ -131,8 +131,8 @@ export function registerHostHandlers(socket: Socket) {
     if (!entry) return;
     const [kickedId] = entry;
     gm.removeSocket(kickedId);
-    io.to(kickedId).emit('kicked');
-    io.to(`host:${game.pin}`).emit('player_left', {
+    getIo().to(kickedId).emit('kicked');
+    getIo().to(`host:${game.pin}`).emit('player_left', {
       players: Array.from(game.players.values()).map(p => ({ name: p.name })),
     });
   });
@@ -164,11 +164,11 @@ export function registerHostHandlers(socket: Socket) {
       gm.markRaceStarted(game);
       const endsAt = game.currentRound!.playStartAt! + game.raceTime * 1000;
       game.phaseEndsAt = endsAt;
-      io.to(`player:${game.pin}`).emit('your_turn', { timeLimit: game.raceTime, endsAt });
+      getIo().to(`player:${game.pin}`).emit('your_turn', { timeLimit: game.raceTime, endsAt });
       game.phaseTimer = setTimeout(() => endRaceRound(game), game.raceTime * 1000);
     } else {
       gm.markTierStarted(game);
-      io.to(`player:${game.pin}`).emit('song_playing');
+      getIo().to(`player:${game.pin}`).emit('song_playing');
       game.phaseTimer = setTimeout(() => startGuessingPhase(game), gm.playMsFor(game.currentRound!.lowestBid));
     }
   });
@@ -200,7 +200,7 @@ export function registerHostHandlers(socket: Socket) {
     if (game.phaseTimer) clearTimeout(game.phaseTimer);
     game.phaseEndsAt = null;
     game.phase = 'finished';
-    io.to(game.pin).emit('game_over', { leaderboard: gm.getLeaderboard(game), awards: gm.computeAwards(game) });
+    getIo().to(game.pin).emit('game_over', { leaderboard: gm.getLeaderboard(game), awards: gm.computeAwards(game) });
   });
 
   // ── Host: advance to next round ────────────────────────────────────────────
@@ -227,7 +227,7 @@ export function registerHostHandlers(socket: Socket) {
     game.roundIndex += 1;
     if (game.roundIndex >= game.totalRounds) {
       game.phase = 'finished';
-      io.to(game.pin).emit('game_over', { leaderboard: gm.getLeaderboard(game), awards: gm.computeAwards(game) });
+      getIo().to(game.pin).emit('game_over', { leaderboard: gm.getLeaderboard(game), awards: gm.computeAwards(game) });
       return;
     }
     beginRound(game);
