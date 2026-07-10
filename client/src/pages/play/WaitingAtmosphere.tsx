@@ -24,10 +24,14 @@ export function WaitingAtmosphere({ leaving }: Readonly<{ leaving: boolean }>) {
   useLayoutEffect(() => {
     setHomeBackgroundTarget(true, reducedMotion);
     setAmbientBackgroundMode(true, true);
-    setConfettiSpeedTarget(1);
+    // Burst on the join -> waiting hand-off, same as a route change, then
+    // glide down to Waiting's resting speed.
+    setConfettiSpeedTarget(4);
     setConfettiRespawning(false);
+    const settleTimer = setTimeout(() => setConfettiSpeedTarget(1), 1000);
 
     return () => {
+      clearTimeout(settleTimer);
       setAmbientBackgroundMode(false, reducedMotion);
       setConfettiRespawning(true);
     };
