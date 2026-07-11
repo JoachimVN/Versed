@@ -475,47 +475,54 @@ function trailingPlayers(game: Game): { ids: string[]; names: string[] } {
   return { ids: trailing.map(p => p.socketId), names: trailing.map(p => p.name) };
 }
 
-function buildPartyConfig(game: Game): PartyConfig {
-  const plain: Omit<PartyConfig, 'format' | 'target' | 'event' | 'multiplier' | 'winnerOnly' | 'intro'> = {
-    finale: false, duelistIds: [], duelistNames: [], restrictedIds: [], restrictedNames: [],
+type PlainPartyConfig = Omit<PartyConfig, 'format' | 'target' | 'event' | 'multiplier' | 'winnerOnly' | 'intro'>;
+
+// Prefer the plainest enabled format so the warm-up stays a gentle intro
+// rather than opening on Guess the Year or Multiple Choice — but still
+// respect a host who's disabled Classic/Race outright.
+function pickWarmupFormat(game: Game): PartyFormat {
+  if (game.enabledRoundTypes.has('classic')) return 'classic';
+  if (game.enabledRoundTypes.has('race')) return 'race';
+  if (game.enabledRoundTypes.has('year')) return 'year';
+  if (game.enabledRoundTypes.has('choice')) return 'choice';
+  return 'classic';
+}
+
+function buildWarmupConfig(game: Game, plain: PlainPartyConfig): PartyConfig {
+  const warmupFormat = pickWarmupFormat(game);
+  const warmupTagline: Record<PartyFormat, string> = {
+    classic: 'A classic round to get going',
+    race: 'A race round to get going',
+    year: 'Guess the year to get going',
+    choice: 'A multiple-choice round to get going',
   };
+  return {
+    ...plain, format: warmupFormat, target: warmupFormat === 'year' ? 'year' : 'title',
+    event: null, multiplier: 1, winnerOnly: false,
+    intro: { title: 'Warm-Up', tagline: warmupTagline[warmupFormat] },
+  };
+}
 
+// Starts (or continues) the finale duel if this is the last round; returns
+// null when the game isn't at its finale yet so the caller falls through to
+// the normal random-round build.
+function maybeBuildFinaleDuelConfig(game: Game): PartyConfig | null {
   const isLast = game.roundIndex === game.totalRounds - 1;
-  if (isLast && game.totalRounds > 1 && game.players.size >= 2) {
-    if (!game.duelActive) {
-      const top = Array.from(game.players.values())
-        .sort((a, b) => b.score - a.score)
-        .slice(0, 2);
-      game.duelActive = true;
-      game.duelDuelistIds = top.map(p => p.socketId);
-      game.duelWins = { [top[0].socketId]: 0, [top[1].socketId]: 0 };
-      game.duelSubRoundIndex = 0;
-    }
-    return buildDuelSubRoundConfig(game);
-  }
+  if (!isLast || game.totalRounds <= 1 || game.players.size < 2) return null;
 
-  if (game.roundIndex === 0) {
-    // Prefer the plainest enabled format so the warm-up stays a gentle
-    // intro rather than opening on Guess the Year or Multiple Choice — but
-    // still respect a host who's disabled Classic/Race outright.
-    const warmupFormat: PartyFormat = game.enabledRoundTypes.has('classic') ? 'classic'
-      : game.enabledRoundTypes.has('race') ? 'race'
-      : game.enabledRoundTypes.has('year') ? 'year'
-      : game.enabledRoundTypes.has('choice') ? 'choice'
-      : 'classic';
-    const warmupTagline: Record<PartyFormat, string> = {
-      classic: 'A classic round to get going',
-      race: 'A race round to get going',
-      year: 'Guess the year to get going',
-      choice: 'A multiple-choice round to get going',
-    };
-    return {
-      ...plain, format: warmupFormat, target: warmupFormat === 'year' ? 'year' : 'title',
-      event: null, multiplier: 1, winnerOnly: false,
-      intro: { title: 'Warm-Up', tagline: warmupTagline[warmupFormat] },
-    };
+  if (!game.duelActive) {
+    const top = Array.from(game.players.values())
+      .sort((a, b) => b.score - a.score)
+      .slice(0, 2);
+    game.duelActive = true;
+    game.duelDuelistIds = top.map(p => p.socketId);
+    game.duelWins = { [top[0].socketId]: 0, [top[1].socketId]: 0 };
+    game.duelSubRoundIndex = 0;
   }
+  return buildDuelSubRoundConfig(game);
+}
 
+function buildRandomRoundConfig(game: Game, plain: PlainPartyConfig): PartyConfig {
   const prev = game.currentRound?.party;
   const formatPool: [PartyFormat, number][] = [];
   if (game.enabledRoundTypes.has('classic')) formatPool.push(['classic', 40]);
@@ -548,6 +555,19 @@ function buildPartyConfig(game: Game): PartyConfig {
     restrictedIds: restricted.ids, restrictedNames: restricted.names,
     intro: introFor(format, target, event, winnerOnly),
   };
+}
+
+function buildPartyConfig(game: Game): PartyConfig {
+  const plain: PlainPartyConfig = {
+    finale: false, duelistIds: [], duelistNames: [], restrictedIds: [], restrictedNames: [],
+  };
+
+  const duelConfig = maybeBuildFinaleDuelConfig(game);
+  if (duelConfig) return duelConfig;
+
+  if (game.roundIndex === 0) return buildWarmupConfig(game, plain);
+
+  return buildRandomRoundConfig(game, plain);
 }
 
 // Best-of-3 finale duel: a fixed format sequence rather than the usual
