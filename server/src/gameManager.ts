@@ -391,10 +391,10 @@ function introFor(
     : { title: 'Classic Round', tagline: 'Bid low, score high' };
 }
 
-// 'title' always stays in the pool unconditionally — it's the baseline round
-// type, same principle as 'classic'/'race' always staying in buildPartyConfig's
-// format pool below — so this never needs an empty-pool fallback the way
-// pickPartyEvent's genuinely-can-empty pool does.
+// 'title' always stays in the pool unconditionally — it's the baseline
+// guess target, available no matter which round types the host disables —
+// so this never needs an empty-pool fallback the way pickPartyEvent's
+// genuinely-can-empty pool does.
 function pickPartyTarget(game: Game, format: PartyFormat): PartyTarget {
   if (format === 'year') return 'year';
   const pool: [PartyTarget, number][] = [['title', 60]];
@@ -416,7 +416,7 @@ export const ALL_PARTY_EVENTS: PartyEvent[] = [
 // Every party round-type variant that exists — same "default everything on,
 // validate host-supplied lists against this" role as ALL_PARTY_EVENTS, but
 // for the format/target/winnerOnly pool instead of event modifiers.
-export const ALL_PARTY_ROUND_TYPES: PartyRoundType[] = ['choice', 'artist', 'both', 'year', 'winnerOnly'];
+export const ALL_PARTY_ROUND_TYPES: PartyRoundType[] = ['classic', 'race', 'choice', 'artist', 'both', 'year', 'winnerOnly'];
 
 // Interpolate from 80% plain rounds at Chill through 60% at Balanced to 40%
 // at Chaotic. Every slider position therefore affects the actual frequency.
@@ -447,28 +447,15 @@ function pickPartyEvent(game: Game, format: PartyFormat, prevEvent: PartyEvent |
   return pickWeighted(filtered);
 }
 
-// Mystery weights at the three labelled anchors. Intermediate slider values
-// linearly interpolate every weight, rather than snapping to a hidden preset.
-const MYSTERY_MULTIPLIERS = [1.5, 2, 3, 4, 5, 10] as const;
-const MYSTERY_WEIGHT_ANCHORS = {
-  chill: [40, 35, 20, 5, 0, 0],
-  balanced: [27, 27, 27, 12, 5, 2],
-  chaotic: [12, 16, 17, 20, 18, 17],
-} as const;
+// Mystery multiplier weights — fixed regardless of chaos slider position, so
+// the slider only controls how often events happen, not how big they pay.
+const MYSTERY_WEIGHTS: [number, number][] = [
+  [1.5, 27], [2, 27], [3, 27], [4, 12], [5, 5], [10, 2],
+];
 
-function mysteryWeights(chaosLevel: ChaosLevel): [number, number][] {
-  const lower = chaosLevel <= 50 ? MYSTERY_WEIGHT_ANCHORS.chill : MYSTERY_WEIGHT_ANCHORS.balanced;
-  const upper = chaosLevel <= 50 ? MYSTERY_WEIGHT_ANCHORS.balanced : MYSTERY_WEIGHT_ANCHORS.chaotic;
-  const progress = chaosLevel <= 50 ? chaosLevel / 50 : (chaosLevel - 50) / 50;
-  return MYSTERY_MULTIPLIERS.map((multiplier, index) => [
-    multiplier,
-    lower[index] + (upper[index] - lower[index]) * progress,
-  ]);
-}
-
-function eventMultiplier(game: Game, event: PartyEvent | null): number {
+function eventMultiplier(event: PartyEvent | null): number {
   if (event === 'double') return 2;
-  if (event === 'mystery') return pickWeighted(mysteryWeights(game.chaosLevel));
+  if (event === 'mystery') return pickWeighted(MYSTERY_WEIGHTS);
   // The "boost" in Underdog Boost — a real payout bump on top of exclusive
   // access to the round, not just first dibs at the normal rate.
   if (event === 'underdog') return 1.5;
@@ -488,46 +475,74 @@ function trailingPlayers(game: Game): { ids: string[]; names: string[] } {
   return { ids: trailing.map(p => p.socketId), names: trailing.map(p => p.name) };
 }
 
-function buildPartyConfig(game: Game): PartyConfig {
-  const plain: Omit<PartyConfig, 'format' | 'target' | 'event' | 'multiplier' | 'winnerOnly' | 'intro'> = {
-    finale: false, duelistIds: [], duelistNames: [], restrictedIds: [], restrictedNames: [],
+type PlainPartyConfig = Omit<PartyConfig, 'format' | 'target' | 'event' | 'multiplier' | 'winnerOnly' | 'intro'>;
+
+// Prefer the plainest enabled format so the warm-up stays a gentle intro
+// rather than opening on Guess the Year or Multiple Choice — but still
+// respect a host who's disabled Classic/Race outright.
+function pickWarmupFormat(game: Game): PartyFormat {
+  if (game.enabledRoundTypes.has('classic')) return 'classic';
+  if (game.enabledRoundTypes.has('race')) return 'race';
+  if (game.enabledRoundTypes.has('year')) return 'year';
+  if (game.enabledRoundTypes.has('choice')) return 'choice';
+  return 'classic';
+}
+
+function buildWarmupConfig(game: Game, plain: PlainPartyConfig): PartyConfig {
+  const warmupFormat = pickWarmupFormat(game);
+  const warmupTagline: Record<PartyFormat, string> = {
+    classic: 'A classic round to get going',
+    race: 'A race round to get going',
+    year: 'Guess the year to get going',
+    choice: 'A multiple-choice round to get going',
   };
+  return {
+    ...plain, format: warmupFormat, target: warmupFormat === 'year' ? 'year' : 'title',
+    event: null, multiplier: 1, winnerOnly: false,
+    intro: { title: 'Warm-Up', tagline: warmupTagline[warmupFormat] },
+  };
+}
 
+// Starts (or continues) the finale duel if this is the last round; returns
+// null when the game isn't at its finale yet so the caller falls through to
+// the normal random-round build.
+function maybeBuildFinaleDuelConfig(game: Game): PartyConfig | null {
   const isLast = game.roundIndex === game.totalRounds - 1;
-  if (isLast && game.totalRounds > 1 && game.players.size >= 2) {
-    if (!game.duelActive) {
-      const top = Array.from(game.players.values())
-        .sort((a, b) => b.score - a.score)
-        .slice(0, 2);
-      game.duelActive = true;
-      game.duelDuelistIds = top.map(p => p.socketId);
-      game.duelWins = { [top[0].socketId]: 0, [top[1].socketId]: 0 };
-      game.duelSubRoundIndex = 0;
-    }
-    return buildDuelSubRoundConfig(game);
-  }
+  if (!isLast || game.totalRounds <= 1 || game.players.size < 2) return null;
 
-  if (game.roundIndex === 0) {
-    return {
-      ...plain, format: 'classic', target: 'title', event: null, multiplier: 1, winnerOnly: false,
-      intro: { title: 'Warm-Up', tagline: 'A classic round to get going' },
-    };
+  if (!game.duelActive) {
+    const top = Array.from(game.players.values())
+      .sort((a, b) => b.score - a.score)
+      .slice(0, 2);
+    game.duelActive = true;
+    game.duelDuelistIds = top.map(p => p.socketId);
+    game.duelWins = { [top[0].socketId]: 0, [top[1].socketId]: 0 };
+    game.duelSubRoundIndex = 0;
   }
+  return buildDuelSubRoundConfig(game);
+}
 
+function buildRandomRoundConfig(game: Game, plain: PlainPartyConfig): PartyConfig {
   const prev = game.currentRound?.party;
-  // 'classic'/'race' always stay unconditional in the pool — same principle
-  // as pickPartyTarget's 'title' — so disabling every round type just falls
-  // back to plain classic/race rounds (events still layer on top), no
-  // explicit empty-pool branch needed the way pickPartyEvent's pool needs one.
-  const formatPool: [PartyFormat, number][] = [['classic', 40], ['race', 35]];
+  const formatPool: [PartyFormat, number][] = [];
+  if (game.enabledRoundTypes.has('classic')) formatPool.push(['classic', 40]);
+  if (game.enabledRoundTypes.has('race')) formatPool.push(['race', 35]);
   if (game.enabledRoundTypes.has('year')) formatPool.push(['year', 15]);
   if (game.enabledRoundTypes.has('choice')) formatPool.push(['choice', 10]);
+  // The host disabled every format — fall back to a plain classic round
+  // rather than handing pickWeighted an empty pool.
+  if (formatPool.length === 0) formatPool.push(['classic', 1]);
   let format = pickWeighted<PartyFormat>(formatPool);
-  if (format === 'year' && prev?.format === 'year') format = 'race';
+  // Avoid two Guess the Year rounds back to back — reroll among whatever
+  // else the host has enabled rather than assuming 'race' is available.
+  if (format === 'year' && prev?.format === 'year') {
+    const nonYearPool = formatPool.filter(([f]) => f !== 'year');
+    format = nonYearPool.length > 0 ? pickWeighted<PartyFormat>(nonYearPool) : 'year';
+  }
 
   const target = pickPartyTarget(game, format);
   const event = pickPartyEvent(game, format, prev?.event);
-  const multiplier = eventMultiplier(game, event);
+  const multiplier = eventMultiplier(event);
   // Only race/year formats can go winner-only — classic already has its own
   // bid/tier stakes, and stacking this on top would just zero out everyone
   // but the lowest bidder.
@@ -540,6 +555,19 @@ function buildPartyConfig(game: Game): PartyConfig {
     restrictedIds: restricted.ids, restrictedNames: restricted.names,
     intro: introFor(format, target, event, winnerOnly),
   };
+}
+
+function buildPartyConfig(game: Game): PartyConfig {
+  const plain: PlainPartyConfig = {
+    finale: false, duelistIds: [], duelistNames: [], restrictedIds: [], restrictedNames: [],
+  };
+
+  const duelConfig = maybeBuildFinaleDuelConfig(game);
+  if (duelConfig) return duelConfig;
+
+  if (game.roundIndex === 0) return buildWarmupConfig(game, plain);
+
+  return buildRandomRoundConfig(game, plain);
 }
 
 // Best-of-3 finale duel: a fixed format sequence rather than the usual
@@ -563,7 +591,7 @@ function buildDuelSubRoundConfig(game: Game): PartyConfig {
 
   const prev = game.currentRound?.party;
   const event = pickPartyEvent(game, format, prev?.event);
-  const multiplier = eventMultiplier(game, event);
+  const multiplier = eventMultiplier(event);
 
   const gameNum = game.duelSubRoundIndex + 1;
   const gameLabel = gameNum > DUEL_FORMAT_SEQUENCE.length

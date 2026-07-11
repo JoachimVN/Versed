@@ -534,6 +534,8 @@ function EventChipGrid({ enabledEvents, onToggle, onSetAll }: Readonly<{
 // (no UI slot for a second bonus answer), while 'year' can appear either as
 // closest-guess year format or as a multiple-choice year target.
 const ROUND_TYPE_LABELS: Record<PartyRoundType, string> = {
+  classic: 'Classic',
+  race: 'Race',
   choice: 'Multiple Choice',
   artist: 'Who Sings It?',
   both: 'Double Duty',
@@ -541,6 +543,8 @@ const ROUND_TYPE_LABELS: Record<PartyRoundType, string> = {
   winnerOnly: 'Winner Takes All',
 };
 const ROUND_TYPE_DESCRIPTIONS: Record<PartyRoundType, string> = {
+  classic: 'Bid low, score high',
+  race: 'Everyone guesses at once — speed wins',
   choice: 'Tap the right answer from 4 options',
   artist: 'Name the artist instead of the title',
   both: 'Name the title — bonus for the artist too',
@@ -565,7 +569,7 @@ function RoundTypeChipGrid({ enabledRoundTypes, onToggle, onSetAll }: Readonly<{
   if (shownType) {
     caption = ROUND_TYPE_DESCRIPTIONS[shownType];
   } else if (enabledRoundTypes.length === 0) {
-    caption = 'No round types selected. Party rounds will play as plain classic/race rounds.';
+    caption = 'No round types selected. Party rounds will fall back to plain classic rounds.';
   } else {
     caption = 'Tap or hover a round type for details.';
   }

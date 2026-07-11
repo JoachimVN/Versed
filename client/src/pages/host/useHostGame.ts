@@ -73,7 +73,7 @@ const MODES: Set<Mode> = new Set(['classic', 'race', 'party']);
 const DIFFICULTIES: Set<Difficulty> = new Set(['easy', 'medium', 'hard']);
 export const ALL_PARTY_EVENTS: PartyEvent[] = ['double', 'mystery', 'steal', 'snippet', 'fullhints', 'blind', 'outro', 'underdog', 'chaoshints'];
 const PARTY_EVENT_SET: Set<string> = new Set(ALL_PARTY_EVENTS);
-export const ALL_PARTY_ROUND_TYPES: PartyRoundType[] = ['choice', 'artist', 'both', 'year', 'winnerOnly'];
+export const ALL_PARTY_ROUND_TYPES: PartyRoundType[] = ['classic', 'race', 'choice', 'artist', 'both', 'year', 'winnerOnly'];
 const PARTY_ROUND_TYPE_SET: Set<string> = new Set(ALL_PARTY_ROUND_TYPES);
 const LEGACY_CHAOS_LEVELS: Record<string, ChaosLevel> = { chill: 0, balanced: 50, chaotic: 100 };
 

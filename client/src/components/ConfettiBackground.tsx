@@ -80,11 +80,21 @@ export function ConfettiBackground({ burst = false, persistAfterBurst = false, s
     const ctx = canvas.getContext('2d');
     if (!ctx) return;
 
-    // Size from the canvas's own CSS box, not window.innerHeight — the
+    // Size from the canvas's containing box, not window.innerHeight — the
     // container spans 100lvh (behind iOS Safari's translucent bottom bar),
     // which is taller than innerHeight while the browser bars are expanded.
-    let W = canvas.clientWidth;
-    let H = canvas.clientHeight;
+    // Reading the containing box also avoids a canvas intrinsic-size race:
+    // if the canvas is measured before its absolute parent has settled, CSS
+    // can stretch the old bitmap and make every particle look enormous.
+    const sizingElement = canvas.parentElement ?? canvas;
+    const readCanvasSize = () => {
+      const rect = sizingElement.getBoundingClientRect();
+      if (rect.width <= 0 || rect.height <= 0) return null;
+      return { width: Math.max(1, Math.round(rect.width)), height: Math.max(1, Math.round(rect.height)) };
+    };
+    const initialSize = readCanvasSize() ?? { width: 1, height: 1 };
+    let W = initialSize.width;
+    let H = initialSize.height;
     canvas.width = W;
     canvas.height = H;
 
@@ -212,23 +222,39 @@ export function ConfettiBackground({ burst = false, persistAfterBurst = false, s
       }
     };
 
-    const onResize = () => {
-      W = canvas.clientWidth;
-      H = canvas.clientHeight;
+    const resizeCanvas = () => {
+      const nextSize = readCanvasSize();
+      if (!nextSize) return;
+      const { width: newW, height: newH } = nextSize;
+      if (newW === W && newH === H) return;
+      if (W > 0 && H > 0) {
+        const scaleX = newW / W;
+        const scaleY = newH / H;
+        for (const p of particles) {
+          p.x *= scaleX;
+          p.y *= scaleY;
+        }
+      }
+      W = newW;
+      H = newH;
       canvas.width = W;
       canvas.height = H;
     };
 
+    const onResize = () => resizeCanvas();
+    const resizeObserver = new ResizeObserver(resizeCanvas);
+    resizeObserver.observe(sizingElement);
     document.addEventListener('visibilitychange', onVisibility);
     window.addEventListener('resize', onResize);
     rafId = requestAnimationFrame(tick);
 
     return () => {
       cancelAnimationFrame(rafId);
+      resizeObserver.disconnect();
       document.removeEventListener('visibilitychange', onVisibility);
       window.removeEventListener('resize', onResize);
     };
   }, []);
 
-  return <canvas ref={canvasRef} className="absolute inset-0 w-full h-full pointer-events-none" style={{ zIndex: 0 }} />;
+  return <canvas ref={canvasRef} className="absolute inset-0 w-full h-full pointer-events-none" style={{ zIndex: 0, display: 'block' }} />;
 }

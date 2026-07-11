@@ -51,12 +51,13 @@ export type PartyTarget = GuessTarget | 'year';
 export type PartyEvent =
   | 'double' | 'mystery' | 'steal' | 'snippet' | 'fullhints' | 'blind' | 'outro' | 'underdog' | 'chaoshints';
 
-// Host-togglable Party round-variant ingredients — 'choice' gates the
-// 'choice' PartyFormat, 'year' gates the 'year' PartyFormat, 'artist'/'both'
-// gate those GuessTarget pool entries, and 'winnerOnly' gates the winner-only
-// roll. Distinct from PartyEvent, which only covers modifiers (Mystery,
-// Steal, Snippet, ...) layered on top of whatever round type gets picked.
-export type PartyRoundType = 'choice' | 'artist' | 'both' | 'year' | 'winnerOnly';
+// Host-togglable Party round-variant ingredients — 'classic'/'race' gate
+// those baseline PartyFormats, 'choice' gates the 'choice' PartyFormat,
+// 'year' gates the 'year' PartyFormat, 'artist'/'both' gate those
+// GuessTarget pool entries, and 'winnerOnly' gates the winner-only roll.
+// Distinct from PartyEvent, which only covers modifiers (Mystery, Steal,
+// Snippet, ...) layered on top of whatever round type gets picked.
+export type PartyRoundType = 'classic' | 'race' | 'choice' | 'artist' | 'both' | 'year' | 'winnerOnly';
 
 // Continuous 0–100 chaos scale. It tunes how often party events fire and how
 // wild mystery's multiplier spread gets; 50 is the balanced default.
