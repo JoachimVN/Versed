@@ -87,6 +87,22 @@ describe('isCorrectGuess — dash and plus attribution', () => {
     expect(isCorrectGuess('Landslide', 'Landslide - 1997 Digital Remaster')).toBe(true);
   });
 
+  it('strips other dash-attributed mix/version tags', () => {
+    expect(isCorrectGuess('Are You Gonna Go My Way', 'Are You Gonna Go My Way - Mono')).toBe(true);
+    expect(isCorrectGuess('Come Together', 'Come Together - Stereo Mix')).toBe(true);
+    expect(isCorrectGuess('Somebody Told Me', 'Somebody Told Me - Single Version')).toBe(true);
+    expect(isCorrectGuess('Chasing', 'Chasing - Demo')).toBe(true);
+    expect(isCorrectGuess('Some Song', 'Some Song - Clean Edit')).toBe(true);
+    expect(isCorrectGuess('Deluxe Track', 'Deluxe Track - Deluxe Edition')).toBe(true);
+  });
+
+  it('does NOT treat mono/stereo/single/clean as metadata mid-title', () => {
+    expect(isCorrectGuess('Stereo Love', 'Stereo Love')).toBe(true);
+    expect(isCorrectGuess('Life In Mono', 'Life In Mono')).toBe(true);
+    expect(isCorrectGuess('Single Ladies', 'Single Ladies (Put A Ring On It)')).toBe(true);
+    expect(isCorrectGuess('Clean Up Woman', 'Clean Up Woman')).toBe(true);
+  });
+
   it('strips a "+ Artist" feature suffix when it names the featured artist', () => {
     expect(isCorrectGuess('Stateside', 'Stateside + Zara Larsson', 'PinkPantheress', 'Zara Larsson')).toBe(true);
   });

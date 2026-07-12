@@ -11,7 +11,7 @@ const HOMOPHONES: Record<string, string> = {
   okay: 'ok',
 };
 
-const METADATA_WORDS = 'feat|ft|featuring|from|with|digital|remaster(?:ed)?|live|acoustic|remix|edit|version|radio|original|extended|deluxe|bonus|interlude';
+const METADATA_WORDS = 'feat|ft|featuring|from|with|digital|mono|stereo|remaster(?:ed)?|live|acoustic|remix|edit|edition|version|radio|original|extended|deluxe|bonus|interlude|single|clean|demo';
 // Reissue tags often lead with the year, e.g. "2008 Remaster" or
 // "1997 Digital Remaster" — treat that leading year as optional filler
 // rather than requiring the metadata word to be first.
