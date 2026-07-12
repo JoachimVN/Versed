@@ -101,8 +101,8 @@ export default function App() {
             zIndex: 3,
             opacity: 'var(--confetti-treatment-opacity, 0)',
             background: 'rgba(5,5,14,0.35)',
-            backdropFilter: 'blur(10px)',
-            WebkitBackdropFilter: 'blur(10px)',
+            backdropFilter: 'blur(5px)',
+            WebkitBackdropFilter: 'blur(5px)',
             transition: 'opacity var(--ambient-surface-duration, 500ms) ease',
           }}
         />
