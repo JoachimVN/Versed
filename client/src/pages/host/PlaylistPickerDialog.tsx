@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { Check, Loader2 } from 'lucide-react';
+import { Check, Disc3 } from 'lucide-react';
 import LiquidGlass from '../../components/StableLiquidGlass';
 import { resolvePlaylistInput, PlaylistFetchError, PlaylistSummary, MAX_PLAYLIST_TRACKS } from '../../hooks/usePlaylistPicker';
 import { LIQUID_CARD_PROPS } from '../../components/liquidGlassPresets';
@@ -259,7 +259,7 @@ export function PlaylistPickerDialog({ game }: Readonly<{ game: HostState }>) {
                 onMouseEnter={() => !resolving && linkInput.trim() && setLoadHovered(true)}
                 onMouseLeave={() => setLoadHovered(false)}
               >
-                {resolving ? <Loader2 className="w-3.5 h-3.5 animate-spin inline mr-1.5" /> : null}
+                {resolving ? <Disc3 className="w-3.5 h-3.5 animate-spin inline mr-1.5" strokeWidth={1.5} /> : null}
                 Load
               </button>
             </div>

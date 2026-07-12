@@ -1,6 +1,6 @@
 import { useCallback, useRef, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { Clock } from 'lucide-react';
+import { Clock, Disc3 } from 'lucide-react';
 import LiquidGlass from '../components/StableLiquidGlass';
 import { useLogoMorph } from '../contexts/LogoMorph';
 import { useEscapeKey } from '../hooks/useEscapeKey';
@@ -101,7 +101,7 @@ export default function Host() {
 
       {reconnecting && !gameExpired && (
         <div className="fixed inset-0 bg-black/70 backdrop-blur-sm flex flex-col items-center justify-center z-50 gap-3">
-          <div className="w-10 h-10 border-2 border-white/30 border-t-white rounded-full animate-spin" />
+          <Disc3 className="w-10 h-10 text-white/70 animate-spin" strokeWidth={1.5} />
           <p className="text-white/70 text-sm font-medium">Reconnecting...</p>
           <p className="text-white/45 text-xs">Game is still running</p>
         </div>
