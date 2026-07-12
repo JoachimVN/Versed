@@ -11,8 +11,12 @@ const HOMOPHONES: Record<string, string> = {
   okay: 'ok',
 };
 
-const METADATA_WORDS = 'feat|ft|featuring|from|with|remaster(?:ed)?|live|acoustic|remix|edit|version|radio|original|extended|deluxe|bonus|interlude';
-const PAREN_METADATA = new RegExp(String.raw`^\s*(${METADATA_WORDS})\b`, 'i');
+const METADATA_WORDS = 'feat|ft|featuring|from|with|digital|remaster(?:ed)?|live|acoustic|remix|edit|version|radio|original|extended|deluxe|bonus|interlude';
+// Reissue tags often lead with the year, e.g. "2008 Remaster" or
+// "1997 Digital Remaster" — treat that leading year as optional filler
+// rather than requiring the metadata word to be first.
+const YEAR_PREFIX = String.raw`(?:\d{4}\s+)?`;
+const PAREN_METADATA = new RegExp(String.raw`^\s*${YEAR_PREFIX}(${METADATA_WORDS})\b`, 'i');
 const PAREN_RE = /^([^([]*)[([](([^)\]]*?))[)\]]/;
 
 // A metadata word can also sit outside the parenthetical, right before it
@@ -34,7 +38,7 @@ function stripTrailingMetadata(s: string): string {
 // `Wondering - From "High School Musical: The Musical: The Series"`. Strip
 // that whole trailing segment (not just the leading word) so guesses only
 // have to match the real title.
-const DASH_METADATA_RE = new RegExp(String.raw`\s+-\s+(${METADATA_WORDS})\b.*$`, 'i');
+const DASH_METADATA_RE = new RegExp(String.raw`\s+-\s+${YEAR_PREFIX}(${METADATA_WORDS})\b.*$`, 'i');
 
 function stripDashMetadata(s: string): string {
   return s.replace(DASH_METADATA_RE, '').trim();

@@ -82,6 +82,11 @@ describe('isCorrectGuess — dash and plus attribution', () => {
     expect(isCorrectGuess('Wondering', 'Wondering - From "High School Musical: The Musical: The Series"')).toBe(true);
   });
 
+  it('strips a year-prefixed remaster tag', () => {
+    expect(isCorrectGuess('Say You Will', 'Say You Will - 2008 Remaster')).toBe(true);
+    expect(isCorrectGuess('Landslide', 'Landslide - 1997 Digital Remaster')).toBe(true);
+  });
+
   it('strips a "+ Artist" feature suffix when it names the featured artist', () => {
     expect(isCorrectGuess('Stateside', 'Stateside + Zara Larsson', 'PinkPantheress', 'Zara Larsson')).toBe(true);
   });
