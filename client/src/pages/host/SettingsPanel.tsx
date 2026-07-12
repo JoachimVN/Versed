@@ -122,10 +122,12 @@ export function SettingsPanel({ game, open }: Readonly<{ game: HostState; open: 
 
         {mode === 'party' && (
           <div className="px-5 pb-4 space-y-4" style={{ borderTop: '1px solid rgba(255,255,255,0.07)', paddingTop: '16px' }}>
-            <ToggleRow label="Finale duel" value={finaleEnabled} onToggle={() => setFinaleEnabled(!finaleEnabled)} />
             <ChaosLevelRow value={chaosLevel} onChange={setChaosLevel} disabled={enabledEvents.length === 0} />
             <EventChipGrid enabledEvents={enabledEvents} onToggle={toggleEvent} onSetAll={setEnabledEvents} />
-            <RoundTypeChipGrid enabledRoundTypes={enabledRoundTypes} onToggle={toggleRoundType} onSetAll={setEnabledRoundTypes} />
+            <RoundTypeChipGrid
+              enabledRoundTypes={enabledRoundTypes} onToggle={toggleRoundType} onSetAll={setEnabledRoundTypes}
+              finaleEnabled={finaleEnabled} onToggleFinale={() => setFinaleEnabled(!finaleEnabled)}
+            />
           </div>
         )}
       </div>
@@ -553,12 +555,21 @@ const ROUND_TYPE_DESCRIPTIONS: Record<PartyRoundType, string> = {
   winnerOnly: 'Only the round winner scores — everyone else gets zero',
 };
 
-function RoundTypeChipGrid({ enabledRoundTypes, onToggle, onSetAll }: Readonly<{
+// 'finale' isn't a PartyRoundType — it doesn't get randomly rolled into a
+// round like the others, it deterministically replaces the *last* round
+// with a fixed best-of-3 duel (see gameManager's finaleEnabled/startFinale).
+// It's shown as a chip here for visual/UX consistency, but stays wired to
+// its own game-wide finaleEnabled boolean rather than the enabledRoundTypes
+// set, and is excluded from the grid's All/None bulk actions.
+type RoundTypeChipKey = PartyRoundType | 'finale';
+
+function RoundTypeChipGrid({ enabledRoundTypes, onToggle, onSetAll, finaleEnabled, onToggleFinale }: Readonly<{
   enabledRoundTypes: PartyRoundType[]; onToggle: (t: PartyRoundType) => void; onSetAll: (types: PartyRoundType[]) => void;
+  finaleEnabled: boolean; onToggleFinale: () => void;
 }>) {
-  const [hoveredType, setHoveredType] = useState<PartyRoundType | null>(null);
-  const [focusedType, setFocusedType] = useState<PartyRoundType | null>(null);
-  const [selectedType, setSelectedType] = useState<PartyRoundType | null>(null);
+  const [hoveredType, setHoveredType] = useState<RoundTypeChipKey | null>(null);
+  const [focusedType, setFocusedType] = useState<RoundTypeChipKey | null>(null);
+  const [selectedType, setSelectedType] = useState<RoundTypeChipKey | null>(null);
   const shownType = hoveredType ?? focusedType ?? selectedType;
 
   const setAll = (types: PartyRoundType[]) => {
@@ -567,7 +578,9 @@ function RoundTypeChipGrid({ enabledRoundTypes, onToggle, onSetAll }: Readonly<{
   };
 
   let caption: string;
-  if (shownType) {
+  if (shownType === 'finale') {
+    caption = 'Last round becomes a top-2 duel — first to answer correctly wins each of best-of-3.';
+  } else if (shownType) {
     caption = ROUND_TYPE_DESCRIPTIONS[shownType];
   } else if (enabledRoundTypes.length === 0) {
     caption = 'No round types selected. Party rounds will fall back to plain classic rounds.';
@@ -641,6 +654,43 @@ function RoundTypeChipGrid({ enabledRoundTypes, onToggle, onSetAll }: Readonly<{
             </button>
           );
         })}
+        {/* Full-width and visually set apart (amethyst accent matching the
+            finale-winner award color) since it isn't a random-pool ingredient
+            like the chips above — it's a fixed, deterministic last round. */}
+        <button
+          type="button"
+          aria-pressed={finaleEnabled}
+          aria-describedby="round-type-caption"
+          onClick={() => { onToggleFinale(); setSelectedType('finale'); }}
+          onMouseEnter={() => setHoveredType('finale')}
+          onMouseLeave={() => setHoveredType(null)}
+          onFocus={() => setFocusedType('finale')}
+          onBlur={() => setFocusedType(null)}
+          style={{
+            gridColumn: '1 / -1',
+            borderRadius: '10px',
+            minHeight: '46px',
+            padding: '6px 10px',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            fontSize: '0.78rem',
+            fontWeight: finaleEnabled ? 600 : 400,
+            textAlign: 'center',
+            lineHeight: 1.25,
+            cursor: 'pointer',
+            color: finaleEnabled ? 'white' : 'rgba(255,255,255,0.5)',
+            backdropFilter: 'blur(10px) saturate(130%)',
+            background: finaleEnabled
+              ? 'linear-gradient(135deg, rgba(198,95,232,0.28), rgba(110,32,155,0.32))'
+              : 'rgba(255,255,255,0.03)',
+            border: finaleEnabled ? '1px solid rgba(198,95,232,0.4)' : '1px solid rgba(255,255,255,0.06)',
+            boxShadow: finaleEnabled ? 'inset 0 1px 0 rgba(255,255,255,0.16)' : 'inset 0 1px 0 rgba(255,255,255,0.04)',
+            transition: 'background 0.2s ease, border-color 0.2s ease, color 0.2s ease, box-shadow 0.2s ease',
+          }}
+        >
+          Finale Duel
+        </button>
       </div>
       <p id="round-type-caption" aria-live="polite" style={{ color: 'rgba(255,255,255,0.4)', fontSize: '0.7rem', lineHeight: 1.4, minHeight: '2.1rem' }}>
         {caption}
