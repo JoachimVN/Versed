@@ -15,10 +15,10 @@ import {
 export function SettingsPanel({ game, open }: Readonly<{ game: HostState; open: boolean }>) {
   const {
     mode, bettingTimeSetting, guessingTimeSetting, roundsSetting, raceTimeSetting, raceWinnerOnly, artistOnly, yearOnly, multipleChoice, difficulty,
-    enabledEvents, enabledRoundTypes, chaosLevel,
+    enabledEvents, enabledRoundTypes, chaosLevel, finaleEnabled,
     songSource, customPlaylists,
     setBettingTimeSetting, setGuessingTimeSetting, setRoundsSetting, setRaceTimeSetting, setRaceWinnerOnly, setArtistOnly, setYearOnly, setMultipleChoice, setDifficulty,
-    toggleEvent, setEnabledEvents, toggleRoundType, setEnabledRoundTypes, setChaosLevel,
+    toggleEvent, setEnabledEvents, toggleRoundType, setEnabledRoundTypes, setChaosLevel, setFinaleEnabled,
     setSongSource, openPlaylistPicker, removePlaylist,
     toggleSettings,
   } = game;
@@ -122,6 +122,7 @@ export function SettingsPanel({ game, open }: Readonly<{ game: HostState; open: 
 
         {mode === 'party' && (
           <div className="px-5 pb-4 space-y-4" style={{ borderTop: '1px solid rgba(255,255,255,0.07)', paddingTop: '16px' }}>
+            <ToggleRow label="Finale duel" value={finaleEnabled} onToggle={() => setFinaleEnabled(!finaleEnabled)} />
             <ChaosLevelRow value={chaosLevel} onChange={setChaosLevel} disabled={enabledEvents.length === 0} />
             <EventChipGrid enabledEvents={enabledEvents} onToggle={toggleEvent} onSetAll={setEnabledEvents} />
             <RoundTypeChipGrid enabledRoundTypes={enabledRoundTypes} onToggle={toggleRoundType} onSetAll={setEnabledRoundTypes} />

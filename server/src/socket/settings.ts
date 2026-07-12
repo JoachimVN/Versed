@@ -5,7 +5,7 @@ export interface StartGameSettings {
   bettingTime?: number; guessingTime?: number; totalRounds?: number; mode?: string;
   raceTime?: number; raceWinnerOnly?: boolean; artistOnly?: boolean; yearOnly?: boolean; multipleChoice?: boolean;
   difficulty?: string; songSource?: string;
-  enabledEvents?: string[]; enabledRoundTypes?: string[]; chaosLevel?: number;
+  enabledEvents?: string[]; enabledRoundTypes?: string[]; chaosLevel?: number; finaleEnabled?: boolean;
   customPlaylist?: { id?: string; tracks?: PlaylistTrackInput[] };
 }
 
@@ -68,6 +68,7 @@ function applyPartyPoolSettings(game: Game, s: StartGameSettings | undefined) {
   // event picker already treats an empty pool as "always play plain".
   game.enabledEvents = enabledPartyItems<PartyEvent>(s?.enabledEvents, gm.ALL_PARTY_EVENTS);
   game.enabledRoundTypes = enabledPartyItems<PartyRoundType>(s?.enabledRoundTypes, gm.ALL_PARTY_ROUND_TYPES);
+  game.finaleEnabled = s?.finaleEnabled === true;
 }
 
 export function applyStartGameSettings(game: Game, s: StartGameSettings | undefined) {
