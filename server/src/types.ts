@@ -229,6 +229,7 @@ export interface Game {
   enabledEvents: Set<PartyEvent>; // party mode: which events the host allows into the pool
   enabledRoundTypes: Set<PartyRoundType>; // party mode: which round-type variants the host allows into the pool
   chaosLevel: ChaosLevel;         // party mode: event frequency + mystery-multiplier spread preset
+  finaleEnabled: boolean;         // party mode: whether the last round becomes a top-2 duel; off by default
   duelChampion: string | null;    // party mode: socketId of the finale duel's winner, once resolved
   // Finale best-of-3 duel state — lives on Game (not Round) since it must
   // survive each sub-round's fresh Round object.

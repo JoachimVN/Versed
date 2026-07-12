@@ -1,4 +1,4 @@
-import { useState, useLayoutEffect, useRef } from 'react';
+import { useState, useEffect, useLayoutEffect, useRef } from 'react';
 import LiquidGlass from '../../components/StableLiquidGlass';
 import { useLogoMorph } from '../../contexts/LogoMorph';
 import { useKeyboardOpen } from '../../hooks/useViewportHeight';
@@ -13,7 +13,22 @@ export function JoinView({ game }: Readonly<{ game: PlayState }>) {
   const [joinHovered, setJoinHovered] = useState(false);
   const [pinFocused, setPinFocused] = useState(false);
   const [nameFocused, setNameFocused] = useState(false);
-  const canJoin = cameFromQR ? name.trim().length > 0 : (pin.length === 3 && name.trim().length > 0);
+  const [pinRevealed, setPinRevealed] = useState(false);
+  // A QR join skips the PIN field, but if the encoded PIN is stale/wrong the
+  // "game not found" error leaves the player stuck with no way to fix it —
+  // reveal the field so they can type the right one.
+  useEffect(() => {
+    if (cameFromQR && error) setPinRevealed(true);
+  }, [cameFromQR, error]);
+  const showPinField = !cameFromQR || pinRevealed;
+  const canJoin = showPinField ? (pin.length === 3 && name.trim().length > 0) : name.trim().length > 0;
+  // LiquidGlass only measures its own size once on mount (and on window
+  // resize) — it has no ResizeObserver, so it never notices the card growing
+  // as the PIN field appears. Re-firing its resize listener lets it
+  // re-measure in place and transition smoothly to the new size.
+  useEffect(() => {
+    globalThis.dispatchEvent(new Event('resize'));
+  }, [showPinField]);
   const keyboardOpen = useKeyboardOpen();
   const [leaving, setLeaving] = useState(false);
   const logoRef = useRef<HTMLImageElement>(null);
@@ -93,14 +108,14 @@ export function JoinView({ game }: Readonly<{ game: PlayState }>) {
       )}
 
       {/* Input card: LiquidGlass */}
-      <div className="liquid-btn relative" style={{ width: '310px', height: cameFromQR ? '115px' : '165px' }}>
+      <div className="liquid-btn relative" style={{ width: '310px', height: showPinField ? '165px' : '115px', transition: 'height 0.3s ease' }}>
         <LiquidGlass
           style={{ position: 'absolute', top: '50%', left: '50%' }}
           {...LIQUID_CARD_PROPS}
           padding="20px 24px"
         >
           <div style={{ width: '262px', textAlign: 'center' }}>
-            {!cameFromQR && (
+            {showPinField && (
               <>
                 {/* PIN */}
                 <div style={{ marginBottom: '14px' }}>
@@ -184,7 +199,7 @@ export function JoinView({ game }: Readonly<{ game: PlayState }>) {
           opacity: canJoin ? 1 : 0.3,
           cursor: canJoin ? 'pointer' : 'not-allowed',
           transition: 'opacity 0.25s ease, margin-top 0.25s ease',
-          marginTop: cameFromQR ? '-20px' : '0',
+          marginTop: showPinField ? '0' : '-20px',
         }}
         onMouseEnter={() => setJoinHovered(true)}
         onMouseLeave={() => setJoinHovered(false)}

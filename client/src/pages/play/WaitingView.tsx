@@ -115,9 +115,11 @@ export function WaitingView({
         <div
           style={{
             position: 'relative',
-            width: 'min(360px, calc(100vw - 2rem))',
+            width: 'min(420px, calc(100vw - 1.5rem))',
             aspectRatio: '1',
-            '--disc-size': 'min(360px, calc(100vw - 2rem))',
+            '--disc-size': 'min(420px, calc(100vw - 1.5rem))',
+            // Keep the same label-to-vinyl proportion as the original
+            // composition while allowing the whole record to scale up.
             '--label-size': 'calc(var(--disc-size) * 0.6)',
           } as CSSProperties}
         >
@@ -241,6 +243,7 @@ export function WaitingView({
                 <div style={{
                   position: 'relative',
                   display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', gap: '10px',
+                  width: '100%',
                   animationName: 'vinylLabelSpinCounter', animationDuration: '7s', animationTimingFunction: 'linear', animationIterationCount: 'infinite',
                 }}>
                   <span style={{
@@ -278,13 +281,13 @@ export function WaitingView({
                       onClick={startEdit}
                       aria-label="Edit your name"
                       style={{
-                        position: 'relative', maxWidth: '85%',
-                        display: 'flex', alignItems: 'center', gap: '6px',
+                        position: 'relative', width: '88%', maxWidth: '88%', minWidth: 0,
+                        display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '6px',
                         background: 'none', border: 'none', cursor: 'pointer', color: 'white',
                         fontSize: 'clamp(1.15rem, 5vw, 1.55rem)', fontWeight: 800, letterSpacing: '-0.01em',
                       }}
                     >
-                      <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', lineHeight: 1.3 }}>{game.myName}</span>
+                      <span style={{ flex: '0 1 auto', minWidth: 0, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', lineHeight: 1.3 }}>{game.myName}</span>
                       <Pencil style={{ width: '13px', height: '13px', color: 'rgba(255,255,255,0.45)', flexShrink: 0 }} />
                     </button>
                   )}

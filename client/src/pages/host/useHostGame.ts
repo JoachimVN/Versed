@@ -56,7 +56,7 @@ type PlaylistPicker = ReturnType<typeof usePlaylistPicker>;
 interface SavedHostSettings {
   bettingTime: number; guessingTime: number; rounds: number; mode: Mode;
   raceTime: number; raceWinnerOnly: boolean; artistOnly: boolean; yearOnly: boolean; multipleChoice: boolean; difficulty: Difficulty;
-  enabledEvents: PartyEvent[]; chaosLevel: ChaosLevel;
+  enabledEvents: PartyEvent[]; chaosLevel: ChaosLevel; finaleEnabled: boolean;
   // Snapshot of ALL_PARTY_EVENTS as of the last save — lets a future load
   // tell "event didn't exist yet when this was saved" (auto-enable) apart
   // from "the host explicitly turned this off" (stay off). Without this, a
@@ -98,6 +98,7 @@ function sanitizeHostSettings(settings: Partial<SavedHostSettings>): Partial<Sav
       ? settings.enabledEvents.filter((e: unknown): e is PartyEvent => PARTY_EVENT_SET.has(e as string))
       : undefined,
     chaosLevel: clampFiniteNumber(settings.chaosLevel, 0, 100) as ChaosLevel | undefined,
+    finaleEnabled: typeof settings.finaleEnabled === 'boolean' ? settings.finaleEnabled : undefined,
     knownPartyEvents: Array.isArray(settings.knownPartyEvents)
       ? settings.knownPartyEvents.filter((e: unknown): e is PartyEvent => PARTY_EVENT_SET.has(e as string))
       : undefined,
@@ -177,6 +178,7 @@ export interface HostState {
   enabledEvents: PartyEvent[];
   enabledRoundTypes: PartyRoundType[];
   chaosLevel: ChaosLevel;
+  finaleEnabled: boolean;
   songSource: SongSource;
   customPlaylists: CustomPlaylist[];
   playlistPicker: PlaylistPicker;
@@ -214,6 +216,7 @@ export interface HostState {
   toggleRoundType: (t: PartyRoundType) => void;
   setEnabledRoundTypes: (types: PartyRoundType[]) => void;
   setChaosLevel: (v: ChaosLevel) => void;
+  setFinaleEnabled: (v: boolean) => void;
   setSongSource: (v: SongSource) => void;
   addPlaylist: (p: CustomPlaylist) => void;
   removePlaylist: (id: string) => void;
@@ -275,6 +278,7 @@ export function useHostGame(): HostState {
   const [enabledEvents, setEnabledEvents] = useState<PartyEvent[]>(savedSettings.enabledEvents ?? ALL_PARTY_EVENTS);
   const [enabledRoundTypes, setEnabledRoundTypes] = useState<PartyRoundType[]>(savedSettings.enabledRoundTypes ?? ALL_PARTY_ROUND_TYPES);
   const [chaosLevel, setChaosLevel] = useState<ChaosLevel>(savedSettings.chaosLevel ?? 50);
+  const [finaleEnabled, setFinaleEnabled] = useState(savedSettings.finaleEnabled ?? false);
   // Not persisted in SavedHostSettings, deliberately: a reload can't restore
   // the actual fetched track data, so a restored 'playlist' flag with no
   // tracks would leave the host in a confusing half-configured state.
@@ -288,7 +292,7 @@ export function useHostGame(): HostState {
     const toSave: SavedHostSettings = {
       bettingTime: bettingTimeSetting, guessingTime: guessingTimeSetting, rounds: roundsSetting, mode,
       raceTime: raceTimeSetting, raceWinnerOnly, artistOnly, yearOnly, multipleChoice, difficulty,
-      enabledEvents, chaosLevel,
+      enabledEvents, chaosLevel, finaleEnabled,
       // Snapshot of every event/round type this build knows about, so a
       // future load can tell newly-added ones (auto-enable) apart from ones
       // the host deliberately turned off (stay off) — see loadSavedHostSettings.
@@ -297,7 +301,7 @@ export function useHostGame(): HostState {
       knownPartyRoundTypes: ALL_PARTY_ROUND_TYPES,
     };
     localStorage.setItem(HOST_SETTINGS_KEY, JSON.stringify(sanitizeHostSettings(toSave)));
-  }, [bettingTimeSetting, guessingTimeSetting, roundsSetting, mode, raceTimeSetting, raceWinnerOnly, artistOnly, yearOnly, multipleChoice, difficulty, enabledEvents, enabledRoundTypes, chaosLevel]);
+  }, [bettingTimeSetting, guessingTimeSetting, roundsSetting, mode, raceTimeSetting, raceWinnerOnly, artistOnly, yearOnly, multipleChoice, difficulty, enabledEvents, enabledRoundTypes, chaosLevel, finaleEnabled]);
 
   const toggleEvent = (e: PartyEvent) => {
     setEnabledEvents(prev => (prev.includes(e) ? prev.filter(x => x !== e) : [...prev, e]));
@@ -610,7 +614,7 @@ export function useHostGame(): HostState {
       settings: {
         bettingTime: bettingTimeSetting, guessingTime: guessingTimeSetting,
         totalRounds: roundsSetting, mode, raceTime: raceTimeSetting, raceWinnerOnly, artistOnly, yearOnly, multipleChoice,
-        difficulty, songSource, enabledEvents, enabledRoundTypes, chaosLevel,
+        difficulty, songSource, enabledEvents, enabledRoundTypes, chaosLevel, finaleEnabled,
         customPlaylist: songSource === 'playlist' && customPlaylists.length > 0
           ? {
             id: customPlaylists.map(p => p.id).join(','),
@@ -667,14 +671,14 @@ export function useHostGame(): HostState {
     result, roundDeltas, roundPity, roundPityAmount, leaderboard, awards, copied, playProgress, inviteUrl,
     settingsOpen, bettingTimeSetting, guessingTimeSetting, roundsSetting,
     mode, raceTimeSetting, raceWinnerOnly, artistOnly, yearOnly, multipleChoice, difficulty,
-    enabledEvents, enabledRoundTypes, chaosLevel,
+    enabledEvents, enabledRoundTypes, chaosLevel, finaleEnabled,
     songSource, customPlaylists, playlistPicker, playlistPickerOpen, startError,
     party, roundArtistOnly, roundYearOnly, roundChoiceOptions, stealResult, answeredCount,
     reconnecting, reconnectingCount: reconnectingNames.size, gameExpired, songPlaying, songTempo,
     toggleSettings: () => setSettingsOpen(o => !o),
     setBettingTimeSetting, setGuessingTimeSetting, setRoundsSetting,
     setMode, setRaceTimeSetting, setRaceWinnerOnly, setArtistOnly, setYearOnly, setMultipleChoice, setDifficulty,
-    toggleEvent, setEnabledEvents, toggleRoundType, setEnabledRoundTypes, setChaosLevel,
+    toggleEvent, setEnabledEvents, toggleRoundType, setEnabledRoundTypes, setChaosLevel, setFinaleEnabled,
     setSongSource,
     addPlaylist: (p: CustomPlaylist) => setCustomPlaylists(list => list.some(x => x.id === p.id) ? list : [...list, p]),
     removePlaylist: (id: string) => setCustomPlaylists(list => list.filter(p => p.id !== id)),

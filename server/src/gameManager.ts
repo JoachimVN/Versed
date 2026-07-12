@@ -507,6 +507,7 @@ function buildWarmupConfig(game: Game, plain: PlainPartyConfig): PartyConfig {
 // null when the game isn't at its finale yet so the caller falls through to
 // the normal random-round build.
 function maybeBuildFinaleDuelConfig(game: Game): PartyConfig | null {
+  if (!game.finaleEnabled) return null;
   const isLast = game.roundIndex === game.totalRounds - 1;
   if (!isLast || game.totalRounds <= 1 || game.players.size < 2) return null;
 
@@ -1094,6 +1095,7 @@ export function createGame(hostSocketId: string, preferredPin?: string): Game {
     enabledEvents: new Set(ALL_PARTY_EVENTS),
     enabledRoundTypes: new Set(ALL_PARTY_ROUND_TYPES),
     chaosLevel: 50,
+    finaleEnabled: false,
     duelChampion: null,
     duelActive: false,
     duelDuelistIds: [],
