@@ -87,6 +87,10 @@ describe('isCorrectGuess — dash and plus attribution', () => {
     expect(isCorrectGuess('Landslide', 'Landslide - 1997 Digital Remaster')).toBe(true);
   });
 
+  it('strips dash-attributed tags that use an en dash instead of a hyphen', () => {
+    expect(isCorrectGuess('Rock With You', 'Rock With You – Single Version')).toBe(true);
+  });
+
   it('strips other dash-attributed mix/version tags', () => {
     expect(isCorrectGuess('Are You Gonna Go My Way', 'Are You Gonna Go My Way - Mono')).toBe(true);
     expect(isCorrectGuess('Come Together', 'Come Together - Stereo Mix')).toBe(true);

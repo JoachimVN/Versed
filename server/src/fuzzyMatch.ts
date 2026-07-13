@@ -37,8 +37,10 @@ function stripTrailingMetadata(s: string): string {
 // Spotify also attributes soundtrack cuts with a dash instead of parens, e.g.
 // `Wondering - From "High School Musical: The Musical: The Series"`. Strip
 // that whole trailing segment (not just the leading word) so guesses only
-// have to match the real title.
-const DASH_METADATA_RE = new RegExp(String.raw`\s+-\s+${YEAR_PREFIX}(${METADATA_WORDS})\b.*$`, 'i');
+// have to match the real title. Some catalog entries use an en/em dash
+// instead of a plain hyphen for this (e.g. `Rock With You – Single Version`),
+// so match any of them.
+const DASH_METADATA_RE = new RegExp(String.raw`\s+[-–—]\s+${YEAR_PREFIX}(${METADATA_WORDS})\b.*$`, 'i');
 
 function stripDashMetadata(s: string): string {
   return s.replace(DASH_METADATA_RE, '').trim();
