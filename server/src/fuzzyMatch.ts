@@ -105,6 +105,13 @@ function levenshtein(a: string, b: string): number {
         a[i - 1] === b[j - 1]
           ? dp[i - 1][j - 1]
           : 1 + Math.min(dp[i - 1][j], dp[i][j - 1], dp[i - 1][j - 1]);
+      // Adjacent-letter swaps (e.g. "wekend" for "weeknd") are one of the most
+      // common typing slips, but plain Levenshtein charges 2 for a transposed
+      // pair (a substitution each way) — enough to blow the short-word budget
+      // in fuzzyThreshold(). Count it as a single edit instead (Damerau/OSA).
+      if (i > 1 && j > 1 && a[i - 1] === b[j - 2] && a[i - 2] === b[j - 1]) {
+        dp[i][j] = Math.min(dp[i][j], dp[i - 2][j - 2] + 1);
+      }
     }
   }
   return dp[m][n];

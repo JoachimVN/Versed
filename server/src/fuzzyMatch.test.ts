@@ -128,6 +128,10 @@ describe('isCorrectArtistGuess', () => {
   it('rejects an unrelated artist', () => {
     expect(isCorrectArtistGuess('Katy Perry', 'Taylor Swift')).toBe(false);
   });
+
+  it('tolerates an adjacent-letter swap on a short name', () => {
+    expect(isCorrectArtistGuess('the wekend', 'The Weeknd')).toBe(true);
+  });
 });
 
 describe('textsCollide (multiple-choice distractor safety)', () => {
