@@ -1,5 +1,6 @@
 import { useState, useEffect, useCallback } from 'react';
 import { useParams } from 'react-router-dom';
+import { Disc3 } from 'lucide-react';
 import { RoundIntro } from '../components/RoundIntro';
 import { commonPhaseAnnouncement } from '../utils/phaseAnnouncement';
 import type { RoundResultEvent } from '../types';
@@ -94,7 +95,7 @@ export default function Play() {
 
       {reconnecting && (
         <div className="fixed inset-0 bg-black/70 backdrop-blur-sm flex flex-col items-center justify-center z-50 gap-3">
-          <div className="w-10 h-10 border-2 border-white/30 border-t-white rounded-full animate-spin" />
+          <Disc3 className="w-10 h-10 text-white/70 animate-spin" strokeWidth={1.5} />
           <p className="text-white/70 text-sm font-medium">Reconnecting...</p>
         </div>
       )}

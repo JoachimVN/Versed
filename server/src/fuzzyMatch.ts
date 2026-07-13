@@ -11,8 +11,12 @@ const HOMOPHONES: Record<string, string> = {
   okay: 'ok',
 };
 
-const METADATA_WORDS = 'feat|ft|featuring|from|with|remaster(?:ed)?|live|acoustic|remix|edit|version|radio|original|extended|deluxe|bonus|interlude';
-const PAREN_METADATA = new RegExp(String.raw`^\s*(${METADATA_WORDS})\b`, 'i');
+const METADATA_WORDS = 'feat|ft|featuring|from|with|digital|mono|stereo|remaster(?:ed)?|live|acoustic|remix|edit|edition|version|radio|original|extended|deluxe|bonus|interlude|single|clean|demo';
+// Reissue tags often lead with the year, e.g. "2008 Remaster" or
+// "1997 Digital Remaster" — treat that leading year as optional filler
+// rather than requiring the metadata word to be first.
+const YEAR_PREFIX = String.raw`(?:\d{4}\s+)?`;
+const PAREN_METADATA = new RegExp(String.raw`^\s*${YEAR_PREFIX}(${METADATA_WORDS})\b`, 'i');
 const PAREN_RE = /^([^([]*)[([](([^)\]]*?))[)\]]/;
 
 // A metadata word can also sit outside the parenthetical, right before it
@@ -33,8 +37,10 @@ function stripTrailingMetadata(s: string): string {
 // Spotify also attributes soundtrack cuts with a dash instead of parens, e.g.
 // `Wondering - From "High School Musical: The Musical: The Series"`. Strip
 // that whole trailing segment (not just the leading word) so guesses only
-// have to match the real title.
-const DASH_METADATA_RE = new RegExp(String.raw`\s+-\s+(${METADATA_WORDS})\b.*$`, 'i');
+// have to match the real title. Some catalog entries use an en/em dash
+// instead of a plain hyphen for this (e.g. `Rock With You – Single Version`),
+// so match any of them.
+const DASH_METADATA_RE = new RegExp(String.raw`\s+[-–—]\s+${YEAR_PREFIX}(${METADATA_WORDS})\b.*$`, 'i');
 
 function stripDashMetadata(s: string): string {
   return s.replace(DASH_METADATA_RE, '').trim();
@@ -101,6 +107,13 @@ function levenshtein(a: string, b: string): number {
         a[i - 1] === b[j - 1]
           ? dp[i - 1][j - 1]
           : 1 + Math.min(dp[i - 1][j], dp[i][j - 1], dp[i - 1][j - 1]);
+      // Adjacent-letter swaps (e.g. "wekend" for "weeknd") are one of the most
+      // common typing slips, but plain Levenshtein charges 2 for a transposed
+      // pair (a substitution each way) — enough to blow the short-word budget
+      // in fuzzyThreshold(). Count it as a single edit instead (Damerau/OSA).
+      if (i > 1 && j > 1 && a[i - 1] === b[j - 2] && a[i - 2] === b[j - 1]) {
+        dp[i][j] = Math.min(dp[i][j], dp[i - 2][j - 2] + 1);
+      }
     }
   }
   return dp[m][n];

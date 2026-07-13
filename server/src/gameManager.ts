@@ -1829,37 +1829,57 @@ export function updateLiveDraft(game: Game, socketId: string, text: string, arti
   if (artistText !== undefined) round.liveArtistDrafts.set(socketId, artistText);
 }
 
+type RoundGuess = { name: string; guess: string | null; timeMs: number | null; live?: boolean; artistGuess?: string | null; artistCorrect?: boolean };
+
+function artistGuessCorrect(artistGuess: string | null, round: Round): boolean | undefined {
+  return artistGuess ? isCorrectArtistGuess(artistGuess, round.song.artist, round.song.featuredArtists) : undefined;
+}
+
 // Artist-guess correctness is computed independently of the title guess and
 // scoring: `checkGuess`'s artistBonus is gated on the title also being right
 // (it only exists to double the score), so it can't be reused here — a
 // player can have the right artist and the wrong title, and the reveal still
 // needs to show that artist guess as correct.
-export function getRoundGuesses(game: Game): { name: string; guess: string | null; timeMs: number | null; live?: boolean; artistGuess?: string | null; artistCorrect?: boolean }[] {
+function getPlayerRoundGuess(id: string, name: string, round: Round): RoundGuess | null {
+  // Chaos Hints never touches round.guesses — taps live in their own map
+  // (recordChaosHintTap) — so without this branch the reveal screen shows
+  // every chaos player as having not answered at all.
+  if (round.party?.event === 'chaoshints' && round.chaosTapped.has(id)) {
+    const tappedIndex = round.chaosTapped.get(id)!;
+    return {
+      name,
+      guess: round.hints[tappedIndex]?.label ?? null,
+      timeMs: round.guessTimes.get(id) ?? null,
+    };
+  }
+  if (round.guesses.has(id)) {
+    const artistGuess = round.artistGuesses.get(id) ?? null;
+    return {
+      name,
+      guess: round.guesses.get(id) ?? null,
+      timeMs: round.guessTimes.get(id) ?? null,
+      artistGuess,
+      artistCorrect: artistGuessCorrect(artistGuess, round),
+    };
+  }
+  const draft = round.liveDrafts.get(id)?.trim();
+  if (!draft) return null;
+  const artistGuess = round.liveArtistDrafts.get(id)?.trim() || null;
+  return {
+    name, guess: draft, timeMs: null, live: true,
+    artistGuess,
+    artistCorrect: artistGuessCorrect(artistGuess, round),
+  };
+}
+
+export function getRoundGuesses(game: Game): RoundGuess[] {
   const round = game.currentRound;
   if (!round) return [];
-  const results: { name: string; guess: string | null; timeMs: number | null; live?: boolean; artistGuess?: string | null; artistCorrect?: boolean }[] = [];
+  const results: RoundGuess[] = [];
   for (const [id, player] of game.players) {
     if (!player.name) continue;
-    if (round.guesses.has(id)) {
-      const artistGuess = round.artistGuesses.get(id) ?? null;
-      results.push({
-        name: player.name,
-        guess: round.guesses.get(id) ?? null,
-        timeMs: round.guessTimes.get(id) ?? null,
-        artistGuess,
-        artistCorrect: artistGuess ? isCorrectArtistGuess(artistGuess, round.song.artist, round.song.featuredArtists) : undefined,
-      });
-      continue;
-    }
-    const draft = round.liveDrafts.get(id)?.trim();
-    if (draft) {
-      const artistGuess = round.liveArtistDrafts.get(id)?.trim() || null;
-      results.push({
-        name: player.name, guess: draft, timeMs: null, live: true,
-        artistGuess,
-        artistCorrect: artistGuess ? isCorrectArtistGuess(artistGuess, round.song.artist, round.song.featuredArtists) : undefined,
-      });
-    }
+    const entry = getPlayerRoundGuess(id, player.name, round);
+    if (entry) results.push(entry);
   }
   return results;
 }

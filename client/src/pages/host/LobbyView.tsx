@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef, useCallback } from 'react';
-import { Loader2, Settings, Flame, Coins, PartyPopper, Volume2, VolumeX } from 'lucide-react';
+import { Disc3, Settings, Flame, Coins, PartyPopper, Volume2, VolumeX } from 'lucide-react';
 import LiquidGlass from '../../components/StableLiquidGlass';
 import { useLogoMorph } from '../../contexts/LogoMorph';
 import { MIN_PLAYLIST_TRACKS } from '../../hooks/usePlaylistPicker';
@@ -395,7 +395,7 @@ export function LobbyView({
   } else if (spotify.playerReady) {
     spotifyStatus = <><span className="w-2 h-2 rounded-full bg-green-500" />Spotify ready</>;
   } else {
-    spotifyStatus = <><Loader2 className="w-3.5 h-3.5 animate-spin" />Spotify loading...</>;
+    spotifyStatus = <><Disc3 className="w-3.5 h-3.5 animate-spin" strokeWidth={1.5} />Spotify loading...</>;
   }
 
   return (

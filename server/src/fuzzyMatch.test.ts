@@ -82,6 +82,31 @@ describe('isCorrectGuess — dash and plus attribution', () => {
     expect(isCorrectGuess('Wondering', 'Wondering - From "High School Musical: The Musical: The Series"')).toBe(true);
   });
 
+  it('strips a year-prefixed remaster tag', () => {
+    expect(isCorrectGuess('Say You Will', 'Say You Will - 2008 Remaster')).toBe(true);
+    expect(isCorrectGuess('Landslide', 'Landslide - 1997 Digital Remaster')).toBe(true);
+  });
+
+  it('strips dash-attributed tags that use an en dash instead of a hyphen', () => {
+    expect(isCorrectGuess('Rock With You', 'Rock With You – Single Version')).toBe(true);
+  });
+
+  it('strips other dash-attributed mix/version tags', () => {
+    expect(isCorrectGuess('Are You Gonna Go My Way', 'Are You Gonna Go My Way - Mono')).toBe(true);
+    expect(isCorrectGuess('Come Together', 'Come Together - Stereo Mix')).toBe(true);
+    expect(isCorrectGuess('Somebody Told Me', 'Somebody Told Me - Single Version')).toBe(true);
+    expect(isCorrectGuess('Chasing', 'Chasing - Demo')).toBe(true);
+    expect(isCorrectGuess('Some Song', 'Some Song - Clean Edit')).toBe(true);
+    expect(isCorrectGuess('Deluxe Track', 'Deluxe Track - Deluxe Edition')).toBe(true);
+  });
+
+  it('does NOT treat mono/stereo/single/clean as metadata mid-title', () => {
+    expect(isCorrectGuess('Stereo Love', 'Stereo Love')).toBe(true);
+    expect(isCorrectGuess('Life In Mono', 'Life In Mono')).toBe(true);
+    expect(isCorrectGuess('Single Ladies', 'Single Ladies (Put A Ring On It)')).toBe(true);
+    expect(isCorrectGuess('Clean Up Woman', 'Clean Up Woman')).toBe(true);
+  });
+
   it('strips a "+ Artist" feature suffix when it names the featured artist', () => {
     expect(isCorrectGuess('Stateside', 'Stateside + Zara Larsson', 'PinkPantheress', 'Zara Larsson')).toBe(true);
   });
@@ -106,6 +131,10 @@ describe('isCorrectArtistGuess', () => {
 
   it('rejects an unrelated artist', () => {
     expect(isCorrectArtistGuess('Katy Perry', 'Taylor Swift')).toBe(false);
+  });
+
+  it('tolerates an adjacent-letter swap on a short name', () => {
+    expect(isCorrectArtistGuess('the wekend', 'The Weeknd')).toBe(true);
   });
 });
 
