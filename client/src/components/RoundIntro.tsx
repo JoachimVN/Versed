@@ -50,15 +50,24 @@ export function RoundIntro({ party, roundKey, dismissible = true }: Readonly<{ p
     background: 'rgba(5,5,14,0.9)', backdropFilter: 'blur(24px)',
     opacity: visible ? 1 : 0,
     pointerEvents: visible ? 'auto' as const : 'none' as const,
-    transition: 'opacity 0.4s ease',
+    // Appearing must be instant, never a fade-in: a fading-in overlay spends its
+    // first frames translucent, letting the hint screen underneath show through
+    // before it's supposed to be revealed. Only the dismiss/timeout transition
+    // (going to hidden) animates — that's an intentional reveal, not a race.
+    transition: visible ? 'none' : 'opacity 0.4s ease',
   };
 
   const content = (
     <div
       style={{
         textAlign: 'center', padding: '0 28px',
+        // The backdrop itself snaps in instantly (see overlayStyle) so it can
+        // never be caught mid-fade with the hint screen showing through — the
+        // graceful reveal instead lives here, fading/scaling the announcement
+        // in on top of the already-opaque backdrop, which is always safe.
+        opacity: visible ? 1 : 0,
         transform: visible ? 'scale(1) translateY(0)' : 'scale(0.94) translateY(8px)',
-        transition: 'transform 0.4s ease',
+        transition: 'opacity 0.4s ease, transform 0.4s ease',
       }}
     >
       <p style={{ color: 'rgba(255,255,255,0.45)', fontSize: '0.68rem', letterSpacing: '0.32em', textTransform: 'uppercase', marginBottom: '12px' }}>
