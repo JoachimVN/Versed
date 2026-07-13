@@ -1840,6 +1840,18 @@ export function getRoundGuesses(game: Game): { name: string; guess: string | nul
   const results: { name: string; guess: string | null; timeMs: number | null; live?: boolean; artistGuess?: string | null; artistCorrect?: boolean }[] = [];
   for (const [id, player] of game.players) {
     if (!player.name) continue;
+    // Chaos Hints never touches round.guesses — taps live in their own map
+    // (recordChaosHintTap) — so without this branch the reveal screen shows
+    // every chaos player as having not answered at all.
+    if (round.party?.event === 'chaoshints' && round.chaosTapped.has(id)) {
+      const tappedIndex = round.chaosTapped.get(id)!;
+      results.push({
+        name: player.name,
+        guess: round.hints[tappedIndex]?.label ?? null,
+        timeMs: round.guessTimes.get(id) ?? null,
+      });
+      continue;
+    }
     if (round.guesses.has(id)) {
       const artistGuess = round.artistGuesses.get(id) ?? null;
       results.push({
