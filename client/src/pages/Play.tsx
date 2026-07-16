@@ -3,6 +3,7 @@ import { useParams } from 'react-router-dom';
 import { Disc3 } from 'lucide-react';
 import { RoundIntro } from '../components/RoundIntro';
 import { commonPhaseAnnouncement } from '../utils/phaseAnnouncement';
+import { useWakeLock } from '../hooks/useWakeLock';
 import type { RoundResultEvent } from '../types';
 
 import { usePlayGame } from './play/usePlayGame';
@@ -42,6 +43,7 @@ export default function Play() {
   const isJoin = phase === 'join';
   const showsGuessInput = phase === 'guessing' || (phase === 'watching' && imGuessing);
   const showWaitingBackground = phase === 'waiting' || game.waitingTransitionPending;
+  useWakeLock(!isJoin);
   const [waitingBackgroundLeaving, setWaitingBackgroundLeaving] = useState(false);
   const leaveWaitingBackground = useCallback(() => setWaitingBackgroundLeaving(true), []);
 
