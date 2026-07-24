@@ -31,6 +31,7 @@ export function ConnectView({ game }: Readonly<{ game: HostState }>) {
             </p>
           )}
           <button
+            type="button"
             onClick={() => spotify.disconnect()}
             className="px-4 py-2 rounded-xl border border-white/15 bg-white/5 text-white/70 text-sm font-semibold hover:bg-white/10 hover:text-white transition-colors"
           >
@@ -68,6 +69,7 @@ export function ConnectView({ game }: Readonly<{ game: HostState }>) {
                   </p>
                 </div>
                 <button
+                  type="button"
                   onClick={() => spotify.disconnect()}
                   style={{ marginTop: '6px', width: '100%', padding: '10px', borderRadius: '12px', border: '1px solid rgba(255,255,255,0.12)', cursor: 'pointer', background: 'rgba(255,255,255,0.07)', color: 'rgba(255,255,255,0.72)', fontWeight: 600, fontSize: '0.875rem', transition: 'background 0.2s ease, border-color 0.2s ease, color 0.2s ease' }}
                   onMouseEnter={e => { const el = e.currentTarget as HTMLElement; el.style.background = 'rgba(255,255,255,0.13)'; el.style.borderColor = 'rgba(255,255,255,0.22)'; el.style.color = 'white'; }}

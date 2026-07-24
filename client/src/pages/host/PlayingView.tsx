@@ -154,7 +154,7 @@ export function PlayingView({ game }: Readonly<{ game: HostState }>) {
         </div>
 
         <div className="flex flex-col items-center gap-2 mt-2">
-          <button onClick={skipTurn} className="text-white/20 text-xs hover:text-white/35 transition-colors">
+          <button type="button" onClick={skipTurn} className="text-white/20 text-xs hover:text-white/35 transition-colors">
             Skip round
           </button>
           <EndGameButton endGame={endGame} />
@@ -211,7 +211,7 @@ export function GuessingView({ game }: Readonly<{ game: HostState }>) {
 
         {othersWaiting && <p className="text-white/45 text-sm">Other players are waiting...</p>}
         <div className="flex flex-col items-center gap-2 mt-2">
-          <button onClick={skipTurn} className="text-white/28 text-xs hover:text-white/50 transition-colors">
+          <button type="button" onClick={skipTurn} className="text-white/28 text-xs hover:text-white/50 transition-colors">
             Skip turn
           </button>
           <EndGameButton endGame={endGame} />

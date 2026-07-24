@@ -1,6 +1,6 @@
 import { randomInt } from 'node:crypto';
 import {
-  Award, ChaosLevel, Difficulty, Game, GuessTarget, Hint, PartyClientView, PartyConfig, PartyEvent, PartyFormat, PartyTarget,
+  Award, Difficulty, Game, GuessTarget, Hint, PartyClientView, PartyConfig, PartyEvent, PartyFormat, PartyTarget,
   PartyRoundType, Player, PlaylistTrackInput, Round, Song, YearResult,
 } from './types';
 import { loadSongs } from './songLoader';
@@ -334,53 +334,62 @@ function buildChaosHintSet(song: Song, pool: Song[]): { hints: Hint[]; fakeIndex
 
 // ─── Party round recipes ─────────────────────────────────────────────────────
 
-function introFor(
-  format: PartyFormat, target: PartyTarget, event: PartyEvent | null, winnerOnly = false,
-): { title: string; tagline: string } {
-  if (format === 'year') {
-    return {
-      title: 'Guess the Year',
-      tagline: winnerOnly
-        ? 'Only the closest guess scores — everyone else gets zero'
-        : 'Closest answer wins the round',
-    };
-  }
-  let choiceFlow = 'Tap the right title';
-  if (target === 'year') choiceFlow = 'Tap the right year';
-  else if (target === 'artist') choiceFlow = 'Tap the right artist';
+const PARTY_EVENT_INTROS: Record<PartyEvent, { title: string; tag: string }> = {
+  double: { title: 'Double Points', tag: 'Everything is worth 2×' },
+  mystery: { title: 'Mystery Multiplier', tag: 'Revealed after the round: ×1.5 up to ×10' },
+  steal: { title: 'Steal Round', tag: 'Win the round, then rob another player' },
+  snippet: { title: 'Snippet Roulette', tag: 'The clip starts somewhere mid-song' },
+  fullhints: { title: 'Open Book', tag: 'Every hint on the table' },
+  blind: { title: 'Blind Bet', tag: 'No hints at all — bid on ears alone' },
+  outro: { title: 'Down to the Wire', tag: "The clip plays the song's final stretch" },
+  underdog: { title: 'Underdog Boost', tag: 'Only the player(s) in last place can answer — hints on, ×1.5 points' },
+  chaoshints: { title: 'Chaos Hints', tag: 'One hint is a lie — tap the fake one, fastest wins' },
+};
 
-  let flow = 'Everyone races';
-  if (format === 'classic') flow = 'Bid & guess';
-  else if (format === 'choice') flow = choiceFlow;
-  let goal = 'name the song';
-  if (target === 'artist') goal = 'name the artist';
-  else if (target === 'both') goal = 'title + artist bonus';
-  else if (target === 'year') goal = 'pick the release year';
-  const suffix = winnerOnly ? ' / winner takes all' : '';
-  const eventIntros: Record<PartyEvent, { title: string; tag: string }> = {
-    double: { title: 'Double Points', tag: 'Everything is worth 2×' },
-    mystery: { title: 'Mystery Multiplier', tag: 'Revealed after the round: ×1.5 up to ×10' },
-    steal: { title: 'Steal Round', tag: 'Win the round, then rob another player' },
-    snippet: { title: 'Snippet Roulette', tag: 'The clip starts somewhere mid-song' },
-    fullhints: { title: 'Open Book', tag: 'Every hint on the table' },
-    blind: { title: 'Blind Bet', tag: 'No hints at all — bid on ears alone' },
-    outro: { title: 'Down to the Wire', tag: "The clip plays the song's final stretch" },
-    underdog: { title: 'Underdog Boost', tag: 'Only the player(s) in last place can answer — hints on, ×1.5 points' },
-    chaoshints: { title: 'Chaos Hints', tag: 'One hint is a lie — tap the fake one, fastest wins' },
+function yearIntro(winnerOnly: boolean): { title: string; tagline: string } {
+  return {
+    title: 'Guess the Year',
+    tagline: winnerOnly
+      ? 'Only the closest guess scores — everyone else gets zero'
+      : 'Closest answer wins the round',
   };
-  // Chaos Hints replaces the round's whole objective (spot the fake hint,
-  // not name the song), so it skips the normal flow/goal composition below
-  // — otherwise the tagline would misleadingly still say "name the song".
-  if (event === 'chaoshints') {
-    return { title: eventIntros.chaoshints.title, tagline: eventIntros.chaoshints.tag };
-  }
-  if (event) {
-    const e = eventIntros[event];
-    return { title: e.title, tagline: `${e.tag} · ${flow} / ${goal}${suffix}` };
-  }
+}
+
+function flowFor(format: PartyFormat, target: PartyTarget): string {
+  if (format === 'classic') return 'Bid & guess';
   if (format === 'choice') {
-    return { title: 'Multiple Choice', tagline: `${flow}, fastest wins${suffix}` };
+    if (target === 'year') return 'Tap the right year';
+    if (target === 'artist') return 'Tap the right artist';
+    return 'Tap the right title';
   }
+  return 'Everyone races';
+}
+
+function goalFor(target: PartyTarget): string {
+  if (target === 'artist') return 'name the artist';
+  if (target === 'both') return 'title + artist bonus';
+  if (target === 'year') return 'pick the release year';
+  return 'name the song';
+}
+
+// Chaos Hints replaces the round's whole objective (spot the fake hint, not
+// name the song), so it skips the normal flow/goal composition — otherwise
+// the tagline would misleadingly still say "name the song".
+function eventIntro(
+  event: PartyEvent | null, flow: string, goal: string, suffix: string,
+): { title: string; tagline: string } | undefined {
+  if (!event) return undefined;
+  if (event === 'chaoshints') {
+    return { title: PARTY_EVENT_INTROS.chaoshints.title, tagline: PARTY_EVENT_INTROS.chaoshints.tag };
+  }
+  const e = PARTY_EVENT_INTROS[event];
+  return { title: e.title, tagline: `${e.tag} · ${flow} / ${goal}${suffix}` };
+}
+
+function targetIntro(
+  format: PartyFormat, target: PartyTarget, flow: string, suffix: string, winnerOnly: boolean,
+): { title: string; tagline: string } {
+  if (format === 'choice') return { title: 'Multiple Choice', tagline: `${flow}, fastest wins${suffix}` };
   if (target === 'artist') return { title: 'Who Sings It?', tagline: `${flow} / name the artist${suffix}` };
   if (target === 'both') return { title: 'Double Duty', tagline: `${flow} / name the artist too to double your points${suffix}` };
   if (format === 'race' && winnerOnly) {
@@ -389,6 +398,16 @@ function introFor(
   return format === 'race'
     ? { title: 'Race Round', tagline: 'Everyone guesses at once / speed wins' }
     : { title: 'Classic Round', tagline: 'Bid low, score high' };
+}
+
+function introFor(
+  format: PartyFormat, target: PartyTarget, event: PartyEvent | null, winnerOnly = false,
+): { title: string; tagline: string } {
+  if (format === 'year') return yearIntro(winnerOnly);
+  const flow = flowFor(format, target);
+  const goal = goalFor(target);
+  const suffix = winnerOnly ? ' / winner takes all' : '';
+  return eventIntro(event, flow, goal, suffix) ?? targetIntro(format, target, flow, suffix, winnerOnly);
 }
 
 // 'title' always stays in the pool unconditionally — it's the baseline
@@ -420,7 +439,7 @@ export const ALL_PARTY_ROUND_TYPES: PartyRoundType[] = ['classic', 'race', 'choi
 
 // Interpolate from 80% plain rounds at Chill through 60% at Balanced to 40%
 // at Chaotic. Every slider position therefore affects the actual frequency.
-function noEventChance(chaosLevel: ChaosLevel): number {
+function noEventChance(chaosLevel: number): number {
   return 80 - chaosLevel * 0.4;
 }
 

@@ -222,6 +222,7 @@ export function PlaylistPickerDialog({ game }: Readonly<{ game: HostState }>) {
             <div className="flex items-center justify-between">
               <p style={{ color: 'white', fontWeight: 800, fontSize: '1.1rem' }}>Choose a playlist</p>
               <button
+                type="button"
                 onClick={closePlaylistPicker}
                 aria-label="Close"
                 style={{ background: 'none', border: 'none', color: 'rgba(255,255,255,0.45)', cursor: 'pointer', fontSize: '1.25rem', lineHeight: 1 }}
@@ -238,6 +239,7 @@ export function PlaylistPickerDialog({ game }: Readonly<{ game: HostState }>) {
                 style={{ flex: 1, padding: '9px 12px', borderRadius: '10px', background: 'rgba(255,255,255,0.06)', border: '1px solid rgba(255,255,255,0.1)', color: 'white', fontSize: '0.8125rem' }}
               />
               <button
+                type="button"
                 onClick={submitLink}
                 disabled={resolving || !linkInput.trim()}
                 className="transition-all duration-150"
@@ -295,6 +297,7 @@ export function PlaylistPickerDialog({ game }: Readonly<{ game: HostState }>) {
                     {selectedIds.size === 0 ? 'Nothing selected yet' : `${selectedIds.size} playlist${pluralS} selected${trackSuffix}`}
                   </p>
                   <button
+                    type="button"
                     onClick={closePlaylistPicker}
                     className="transition-all duration-150"
                     style={{

@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { useEscapeKey } from '../../hooks/useEscapeKey';
 import { useFocusTrap } from '../../hooks/useFocusTrap';
-import type { ChaosLevel, PartyEvent, PartyRoundType, SongSource } from '../../types';
+import type { PartyEvent, PartyRoundType, SongSource } from '../../types';
 import {
   mergeUniqueTracks,
   MAX_POOL_TRACKS,
@@ -151,6 +151,7 @@ function SettingStepperButton({ symbol, label, onClick, disabled }: Readonly<{
 }>) {
   return (
     <button
+      type="button"
       onClick={disabled ? undefined : onClick}
       disabled={disabled}
       aria-label={label}
@@ -272,6 +273,7 @@ function DifficultyRow({ value, onChange }: Readonly<{ value: Difficulty; onChan
         {DIFFICULTY_OPTIONS.map(({ key, label }) => (
           <button
             key={key}
+            type="button"
             onClick={() => onChange(key)}
             className="relative flex-1 py-1.5 rounded-lg text-xs font-semibold z-10 transition-colors duration-200"
             style={{
@@ -323,6 +325,7 @@ function SongSourceRow({ value, onChange }: Readonly<{ value: SongSource; onChan
         {SONG_SOURCE_OPTIONS.map(({ key, label }) => (
           <button
             key={key}
+            type="button"
             onClick={() => onChange(key)}
             className="relative flex-1 py-1.5 rounded-lg text-xs font-semibold z-10 transition-colors duration-200"
             style={{
@@ -366,7 +369,7 @@ function chaosTrackBackground(value: number): string {
   return `linear-gradient(90deg, ${stops.join(', ')})`;
 }
 
-function ChaosLevelRow({ value, onChange, disabled }: Readonly<{ value: ChaosLevel; onChange: (v: ChaosLevel) => void; disabled?: boolean }>) {
+function ChaosLevelRow({ value, onChange, disabled }: Readonly<{ value: number; onChange: (v: number) => void; disabled?: boolean }>) {
   return (
     <div className="space-y-2" style={{ opacity: disabled ? 0.4 : 1, transition: 'opacity 0.2s ease' }}>
       <div className="flex items-center justify-between">
@@ -723,6 +726,7 @@ function PlaylistList({ customPlaylists, onOpen, onRemove }: Readonly<{
             <p style={{ color: 'rgba(255,255,255,0.4)', fontSize: '0.6875rem' }}>{p.tracks.length} tracks</p>
           </div>
           <button
+            type="button"
             onClick={() => onRemove(p.id)}
             aria-label={`Remove ${p.name}`}
             className="text-white/35 hover:text-white/80 transition-colors"
@@ -733,6 +737,7 @@ function PlaylistList({ customPlaylists, onOpen, onRemove }: Readonly<{
         </div>
       ))}
       <button
+        type="button"
         onClick={onOpen}
         className="w-full flex items-center gap-2.5 rounded-xl text-left"
         style={{ padding: '8px 10px', background: 'rgba(255,255,255,0.05)', border: '1px dashed rgba(255,255,255,0.15)', cursor: 'pointer', transition: 'background 0.15s, border-color 0.15s' }}
@@ -767,6 +772,7 @@ function ToggleRow({ label, value, onToggle, disabled }: Readonly<{
         {label}
       </span>
       <button
+        type="button"
         onClick={disabled ? undefined : onToggle}
         disabled={disabled}
         className="relative shrink-0"

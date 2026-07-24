@@ -323,6 +323,7 @@ export function GuessingView({ game }: Readonly<{ game: PlayState }>) {
         )}
 
         <button
+          type="button"
           onClick={skipGuess}
           style={{ background: 'none', border: 'none', color: 'rgba(255,255,255,0.28)', fontSize: '0.82rem', cursor: 'pointer', transition: 'color 0.2s ease' }}
           onMouseEnter={e => { (e.currentTarget as HTMLElement).style.color = 'rgba(255,255,255,0.5)'; }}
@@ -456,6 +457,7 @@ export function StealPicker({ victims, onPick, onSkip }: Readonly<{
         {victims.map(v => (
           <button
             key={v.name}
+            type="button"
             onClick={() => onPick(v.name)}
             className="flex items-center justify-between px-5 py-3.5 rounded-2xl"
             style={{
@@ -471,6 +473,7 @@ export function StealPicker({ victims, onPick, onSkip }: Readonly<{
         ))}
       </div>
       <button
+        type="button"
         onClick={onSkip}
         style={{ background: 'none', border: 'none', color: 'rgba(255,255,255,0.28)', fontSize: '0.82rem', cursor: 'pointer', transition: 'color 0.2s ease' }}
         onMouseEnter={e => { (e.currentTarget as HTMLElement).style.color = 'rgba(255,255,255,0.5)'; }}

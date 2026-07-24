@@ -96,6 +96,7 @@ export function BettingView({ game }: Readonly<{ game: HostState }>) {
       {/* Skip / end */}
       <div className="relative flex flex-col justify-center items-center gap-2 pb-7" style={{ zIndex: 2 }}>
         <button
+          type="button"
           onClick={skipTurn}
           style={{ background: 'none', border: 'none', color: 'rgba(255,255,255,0.2)', fontSize: '0.75rem', cursor: 'pointer', transition: 'color 0.2s ease' }}
           onMouseEnter={e => { (e.currentTarget as HTMLElement).style.color = 'rgba(255,255,255,0.32)'; }}

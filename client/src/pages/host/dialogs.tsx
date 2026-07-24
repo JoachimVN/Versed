@@ -11,6 +11,7 @@ export function EndGameButton({ endGame }: Readonly<{ endGame: () => void }>) {
   }, [confirming]);
   return (
     <button
+      type="button"
       onClick={() => { if (confirming) endGame(); else setConfirming(true); }}
       className="text-xs transition-colors"
       style={{
