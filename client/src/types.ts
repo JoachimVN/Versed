@@ -43,7 +43,6 @@ export interface PlayerInfo {
 export type PartyEvent = 'double' | 'mystery' | 'steal' | 'snippet' | 'fullhints' | 'blind' | 'outro' | 'underdog' | 'chaoshints';
 // Mirrors server/src/types.ts's PartyRoundType.
 export type PartyRoundType = 'classic' | 'race' | 'choice' | 'artist' | 'both' | 'year' | 'winnerOnly';
-export type ChaosLevel = number;
 
 // Party mode: the per-round recipe as clients see it. A hidden mystery
 // multiplier arrives as null and is revealed (a number) on round_result.

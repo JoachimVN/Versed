@@ -59,10 +59,6 @@ export type PartyEvent =
 // Snippet, ...) layered on top of whatever round type gets picked.
 export type PartyRoundType = 'classic' | 'race' | 'choice' | 'artist' | 'both' | 'year' | 'winnerOnly';
 
-// Continuous 0–100 chaos scale. It tunes how often party events fire and how
-// wild mystery's multiplier spread gets; 50 is the balanced default.
-export type ChaosLevel = number;
-
 export interface PartyConfig {
   format: PartyFormat;
   target: PartyTarget;              // what the guess is checked against ('year' only for choice/year formats)
@@ -228,7 +224,7 @@ export interface Game {
   difficulty: Difficulty;
   enabledEvents: Set<PartyEvent>; // party mode: which events the host allows into the pool
   enabledRoundTypes: Set<PartyRoundType>; // party mode: which round-type variants the host allows into the pool
-  chaosLevel: ChaosLevel;         // party mode: event frequency + mystery-multiplier spread preset
+  chaosLevel: number;             // 0-100 chaos scale: event frequency + mystery-multiplier spread preset
   finaleEnabled: boolean;         // party mode: whether the last round becomes a top-2 duel; off by default
   duelChampion: string | null;    // party mode: socketId of the finale duel's winner, once resolved
   // Finale best-of-3 duel state — lives on Game (not Round) since it must

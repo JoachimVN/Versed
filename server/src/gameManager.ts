@@ -1,6 +1,6 @@
 import { randomInt } from 'node:crypto';
 import {
-  Award, ChaosLevel, Difficulty, Game, GuessTarget, Hint, PartyClientView, PartyConfig, PartyEvent, PartyFormat, PartyTarget,
+  Award, Difficulty, Game, GuessTarget, Hint, PartyClientView, PartyConfig, PartyEvent, PartyFormat, PartyTarget,
   PartyRoundType, Player, PlaylistTrackInput, Round, Song, YearResult,
 } from './types';
 import { loadSongs } from './songLoader';
@@ -420,7 +420,7 @@ export const ALL_PARTY_ROUND_TYPES: PartyRoundType[] = ['classic', 'race', 'choi
 
 // Interpolate from 80% plain rounds at Chill through 60% at Balanced to 40%
 // at Chaotic. Every slider position therefore affects the actual frequency.
-function noEventChance(chaosLevel: ChaosLevel): number {
+function noEventChance(chaosLevel: number): number {
   return 80 - chaosLevel * 0.4;
 }
 

@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { useEscapeKey } from '../../hooks/useEscapeKey';
 import { useFocusTrap } from '../../hooks/useFocusTrap';
-import type { ChaosLevel, PartyEvent, PartyRoundType, SongSource } from '../../types';
+import type { PartyEvent, PartyRoundType, SongSource } from '../../types';
 import {
   mergeUniqueTracks,
   MAX_POOL_TRACKS,
@@ -369,7 +369,7 @@ function chaosTrackBackground(value: number): string {
   return `linear-gradient(90deg, ${stops.join(', ')})`;
 }
 
-function ChaosLevelRow({ value, onChange, disabled }: Readonly<{ value: ChaosLevel; onChange: (v: ChaosLevel) => void; disabled?: boolean }>) {
+function ChaosLevelRow({ value, onChange, disabled }: Readonly<{ value: number; onChange: (v: number) => void; disabled?: boolean }>) {
   return (
     <div className="space-y-2" style={{ opacity: disabled ? 0.4 : 1, transition: 'opacity 0.2s ease' }}>
       <div className="flex items-center justify-between">

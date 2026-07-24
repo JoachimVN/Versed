@@ -4,7 +4,7 @@ import { useSpotify } from '../../hooks/useSpotify';
 import { usePlaylistPicker } from '../../hooks/usePlaylistPicker';
 import { useSoundEffect } from '../../hooks/useSoundEffect';
 import { RACE_TIME } from '../../config';
-import type { Award, ChaosLevel, Hint, LeaderboardEntry, PartyEvent, PartyInfo, PartyRoundType, PlayerInfo, PlaylistTrackInput, RoundResultEvent, SongSource } from '../../types';
+import type { Award, Hint, LeaderboardEntry, PartyEvent, PartyInfo, PartyRoundType, PlayerInfo, PlaylistTrackInput, RoundResultEvent, SongSource } from '../../types';
 
 export type Phase = 'connect' | 'lobby' | 'betting' | 'playing' | 'guessing' | 'reveal' | 'leaderboard' | 'finished';
 export type Mode = 'classic' | 'race' | 'party';
@@ -56,7 +56,7 @@ type PlaylistPicker = ReturnType<typeof usePlaylistPicker>;
 interface SavedHostSettings {
   bettingTime: number; guessingTime: number; rounds: number; mode: Mode;
   raceTime: number; raceWinnerOnly: boolean; artistOnly: boolean; yearOnly: boolean; multipleChoice: boolean; difficulty: Difficulty;
-  enabledEvents: PartyEvent[]; chaosLevel: ChaosLevel; finaleEnabled: boolean;
+  enabledEvents: PartyEvent[]; chaosLevel: number; finaleEnabled: boolean;
   // Snapshot of ALL_PARTY_EVENTS as of the last save — lets a future load
   // tell "event didn't exist yet when this was saved" (auto-enable) apart
   // from "the host explicitly turned this off" (stay off). Without this, a
@@ -75,7 +75,7 @@ export const ALL_PARTY_EVENTS: PartyEvent[] = ['double', 'mystery', 'steal', 'sn
 const PARTY_EVENT_SET: Set<string> = new Set(ALL_PARTY_EVENTS);
 export const ALL_PARTY_ROUND_TYPES: PartyRoundType[] = ['classic', 'race', 'choice', 'artist', 'both', 'year', 'winnerOnly'];
 const PARTY_ROUND_TYPE_SET: Set<string> = new Set(ALL_PARTY_ROUND_TYPES);
-const LEGACY_CHAOS_LEVELS: Record<string, ChaosLevel> = { chill: 0, balanced: 50, chaotic: 100 };
+const LEGACY_CHAOS_LEVELS: Record<string, number> = { chill: 0, balanced: 50, chaotic: 100 };
 
 function clampFiniteNumber(value: unknown, min: number, max: number): number | undefined {
   if (typeof value !== 'number' || !Number.isFinite(value)) return undefined;
@@ -97,7 +97,7 @@ function sanitizeHostSettings(settings: Partial<SavedHostSettings>): Partial<Sav
     enabledEvents: Array.isArray(settings.enabledEvents)
       ? settings.enabledEvents.filter((e: unknown): e is PartyEvent => PARTY_EVENT_SET.has(e as string))
       : undefined,
-    chaosLevel: clampFiniteNumber(settings.chaosLevel, 0, 100) as ChaosLevel | undefined,
+    chaosLevel: clampFiniteNumber(settings.chaosLevel, 0, 100),
     finaleEnabled: typeof settings.finaleEnabled === 'boolean' ? settings.finaleEnabled : undefined,
     knownPartyEvents: Array.isArray(settings.knownPartyEvents)
       ? settings.knownPartyEvents.filter((e: unknown): e is PartyEvent => PARTY_EVENT_SET.has(e as string))
@@ -177,7 +177,7 @@ export interface HostState {
   difficulty: Difficulty;
   enabledEvents: PartyEvent[];
   enabledRoundTypes: PartyRoundType[];
-  chaosLevel: ChaosLevel;
+  chaosLevel: number;
   finaleEnabled: boolean;
   songSource: SongSource;
   customPlaylists: CustomPlaylist[];
@@ -215,7 +215,7 @@ export interface HostState {
   setEnabledEvents: (events: PartyEvent[]) => void;
   toggleRoundType: (t: PartyRoundType) => void;
   setEnabledRoundTypes: (types: PartyRoundType[]) => void;
-  setChaosLevel: (v: ChaosLevel) => void;
+  setChaosLevel: (v: number) => void;
   setFinaleEnabled: (v: boolean) => void;
   setSongSource: (v: SongSource) => void;
   addPlaylist: (p: CustomPlaylist) => void;
@@ -277,7 +277,7 @@ export function useHostGame(): HostState {
   const [difficulty, setDifficulty] = useState<Difficulty>(savedSettings.difficulty ?? 'hard');
   const [enabledEvents, setEnabledEvents] = useState<PartyEvent[]>(savedSettings.enabledEvents ?? ALL_PARTY_EVENTS);
   const [enabledRoundTypes, setEnabledRoundTypes] = useState<PartyRoundType[]>(savedSettings.enabledRoundTypes ?? ALL_PARTY_ROUND_TYPES);
-  const [chaosLevel, setChaosLevel] = useState<ChaosLevel>(savedSettings.chaosLevel ?? 50);
+  const [chaosLevel, setChaosLevel] = useState<number>(savedSettings.chaosLevel ?? 50);
   const [finaleEnabled, setFinaleEnabled] = useState(savedSettings.finaleEnabled ?? false);
   // Not persisted in SavedHostSettings, deliberately: a reload can't restore
   // the actual fetched track data, so a restored 'playlist' flag with no
