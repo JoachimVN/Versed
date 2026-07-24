@@ -180,8 +180,9 @@ function useLobbyMusic(muffled: boolean) {
   const gainRef = useRef<GainNode | null>(null);
   const filterRef = useRef<BiquadFilterNode | null>(null);
   const fadeIntervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
-  const mutedRef = useRef(false);
-  const [muted, setMuted] = useState(false);
+  const volumeRef = useRef(1);
+  const lastVolumeRef = useRef(1);
+  const [volume, setVolumeState] = useState(1);
 
   useEffect(() => {
     let cancelled = false;
@@ -197,7 +198,7 @@ function useLobbyMusic(muffled: boolean) {
         filter.type = 'lowpass';
         filter.frequency.value = 22050; // fully open — no audible filtering
         const gain = ctx.createGain();
-        gain.gain.value = mutedRef.current ? 0 : 1;
+        gain.gain.value = volumeRef.current;
         const source = ctx.createBufferSource();
         source.buffer = buffer;
         source.loop = true;
@@ -278,58 +279,96 @@ function useLobbyMusic(muffled: boolean) {
     sourceRef.current?.stop();
   };
 
-  const toggleMute = () => {
-    const next = !mutedRef.current;
-    mutedRef.current = next;
-    setMuted(next);
-    rampGain(next ? 0 : 1, 250);
+  // Drags need to feel instant, so the slider bypasses rampGain and writes
+  // the gain directly; only the mute-button toggle gets an animated fade.
+  const setVolume = (v: number) => {
+    const clamped = Math.min(1, Math.max(0, v));
+    volumeRef.current = clamped;
+    if (clamped > 0) lastVolumeRef.current = clamped;
+    setVolumeState(clamped);
+    if (fadeIntervalRef.current) { clearInterval(fadeIntervalRef.current); fadeIntervalRef.current = null; }
+    const gain = gainRef.current;
+    if (gain) gain.gain.value = clamped;
   };
 
-  return { fadeOut, muted, toggleMute };
+  const toggleMute = () => {
+    if (volumeRef.current > 0) { setVolume(0); return; }
+    rampGain(lastVolumeRef.current || 1, 250);
+    volumeRef.current = lastVolumeRef.current || 1;
+    setVolumeState(volumeRef.current);
+  };
+
+  return { fadeOut, volume, setVolume, toggleMute };
 }
 
-function MuteButton({ muted, toggleMute }: Readonly<{ muted: boolean; toggleMute: () => void }>) {
+function VolumeControl({ volume, setVolume, toggleMute }: Readonly<{
+  volume: number; setVolume: (v: number) => void; toggleMute: () => void;
+}>) {
+  const muted = volume === 0;
   const [hovered, setHovered] = useState(false);
+  const pct = Math.round(volume * 100);
   return (
-    <button
-      type="button"
-      onClick={toggleMute}
+    <div
       onMouseEnter={() => setHovered(true)}
       onMouseLeave={() => setHovered(false)}
-      tabIndex={0}
-      aria-label={muted ? 'Unmute lobby music' : 'Mute lobby music'}
-      aria-pressed={muted}
-      className="absolute bottom-5 right-5 flex items-center justify-center rounded-full transition-all duration-200 z-10"
+      className="absolute bottom-5 right-5 flex items-center gap-1 rounded-full transition-all duration-200 z-10"
       style={{
-        width: '38px', height: '38px',
         background: hovered ? 'rgba(255,255,255,0.11)' : 'rgba(255,255,255,0.06)',
         border: '1px solid rgba(255,255,255,0.10)',
         backdropFilter: 'blur(12px)',
-        color: muted ? 'rgba(255,255,255,0.4)' : 'rgba(255,255,255,0.7)',
-        cursor: 'pointer',
+        paddingRight: '14px',
+        height: '38px',
       }}
     >
-      <span style={{ position: 'relative', width: '16px', height: '16px', display: 'inline-block' }}>
-        <Volume2
-          className="w-4 h-4"
-          style={{
-            position: 'absolute', inset: 0,
-            opacity: muted ? 0 : 1,
-            transform: muted ? 'scale(0.6) rotate(-15deg)' : 'scale(1) rotate(0deg)',
-            transition: 'opacity 0.25s ease, transform 0.25s ease',
-          }}
-        />
-        <VolumeX
-          className="w-4 h-4"
-          style={{
-            position: 'absolute', inset: 0,
-            opacity: muted ? 1 : 0,
-            transform: muted ? 'scale(1) rotate(0deg)' : 'scale(0.6) rotate(15deg)',
-            transition: 'opacity 0.25s ease, transform 0.25s ease',
-          }}
-        />
-      </span>
-    </button>
+      <button
+        type="button"
+        onClick={toggleMute}
+        tabIndex={0}
+        aria-label={muted ? 'Unmute lobby music' : 'Mute lobby music'}
+        aria-pressed={muted}
+        className="flex items-center justify-center rounded-full flex-shrink-0"
+        style={{
+          width: '38px', height: '38px',
+          background: 'transparent',
+          border: 'none',
+          color: muted ? 'rgba(255,255,255,0.4)' : 'rgba(255,255,255,0.7)',
+          cursor: 'pointer',
+        }}
+      >
+        <span style={{ position: 'relative', width: '16px', height: '16px', display: 'inline-block' }}>
+          <Volume2
+            className="w-4 h-4"
+            style={{
+              position: 'absolute', inset: 0,
+              opacity: muted ? 0 : 1,
+              transform: muted ? 'scale(0.6) rotate(-15deg)' : 'scale(1) rotate(0deg)',
+              transition: 'opacity 0.25s ease, transform 0.25s ease',
+            }}
+          />
+          <VolumeX
+            className="w-4 h-4"
+            style={{
+              position: 'absolute', inset: 0,
+              opacity: muted ? 1 : 0,
+              transform: muted ? 'scale(1) rotate(0deg)' : 'scale(0.6) rotate(15deg)',
+              transition: 'opacity 0.25s ease, transform 0.25s ease',
+            }}
+          />
+        </span>
+      </button>
+      <input
+        type="range"
+        min={0}
+        max={100}
+        step={1}
+        value={pct}
+        onChange={e => setVolume(Number(e.target.value) / 100)}
+        aria-label="Lobby music volume"
+        aria-valuetext={`${pct} percent`}
+        className="volume-slider"
+        style={{ '--volume-pct': `${pct}%` } as React.CSSProperties}
+      />
+    </div>
   );
 }
 
@@ -350,7 +389,7 @@ export function LobbyView({
   const playlistEmpty = songSource === 'playlist' && playlistTrackCount === 0;
   const playlistLow = songSource === 'playlist' && playlistTrackCount > 0 && playlistTrackCount < MIN_PLAYLIST_TRACKS;
   const [lobbyVisible, setLobbyVisible] = useState(false);
-  const { fadeOut, muted, toggleMute } = useLobbyMusic(gameExpired);
+  const { fadeOut, volume, setVolume, toggleMute } = useLobbyMusic(gameExpired);
   const { beginMorph, morphing, reducedMotion } = useLogoMorph();
   const logoRef = useRef<HTMLImageElement>(null);
   const startingRef = useRef(false);
@@ -405,7 +444,7 @@ export function LobbyView({
     <div className="min-h-screen relative flex flex-col overflow-hidden">
       <BackButton zIndex={10} beforeNavigate={beforeGoHome ?? fadeOut} />
       <SettingsButton settingsOpen={settingsOpen} toggleSettings={toggleSettings} />
-      <MuteButton muted={muted} toggleMute={toggleMute} />
+      <VolumeControl volume={volume} setVolume={setVolume} toggleMute={toggleMute} />
 
       <SettingsPanel game={game} open={settingsOpen} />
       {playlistPickerOpen && <PlaylistPickerDialog game={game} />}
