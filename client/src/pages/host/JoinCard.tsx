@@ -94,6 +94,7 @@ export function JoinCard({ pin, copied, copyInvite }: Readonly<{ pin: string; co
             <p className="text-6xl font-black text-white tracking-widest leading-none select-text">{pin}</p>
           </div>
           <button
+            type="button"
             onClick={copyInvite}
             className="flex items-center gap-2 text-white/45 text-xs hover:text-white/70 transition-colors"
           >

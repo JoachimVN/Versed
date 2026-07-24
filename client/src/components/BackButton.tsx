@@ -9,6 +9,7 @@ export function BackButton({ zIndex = 2, beforeNavigate }: Readonly<{ zIndex?: n
   };
   return (
     <button
+      type="button"
       onClick={handleClick}
       // Explicit (not just the implicit default 0): Safari only includes
       // plain <button>s in native Tab order when "Full Keyboard Access" is

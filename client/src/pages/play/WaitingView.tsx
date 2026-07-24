@@ -278,6 +278,7 @@ export function WaitingView({
                     </>
                   ) : (
                     <button
+                      type="button"
                       onClick={startEdit}
                       aria-label="Edit your name"
                       style={{

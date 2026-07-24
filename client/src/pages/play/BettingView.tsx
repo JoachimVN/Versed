@@ -19,6 +19,7 @@ function BidArrow({ direction, enabled, onClick }: Readonly<{ direction: 'left' 
   const { bg, border } = bidArrowStyle(enabled, pressed, hovered);
   return (
     <button
+      type="button"
       onClick={() => enabled && onClick()}
       onMouseEnter={() => setHovered(true)}
       onMouseLeave={() => { setHovered(false); setPressed(false); }}

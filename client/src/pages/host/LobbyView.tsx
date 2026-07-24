@@ -22,6 +22,7 @@ function SettingsButton({ settingsOpen, toggleSettings }: Readonly<{ settingsOpe
   else if (hovered) color = 'rgba(255,255,255,0.85)';
   return (
     <button
+      type="button"
       onClick={toggleSettings}
       onMouseEnter={() => setHovered(true)}
       onMouseLeave={() => setHovered(false)}
@@ -79,6 +80,7 @@ function ModeToggle({ mode, setMode }: Readonly<{ mode: Mode; setMode: (m: Mode)
       {modes.map(({ key, label, Icon }) => (
         <button
           key={key}
+          type="button"
           onClick={() => setMode(key)}
           tabIndex={0}
           className="relative flex-1 py-2.5 rounded-xl text-sm font-semibold z-10 transition-colors duration-200 flex items-center justify-center gap-1.5"
@@ -290,6 +292,7 @@ function MuteButton({ muted, toggleMute }: Readonly<{ muted: boolean; toggleMute
   const [hovered, setHovered] = useState(false);
   return (
     <button
+      type="button"
       onClick={toggleMute}
       onMouseEnter={() => setHovered(true)}
       onMouseLeave={() => setHovered(false)}
@@ -440,6 +443,7 @@ export function LobbyView({
               {players.map(p => (
                 <button
                   key={p.name}
+                  type="button"
                   onClick={() => removePlayer(p.name)}
                   tabIndex={0}
                   className="relative group px-3 py-1.5 rounded-full bg-white/10 text-white text-sm font-semibold"

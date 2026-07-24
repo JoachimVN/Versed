@@ -45,7 +45,7 @@ function RevealPlayerRow({
   const guessCls = (!skipped && correct !== 'none') ? `${correctCls} text-xs break-words min-w-0` : 'text-white/28 italic text-xs break-words min-w-0';
   if (!entry) {
     return (
-      <button onClick={() => removePlayer(player.name)} aria-label={`Remove ${player.name}`} className="relative group w-full text-left py-1">
+      <button type="button" onClick={() => removePlayer(player.name)} aria-label={`Remove ${player.name}`} className="relative group w-full text-left py-1">
         <div className="flex justify-between items-center gap-2">
           <div className="flex items-center gap-1 min-w-0">
             {streak >= 2 && (
@@ -63,7 +63,7 @@ function RevealPlayerRow({
   }
 
   return (
-    <button onClick={() => removePlayer(player.name)} aria-label={`Remove ${player.name}`} className="relative group w-full text-left py-1">
+    <button type="button" onClick={() => removePlayer(player.name)} aria-label={`Remove ${player.name}`} className="relative group w-full text-left py-1">
       {/* Row 1: name + streak | delta */}
       <div className="flex justify-between items-center gap-2">
         <div className="flex items-center gap-1 min-w-0">
