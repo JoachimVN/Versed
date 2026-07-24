@@ -26,20 +26,20 @@ jobs:
 
       - name: Install client dependencies
         working-directory: client
-        run: npm ci
+        run: npm ci --ignore-scripts
 
       - name: Build client
         working-directory: client
-        run: npx vite build --base=/
+        run: ../node_modules/.bin/vite build --base=/
 
-      - name: Install Playwright and Chromium
+      - name: Install Playwright, Chromium and serve
         working-directory: .github/scripts
         run: |
           npm ci --ignore-scripts
           ./node_modules/.bin/playwright install chromium --with-deps
 
       - name: Serve client
-        run: npx serve@14 client/dist -p 4321 -s &
+        run: .github/scripts/node_modules/.bin/serve client/dist -p 4321 -s &
 
       - name: Wait for server
         run: sleep 3
