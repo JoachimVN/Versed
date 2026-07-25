@@ -168,6 +168,26 @@ const MOCK_HOST_YEAR_REVEAL: HostState = {
   roundDeltas: { Olivia: 650, Anna: 480, John: 210 },
 };
 
+// Jackpot mystery roll (x10, the rarest weight) so the reel's gold-glow
+// landing state is what gets captured, not a routine x1.5-x4.
+const MOCK_RESULT_MYSTERY: RoundResultEvent = {
+  ...MOCK_RESULT,
+  points: 4200,
+  party: {
+    format: 'classic', target: 'title', event: 'mystery', multiplier: 10, winnerOnly: false,
+    intro: { title: 'Mystery Multiplier', tagline: 'Revealed after the round: ×1.5 up to ×10' },
+    finale: false, duelists: [], restricted: [],
+  },
+};
+
+const MOCK_HOST_MYSTERY_REVEAL: HostState = {
+  ...MOCK_HOST,
+  phase: 'reveal',
+  result: MOCK_RESULT_MYSTERY,
+  roundDeltas: { Anna: 4200 },
+  party: MOCK_RESULT_MYSTERY.party ?? null,
+};
+
 const MOCK_LEADERBOARD: LeaderboardEntry[] = [
   { rank: 1, name: 'Anna', score: 5350 },
   { rank: 2, name: 'John', score: 4100 },
@@ -286,6 +306,7 @@ export default function Screenshot() {
   if (v === 'playing') return <PlayingView game={MOCK_HOST} />;
   if (v === 'reveal')  return <RevealView game={MOCK_HOST_REVEAL} result={MOCK_RESULT} instant />;
   if (v === 'year')    return <RevealView game={MOCK_HOST_YEAR_REVEAL} result={MOCK_RESULT_YEAR} instant />;
+  if (v === 'mystery-reveal') return <RevealView game={MOCK_HOST_MYSTERY_REVEAL} result={MOCK_RESULT_MYSTERY} />;
   if (v === 'watching') return <WatchingView game={MOCK_PLAY} />;
   if (v === 'waiting') return (
     <>
@@ -358,5 +379,5 @@ export default function Screenshot() {
       />
     );
   }
-  return <p className="text-white p-6 font-mono">?v=playing|reveal|year|watching|guessing|year-guessing|lobby|party-intro|final-host|final-host-1|final-host-2|final-host-long|final-player|final-empty</p>;
+  return <p className="text-white p-6 font-mono">?v=playing|reveal|year|mystery-reveal|watching|guessing|year-guessing|lobby|party-intro|final-host|final-host-1|final-host-2|final-host-long|final-player|final-empty</p>;
 }

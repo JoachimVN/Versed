@@ -298,6 +298,27 @@ select:focus-visible,
   100% { transform: scale(1); opacity: 1; }
 }
 
+/* Mystery multiplier slot reel (RoundIntro.tsx's MysteryMultiplierChip): a
+   quick flicker per decoy value, then a bigger overshoot than chipReveal for
+   the value it actually lands on, so settling reads as a payoff. */
+@keyframes mysterySpinTick {
+  0%   { transform: scale(0.85); opacity: 0.5; }
+  50%  { transform: scale(1.08); opacity: 1; }
+  100% { transform: scale(1); opacity: 0.85; }
+}
+@keyframes mysteryLand {
+  0%   { transform: scale(0.5); opacity: 0; }
+  55%  { transform: scale(1.35); opacity: 1; }
+  75%  { transform: scale(0.92); }
+  100% { transform: scale(1); opacity: 1; }
+}
+/* Continuous gold pulse for a jackpot roll (x5/x10), so the rare high value
+   keeps drawing the eye instead of going static like a normal x1.5-x4. */
+@keyframes mysteryJackpotGlow {
+  0%, 100% { box-shadow: 0 0 0 0 rgba(251,191,36,0.5); }
+  50%       { box-shadow: 0 0 18px 5px rgba(251,191,36,0.45); }
+}
+
 @keyframes markerGlowPulse {
   0%, 100% { box-shadow: 0 0 0 0 rgba(251,191,36,0.5); }
   50%       { box-shadow: 0 0 0 6px rgba(251,191,36,0); }
