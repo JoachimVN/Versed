@@ -3,6 +3,13 @@ import LiquidGlass from './StableLiquidGlass';
 import type { Award, PointsBreakdown, RoundResultEvent } from '../types';
 import { LIQUID_PILL_PROPS } from './liquidGlassPresets';
 
+// A round delta this large only happens with a multiplier event, a big
+// steal, or several bonuses stacking — comfortably above classic's ordinary
+// per-round ceiling (500 base + 1000 bid + 500 difficulty = 2000) and race's
+// (1000 base + 500 difficulty), so it only lights up for genuinely
+// exceptional rounds rather than an everyday good guess.
+export const BIG_POINTS_THRESHOLD = 2500;
+
 // One line per non-zero component of a payout, in earn order: named parts,
 // then the multiplier's own contribution, then pity last (it's added after
 // the multiplier, not scaled by it). Omits the multiplier/pity lines

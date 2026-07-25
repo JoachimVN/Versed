@@ -188,6 +188,15 @@ const MOCK_HOST_MYSTERY_REVEAL: HostState = {
   party: MOCK_RESULT_MYSTERY.party ?? null,
 };
 
+// A delta past BIG_POINTS_THRESHOLD without a party multiplier — e.g. a big
+// steal or bonuses stacking — for capturing the celebration on its own.
+const MOCK_HOST_BIGPOINTS_REVEAL: HostState = {
+  ...MOCK_HOST,
+  phase: 'reveal',
+  result: MOCK_RESULT,
+  roundDeltas: { Anna: 3200 },
+};
+
 const MOCK_LEADERBOARD: LeaderboardEntry[] = [
   { rank: 1, name: 'Anna', score: 5350 },
   { rank: 2, name: 'John', score: 4100 },
@@ -307,6 +316,7 @@ export default function Screenshot() {
   if (v === 'reveal')  return <RevealView game={MOCK_HOST_REVEAL} result={MOCK_RESULT} instant />;
   if (v === 'year')    return <RevealView game={MOCK_HOST_YEAR_REVEAL} result={MOCK_RESULT_YEAR} instant />;
   if (v === 'mystery-reveal') return <RevealView game={MOCK_HOST_MYSTERY_REVEAL} result={MOCK_RESULT_MYSTERY} />;
+  if (v === 'big-points-reveal') return <RevealView game={MOCK_HOST_BIGPOINTS_REVEAL} result={MOCK_RESULT} />;
   if (v === 'watching') return <WatchingView game={MOCK_PLAY} />;
   if (v === 'waiting') return (
     <>
@@ -379,5 +389,5 @@ export default function Screenshot() {
       />
     );
   }
-  return <p className="text-white p-6 font-mono">?v=playing|reveal|year|mystery-reveal|watching|guessing|year-guessing|lobby|party-intro|final-host|final-host-1|final-host-2|final-host-long|final-player|final-empty</p>;
+  return <p className="text-white p-6 font-mono">?v=playing|reveal|year|mystery-reveal|big-points-reveal|watching|guessing|year-guessing|lobby|party-intro|final-host|final-host-1|final-host-2|final-host-long|final-player|final-empty</p>;
 }
