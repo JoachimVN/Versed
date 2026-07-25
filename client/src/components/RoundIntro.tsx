@@ -179,6 +179,12 @@ function MysteryMultiplierChip({ multiplier }: Readonly<{ multiplier: number }>)
   }, [multiplier]);
 
   const jackpot = landed && multiplier >= 5;
+  // Landing gets a one-shot white flash on every roll (mysteryFlash) — the
+  // jackpot's gold glow only kicks in afterward, timed past the flash so the
+  // two don't visually fight for the same instant.
+  const landAnimation = jackpot
+    ? 'mysteryLand 0.6s cubic-bezier(0.34, 1.56, 0.64, 1), mysteryFlash 0.7s ease-out, mysteryJackpotGlow 1.6s ease-in-out 0.6s infinite'
+    : 'mysteryLand 0.6s cubic-bezier(0.34, 1.56, 0.64, 1), mysteryFlash 0.7s ease-out';
   return (
     <span
       // A fresh key per flicker tick (and a distinct one on landing) forces
@@ -186,17 +192,28 @@ function MysteryMultiplierChip({ multiplier }: Readonly<{ multiplier: number }>)
       // a stale one — a plain style-string diff wouldn't retrigger it.
       key={landed ? `landed-${multiplier}` : `spin-${tick}`}
       style={{
-        padding: '6px 16px', borderRadius: '100px', display: 'inline-block',
+        display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '2px',
+        padding: '10px 24px', borderRadius: '20px',
         background: jackpot ? 'rgba(251,191,36,0.14)' : 'rgba(0,238,232,0.1)',
         border: `1px solid ${jackpot ? 'rgba(251,191,36,0.45)' : 'rgba(0,238,232,0.3)'}`,
-        color: jackpot ? 'rgba(253,224,71,0.95)' : 'rgba(94,234,212,0.9)',
-        fontSize: '0.72rem', fontWeight: 700, letterSpacing: '0.1em', textTransform: 'uppercase',
-        animation: landed
-          ? `mysteryLand 0.5s cubic-bezier(0.34, 1.56, 0.64, 1)${jackpot ? ', mysteryJackpotGlow 1.6s ease-in-out 0.5s infinite' : ''}`
-          : 'mysterySpinTick 0.14s ease-out',
+        animation: landed ? landAnimation : 'mysterySpinTick 0.14s ease-out',
       }}
     >
-      Mystery multiplier · ×{display}
+      <span style={{
+        fontSize: '0.62rem', fontWeight: 800, letterSpacing: '0.14em', textTransform: 'uppercase',
+        color: jackpot ? 'rgba(253,224,71,0.9)' : 'rgba(94,234,212,0.9)',
+      }}>
+        Mystery Multiplier
+      </span>
+      <span style={{
+        fontSize: '1.9rem', fontWeight: 900, lineHeight: 1,
+        background: jackpot
+          ? 'linear-gradient(to bottom left, rgba(251,191,36,0.6) 0%, transparent 55%), linear-gradient(to top right, rgba(255,221,120,0.55) 0%, transparent 55%), #fff'
+          : 'linear-gradient(to bottom left, rgba(0,238,232,0.5) 0%, transparent 55%), linear-gradient(to top right, rgba(158,18,204,0.55) 0%, transparent 55%), #fff',
+        WebkitBackgroundClip: 'text', WebkitTextFillColor: 'transparent', backgroundClip: 'text',
+      }}>
+        ×{display}
+      </span>
     </span>
   );
 }

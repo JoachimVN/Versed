@@ -312,6 +312,13 @@ select:focus-visible,
   75%  { transform: scale(0.92); }
   100% { transform: scale(1); opacity: 1; }
 }
+/* The moment the reel settles gets a quick bright flare on every value —
+   including the common ×1.5 — so the multiplier is visibly revealed rather
+   than merely changing text. */
+@keyframes mysteryFlash {
+  0%, 100% { filter: brightness(1); }
+  28%       { filter: brightness(2.3) drop-shadow(0 0 12px rgba(255,255,255,0.8)); }
+}
 /* Continuous gold pulse for a jackpot roll (x5/x10), so the rare high value
    keeps drawing the eye instead of going static like a normal x1.5-x4. */
 @keyframes mysteryJackpotGlow {
