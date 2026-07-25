@@ -314,7 +314,7 @@ function VolumeControl({ volume, setVolume, toggleMute }: Readonly<{
     <div
       onMouseEnter={() => setHovered(true)}
       onMouseLeave={() => setHovered(false)}
-      className="liquid-btn glass-tint-purple absolute bottom-5 right-5 z-10"
+      className="liquid-btn glass-tint-purple volume-control-glass absolute bottom-5 right-5 z-10"
       style={{ width: '148px', height: '44px' }}
     >
       <LiquidGlass
@@ -333,7 +333,7 @@ function VolumeControl({ volume, setVolume, toggleMute }: Readonly<{
               full pill, since it's a child of the padded content box. */}
           <div style={{
             position: 'absolute', inset: '-8px -16px', borderRadius: '100px', pointerEvents: 'none',
-            background: 'rgba(158,18,204,0.10)',
+            background: 'rgba(158,18,204,0.05)',
           }} />
           <div style={{ position: 'relative', display: 'flex', alignItems: 'center', gap: '8px', height: '28px' }}>
             <button

@@ -161,6 +161,24 @@ select:focus-visible,
   box-shadow: 0 0 0 1px rgba(0,238,232,0.35) inset, 0 1px 4px rgba(0,0,0,0.35) !important;
 }
 
+/* Volume control's edge ring at half strength — opacity (not just the
+   box-shadow tint above) so the library's own white cursor-tracking sheen on
+   these same spans dims along with it. Without this the sheen stayed at full
+   brightness and the ring still read as a hard white edge. It's small
+   always-on chrome, not a CTA, so the edge should recede. */
+.volume-control-glass > .liquid-glass-stabilizer > :nth-child(4),
+.volume-control-glass > .liquid-glass-stabilizer > :nth-child(5) {
+  box-shadow: 0 0 0 1px rgba(158,18,204,0.35) inset, 0 1px 4px rgba(0,0,0,0.35) !important;
+  opacity: 0.5 !important;
+}
+/* Same control's ambient drop shadow (the library's own `.glass` box-shadow,
+   independent of the tinted ring spans above) at half strength too, so the
+   pill reads as lighter/more see-through overall rather than just a thinner
+   edge. */
+.volume-control-glass .glass {
+  box-shadow: 0px 12px 40px rgba(0, 0, 0, 0.125) !important;
+}
+
 /* Thin, on-brand scrollbar for every scroll container (playlist picker grid,
    leaderboard, etc.) instead of the OS default. Firefox reads the two
    scrollbar-* properties on the `*` reset above; everything else reads the

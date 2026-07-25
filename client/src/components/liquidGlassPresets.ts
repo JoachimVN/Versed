@@ -29,7 +29,7 @@ export const LIQUID_PILL_PROPS = {
 // you drag along.
 export const LIQUID_CONTROL_PROPS = {
   displacementScale: 34,
-  blurAmount: 0.05,
+  blurAmount: 0.025,
   saturation: 130,
   aberrationIntensity: 1.2,
   elasticity: 0,
