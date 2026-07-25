@@ -1,9 +1,9 @@
 import React from 'react';
-import { Flame } from 'lucide-react';
+import { Flame, Zap } from 'lucide-react';
 import LiquidGlass from '../../components/StableLiquidGlass';
 import { socket } from '../../socket';
 import { useAnimatedScore } from '../../hooks/useAnimatedScore';
-import { FinalRoundAnswerContent, NoOneGotItCardContent, GotItCardContent, YearTimelineContent, PillButton } from '../../components/RevealShared';
+import { BIG_POINTS_THRESHOLD, FinalRoundAnswerContent, NoOneGotItCardContent, GotItCardContent, YearTimelineContent, PillButton } from '../../components/RevealShared';
 import { PartyRevealExtras } from '../../components/RoundIntro';
 import { LIQUID_CARD_PROPS } from '../../components/liquidGlassPresets';
 import type { PlayerInfo, RoundResultEvent } from '../../types';
@@ -75,7 +75,11 @@ function RevealPlayerRow({
           <span className={`text-xs truncate ${correct === 'none' ? 'text-white/45' : 'text-white font-semibold'}`}>{player.name}</span>
         </div>
         {delta > 0 && (
-          <p className={`text-sky-400 text-xs tabular-nums shrink-0 transition-opacity duration-500 ${deltaFading ? 'opacity-0' : 'opacity-100'}`}>
+          <p
+            className={`text-xs tabular-nums shrink-0 flex items-center gap-0.5 transition-opacity duration-500 ${deltaFading ? 'opacity-0' : 'opacity-100'} ${delta >= BIG_POINTS_THRESHOLD ? 'text-amber-300' : 'text-sky-400'}`}
+            style={delta >= BIG_POINTS_THRESHOLD ? { animation: 'bigPointsPop 0.6s cubic-bezier(0.34, 1.56, 0.64, 1), bigPointsGlow 1.6s ease-in-out 0.6s infinite' } : undefined}
+          >
+            {delta >= BIG_POINTS_THRESHOLD && <Zap className="w-3 h-3 shrink-0" />}
             +{displayDelta > 0 ? displayDelta.toLocaleString() : ''}{pity && ` (+${pityAmount.toLocaleString()} pity)`}
           </p>
         )}

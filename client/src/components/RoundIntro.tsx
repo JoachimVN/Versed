@@ -1,4 +1,4 @@
-import { useLayoutEffect, useRef, useState } from 'react';
+import { useEffect, useLayoutEffect, useRef, useState } from 'react';
 import type { Hint, PartyInfo, RoundResultEvent } from '../types';
 import { useEscapeKey } from '../hooks/useEscapeKey';
 import { useFocusTrap } from '../hooks/useFocusTrap';
@@ -129,6 +129,101 @@ export function RoundIntro({ party, roundKey, dismissible = true }: Readonly<{ p
   );
 }
 
+// Candidate values the reel flickers through before landing — the real
+// weight pool from gameManager's MYSTERY_WEIGHTS, minus whatever the actual
+// roll landed on (that's added back as the final, held frame).
+const MYSTERY_CANDIDATES = [1.5, 2, 3, 4, 5, 10];
+
+// Step durations for the flicker, front-loaded fast then slowing down like a
+// wheel losing momentum — the deceleration is what sells "landing" rather
+// than "the label just changed".
+const MYSTERY_SPIN_STEPS_MS = [55, 65, 80, 95, 115, 140, 170, 205, 245, 290];
+
+function pickMysteryCandidate(candidates: readonly number[]) {
+  const randomValue = new Uint32Array(1);
+  crypto.getRandomValues(randomValue);
+  return candidates[randomValue[0] % candidates.length]!;
+}
+
+// Slot-reel reveal for the mystery multiplier: flickers through a handful of
+// decoy values before settling on the real one, instead of the value just
+// appearing. ×5/×10 (the rare high rolls) keep pulsing gold after landing so
+// the jackpot outcome reads as more exciting than a routine ×1.5-×4.
+function MysteryMultiplierChip({ multiplier }: Readonly<{ multiplier: number }>) {
+  const [display, setDisplay] = useState(multiplier);
+  const [tick, setTick] = useState(0);
+  const [landed, setLanded] = useState(false);
+  const spunFor = useRef<number | null>(null);
+
+  useEffect(() => {
+    if (spunFor.current === multiplier) return;
+    spunFor.current = multiplier;
+    if (globalThis.matchMedia('(prefers-reduced-motion: reduce)').matches) {
+      setDisplay(multiplier);
+      setLanded(true);
+      return;
+    }
+    setLanded(false);
+    let cancelled = false;
+    let timer: ReturnType<typeof setTimeout>;
+    const pool = MYSTERY_CANDIDATES.filter(v => v !== multiplier);
+    let i = 0;
+    const step = () => {
+      if (cancelled) return;
+      if (i >= MYSTERY_SPIN_STEPS_MS.length) {
+        setDisplay(multiplier);
+        setLanded(true);
+        return;
+      }
+      setDisplay(pickMysteryCandidate(pool));
+      setTick(t => t + 1);
+      timer = setTimeout(step, MYSTERY_SPIN_STEPS_MS[i]);
+      i++;
+    };
+    step();
+    return () => { cancelled = true; clearTimeout(timer); };
+  }, [multiplier]);
+
+  const jackpot = landed && multiplier >= 5;
+  // Landing gets a one-shot white flash on every roll (mysteryFlash) — the
+  // jackpot's gold glow only kicks in afterward, timed past the flash so the
+  // two don't visually fight for the same instant.
+  const landAnimation = jackpot
+    ? 'mysteryLand 0.6s cubic-bezier(0.34, 1.56, 0.64, 1), mysteryFlash 0.7s ease-out, mysteryJackpotGlow 1.6s ease-in-out 0.6s infinite'
+    : 'mysteryLand 0.6s cubic-bezier(0.34, 1.56, 0.64, 1), mysteryFlash 0.7s ease-out';
+  return (
+    <span
+      // A fresh key per flicker tick (and a distinct one on landing) forces
+      // the animation to restart on every value change instead of continuing
+      // a stale one — a plain style-string diff wouldn't retrigger it.
+      key={landed ? `landed-${multiplier}` : `spin-${tick}`}
+      style={{
+        display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '2px',
+        padding: '10px 24px', borderRadius: '20px',
+        background: jackpot ? 'rgba(251,191,36,0.14)' : 'rgba(0,238,232,0.1)',
+        border: `1px solid ${jackpot ? 'rgba(251,191,36,0.45)' : 'rgba(0,238,232,0.3)'}`,
+        animation: landed ? landAnimation : 'mysterySpinTick 0.14s ease-out',
+      }}
+    >
+      <span style={{
+        fontSize: '0.62rem', fontWeight: 800, letterSpacing: '0.14em', textTransform: 'uppercase',
+        color: jackpot ? 'rgba(253,224,71,0.9)' : 'rgba(94,234,212,0.9)',
+      }}>
+        Mystery Multiplier
+      </span>
+      <span style={{
+        fontSize: '1.9rem', fontWeight: 900, lineHeight: 1,
+        background: jackpot
+          ? 'linear-gradient(to bottom left, rgba(251,191,36,0.6) 0%, transparent 55%), linear-gradient(to top right, rgba(255,221,120,0.55) 0%, transparent 55%), #fff'
+          : 'linear-gradient(to bottom left, rgba(0,238,232,0.5) 0%, transparent 55%), linear-gradient(to top right, rgba(158,18,204,0.55) 0%, transparent 55%), #fff',
+        WebkitBackgroundClip: 'text', WebkitTextFillColor: 'transparent', backgroundClip: 'text',
+      }}>
+        ×{display}
+      </span>
+    </span>
+  );
+}
+
 // Party extras shown under the reveal card: revealed multiplier, steal outcome
 // (or "picking a victim…" while the thief decides). Shared by host and player.
 export function PartyRevealExtras({ result, stealResult, hints }: Readonly<{
@@ -137,18 +232,18 @@ export function PartyRevealExtras({ result, stealResult, hints }: Readonly<{
   hints?: Hint[];
 }>) {
   const party = result.party;
+  const mysteryMultiplier = party?.event === 'mystery' ? party.multiplier : null;
   const chips: { text: string; reveal: boolean }[] = [];
-  if (party?.event === 'mystery' && party.multiplier !== null) {
-    chips.push({ text: `Mystery multiplier · ×${party.multiplier}`, reveal: true });
-  } else if (party?.event === 'double') {
+  if (party?.event === 'double') {
     chips.push({ text: 'Double points · ×2', reveal: false });
   } else if (party?.event === 'chaoshints' && result.chaosFakeIndex != null && hints?.[result.chaosFakeIndex]) {
     chips.push({ text: `The lie was · ${hints[result.chaosFakeIndex].label}`, reveal: true });
   }
   const showPending = !stealResult && !!result.stealPending;
-  if (chips.length === 0 && !stealResult && !showPending) return null;
+  if (mysteryMultiplier === null && chips.length === 0 && !stealResult && !showPending) return null;
   return (
     <div className="flex flex-col items-center gap-2" style={{ maxWidth: '92vw' }}>
+      {mysteryMultiplier !== null && <MysteryMultiplierChip multiplier={mysteryMultiplier} />}
       {chips.map(c => (
         <span key={c.text} style={{
           padding: '6px 16px', borderRadius: '100px',

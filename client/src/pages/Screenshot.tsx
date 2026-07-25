@@ -1,3 +1,4 @@
+import type { ReactNode } from 'react';
 import { useSearchParams } from 'react-router-dom';
 import { PlayingView } from './host/PlayingView';
 import { RevealView } from './host/RevealView';
@@ -168,6 +169,35 @@ const MOCK_HOST_YEAR_REVEAL: HostState = {
   roundDeltas: { Olivia: 650, Anna: 480, John: 210 },
 };
 
+// Jackpot mystery roll (x10, the rarest weight) so the reel's gold-glow
+// landing state is what gets captured, not a routine x1.5-x4.
+const MOCK_RESULT_MYSTERY: RoundResultEvent = {
+  ...MOCK_RESULT,
+  points: 4200,
+  party: {
+    format: 'classic', target: 'title', event: 'mystery', multiplier: 10, winnerOnly: false,
+    intro: { title: 'Mystery Multiplier', tagline: 'Revealed after the round: ×1.5 up to ×10' },
+    finale: false, duelists: [], restricted: [],
+  },
+};
+
+const MOCK_HOST_MYSTERY_REVEAL: HostState = {
+  ...MOCK_HOST,
+  phase: 'reveal',
+  result: MOCK_RESULT_MYSTERY,
+  roundDeltas: { Anna: 4200 },
+  party: MOCK_RESULT_MYSTERY.party ?? null,
+};
+
+// A delta past BIG_POINTS_THRESHOLD without a party multiplier — e.g. a big
+// steal or bonuses stacking — for capturing the celebration on its own.
+const MOCK_HOST_BIGPOINTS_REVEAL: HostState = {
+  ...MOCK_HOST,
+  phase: 'reveal',
+  result: MOCK_RESULT,
+  roundDeltas: { Anna: 3200 },
+};
+
 const MOCK_LEADERBOARD: LeaderboardEntry[] = [
   { rank: 1, name: 'Anna', score: 5350 },
   { rank: 2, name: 'John', score: 4100 },
@@ -230,6 +260,7 @@ const MOCK_PLAY: PlayState = {
   myScoreDelta: 0,
   myPity: false,
   myPityAmount: 0,
+  myBreakdown: null,
   myStreak: 0,
   mode: 'classic',
   artistOnly: false,
@@ -281,81 +312,26 @@ const MOCK_PLAY_YEAR_GUESSING: PlayState = {
 
 export default function Screenshot() {
   const [params] = useSearchParams();
-  const v = params.get('v');
-  if (v === 'playing') return <PlayingView game={MOCK_HOST} />;
-  if (v === 'reveal')  return <RevealView game={MOCK_HOST_REVEAL} result={MOCK_RESULT} instant />;
-  if (v === 'year')    return <RevealView game={MOCK_HOST_YEAR_REVEAL} result={MOCK_RESULT_YEAR} instant />;
-  if (v === 'watching') return <WatchingView game={MOCK_PLAY} />;
-  if (v === 'waiting') return (
-    <>
-      <WaitingAtmosphere leaving={false} />
-      <WaitingView game={{ ...MOCK_PLAY, phase: 'waiting', myName: 'Joachim' }} leaveBackground={noop} />
-    </>
-  );
-  if (v === 'guessing') return <GuessingView game={MOCK_PLAY_GUESSING} />;
-  if (v === 'year-guessing') return <GuessingView game={MOCK_PLAY_YEAR_GUESSING} />;
-  if (v === 'lobby') return <LobbyView game={MOCK_HOST_LOBBY} />;
-  if (v === 'party-intro') return <RoundIntro party={MOCK_PARTY_STEAL} roundKey={0} dismissible={false} />;
-  if (v === 'final-host') {
-    return (
-      <FinalResultsView
-        leaderboard={MOCK_LEADERBOARD}
-        awards={MOCK_AWARDS}
-        backgroundSrc={`${import.meta.env.BASE_URL}background6.svg`}
-        footer={<PillButton onClick={noop} label="New Game" />}
-      />
-    );
-  }
-  if (v === 'final-host-1') {
-    return (
-      <FinalResultsView
-        leaderboard={MOCK_LEADERBOARD.slice(0, 1)}
-        awards={[]}
-        backgroundSrc={`${import.meta.env.BASE_URL}background6.svg`}
-        footer={<PillButton onClick={noop} label="New Game" />}
-      />
-    );
-  }
-  if (v === 'final-host-2') {
-    return (
-      <FinalResultsView
-        leaderboard={MOCK_LEADERBOARD.slice(0, 2)}
-        awards={[]}
-        backgroundSrc={`${import.meta.env.BASE_URL}background6.svg`}
-        footer={<PillButton onClick={noop} label="New Game" />}
-      />
-    );
-  }
-  if (v === 'final-host-long') {
-    return (
-      <FinalResultsView
-        leaderboard={MOCK_LEADERBOARD_LONG}
-        awards={MOCK_AWARDS}
-        backgroundSrc={`${import.meta.env.BASE_URL}background6.svg`}
-        footer={<PillButton onClick={noop} label="New Game" />}
-      />
-    );
-  }
-  if (v === 'final-player') {
-    return (
-      <FinalResultsView
-        leaderboard={MOCK_LEADERBOARD}
-        awards={MOCK_AWARDS}
-        myName="John"
-        backgroundSrc={`${import.meta.env.BASE_URL}background5.svg`}
-        footer={<PillButton onClick={noop} label="Leave" />}
-      />
-    );
-  }
-  if (v === 'final-empty') {
-    return (
-      <FinalResultsView
-        leaderboard={[]}
-        awards={[]}
-        backgroundSrc={`${import.meta.env.BASE_URL}background6.svg`}
-        footer={<PillButton onClick={noop} label="New Game" />}
-      />
-    );
-  }
-  return <p className="text-white p-6 font-mono">?v=playing|reveal|year|watching|guessing|year-guessing|lobby|party-intro|final-host|final-host-1|final-host-2|final-host-long|final-player|final-empty</p>;
+  const screenshots: Record<string, ReactNode> = {
+    playing: <PlayingView game={MOCK_HOST} />,
+    reveal: <RevealView game={MOCK_HOST_REVEAL} result={MOCK_RESULT} instant />,
+    year: <RevealView game={MOCK_HOST_YEAR_REVEAL} result={MOCK_RESULT_YEAR} instant />,
+    'mystery-reveal': <RevealView game={MOCK_HOST_MYSTERY_REVEAL} result={MOCK_RESULT_MYSTERY} />,
+    'big-points-reveal': <RevealView game={MOCK_HOST_BIGPOINTS_REVEAL} result={MOCK_RESULT} />,
+    watching: <WatchingView game={MOCK_PLAY} />,
+    waiting: <><WaitingAtmosphere leaving={false} /><WaitingView game={{ ...MOCK_PLAY, phase: 'waiting', myName: 'Joachim' }} leaveBackground={noop} /></>,
+    guessing: <GuessingView game={MOCK_PLAY_GUESSING} />,
+    'year-guessing': <GuessingView game={MOCK_PLAY_YEAR_GUESSING} />,
+    lobby: <LobbyView game={MOCK_HOST_LOBBY} />,
+    'party-intro': <RoundIntro party={MOCK_PARTY_STEAL} roundKey={0} dismissible={false} />,
+    'final-host': <FinalResultsView leaderboard={MOCK_LEADERBOARD} awards={MOCK_AWARDS} backgroundSrc={`${import.meta.env.BASE_URL}background6.svg`} footer={<PillButton onClick={noop} label="New Game" />} />,
+    'final-host-1': <FinalResultsView leaderboard={MOCK_LEADERBOARD.slice(0, 1)} awards={[]} backgroundSrc={`${import.meta.env.BASE_URL}background6.svg`} footer={<PillButton onClick={noop} label="New Game" />} />,
+    'final-host-2': <FinalResultsView leaderboard={MOCK_LEADERBOARD.slice(0, 2)} awards={[]} backgroundSrc={`${import.meta.env.BASE_URL}background6.svg`} footer={<PillButton onClick={noop} label="New Game" />} />,
+    'final-host-long': <FinalResultsView leaderboard={MOCK_LEADERBOARD_LONG} awards={MOCK_AWARDS} backgroundSrc={`${import.meta.env.BASE_URL}background6.svg`} footer={<PillButton onClick={noop} label="New Game" />} />,
+    'final-player': <FinalResultsView leaderboard={MOCK_LEADERBOARD} awards={MOCK_AWARDS} myName="John" backgroundSrc={`${import.meta.env.BASE_URL}background5.svg`} footer={<PillButton onClick={noop} label="Leave" />} />,
+    'final-empty': <FinalResultsView leaderboard={[]} awards={[]} backgroundSrc={`${import.meta.env.BASE_URL}background6.svg`} footer={<PillButton onClick={noop} label="New Game" />} />,
+  };
+
+  return screenshots[params.get('v') ?? '']
+    ?? <p className="text-white p-6 font-mono">?v=playing|reveal|year|mystery-reveal|big-points-reveal|watching|guessing|year-guessing|lobby|party-intro|final-host|final-host-1|final-host-2|final-host-long|final-player|final-empty</p>;
 }

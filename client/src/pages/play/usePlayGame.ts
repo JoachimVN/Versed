@@ -1,7 +1,7 @@
 import { useState, useEffect, useRef } from 'react';
 import { socket } from '../../socket';
 import { BID_OPTIONS } from '../../config';
-import type { Award, Hint, LeaderboardEntry, PartyInfo, RoundResultEvent } from '../../types';
+import type { Award, Hint, LeaderboardEntry, PartyInfo, PointsBreakdown, RoundResultEvent } from '../../types';
 
 export type Phase =
   | 'join' | 'waiting' | 'betting' | 'bid_submitted'
@@ -31,6 +31,7 @@ export interface PlayState {
   myScoreDelta: number;
   myPity: boolean;
   myPityAmount: number;
+  myBreakdown: PointsBreakdown | null;
   myStreak: number;
   mode: 'classic' | 'race';
   artistOnly: boolean;
@@ -106,6 +107,7 @@ export function usePlayGame(pinParam?: string): PlayState {
   const [myScoreDelta, setMyScoreDelta] = useState(0);
   const [myPity, setMyPity] = useState(false);
   const [myPityAmount, setMyPityAmount] = useState(0);
+  const [myBreakdown, setMyBreakdown] = useState<PointsBreakdown | null>(null);
   const [myStreak, setMyStreak] = useState(0);
   const [mode, setMode] = useState<'classic' | 'race'>('classic');
   const modeRef = useRef<'classic' | 'race'>('classic');
@@ -362,12 +364,13 @@ export function usePlayGame(pinParam?: string): PlayState {
       setPhase('reveal');
     });
 
-    socket.on('score_update', ({ players }: { players: { name: string; score: number; streak: number; pity?: boolean; pityAmount?: number }[] }) => {
+    socket.on('score_update', ({ players }: { players: { name: string; score: number; streak: number; pity?: boolean; pityAmount?: number; breakdown?: PointsBreakdown }[] }) => {
       const me = players.find(p => p.name === myNameRef.current);
       if (me) {
         setMyScoreDelta(Math.max(0, me.score - myScoreRef.current));
         setMyPity(me.pity ?? false);
         setMyPityAmount(me.pityAmount ?? 0);
+        setMyBreakdown(me.breakdown ?? null);
         myScoreRef.current = me.score;
         setMyScore(me.score);
         setMyStreak(me.streak);
@@ -629,7 +632,7 @@ export function usePlayGame(pinParam?: string): PlayState {
   return {
     phase, pin, name, myName, error, roundIndex, totalRounds, hints,
     timeLeft, timerTotal, bettingTime, bidIndex, bidOptions, bidScores, myBid, guesserNames, lowestBid,
-    guessText, result, myScore, myScoreDelta, myPity, myPityAmount, myStreak, mode, artistOnly, yearOnly, choiceOptions, myRacePoints, myRaceTimeMs,
+    guessText, result, myScore, myScoreDelta, myPity, myPityAmount, myBreakdown, myStreak, mode, artistOnly, yearOnly, choiceOptions, myRacePoints, myRaceTimeMs,
     party, artistGuessText, stealVictims, stealResult,
     leaderboard, leaderboardDeltas, awards, songPlaying, songTempo, reconnecting, hostReconnecting, savedSession, guessInputRef,
     cameFromQR, newGamePin, rejoinNewGame,

@@ -298,6 +298,48 @@ select:focus-visible,
   100% { transform: scale(1); opacity: 1; }
 }
 
+/* Mystery multiplier slot reel (RoundIntro.tsx's MysteryMultiplierChip): a
+   quick flicker per decoy value, then a bigger overshoot than chipReveal for
+   the value it actually lands on, so settling reads as a payoff. */
+@keyframes mysterySpinTick {
+  0%   { transform: scale(0.85); opacity: 0.5; }
+  50%  { transform: scale(1.08); opacity: 1; }
+  100% { transform: scale(1); opacity: 0.85; }
+}
+@keyframes mysteryLand {
+  0%   { transform: scale(0.5); opacity: 0; }
+  55%  { transform: scale(1.35); opacity: 1; }
+  75%  { transform: scale(0.92); }
+  100% { transform: scale(1); opacity: 1; }
+}
+/* The moment the reel settles gets a quick bright flare on every value —
+   including the common ×1.5 — so the multiplier is visibly revealed rather
+   than merely changing text. */
+@keyframes mysteryFlash {
+  0%, 100% { filter: brightness(1); }
+  28%       { filter: brightness(2.3) drop-shadow(0 0 12px rgba(255,255,255,0.8)); }
+}
+/* Continuous gold pulse for a jackpot roll (x5/x10), so the rare high value
+   keeps drawing the eye instead of going static like a normal x1.5-x4. */
+@keyframes mysteryJackpotGlow {
+  0%, 100% { box-shadow: 0 0 0 0 rgba(251,191,36,0.5); }
+  50%       { box-shadow: 0 0 18px 5px rgba(251,191,36,0.45); }
+}
+
+/* A player's round delta clears BIG_POINTS_THRESHOLD (RevealShared.tsx): a
+   bigger, rotated overshoot than chipReveal so it reads as exceptional, plus
+   a slow gold glow that keeps it drawing the eye after it settles. */
+@keyframes bigPointsPop {
+  0%   { transform: scale(0.3) rotate(-6deg); opacity: 0; }
+  50%  { transform: scale(1.3) rotate(3deg); opacity: 1; }
+  75%  { transform: scale(0.94) rotate(-1deg); }
+  100% { transform: scale(1) rotate(0deg); opacity: 1; }
+}
+@keyframes bigPointsGlow {
+  0%, 100% { filter: drop-shadow(0 0 3px rgba(251,191,36,0.35)); }
+  50%       { filter: drop-shadow(0 0 10px rgba(251,191,36,0.75)); }
+}
+
 @keyframes markerGlowPulse {
   0%, 100% { box-shadow: 0 0 0 0 rgba(251,191,36,0.5); }
   50%       { box-shadow: 0 0 0 6px rgba(251,191,36,0); }

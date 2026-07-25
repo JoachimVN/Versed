@@ -1,7 +1,7 @@
-import { Flame } from 'lucide-react';
+import { Flame, Zap } from 'lucide-react';
 import LiquidGlass from '../../components/StableLiquidGlass';
 import { useAnimatedScore } from '../../hooks/useAnimatedScore';
-import { FinalRoundAnswerContent, NoOneGotItCardContent, GotItCardContent, YearTimelineContent } from '../../components/RevealShared';
+import { BIG_POINTS_THRESHOLD, FinalRoundAnswerContent, NoOneGotItCardContent, GotItCardContent, YearTimelineContent, PointsBreakdownList, breakdownCompact } from '../../components/RevealShared';
 import { PartyRevealExtras } from '../../components/RoundIntro';
 import { LIQUID_CARD_PROPS } from '../../components/liquidGlassPresets';
 import type { RoundResultEvent } from '../../types';
@@ -36,14 +36,16 @@ function PlayRevealShell({
   scoreExtra?: React.ReactNode;
   wide?: boolean;
 }>) {
-  const { myScore, myScoreDelta, myPity, myPityAmount, myStreak, stealResult } = game;
+  const { myScore, myScoreDelta, myBreakdown, myStreak, stealResult } = game;
   const revealParty = result.party ?? game.party;
   const finaleResolved = revealParty?.duelProgress?.wins.some(w => w.count >= 2) ?? false;
   const isFinalReveal = game.roundIndex + 1 >= game.totalRounds && (!revealParty?.finale || finaleResolved);
   // Ties the score bump to the shared reveal moment — for a mystery round
   // this is the first time the true (multiplied) total is visible, so it
-  // should count up rather than just appear.
-  const { displayScore, displayDelta, deltaFading } = useAnimatedScore(myScore, myScoreDelta, 300);
+  // should count up rather than just appear. The "+N pts" line and its
+  // breakdown stay put (no fade-out) — how many points this round earned,
+  // and why, shouldn't disappear a few seconds after the reveal.
+  const { displayScore } = useAnimatedScore(myScore, myScoreDelta, 300);
   return (
     <div className={`page-enter relative min-h-screen flex flex-col items-center justify-center gap-5 overflow-hidden ${wide ? 'px-2 py-6' : 'p-6'}`}>
       <img
@@ -70,11 +72,16 @@ function PlayRevealShell({
 
         <div style={{ background: 'rgba(255,255,255,0.05)', border: '1px solid rgba(255,255,255,0.08)', borderRadius: '16px', padding: '16px 32px', textAlign: 'center' }}>
           {myScoreDelta > 0 && (
-            <p className={`text-sky-400 text-sm font-bold tabular-nums transition-opacity duration-500 ${deltaFading ? 'opacity-0' : 'opacity-100'}`}>
-              +{displayDelta > 0 ? displayDelta.toLocaleString() : ''} pts{myPity && ` (+${myPityAmount.toLocaleString()} pity)`}
+            <p
+              className={`text-sm font-bold tabular-nums flex items-center justify-center gap-1 ${myScoreDelta >= BIG_POINTS_THRESHOLD ? 'text-amber-300' : 'text-sky-400'}`}
+              style={myScoreDelta >= BIG_POINTS_THRESHOLD ? { animation: 'bigPointsPop 0.6s cubic-bezier(0.34, 1.56, 0.64, 1), bigPointsGlow 1.6s ease-in-out 0.6s infinite' } : undefined}
+            >
+              {myScoreDelta >= BIG_POINTS_THRESHOLD && <Zap className="w-3.5 h-3.5" />}
+              +{myScoreDelta.toLocaleString()} pts
             </p>
           )}
-          <p className="text-3xl font-black text-white">{displayScore.toLocaleString()}</p>
+          {myScoreDelta > 0 && myBreakdown && <PointsBreakdownList breakdown={myBreakdown} />}
+          <p className="text-3xl font-black text-white mt-1">{displayScore.toLocaleString()}</p>
           <p className="text-white/45 text-sm">your score</p>
           {scoreExtra}
           {myStreak >= 2 && (
@@ -112,9 +119,14 @@ export function YearRevealView({ game, result }: Readonly<{ game: PlayState; res
   const guessesList = scorers.length > 0 && (
     <div style={{ background: 'rgba(255,255,255,0.05)', border: '1px solid rgba(255,255,255,0.08)', borderRadius: '16px', padding: '8px 12px', width: '310px', maxWidth: '92vw' }} className="space-y-1">
       {scorers.map(r => (
-        <div key={r.name} className="flex justify-between items-center gap-2">
-          <span className={`text-xs min-w-0 truncate ${r.name === myName ? 'text-white font-semibold' : 'text-white/45'}`}>{r.name}</span>
-          <span className="ml-1.5 text-xs text-sky-400 font-semibold tabular-nums shrink-0">+{r.points.toLocaleString()}{r.pity && ` (+${(r.pityAmount ?? 0).toLocaleString()} pity)`}</span>
+        <div key={r.name} className="flex flex-col gap-0">
+          <div className="flex justify-between items-center gap-2">
+            <span className={`text-xs min-w-0 truncate ${r.name === myName ? 'text-white font-semibold' : 'text-white/45'}`}>{r.name}</span>
+            <span className="ml-1.5 text-xs text-sky-400 font-semibold tabular-nums shrink-0">+{r.points.toLocaleString()}</span>
+          </div>
+          {r.breakdown && (
+            <p className="text-white/35 text-[0.62rem] text-right leading-tight break-words" style={{ overflowWrap: 'anywhere' }}>{breakdownCompact(r.breakdown)}</p>
+          )}
         </div>
       ))}
     </div>

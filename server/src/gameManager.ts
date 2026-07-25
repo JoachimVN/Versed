@@ -1,7 +1,7 @@
 import { randomInt } from 'node:crypto';
 import {
   Award, Difficulty, Game, GuessTarget, Hint, PartyClientView, PartyConfig, PartyEvent, PartyFormat, PartyTarget,
-  PartyRoundType, Player, PlaylistTrackInput, Round, Song, YearResult,
+  PartyRoundType, Player, PlaylistTrackInput, PointsBreakdown, PointsBreakdownPart, Round, Song, YearResult,
 } from './types';
 import { loadSongs } from './songLoader';
 import { adaptPlaylistTracks } from './customSongPool';
@@ -722,9 +722,19 @@ function raceParticipants(game: Game, round: Round): string[] {
 // library 'hard' mode, not merely "equal difficulty."
 const FLAT_DIFFICULTY_BONUS = 250;
 
-function difficultyBonus(game: Game, rank: number): number {
+export function difficultyBonus(game: Game, rank: number): number {
   if (game.songSource === 'playlist') return FLAT_DIFFICULTY_BONUS;
   return Math.round(500 * Math.max(0, 1 - (rank - 1) / Math.max(songs.length - 1, 1)));
+}
+
+// Assembles a PointsBreakdown from a payout's named pre-multiplier
+// components — `parts` must sum to the exact pre-multiplier subtotal each
+// call site already computes today, so `total` here always matches the
+// `points` value awarded alongside it (same Math.round, same operand order).
+function buildBreakdown(parts: PointsBreakdownPart[], multiplier: number, pity: number): PointsBreakdown {
+  const preMultiplier = parts.reduce((sum, p) => sum + p.amount, 0);
+  const multiplied = Math.round(preMultiplier * multiplier);
+  return { parts, multiplier, multiplierBonus: multiplied - preMultiplier, pity, total: multiplied + pity };
 }
 
 function currentScores(game: Game): Map<string, number> {
@@ -1075,6 +1085,7 @@ function buildRound(game: Game, party?: PartyConfig): Round {
     liveArtistDrafts: new Map(),
     scoredSocketIds: new Set(),
     pityAwardedTo: new Set(),
+    pointsBreakdown: new Map(),
     playStartAt: null,
     firstCorrectAt: null,
     correctGuessers: new Set(),
@@ -1384,8 +1395,16 @@ export function recordGuess(
     const guess = parseYearGuess(text);
     const correct = guess !== null && guess === Math.floor(round.song.year ?? 0);
     if (!correct) return failGuess(round, socketId, guesserName);
-    const points = Math.round(calcPoints(game, round.lowestBid, round.song.rank) * roundMultiplier(round))
-      + pityBonus(currentScores(game), socketId, round);
+    const parts: PointsBreakdownPart[] = [
+      { label: 'Base', amount: 500 },
+      { label: 'Bid bonus', amount: bidScore(round.lowestBid) },
+      { label: 'Difficulty', amount: difficultyBonus(game, round.song.rank) },
+    ];
+    const mult = roundMultiplier(round);
+    const pity = pityBonus(currentScores(game), socketId, round);
+    const breakdown = buildBreakdown(parts, mult, pity);
+    round.pointsBreakdown.set(socketId, breakdown);
+    const points = breakdown.total;
     const result = applyClassicWin(game, round, socketId, guesserName, points, elapsedMs);
     // The year reveal UI reads exclusively from `yearResults` (never from
     // correct/guesserName/points), so an early exact-match win still needs a
@@ -1399,9 +1418,15 @@ export function recordGuess(
   if (!correct) return failGuess(round, socketId, guesserName);
 
   const basePoints = calcPoints(game, round.lowestBid, round.song.rank);
-  const points = Math.round((basePoints + (artistBonus ? basePoints : 0)) * roundMultiplier(round))
-    + pityBonus(currentScores(game), socketId, round);
-  return applyClassicWin(game, round, socketId, guesserName, points, elapsedMs);
+  const parts: PointsBreakdownPart[] = [
+    { label: 'Base', amount: 500 },
+    { label: 'Bid bonus', amount: bidScore(round.lowestBid) },
+    { label: 'Difficulty', amount: difficultyBonus(game, round.song.rank) },
+  ];
+  if (artistBonus) parts.push({ label: 'Title + artist bonus', amount: basePoints });
+  const breakdown = buildBreakdown(parts, roundMultiplier(round), pityBonus(currentScores(game), socketId, round));
+  round.pointsBreakdown.set(socketId, breakdown);
+  return applyClassicWin(game, round, socketId, guesserName, breakdown.total, elapsedMs);
 }
 
 // A guesser's turn ends without a win — hand them off to "passed" and report
@@ -1496,9 +1521,18 @@ function applyRaceCorrectGuess(
   const base = isWinnerOnlyRound(game, round)
     ? calcRaceWinnerPoints(game, elapsedMs, game.raceTime, round.song.rank)
     : calcRacePoints(game, isFirst, elapsedMs, round.firstCorrectAt! - round.playStartAt!, round.song.rank);
-  const preMultiplier = base + (artistBonus ? base : 0);
-  let points = Math.round(preMultiplier * roundMultiplier(round));
-  if (points > 0) points += pityBonus(currentScores(game), socketId, round);
+  const diffBonus = difficultyBonus(game, round.song.rank);
+  const parts: PointsBreakdownPart[] = [
+    { label: 'Speed', amount: base - diffBonus },
+    { label: 'Difficulty', amount: diffBonus },
+  ];
+  if (artistBonus) parts.push({ label: 'Title + artist bonus', amount: base });
+  const preMultiplier = parts.reduce((sum, p) => sum + p.amount, 0); // === base + (artistBonus ? base : 0)
+  const mult = roundMultiplier(round);
+  let points = Math.round(preMultiplier * mult);
+  let pity = 0;
+  if (points > 0) { pity = pityBonus(currentScores(game), socketId, round); points += pity; }
+  round.pointsBreakdown.set(socketId, buildBreakdown(parts, mult, pity));
   if (isFirst && round.party?.event === 'steal') {
     round.stealBy = socketId;
     round.stealDone = false;
@@ -1611,8 +1645,16 @@ function applyChaosHintTap(
   const base = isWinnerOnlyRound(game, round)
     ? calcRaceWinnerPoints(game, elapsedMs, game.raceTime, round.song.rank)
     : calcRacePoints(game, isFirst, elapsedMs, round.firstCorrectAt! - round.playStartAt!, round.song.rank);
-  let points = Math.round(base * roundMultiplier(round));
-  if (points > 0) points += pityBonus(currentScores(game), socketId, round);
+  const diffBonus = difficultyBonus(game, round.song.rank);
+  const parts: PointsBreakdownPart[] = [
+    { label: 'Speed', amount: base - diffBonus },
+    { label: 'Difficulty', amount: diffBonus },
+  ];
+  const mult = roundMultiplier(round);
+  let points = Math.round(base * mult);
+  let pity = 0;
+  if (points > 0) { pity = pityBonus(currentScores(game), socketId, round); points += pity; }
+  round.pointsBreakdown.set(socketId, buildBreakdown(parts, mult, pity));
   const player = game.players.get(socketId)!;
   player.score += points;
   if (points > 0) {
@@ -1680,13 +1722,20 @@ function scoreYearGuesses(game: Game, round: Round, mult: number, winnerOnly: bo
 
   const results: YearResult[] = entries.map(e => {
     let points = 0;
+    let breakdown: PointsBreakdown | undefined;
     if (e.diff !== null && (!winnerOnly || e.diff === best)) {
-      points = Math.max(0, YEAR_MAX_POINTS - YEAR_POINTS_SLOPE * e.diff);
-      if (e.diff === best) points += Math.round(YEAR_WINNER_BONUS / winners);
-      points = Math.round(points * mult);
+      const parts: PointsBreakdownPart[] = [
+        { label: 'Accuracy', amount: Math.max(0, YEAR_MAX_POINTS - YEAR_POINTS_SLOPE * e.diff) },
+      ];
+      if (e.diff === best) parts.push({ label: 'Closest guess bonus', amount: Math.round(YEAR_WINNER_BONUS / winners) });
+      const preMultiplier = parts.reduce((sum, p) => sum + p.amount, 0);
+      points = Math.round(preMultiplier * mult);
+      let pity = 0;
+      if (points > 0) { pity = pityBonus(preRoundScores, e.id, round); points += pity; }
+      breakdown = buildBreakdown(parts, mult, pity);
+      round.pointsBreakdown.set(e.id, breakdown);
     }
     if (points > 0) {
-      points += pityBonus(preRoundScores, e.id, round);
       e.player.score += points;
       e.player.streak += 1;
       e.player.totalCorrect += 1;
@@ -1694,7 +1743,7 @@ function scoreYearGuesses(game: Game, round: Round, mult: number, winnerOnly: bo
       round.scoredSocketIds.add(e.id);
     }
     const pity = round.pityAwardedTo.has(e.id);
-    return { name: e.player.name, guess: e.guess, diff: e.diff, points, pity, pityAmount: pity ? PITY_BONUS : undefined };
+    return { name: e.player.name, guess: e.guess, diff: e.diff, points, pity, pityAmount: pity ? PITY_BONUS : undefined, breakdown };
   });
 
   results.sort((a, b) => (a.diff ?? 9999) - (b.diff ?? 9999));
@@ -1744,6 +1793,7 @@ function finalizeClassicYearWin(game: Game, round: Round, winnerId: string, winn
       name: e.player.name, guess: e.guess, diff: e.diff,
       points: e.id === winnerId ? winnerPoints : 0,
       pity, pityAmount: pity ? PITY_BONUS : undefined,
+      breakdown: e.id === winnerId ? round.pointsBreakdown.get(winnerId) : undefined,
     };
   });
   results.sort((a, b) => (a.diff ?? 9999) - (b.diff ?? 9999));
