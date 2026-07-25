@@ -136,8 +136,11 @@ export default function Host() {
           </div>
         </FullScreenDialog>
       )}
+      {/* Bottom-left, not bottom-right: the lobby's volume control owns that
+          corner, and this toast can appear in any phase, so giving it its own
+          corner avoids the two having to know about each other. */}
       {reconnectingCount > 0 && !reconnecting && (
-        <div className="fixed bottom-5 right-5 flex items-center gap-2 bg-white/8 backdrop-blur-sm rounded-full px-3 py-1.5 z-40">
+        <div className="fixed bottom-5 left-5 flex items-center gap-2 bg-white/8 backdrop-blur-sm rounded-full px-3 py-1.5 z-40">
           <span className="w-1.5 h-1.5 rounded-full bg-white/50 animate-pulse" />
           <p className="text-white/50 text-xs">
             {reconnectingCount} player{reconnectingCount > 1 ? 's' : ''} reconnecting

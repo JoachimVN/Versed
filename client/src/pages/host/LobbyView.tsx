@@ -314,7 +314,7 @@ function VolumeControl({ volume, setVolume, toggleMute }: Readonly<{
     <div
       onMouseEnter={() => setHovered(true)}
       onMouseLeave={() => setHovered(false)}
-      className="liquid-btn absolute bottom-5 right-5 z-10"
+      className="liquid-btn glass-tint-purple absolute bottom-5 right-5 z-10"
       style={{ width: '148px', height: '44px' }}
     >
       <LiquidGlass
@@ -327,56 +327,65 @@ function VolumeControl({ volume, setVolume, toggleMute }: Readonly<{
         }}
         {...LIQUID_CONTROL_PROPS}
       >
-        <div style={{ display: 'flex', alignItems: 'center', gap: '8px', height: '28px' }}>
-          <button
-            type="button"
-            onClick={toggleMute}
-            tabIndex={0}
-            aria-label={muted ? 'Unmute lobby music' : 'Mute lobby music'}
-            aria-pressed={muted}
-            className="flex items-center justify-center rounded-full flex-shrink-0"
-            style={{
-              width: '28px', height: '28px',
-              background: 'transparent',
-              border: 'none',
-              color: muted ? 'rgba(255,255,255,0.4)' : 'rgba(255,255,255,0.75)',
-              cursor: 'pointer',
-              transition: 'color 0.2s ease',
-            }}
-          >
-            <span style={{ position: 'relative', width: '16px', height: '16px', display: 'inline-block' }}>
-              <Volume2
-                className="w-4 h-4"
-                style={{
-                  position: 'absolute', inset: 0,
-                  opacity: muted ? 0 : 1,
-                  transform: muted ? 'scale(0.6) rotate(-15deg)' : 'scale(1) rotate(0deg)',
-                  transition: 'opacity 0.25s ease, transform 0.25s ease',
-                }}
-              />
-              <VolumeX
-                className="w-4 h-4"
-                style={{
-                  position: 'absolute', inset: 0,
-                  opacity: muted ? 1 : 0,
-                  transform: muted ? 'scale(1) rotate(0deg)' : 'scale(0.6) rotate(15deg)',
-                  transition: 'opacity 0.25s ease, transform 0.25s ease',
-                }}
-              />
-            </span>
-          </button>
-          <input
-            type="range"
-            min={0}
-            max={100}
-            step={1}
-            value={pct}
-            onChange={e => setVolume(Number(e.target.value) / 100)}
-            aria-label="Lobby music volume"
-            aria-valuetext={`${pct} percent`}
-            className="volume-slider"
-            style={{ '--volume-pct': `${pct}%` } as React.CSSProperties}
-          />
+        <div style={{ position: 'relative' }}>
+          {/* Tint overlay, same as every other glass control: negative insets
+              matching LIQUID_CONTROL_PROPS' padding stretch it back over the
+              full pill, since it's a child of the padded content box. */}
+          <div style={{
+            position: 'absolute', inset: '-8px -16px', borderRadius: '100px', pointerEvents: 'none',
+            background: 'rgba(158,18,204,0.10)',
+          }} />
+          <div style={{ position: 'relative', display: 'flex', alignItems: 'center', gap: '8px', height: '28px' }}>
+            <button
+              type="button"
+              onClick={toggleMute}
+              tabIndex={0}
+              aria-label={muted ? 'Unmute lobby music' : 'Mute lobby music'}
+              aria-pressed={muted}
+              className="flex items-center justify-center rounded-full flex-shrink-0"
+              style={{
+                width: '28px', height: '28px',
+                background: 'transparent',
+                border: 'none',
+                color: muted ? 'rgba(255,255,255,0.4)' : 'rgba(255,255,255,0.75)',
+                cursor: 'pointer',
+                transition: 'color 0.2s ease',
+              }}
+            >
+              <span style={{ position: 'relative', width: '16px', height: '16px', display: 'inline-block' }}>
+                <Volume2
+                  className="w-4 h-4"
+                  style={{
+                    position: 'absolute', inset: 0,
+                    opacity: muted ? 0 : 1,
+                    transform: muted ? 'scale(0.6) rotate(-15deg)' : 'scale(1) rotate(0deg)',
+                    transition: 'opacity 0.25s ease, transform 0.25s ease',
+                  }}
+                />
+                <VolumeX
+                  className="w-4 h-4"
+                  style={{
+                    position: 'absolute', inset: 0,
+                    opacity: muted ? 1 : 0,
+                    transform: muted ? 'scale(1) rotate(0deg)' : 'scale(0.6) rotate(15deg)',
+                    transition: 'opacity 0.25s ease, transform 0.25s ease',
+                  }}
+                />
+              </span>
+            </button>
+            <input
+              type="range"
+              min={0}
+              max={100}
+              step={1}
+              value={pct}
+              onChange={e => setVolume(Number(e.target.value) / 100)}
+              aria-label="Lobby music volume"
+              aria-valuetext={`${pct} percent`}
+              className="volume-slider"
+              style={{ '--volume-pct': `${pct}%` } as React.CSSProperties}
+            />
+          </div>
         </div>
       </LiquidGlass>
     </div>
