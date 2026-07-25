@@ -139,6 +139,12 @@ const MYSTERY_CANDIDATES = [1.5, 2, 3, 4, 5, 10];
 // than "the label just changed".
 const MYSTERY_SPIN_STEPS_MS = [55, 65, 80, 95, 115, 140, 170, 205, 245, 290];
 
+function pickMysteryCandidate(candidates: readonly number[]) {
+  const randomValue = new Uint32Array(1);
+  crypto.getRandomValues(randomValue);
+  return candidates[randomValue[0] % candidates.length]!;
+}
+
 // Slot-reel reveal for the mystery multiplier: flickers through a handful of
 // decoy values before settling on the real one, instead of the value just
 // appearing. ×5/×10 (the rare high rolls) keep pulsing gold after landing so
@@ -169,7 +175,7 @@ function MysteryMultiplierChip({ multiplier }: Readonly<{ multiplier: number }>)
         setLanded(true);
         return;
       }
-      setDisplay(pool[Math.floor(Math.random() * pool.length)]);
+      setDisplay(pickMysteryCandidate(pool));
       setTick(t => t + 1);
       timer = setTimeout(step, MYSTERY_SPIN_STEPS_MS[i]);
       i++;
