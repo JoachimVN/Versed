@@ -76,24 +76,46 @@ select:focus-visible,
   outline: none;
 }
 
-/* Pins full-screen layouts to the visible area above an open mobile keyboard
-   instead of letting the keyboard cover them; --app-height is kept in sync
-   by useViewportHeight() via window.visualViewport. An exact height (not
-   just min-height) is required so bottom-anchored flex children (e.g. the
-   guess screen's Submit/Skip buttons) actually land flush with the visible
-   bottom edge instead of the full unshrunk document height.
-   No transition here on purpose: screens without a text input (reveal,
-   leaderboard, etc.) should snap to the current --app-height instantly, not
-   animate — otherwise a keyboard closing on the screen you just navigated
-   away from visibly "rescales" the new screen you land on. Only screens
-   with a focused input opt into the animated version via .keyboard-resize. */
+/* Every page root. Sized to the app shell (--app-height, published by
+   useViewportLayout) minus the safe-area insets, so a page fills exactly the
+   space the shell gives it. An exact height (not just min-height) is what
+   makes bottom-anchored flex children — the guess screen's Submit/Skip
+   buttons, say — land flush with the bottom edge.
+
+   This height does NOT react to an on-screen keyboard, deliberately. The old
+   version shrank every screen to the keyboard-visible height, which meant a
+   button could slide out from under a finger mid-tap (tapping it blurs the
+   input, which grows the screen back) and a keyboard closing on the screen
+   you just left would visibly rescale the screen you landed on. Screens with
+   a text input now get clear of the keyboard themselves with
+   --keyboard-inset (see .keyboard-shift), and nothing else moves at all. */
 .min-h-screen {
   height: calc(var(--app-height, 100vh) - env(safe-area-inset-top, 0px) - env(safe-area-inset-bottom, 0px));
   min-height: calc(var(--app-height, 100vh) - env(safe-area-inset-top, 0px) - env(safe-area-inset-bottom, 0px));
 }
 
-.keyboard-resize {
-  transition: height 0.25s ease, min-height 0.25s ease;
+/* Opt-in easing for the one thing that does move when a keyboard opens: the
+   bottom padding a screen adds to lift its controls clear of it. iOS reports
+   the keyboard height in one jump on older versions and continuously on
+   newer ones, so this smooths the former without fighting the latter.
+   (The reduced-motion block near the bottom of this file already collapses
+   it to nothing for anyone who asks for that.) */
+.keyboard-shift {
+  transition: padding-bottom 0.22s ease-out;
+}
+
+/* Body of a screen that centers its content but must stay reachable when it
+   doesn't fit — the join screen with a keyboard up, mainly. `safe` centering
+   is the load-bearing part: plain `center` splits the overflow above and
+   below, stranding the top of the content where no amount of scrolling
+   reaches it, whereas `safe` falls back to start-alignment the moment the
+   content overflows. Pair with min-height: 100% and a bottom padding of
+   --keyboard-inset on the same element (see JoinView): the padding is inside
+   the border box, so the content area ends up exactly the height of the
+   space above the keyboard, and anything taller becomes scrollable. */
+.screen-center-safe {
+  justify-content: center;
+  justify-content: safe center;
 }
 
 /* liquid-glass-react initializes at a hard-coded 270x69, then measures its
@@ -137,6 +159,24 @@ select:focus-visible,
 .glass-tint-cyan > .liquid-glass-stabilizer > :nth-child(4),
 .glass-tint-cyan > .liquid-glass-stabilizer > :nth-child(5) {
   box-shadow: 0 0 0 1px rgba(0,238,232,0.35) inset, 0 1px 4px rgba(0,0,0,0.35) !important;
+}
+
+/* Volume control's edge ring at half strength — opacity (not just the
+   box-shadow tint above) so the library's own white cursor-tracking sheen on
+   these same spans dims along with it. Without this the sheen stayed at full
+   brightness and the ring still read as a hard white edge. It's small
+   always-on chrome, not a CTA, so the edge should recede. */
+.volume-control-glass > .liquid-glass-stabilizer > :nth-child(4),
+.volume-control-glass > .liquid-glass-stabilizer > :nth-child(5) {
+  box-shadow: 0 0 0 1px rgba(158,18,204,0.35) inset, 0 1px 4px rgba(0,0,0,0.35) !important;
+  opacity: 0.5 !important;
+}
+/* Same control's ambient drop shadow (the library's own `.glass` box-shadow,
+   independent of the tinted ring spans above) at half strength too, so the
+   pill reads as lighter/more see-through overall rather than just a thinner
+   edge. */
+.volume-control-glass .glass {
+  box-shadow: 0px 12px 40px rgba(0, 0, 0, 0.125) !important;
 }
 
 /* Thin, on-brand scrollbar for every scroll container (playlist picker grid,
@@ -450,12 +490,17 @@ select:focus-visible,
 /* Lobby theme-song volume bar (LobbyView.tsx VolumeControl): same bare
    filled-from-left track as .chaos-slider, but a single flat accent color
    instead of a multi-stop gradient since there's no chaos-style spectrum to
-   reveal here. */
+   reveal here.
+   Tuned for sitting inside a LiquidGlass pill rather than on a flat panel:
+   the unfilled remainder is brighter than .chaos-slider's, because the
+   refracted glass underneath is busy enough to swallow a dim track, and the
+   thumb carries a thin white ring so it stays legible wherever it lands over
+   that refraction. */
 .volume-slider {
   -webkit-appearance: none;
   appearance: none;
   width: 80px;
-  height: 24px;
+  height: 28px;
   background: transparent;
   outline: none;
   cursor: pointer;
@@ -464,7 +509,7 @@ select:focus-visible,
   width: 100%;
   height: 4px;
   border-radius: 999px;
-  background: linear-gradient(90deg, #c084fc var(--volume-pct, 100%), rgba(255, 255, 255, 0.14) var(--volume-pct, 100%));
+  background: linear-gradient(90deg, rgba(192, 132, 252, 0.55) var(--volume-pct, 100%), rgba(255, 255, 255, 0.22) var(--volume-pct, 100%));
 }
 .volume-slider::-webkit-slider-thumb {
   -webkit-appearance: none;
@@ -474,16 +519,16 @@ select:focus-visible,
   border-radius: 50%;
   background: white;
   border: none;
-  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.4);
+  box-shadow: 0 0 0 1px rgba(255, 255, 255, 0.4), 0 1px 4px rgba(0, 0, 0, 0.45);
   cursor: pointer;
   margin-top: -5px;
-  transition: transform 0.15s ease;
+  transition: transform 0.15s ease, box-shadow 0.15s ease;
 }
 .volume-slider::-moz-range-track {
   width: 100%;
   height: 4px;
   border-radius: 999px;
-  background: linear-gradient(90deg, #c084fc var(--volume-pct, 100%), rgba(255, 255, 255, 0.14) var(--volume-pct, 100%));
+  background: linear-gradient(90deg, rgba(192, 132, 252, 0.55) var(--volume-pct, 100%), rgba(255, 255, 255, 0.22) var(--volume-pct, 100%));
 }
 .volume-slider::-moz-range-thumb {
   width: 14px;
@@ -491,9 +536,17 @@ select:focus-visible,
   border-radius: 50%;
   background: white;
   border: none;
-  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.4);
+  box-shadow: 0 0 0 1px rgba(255, 255, 255, 0.4), 0 1px 4px rgba(0, 0, 0, 0.45);
   cursor: pointer;
-  transition: transform 0.15s ease;
+  transition: transform 0.15s ease, box-shadow 0.15s ease;
+}
+.volume-slider:hover::-webkit-slider-thumb,
+.volume-slider:focus-visible::-webkit-slider-thumb {
+  box-shadow: 0 0 0 4px rgba(192, 132, 252, 0.28), 0 1px 4px rgba(0, 0, 0, 0.45);
+}
+.volume-slider:hover::-moz-range-thumb,
+.volume-slider:focus-visible::-moz-range-thumb {
+  box-shadow: 0 0 0 4px rgba(192, 132, 252, 0.28), 0 1px 4px rgba(0, 0, 0, 0.45);
 }
 .volume-slider:active::-webkit-slider-thumb,
 .volume-slider:active::-moz-range-thumb {

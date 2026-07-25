@@ -2,7 +2,13 @@
 <html lang="en">
   <head>
     <meta charset="UTF-8" />
-    <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
+    <!-- interactive-widget=resizes-content: when the on-screen keyboard opens,
+         shrink the layout viewport rather than just the visual one, so a page
+         sized to 100% of it is already clear of the keyboard. Supported on
+         Chromium (Android); iOS ignores it and is handled by the
+         --keyboard-inset path in useViewportLayout instead. Stated explicitly
+         so Android doesn't depend on which behaviour the browser defaults to. -->
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover, interactive-widget=resizes-content" />
     <title>Versed</title>
     <link rel="icon" type="image/svg+xml" href="%BASE_URL%favicon.svg" />
     <link rel="icon" type="image/png" sizes="32x32" href="%BASE_URL%favicon.png" />

@@ -20,6 +20,23 @@ export const LIQUID_PILL_PROPS = {
   padding: '18px 36px',
 } as const;
 
+// Small always-on control chrome (the lobby's volume pill) rather than a CTA.
+// Two deliberate departures from LIQUID_PILL_PROPS: displacement is dialled
+// well down, because the refraction is drawn from the element's edges inward
+// and what reads as a gentle bevel across a 310px button swallows something
+// this short; and elasticity is off entirely, since the glass leaning toward
+// the cursor is charming on a button you tap once and distracting on a slider
+// you drag along.
+export const LIQUID_CONTROL_PROPS = {
+  displacementScale: 34,
+  blurAmount: 0.025,
+  saturation: 130,
+  aberrationIntensity: 1.2,
+  elasticity: 0,
+  cornerRadius: 100,
+  padding: '8px 16px',
+} as const;
+
 // Circular "record label" look (Play's waiting-room vinyl card) — same glass
 // character as LIQUID_CARD_PROPS, but cornerRadius is pinned to the
 // library's own "always circular" default (999 — browsers clamp

@@ -99,7 +99,7 @@ export function WaitingView({
           alt={APP_NAME}
           width={2560}
           height={1000}
-          className="w-auto drop-shadow-2xl"
+          className="w-auto drop-shadow-[0_18px_22px_rgba(0,0,0,0.55)]"
           style={{ maxHeight: '140px', maxWidth: '100%', opacity: (morphing || leaving) ? 0 : 1, willChange: 'opacity' }}
         />
 

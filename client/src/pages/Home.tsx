@@ -55,7 +55,7 @@ export default function Home() {
           alt={APP_NAME}
           width={2560}
           height={1000}
-          className="w-auto drop-shadow-2xl"
+          className="w-auto drop-shadow-[0_18px_22px_rgba(0,0,0,0.55)]"
           style={{ maxHeight: '225px', maxWidth: '100%', marginBottom: '50px', opacity: (leaving || morphing) ? 0 : 1, willChange: 'opacity' }}
         />
         <p className="text-white/60 text-lg tracking-wide"></p>

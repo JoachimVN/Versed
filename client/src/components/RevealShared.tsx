@@ -327,8 +327,9 @@ export function YearTimelineContent({ result, showGuessValues = true }: Readonly
   const maxGuess = Math.max(...guesses.map(g => g.guess!));
   const min = Math.min(year, minGuess);
   const max = Math.max(year, maxGuess);
-  const range = max === min ? 1 : max - min;
-  const pos = (y: number) => 11 + ((y - min) / range) * 78;
+  // Everyone (including the actual year) landed on the same value — nothing
+  // to spread across the line, so just center the single marker.
+  const pos = (y: number) => (max === min ? 50 : 11 + ((y - min) / (max - min)) * 78);
 
   // Server presorts yearResults by diff ascending, so the first non-null diff is the best.
   const bestDiff = result.yearResults.find(r => r.diff !== null)?.diff ?? null;

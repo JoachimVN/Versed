@@ -1,12 +1,33 @@
 import { useState, useEffect, useLayoutEffect, useRef } from 'react';
 import LiquidGlass from '../../components/StableLiquidGlass';
 import { useLogoMorph } from '../../contexts/LogoMorph';
-import { useKeyboardOpen } from '../../hooks/useViewportHeight';
+import { useKeyboardOpen } from '../../hooks/useViewportLayout';
 import { BackButton } from '../../components/BackButton';
 import { LIQUID_CARD_PROPS, LIQUID_PILL_PROPS } from '../../components/liquidGlassPresets';
 import { APP_NAME } from '../../config';
 import type { PlayState } from './usePlayGame';
 import { useMorphBack, useWaitingTransitionMorph, pageTransitionClass } from './morph';
+
+// Collapses an element to nothing while the keyboard is up, keeping it
+// mounted (the logo is a LogoMorph anchor, and both of these wrap a
+// LiquidGlass that only measures itself on mount/resize — unmounting either
+// would cost more than it saves). maxHeight is generous enough not to clip
+// anything at rest; it only has to be a finite number for the transition to
+// have something to animate between.
+function collapsedWhenTyping(typing: boolean): React.CSSProperties {
+  return {
+    maxHeight: typing ? 0 : '180px',
+    opacity: typing ? 0 : 1,
+    overflow: 'hidden',
+    pointerEvents: typing ? 'none' : undefined,
+    transition: 'max-height 0.28s ease, opacity 0.2s ease',
+  };
+}
+
+function canJoinGame(showPinField: boolean, pin: string, name: string): boolean {
+  const hasName = name.trim().length > 0;
+  return !showPinField || (pin.length === 3 && hasName);
+}
 
 export function JoinView({ game }: Readonly<{ game: PlayState }>) {
   const { pin, name, error, savedSession, cameFromQR, setPin, setName, join, rejoinSaved } = game;
@@ -21,7 +42,7 @@ export function JoinView({ game }: Readonly<{ game: PlayState }>) {
     if (cameFromQR && error) setPinRevealed(true);
   }, [cameFromQR, error]);
   const showPinField = !cameFromQR || pinRevealed;
-  const canJoin = showPinField ? (pin.length === 3 && name.trim().length > 0) : name.trim().length > 0;
+  const canJoin = canJoinGame(showPinField, pin, name);
   // LiquidGlass only measures its own size once on mount (and on window
   // resize) — it has no ResizeObserver, so it never notices the card growing
   // as the PIN field appears. Re-firing its resize listener lets it
@@ -54,33 +75,54 @@ export function JoinView({ game }: Readonly<{ game: PlayState }>) {
 
   return (
     <div
-      className={`relative min-h-screen keyboard-resize ${pageTransitionClass(leaving, arrivedViaMorph)}`}
-      style={{ zIndex: 1, overflowY: 'auto', pointerEvents: leaving ? 'none' : undefined }}
+      className={`relative min-h-screen ${pageTransitionClass(leaving, arrivedViaMorph)}`}
+      style={{
+        zIndex: 1,
+        // Nothing may scroll while the keyboard is up. Beyond the fact that
+        // an overflow container inside a fixed, keyboard-shrunk viewport
+        // scrolls terribly on iOS, a scrollable page is also what lets Safari
+        // pan the visual viewport — and the background layers behind this are
+        // positioned against the document, so panning slides the page off the
+        // bottom of the confetti into flat body colour. The layout below is
+        // sized to fit exactly, so there is nothing to scroll to anyway.
+        overflowY: keyboardOpen ? 'hidden' : 'auto',
+        overscrollBehavior: 'contain',
+        pointerEvents: leaving ? 'none' : undefined,
+      }}
     >
       <BackButton beforeNavigate={goBack} />
 
-      {/* minHeight (not height) lets this grow past the viewport instead of
-          fighting it for space — centered when it fits, top-to-bottom
-          scrollable overflow (no Safari "unreachable centered overflow"
-          quirk) when the keyboard shrinks the viewport past what fits.
-          Centering splits that overflow between top and bottom though, which
-          traps the Join button under the keyboard with no way to scroll to
-          it — so once a field is focused, align to the top instead, where
-          plain top-to-bottom scrolling reaches everything. */}
-      <div className="flex flex-col items-center p-6 gap-10" style={{ minHeight: '100%', justifyContent: keyboardOpen ? 'flex-start' : 'center' }}>
+      {/* While the keyboard is up this box is pinned to exactly the space
+          above it, so `justify-content: center` centers the card and Join
+          button in what's actually visible. (Reserving the keyboard's height
+          as bottom padding instead looks equivalent but isn't: it leaves the
+          border box a full viewport tall, which is enough to make the page
+          scrollable and hand Safari the pan described above.) The branding
+          collapses so the form fits that space on any phone. */}
+      <div
+        className="screen-center-safe flex flex-col items-center p-6"
+        style={{
+          minHeight: 'calc(100% - var(--keyboard-inset, 0px))',
+          height: 'calc(100% - var(--keyboard-inset, 0px))',
+          gap: keyboardOpen ? '20px' : '40px',
+          transition: 'gap 0.28s ease, height 0.22s ease-out, min-height 0.22s ease-out',
+        }}
+      >
 
-      <img
-        ref={logoRef}
-        src={`${import.meta.env.BASE_URL}logo.png`}
-        alt={APP_NAME}
-        width={2560}
-        height={1000}
-        className="w-auto drop-shadow-2xl"
-        style={{ maxHeight: '128px', maxWidth: '100%', opacity: (morphing || leaving) ? 0 : 1, willChange: 'opacity' }}
-      />
+      <div style={collapsedWhenTyping(keyboardOpen)}>
+        <img
+          ref={logoRef}
+          src={`${import.meta.env.BASE_URL}logo.png`}
+          alt={APP_NAME}
+          width={2560}
+          height={1000}
+          className="w-auto drop-shadow-[0_18px_22px_rgba(0,0,0,0.55)]"
+          style={{ maxHeight: '128px', maxWidth: '100%', opacity: (morphing || leaving) ? 0 : 1, willChange: 'opacity' }}
+        />
+      </div>
 
       {savedSession && (
-        <div className="flex flex-col items-center gap-3">
+        <div className="flex flex-col items-center gap-3" style={collapsedWhenTyping(keyboardOpen)}>
           <button
             type="button"
             onClick={rejoinSaved}
@@ -203,6 +245,11 @@ export function JoinView({ game }: Readonly<{ game: PlayState }>) {
         }}
         onMouseEnter={() => setJoinHovered(true)}
         onMouseLeave={() => setJoinHovered(false)}
+        // Suppressing the default focus transfer keeps the name field focused
+        // through the tap, so the keyboard doesn't start closing (and the
+        // layout doesn't start re-centering) out from under the finger that's
+        // still mid-press. join() unmounts this screen anyway.
+        onMouseDown={e => e.preventDefault()}
         onClick={() => canJoin && join()}
       >
         <LiquidGlass
