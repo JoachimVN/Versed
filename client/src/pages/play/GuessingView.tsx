@@ -47,6 +47,15 @@ function ActiveHeader({ timeLeft, timerTotal, myScore, isRace, isYear, songPlayi
   );
 }
 
+const SKIP_IDLE = { border: 'rgba(255,255,255,0.16)', background: 'rgba(255,255,255,0.05)', color: 'rgba(255,255,255,0.6)' };
+const SKIP_HOVER = { border: 'rgba(255,255,255,0.3)', background: 'rgba(255,255,255,0.1)', color: 'rgba(255,255,255,0.85)' };
+
+function applySkipStyle(el: HTMLElement, s: typeof SKIP_IDLE) {
+  el.style.borderColor = s.border;
+  el.style.background = s.background;
+  el.style.color = s.color;
+}
+
 function guessInputBoxStyle(isListening: boolean, focused: boolean): { border: string; background: string; boxShadow: string } {
   if (isListening) {
     return { border: '1px solid rgba(255,255,255,0.07)', background: 'rgba(255,255,255,0.03)', boxShadow: 'none' };
@@ -336,12 +345,23 @@ export function GuessingView({ game }: Readonly<{ game: PlayState }>) {
           </button>
         )}
 
+        {/* Outlined pill rather than the bare text link this used to be: it
+            reads as something you can press, while staying clearly secondary
+            to the filled glass Submit above it. On the tap-to-answer formats
+            (multiple choice, chaos hints) there is no Submit at all, so this
+            is the only button on the screen and has to look like one. */}
         <button
           type="button"
+          onMouseDown={e => e.preventDefault()}
           onClick={skipGuess}
-          style={{ background: 'none', border: 'none', color: 'rgba(255,255,255,0.28)', fontSize: '0.82rem', cursor: 'pointer', transition: 'color 0.2s ease' }}
-          onMouseEnter={e => { (e.currentTarget as HTMLElement).style.color = 'rgba(255,255,255,0.5)'; }}
-          onMouseLeave={e => { (e.currentTarget as HTMLElement).style.color = 'rgba(255,255,255,0.28)'; }}
+          style={{
+            padding: '13px 34px', borderRadius: '100px', fontFamily: 'inherit',
+            border: `1px solid ${SKIP_IDLE.border}`, background: SKIP_IDLE.background, color: SKIP_IDLE.color,
+            fontSize: '0.92rem', fontWeight: 700, cursor: 'pointer',
+            transition: 'background 0.2s ease, border-color 0.2s ease, color 0.2s ease',
+          }}
+          onMouseEnter={e => applySkipStyle(e.currentTarget, SKIP_HOVER)}
+          onMouseLeave={e => applySkipStyle(e.currentTarget, SKIP_IDLE)}
         >
           Skip, I don't know
         </button>
