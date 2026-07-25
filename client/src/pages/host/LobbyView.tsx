@@ -479,7 +479,7 @@ export function LobbyView({
           alt={APP_NAME}
           width={2560}
           height={1000}
-          className="w-auto"
+          className="w-auto drop-shadow-[0_18px_22px_rgba(0,0,0,0.55)]"
           style={{ maxHeight: '192px', maxWidth: '100%', opacity: morphing ? 0 : 1, willChange: 'opacity' }}
         />
         <span className="text-white/45 text-sm flex items-center gap-2">

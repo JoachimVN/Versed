@@ -125,6 +125,7 @@ export function LogoMorphProvider({ children }: Readonly<{ children: React.React
             height: rect.height,
             zIndex: 50,
             pointerEvents: 'none',
+            filter: 'drop-shadow(0 18px 22px rgba(0,0,0,0.55))',
             transition: animate
               ? `top ${DURATION}ms ${EASING}, left ${DURATION}ms ${EASING}, width ${DURATION}ms ${EASING}, height ${DURATION}ms ${EASING}`
               : 'none',
