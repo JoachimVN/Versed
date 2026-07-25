@@ -76,24 +76,46 @@ select:focus-visible,
   outline: none;
 }
 
-/* Pins full-screen layouts to the visible area above an open mobile keyboard
-   instead of letting the keyboard cover them; --app-height is kept in sync
-   by useViewportHeight() via window.visualViewport. An exact height (not
-   just min-height) is required so bottom-anchored flex children (e.g. the
-   guess screen's Submit/Skip buttons) actually land flush with the visible
-   bottom edge instead of the full unshrunk document height.
-   No transition here on purpose: screens without a text input (reveal,
-   leaderboard, etc.) should snap to the current --app-height instantly, not
-   animate — otherwise a keyboard closing on the screen you just navigated
-   away from visibly "rescales" the new screen you land on. Only screens
-   with a focused input opt into the animated version via .keyboard-resize. */
+/* Every page root. Sized to the app shell (--app-height, published by
+   useViewportLayout) minus the safe-area insets, so a page fills exactly the
+   space the shell gives it. An exact height (not just min-height) is what
+   makes bottom-anchored flex children — the guess screen's Submit/Skip
+   buttons, say — land flush with the bottom edge.
+
+   This height does NOT react to an on-screen keyboard, deliberately. The old
+   version shrank every screen to the keyboard-visible height, which meant a
+   button could slide out from under a finger mid-tap (tapping it blurs the
+   input, which grows the screen back) and a keyboard closing on the screen
+   you just left would visibly rescale the screen you landed on. Screens with
+   a text input now get clear of the keyboard themselves with
+   --keyboard-inset (see .keyboard-shift), and nothing else moves at all. */
 .min-h-screen {
   height: calc(var(--app-height, 100vh) - env(safe-area-inset-top, 0px) - env(safe-area-inset-bottom, 0px));
   min-height: calc(var(--app-height, 100vh) - env(safe-area-inset-top, 0px) - env(safe-area-inset-bottom, 0px));
 }
 
-.keyboard-resize {
-  transition: height 0.25s ease, min-height 0.25s ease;
+/* Opt-in easing for the one thing that does move when a keyboard opens: the
+   bottom padding a screen adds to lift its controls clear of it. iOS reports
+   the keyboard height in one jump on older versions and continuously on
+   newer ones, so this smooths the former without fighting the latter.
+   (The reduced-motion block near the bottom of this file already collapses
+   it to nothing for anyone who asks for that.) */
+.keyboard-shift {
+  transition: padding-bottom 0.22s ease-out;
+}
+
+/* Body of a screen that centers its content but must stay reachable when it
+   doesn't fit — the join screen with a keyboard up, mainly. `safe` centering
+   is the load-bearing part: plain `center` splits the overflow above and
+   below, stranding the top of the content where no amount of scrolling
+   reaches it, whereas `safe` falls back to start-alignment the moment the
+   content overflows. Pair with min-height: 100% and a bottom padding of
+   --keyboard-inset on the same element (see JoinView): the padding is inside
+   the border box, so the content area ends up exactly the height of the
+   space above the keyboard, and anything taller becomes scrollable. */
+.screen-center-safe {
+  justify-content: center;
+  justify-content: safe center;
 }
 
 /* liquid-glass-react initializes at a hard-coded 270x69, then measures its

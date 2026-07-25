@@ -1,7 +1,7 @@
 import { lazy, Suspense, useEffect, useRef } from 'react';
 import { BrowserRouter, Routes, Route, useLocation } from 'react-router-dom';
 import { ConfettiBackground, setConfettiSpeedTarget } from './components/ConfettiBackground';
-import { useViewportHeight } from './hooks/useViewportHeight';
+import { useViewportLayout, useVisualViewportAnchor } from './hooks/useViewportLayout';
 import { LogoMorphProvider } from './contexts/LogoMorph';
 import Home from './pages/Home';
 
@@ -42,7 +42,9 @@ function RouteTracker() {
 }
 
 export default function App() {
-  useViewportHeight();
+  useViewportLayout();
+  const backgroundRef = useRef<HTMLDivElement>(null);
+  useVisualViewportAnchor(backgroundRef);
 
   // Warm the Play chunk right after first paint: the Home -> Play logo morph
   // must not stall on a chunk fetch when someone joins via PIN/QR.
@@ -62,7 +64,14 @@ export default function App() {
           shrunk visual viewport by iOS Safari when the keyboard opens on a
           non-scrolling page like ours, which cut this off at the keyboard's
           edge instead of extending behind it. Absolute positioning isn't
-          subject to that quirk. */}
+          subject to that quirk.
+          The flip side is that they don't follow iOS when it pans the visual
+          viewport with a keyboard up, while the fixed content shell below
+          does — so they're grouped under one wrapper that useVisualViewportAnchor
+          keeps aligned with it. Grouping also matters for the backdrop-filter
+          layers inside: they must stay in the same stacking context as the
+          confetti they blur. */}
+      <div ref={backgroundRef} className="absolute inset-0" style={{ zIndex: 0, willChange: 'transform' }}>
       <div className="absolute inset-0" style={{ background: '#080812', zIndex: 0 }} />
       <div
         className="waiting-background"
@@ -127,10 +136,13 @@ export default function App() {
           }}
         />
       </div>
-      {/* Content layer: shrinks to --app-height so it stays anchored to the
-          top and reflows above the keyboard instead of being covered by it.
-          Offset below the status bar/notch via safe-area-inset-top — with
-          viewport-fit=cover (see index.html) the background above is allowed
+      </div>
+      {/* Content layer: the app shell. Its height (--app-height) is constant
+          across a keyboard opening and closing — screens get clear of the
+          keyboard themselves via --keyboard-inset (see useViewportLayout), so
+          nothing here rescales. Offset below the status bar/notch via
+          safe-area-inset-top — with viewport-fit=cover (see index.html) the
+          background above is allowed
           to paint full-bleed under the notch and home indicator, but this
           layer (and everything in it: back buttons, nav, etc.) should stay
           clear of them, so it starts below the inset instead of at the true

@@ -245,19 +245,29 @@ export function GuessingView({ game }: Readonly<{ game: PlayState }>) {
   }
 
   return (
-    <div className="relative min-h-screen keyboard-resize flex flex-col overflow-hidden" style={{ background: '#080812' }}>
+    <div className="relative min-h-screen flex flex-col overflow-hidden" style={{ background: '#080812' }}>
       <img src={`${import.meta.env.BASE_URL}background4.svg`} alt="" aria-hidden="true" style={{ position: 'fixed', inset: 0, width: '100%', height: '100%', objectFit: 'cover', zIndex: 0, transform: 'rotate(180deg)' }} />
       <div style={{ position: 'fixed', inset: 0, zIndex: 1, background: 'rgba(5,5,14,0.82)', backdropFilter: 'blur(28px)' }} />
 
-      <div className="relative flex flex-col flex-1" style={{ zIndex: 2 }}>
+      {/* Reserving the keyboard's height at the bottom is what keeps Submit and
+          Skip tappable: the screen itself never resizes, the column just gets
+          shorter, so the header stays put and the input area in the middle
+          takes the squeeze (and scrolls if it runs out of room). */}
+      <div className="relative flex flex-col flex-1 keyboard-shift" style={{ zIndex: 2, minHeight: 0, paddingBottom: 'var(--keyboard-inset, 0px)' }}>
 
       {/* Header: waveform while listening, timer + score when active */}
       {isListening
         ? <ListeningHeader songPlaying={songPlaying} songTempo={songTempo} isYear={isYear} />
         : <ActiveHeader timeLeft={timeLeft} timerTotal={timerTotal} myScore={myScore} isRace={mode === 'race'} isYear={isYear} songPlaying={songPlaying} songTempo={songTempo} />}
 
-      {/* Input area */}
-      <div className="flex-1 flex flex-col items-center justify-center gap-5 px-5">
+      {/* Input area. min-h-0 lets it actually shrink when the keyboard takes
+          the bottom of the column, and scrolling is the escape hatch for the
+          tightest case (a "both" round on a short phone, where the title and
+          artist fields together outgrow what's left). overscroll-behavior
+          keeps a drag that reaches the end of it from chaining outwards into
+          an iOS visual-viewport pan, which would slide the whole screen off
+          the bottom of the background. */}
+      <div className="flex-1 flex flex-col items-center justify-center gap-5 px-5 overflow-y-auto" style={{ minHeight: 0, overscrollBehavior: 'contain' }}>
         {party && <PartyBadge party={party} />}
         <p style={{
           color: isListening ? 'rgba(255,255,255,0.45)' : 'rgba(255,255,255,0.6)',
@@ -306,6 +316,10 @@ export function GuessingView({ game }: Readonly<{ game: PlayState }>) {
               cursor: canSubmit ? 'pointer' : 'not-allowed',
               transition: 'opacity 0.25s ease',
             }}
+            // Don't let the press pull focus off the guess field: the keyboard
+            // would start closing mid-tap and the layout would grow back under
+            // the finger. submitGuess() blurs it deliberately afterwards.
+            onMouseDown={e => e.preventDefault()}
             onClick={() => canSubmit && submitGuess()}
           >
             <LiquidGlass
