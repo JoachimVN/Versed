@@ -24,6 +24,11 @@ function collapsedWhenTyping(typing: boolean): React.CSSProperties {
   };
 }
 
+function canJoinGame(showPinField: boolean, pin: string, name: string): boolean {
+  const hasName = name.trim().length > 0;
+  return !showPinField || (pin.length === 3 && hasName);
+}
+
 export function JoinView({ game }: Readonly<{ game: PlayState }>) {
   const { pin, name, error, savedSession, cameFromQR, setPin, setName, join, rejoinSaved } = game;
   const [joinHovered, setJoinHovered] = useState(false);
@@ -37,7 +42,7 @@ export function JoinView({ game }: Readonly<{ game: PlayState }>) {
     if (cameFromQR && error) setPinRevealed(true);
   }, [cameFromQR, error]);
   const showPinField = !cameFromQR || pinRevealed;
-  const canJoin = showPinField ? (pin.length === 3 && name.trim().length > 0) : name.trim().length > 0;
+  const canJoin = canJoinGame(showPinField, pin, name);
   // LiquidGlass only measures its own size once on mount (and on window
   // resize) — it has no ResizeObserver, so it never notices the card growing
   // as the PIN field appears. Re-firing its resize listener lets it
