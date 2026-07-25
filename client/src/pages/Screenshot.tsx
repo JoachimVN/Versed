@@ -230,6 +230,7 @@ const MOCK_PLAY: PlayState = {
   myScoreDelta: 0,
   myPity: false,
   myPityAmount: 0,
+  myBreakdown: null,
   myStreak: 0,
   mode: 'classic',
   artistOnly: false,

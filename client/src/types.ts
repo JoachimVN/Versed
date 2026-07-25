@@ -38,6 +38,20 @@ export interface PlayerInfo {
   pityAmount?: number;
 }
 
+// Mirrors server/src/types.ts's PointsBreakdownPart/PointsBreakdown.
+export interface PointsBreakdownPart {
+  label: string;
+  amount: number;
+}
+
+export interface PointsBreakdown {
+  parts: PointsBreakdownPart[];
+  multiplier: number;
+  multiplierBonus: number;
+  pity: number;
+  total: number;
+}
+
 // Mirrors server/src/types.ts's PartyEvent — kept in sync by hand, no shared
 // import between the two workspaces.
 export type PartyEvent = 'double' | 'mystery' | 'steal' | 'snippet' | 'fullhints' | 'blind' | 'outro' | 'underdog' | 'chaoshints';
@@ -68,6 +82,7 @@ export interface YearResult {
   points: number;
   pity: boolean;
   pityAmount?: number;
+  breakdown?: PointsBreakdown;
 }
 
 export interface RoundResultEvent {

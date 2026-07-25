@@ -185,11 +185,15 @@ export function songFields(game: Game, round: Round) {
 }
 
 export function emitScoreUpdate(game: Game) {
-  const pityAwardedTo = game.currentRound?.pityAwardedTo;
+  const round = game.currentRound;
+  const pityAwardedTo = round?.pityAwardedTo;
   getIo().to(game.pin).emit('score_update', {
     players: Array.from(game.players.values()).map(p => {
       const pity = pityAwardedTo?.has(p.socketId) ?? false;
-      return { name: p.name, score: p.score, streak: p.streak, pity, pityAmount: pity ? gm.PITY_BONUS : undefined };
+      return {
+        name: p.name, score: p.score, streak: p.streak, pity, pityAmount: pity ? gm.PITY_BONUS : undefined,
+        breakdown: round?.pointsBreakdown.get(p.socketId),
+      };
     }),
   });
 }

@@ -102,6 +102,30 @@ export interface YearResult {
   points: number;
   pity: boolean;
   pityAmount?: number;              // set alongside pity: true — the flat catch-up amount, so the UI can break it out of `points`
+  breakdown?: PointsBreakdown;      // same total as `points`, itemized — undefined when points is 0
+}
+
+// One named component of a scoring payout (e.g. "Bid bonus", "Difficulty",
+// "Title + artist bonus") — pre-multiplier, so the client can show players
+// exactly where their points came from instead of a single opaque total.
+export interface PointsBreakdownPart {
+  label: string;
+  amount: number;
+}
+
+// Full itemization of a single scoring payout. `parts` sum to the
+// pre-multiplier subtotal; `multiplierBonus` is what the event multiplier
+// (double/mystery/underdog) added on top of that subtotal, and `pity` is
+// added after the multiplier (it's a flat catch-up, not scaled by it).
+// `total` always equals round(sum(parts) * multiplier) + pity, matching the
+// `points` value awarded alongside it — never recomputed independently on
+// the client, just displayed.
+export interface PointsBreakdown {
+  parts: PointsBreakdownPart[];
+  multiplier: number;
+  multiplierBonus: number;
+  pity: number;
+  total: number;
 }
 
 // Bidders grouped by bid value. Tiers are played in ascending bid order: the
@@ -152,6 +176,7 @@ export interface Round {
   correctGuesserName?: string;      // classic mode: name of the player who got it right
   scoredSocketIds: Set<string>;     // players who earned points this round — everyone else's streak resets when the round ends
   pityAwardedTo: Set<string>;       // players whose score this round included the catch-up pity bonus
+  pointsBreakdown: Map<string, PointsBreakdown>; // socketId → itemization of the points they earned this round
   // Race-mode fields
   playStartAt: number | null;      // epoch ms when audio started
   firstCorrectAt: number | null;   // epoch ms of first correct guess (decay origin)

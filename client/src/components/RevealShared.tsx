@@ -1,7 +1,38 @@
 import { Check, Trophy, X, Zap, Timer, TrendingUp, Swords } from 'lucide-react';
 import LiquidGlass from './StableLiquidGlass';
-import type { Award, RoundResultEvent } from '../types';
+import type { Award, PointsBreakdown, RoundResultEvent } from '../types';
 import { LIQUID_PILL_PROPS } from './liquidGlassPresets';
+
+// One line per non-zero component of a payout, in earn order: named parts,
+// then the multiplier's own contribution, then pity last (it's added after
+// the multiplier, not scaled by it). Omits the multiplier/pity lines
+// entirely on a plain round where neither applied — everyone still sees
+// where their base/bid/difficulty points came from either way.
+export function breakdownLines(b: PointsBreakdown): string[] {
+  const lines = b.parts.filter(p => p.amount !== 0).map(p => `${p.label} +${p.amount.toLocaleString()}`);
+  if (b.multiplier !== 1) lines.push(`×${b.multiplier} multiplier +${b.multiplierBonus.toLocaleString()}`);
+  if (b.pity > 0) lines.push(`Pity +${b.pity.toLocaleString()}`);
+  return lines;
+}
+
+export function breakdownCompact(b: PointsBreakdown): string {
+  return breakdownLines(b).join(' · ');
+}
+
+// Stacked itemization shown under a player's own score pill — every round,
+// not just ones with a bonus, so "where did my points come from" always has
+// an answer instead of only showing up when something unusual happened.
+export function PointsBreakdownList({ breakdown }: Readonly<{ breakdown: PointsBreakdown }>) {
+  const lines = breakdownLines(breakdown);
+  if (lines.length === 0) return null;
+  return (
+    <div className="flex flex-col items-center gap-0.5" style={{ marginTop: '2px' }}>
+      {lines.map(l => (
+        <p key={l} className="text-white/40 text-[0.66rem] tabular-nums leading-tight">{l}</p>
+      ))}
+    </div>
+  );
+}
 
 // 'fastestGuess' (race-flow timing) and 'fastestClassicGuess' (classic
 // bid/tier timing) are separate awards, not merged into one — the two flows
