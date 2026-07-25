@@ -4,7 +4,7 @@ import LiquidGlass from '../../components/StableLiquidGlass';
 import { useLogoMorph } from '../../contexts/LogoMorph';
 import { MIN_PLAYLIST_TRACKS } from '../../hooks/usePlaylistPicker';
 import { BackButton } from '../../components/BackButton';
-import { LIQUID_PILL_PROPS } from '../../components/liquidGlassPresets';
+import { LIQUID_CONTROL_PROPS, LIQUID_PILL_PROPS } from '../../components/liquidGlassPresets';
 import { APP_NAME } from '../../config';
 import type { PlayerInfo } from '../../types';
 import { mergePlaylistTracks, type HostState, type Mode } from './useHostGame';
@@ -308,66 +308,77 @@ function VolumeControl({ volume, setVolume, toggleMute }: Readonly<{
   const [hovered, setHovered] = useState(false);
   const pct = Math.round(volume * 100);
   return (
+    // Sized to the glass rather than the other way round: LiquidGlass centres
+    // itself on this box, so its width/height must be the content (28px icon +
+    // 8px gap + 80px track) plus LIQUID_CONTROL_PROPS' padding.
     <div
       onMouseEnter={() => setHovered(true)}
       onMouseLeave={() => setHovered(false)}
-      className="absolute bottom-5 right-5 flex items-center gap-1 rounded-full transition-all duration-200 z-10"
-      style={{
-        background: hovered ? 'rgba(255,255,255,0.11)' : 'rgba(255,255,255,0.06)',
-        border: '1px solid rgba(255,255,255,0.10)',
-        backdropFilter: 'blur(12px)',
-        paddingRight: '14px',
-        height: '38px',
-      }}
+      className="liquid-btn absolute bottom-5 right-5 z-10"
+      style={{ width: '148px', height: '44px' }}
     >
-      <button
-        type="button"
-        onClick={toggleMute}
-        tabIndex={0}
-        aria-label={muted ? 'Unmute lobby music' : 'Mute lobby music'}
-        aria-pressed={muted}
-        className="flex items-center justify-center rounded-full flex-shrink-0"
+      <LiquidGlass
         style={{
-          width: '38px', height: '38px',
-          background: 'transparent',
-          border: 'none',
-          color: muted ? 'rgba(255,255,255,0.4)' : 'rgba(255,255,255,0.7)',
-          cursor: 'pointer',
+          position: 'absolute', top: '50%', left: '50%',
+          // Matches how the CTA pills announce hover — a glow around the glass
+          // itself — instead of the flat panel tint this control used to have.
+          filter: hovered ? 'drop-shadow(0 0 10px rgba(192,132,252,0.4))' : 'drop-shadow(0 0 0px rgba(192,132,252,0))',
+          transition: 'filter 0.25s ease',
         }}
+        {...LIQUID_CONTROL_PROPS}
       >
-        <span style={{ position: 'relative', width: '16px', height: '16px', display: 'inline-block' }}>
-          <Volume2
-            className="w-4 h-4"
+        <div style={{ display: 'flex', alignItems: 'center', gap: '8px', height: '28px' }}>
+          <button
+            type="button"
+            onClick={toggleMute}
+            tabIndex={0}
+            aria-label={muted ? 'Unmute lobby music' : 'Mute lobby music'}
+            aria-pressed={muted}
+            className="flex items-center justify-center rounded-full flex-shrink-0"
             style={{
-              position: 'absolute', inset: 0,
-              opacity: muted ? 0 : 1,
-              transform: muted ? 'scale(0.6) rotate(-15deg)' : 'scale(1) rotate(0deg)',
-              transition: 'opacity 0.25s ease, transform 0.25s ease',
+              width: '28px', height: '28px',
+              background: 'transparent',
+              border: 'none',
+              color: muted ? 'rgba(255,255,255,0.4)' : 'rgba(255,255,255,0.75)',
+              cursor: 'pointer',
+              transition: 'color 0.2s ease',
             }}
+          >
+            <span style={{ position: 'relative', width: '16px', height: '16px', display: 'inline-block' }}>
+              <Volume2
+                className="w-4 h-4"
+                style={{
+                  position: 'absolute', inset: 0,
+                  opacity: muted ? 0 : 1,
+                  transform: muted ? 'scale(0.6) rotate(-15deg)' : 'scale(1) rotate(0deg)',
+                  transition: 'opacity 0.25s ease, transform 0.25s ease',
+                }}
+              />
+              <VolumeX
+                className="w-4 h-4"
+                style={{
+                  position: 'absolute', inset: 0,
+                  opacity: muted ? 1 : 0,
+                  transform: muted ? 'scale(1) rotate(0deg)' : 'scale(0.6) rotate(15deg)',
+                  transition: 'opacity 0.25s ease, transform 0.25s ease',
+                }}
+              />
+            </span>
+          </button>
+          <input
+            type="range"
+            min={0}
+            max={100}
+            step={1}
+            value={pct}
+            onChange={e => setVolume(Number(e.target.value) / 100)}
+            aria-label="Lobby music volume"
+            aria-valuetext={`${pct} percent`}
+            className="volume-slider"
+            style={{ '--volume-pct': `${pct}%` } as React.CSSProperties}
           />
-          <VolumeX
-            className="w-4 h-4"
-            style={{
-              position: 'absolute', inset: 0,
-              opacity: muted ? 1 : 0,
-              transform: muted ? 'scale(1) rotate(0deg)' : 'scale(0.6) rotate(15deg)',
-              transition: 'opacity 0.25s ease, transform 0.25s ease',
-            }}
-          />
-        </span>
-      </button>
-      <input
-        type="range"
-        min={0}
-        max={100}
-        step={1}
-        value={pct}
-        onChange={e => setVolume(Number(e.target.value) / 100)}
-        aria-label="Lobby music volume"
-        aria-valuetext={`${pct} percent`}
-        className="volume-slider"
-        style={{ '--volume-pct': `${pct}%` } as React.CSSProperties}
-      />
+        </div>
+      </LiquidGlass>
     </div>
   );
 }
