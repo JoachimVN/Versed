@@ -98,7 +98,7 @@ export function JoinView({ game }: Readonly<{ game: PlayState }>) {
         className="screen-center-safe flex flex-col items-center p-6"
         style={{
           minHeight: 'calc(100% - var(--keyboard-inset, 0px))',
-          height: keyboardOpen ? 'calc(100% - var(--keyboard-inset, 0px))' : undefined,
+          height: 'calc(100% - var(--keyboard-inset, 0px))',
           gap: keyboardOpen ? '20px' : '40px',
           transition: 'gap 0.28s ease, height 0.22s ease-out, min-height 0.22s ease-out',
         }}
