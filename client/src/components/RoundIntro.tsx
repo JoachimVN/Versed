@@ -156,51 +156,6 @@ function pickMysteryCandidate(candidates: readonly number[]) {
 // full ring so it reads as an explosion rather than a directional flick.
 const MEGA_SPARK_ANGLES = [0, 45, 90, 135, 180, 225, 270, 315];
 
-// One-shot tone with a short exponential attack/decay envelope. Exponential
-// ramps can't target exactly 0 (Web Audio throws), hence the 0.0001 floor.
-function playTone(ctx: AudioContext, freq: number, type: OscillatorType, startOffset: number, duration: number, peakGain: number) {
-  const osc = ctx.createOscillator();
-  const gain = ctx.createGain();
-  osc.type = type;
-  osc.frequency.value = freq;
-  const t0 = ctx.currentTime + startOffset;
-  gain.gain.setValueAtTime(0.0001, t0);
-  gain.gain.exponentialRampToValueAtTime(peakGain, t0 + 0.012);
-  gain.gain.exponentialRampToValueAtTime(0.0001, t0 + duration);
-  osc.connect(gain).connect(ctx.destination);
-  osc.start(t0);
-  osc.stop(t0 + duration + 0.02);
-}
-
-// Synthesized landing cue, tiered with the visual payoff: every roll gets a
-// soft ding, ×5 gets a two-note chime with a shimmer layer, and the rare ×10
-// gets a sub "thump" for weight plus a rising major-chord arpeggio (with an
-// octave-up shimmer doubling each note) so it reads as the jackpot.
-function playMysteryChime(ctx: AudioContext, tier: 'normal' | 'jackpot' | 'mega') {
-  if (tier === 'normal') {
-    playTone(ctx, 784, 'sine', 0, 0.22, 0.16);
-    return;
-  }
-  if (tier === 'jackpot') {
-    playTone(ctx, 587, 'sine', 0, 0.18, 0.18);
-    playTone(ctx, 784, 'sine', 0.09, 0.28, 0.2);
-    playTone(ctx, 784, 'triangle', 0.09, 0.28, 0.05);
-    return;
-  }
-  playTone(ctx, 90, 'sine', 0, 0.35, 0.3);
-  const notes = [523.25, 659.25, 783.99, 1046.5];
-  notes.forEach((f, i) => {
-    playTone(ctx, f, 'triangle', 0.05 + i * 0.075, 0.3, 0.18);
-    playTone(ctx, f * 2, 'sine', 0.05 + i * 0.075, 0.2, 0.05);
-  });
-}
-
-function mysteryTier(multiplier: number): 'normal' | 'jackpot' | 'mega' {
-  if (multiplier === 10) return 'mega';
-  if (multiplier >= 5) return 'jackpot';
-  return 'normal';
-}
-
 function mysteryValueFontSize(landed: boolean, superJackpot: boolean): string {
   if (!landed) return '1.9rem';
   return superJackpot ? '2.5rem' : '2.2rem';
@@ -218,30 +173,11 @@ function MysteryMultiplierChip({ multiplier }: Readonly<{ multiplier: number }>)
   const [tick, setTick] = useState(0);
   const [landed, setLanded] = useState(false);
   const [reducedMotion] = useState(() => globalThis.matchMedia('(prefers-reduced-motion: reduce)').matches);
-  const audioCtxRef = useRef<AudioContext | null>(null);
-
-  // A dedicated AudioContext for this chip rather than reusing useSoundEffect
-  // (which fetches/decodes a file) — these tones are synthesized, no asset to
-  // load. Same resume-on-gesture dance since the context starts suspended.
-  useEffect(() => {
-    const ctx = new AudioContext();
-    audioCtxRef.current = ctx;
-    const resume = () => { ctx.resume().catch(() => {}); };
-    document.addEventListener('pointerdown', resume);
-    document.addEventListener('keydown', resume);
-    return () => {
-      document.removeEventListener('pointerdown', resume);
-      document.removeEventListener('keydown', resume);
-      ctx.close().catch(() => {});
-    };
-  }, []);
 
   useEffect(() => {
-    const tier = mysteryTier(multiplier);
     if (reducedMotion) {
       setDisplay(multiplier);
       setLanded(true);
-      if (audioCtxRef.current) playMysteryChime(audioCtxRef.current, tier);
       return;
     }
     setLanded(false);
@@ -254,7 +190,6 @@ function MysteryMultiplierChip({ multiplier }: Readonly<{ multiplier: number }>)
       if (i >= MYSTERY_SPIN_STEPS_MS.length) {
         setDisplay(multiplier);
         setLanded(true);
-        if (audioCtxRef.current) playMysteryChime(audioCtxRef.current, tier);
         return;
       }
       setDisplay(pickMysteryCandidate(pool));
@@ -327,10 +262,10 @@ function MysteryMultiplierChip({ multiplier }: Readonly<{ multiplier: number }>)
           ? 'linear-gradient(to bottom left, rgba(251,191,36,0.6) 0%, transparent 55%), linear-gradient(to top right, rgba(255,221,120,0.55) 0%, transparent 55%), #fff'
           : 'linear-gradient(to bottom left, rgba(0,238,232,0.5) 0%, transparent 55%), linear-gradient(to top right, rgba(158,18,204,0.55) 0%, transparent 55%), #fff',
         WebkitBackgroundClip: 'text', WebkitTextFillColor: 'transparent', backgroundClip: 'text',
-        // Same reasoning as the year reveal (YearReveal.tsx): a decoy tick
-        // at full clarity could be mistaken for the real multiplier by
-        // anyone glancing at exactly the wrong instant.
-        filter: landed ? undefined : 'blur(3px)',
+        // The chip itself pulses while a sharp, dim value rolls through it;
+        // a clear reel motion communicates that this is a decoy without
+        // obscuring the number.
+        animation: landed ? undefined : 'slotReelTick 0.14s ease-out',
       }}>
         ×{display}
       </span>
