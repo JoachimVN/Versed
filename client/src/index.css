@@ -380,8 +380,8 @@ select:focus-visible,
    from --mystery-glow-color (set inline per tier in RoundIntro.tsx) so gold
    (x5-x9) and violet (x10) share this exact animation. */
 @keyframes mysteryJackpotGlow {
-  0%, 100% { box-shadow: 0 0 0 0 var(--mystery-glow-color, rgba(251,191,36,0.5)); }
-  50%       { box-shadow: 0 0 24px 8px var(--mystery-glow-color, rgba(251,191,36,0.5)); }
+  0%, 100% { box-shadow: 0 0 0 0 var(--mystery-glow-color, rgba(251,191,36,0.35)); }
+  50%       { box-shadow: 0 0 16px 4px var(--mystery-glow-color, rgba(251,191,36,0.35)); }
 }
 
 /* A player's round delta clears BIG_POINTS_THRESHOLD (RevealShared.tsx): one

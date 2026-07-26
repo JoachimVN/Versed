@@ -182,21 +182,21 @@ const MYSTERY_COLORS: Record<MysteryTier, {
     border: 'rgba(255,255,255,0.14)',
     label: 'rgba(94,234,212,0.9)',
     valueGradient: 'linear-gradient(to bottom left, rgba(0,238,232,0.5) 0%, transparent 55%), linear-gradient(to top right, rgba(158,18,204,0.55) 0%, transparent 55%), #fff',
-    glow: 'rgba(251,191,36,0.5)', // unused — base tier never plays mysteryJackpotGlow
+    glow: 'rgba(251,191,36,0.35)', // unused — base tier never plays mysteryJackpotGlow
   },
   gold: {
     background: 'linear-gradient(155deg, rgba(251,191,36,0.24) 0%, rgba(217,119,6,0.08) 55%, rgba(255,255,255,0.04) 100%)',
     border: 'rgba(251,191,36,0.4)',
     label: 'rgba(253,224,71,0.9)',
     valueGradient: 'linear-gradient(to bottom left, rgba(251,191,36,0.6) 0%, transparent 55%), linear-gradient(to top right, rgba(255,221,120,0.55) 0%, transparent 55%), #fff',
-    glow: 'rgba(251,191,36,0.5)',
+    glow: 'rgba(251,191,36,0.35)',
   },
   violet: {
     background: 'linear-gradient(155deg, rgba(217,70,239,0.24) 0%, rgba(126,34,206,0.08) 55%, rgba(255,255,255,0.04) 100%)',
     border: 'rgba(217,70,239,0.4)',
     label: 'rgba(240,171,252,0.9)',
     valueGradient: 'linear-gradient(to bottom left, rgba(217,70,239,0.6) 0%, transparent 55%), linear-gradient(to top right, rgba(240,171,252,0.55) 0%, transparent 55%), #fff',
-    glow: 'rgba(217,70,239,0.5)',
+    glow: 'rgba(217,70,239,0.35)',
   },
 };
 
