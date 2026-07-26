@@ -71,7 +71,7 @@ function guessInputBoxStyle(isListening: boolean, focused: boolean): { border: s
 function ChoiceButtons({ options, onPick, disabled }: Readonly<{ options: string[]; onPick: (option: string) => void; disabled?: boolean }>) {
   const style = guessInputBoxStyle(false, false);
   return (
-    <div className="w-full grid grid-cols-2 gap-3">
+    <div className="w-full grid grid-cols-2 gap-3" style={{ flexShrink: 0 }}>
       {options.map(option => (
         <button
           key={option}
@@ -100,7 +100,7 @@ function ChoiceButtons({ options, onPick, disabled }: Readonly<{ options: string
 function ChaosHintButtons({ hints, onPick, disabled }: Readonly<{ hints: Hint[]; onPick: (index: number) => void; disabled?: boolean }>) {
   const style = guessInputBoxStyle(false, false);
   return (
-    <div className="w-full grid grid-cols-2 gap-2.5">
+    <div className="w-full grid grid-cols-2 gap-2.5" style={{ flexShrink: 0 }}>
       {hints.map((h, i) => (
         <button
           key={h.label}
@@ -203,7 +203,7 @@ export function GuessingView({ game }: Readonly<{ game: PlayState }>) {
     guessControl = <ChoiceButtons options={options} onPick={submitChoice} />;
   } else if (isYear) {
     guessControl = (
-      <div style={{ position: 'relative' }}>
+      <div style={{ position: 'relative', flexShrink: 0 }}>
         <YearDigitBoxes value={guessText} focused={inputFocused} />
         <input
           ref={guessInputRef}
@@ -226,7 +226,7 @@ export function GuessingView({ game }: Readonly<{ game: PlayState }>) {
   } else {
     guessControl = (
       <div style={{
-        width: '100%', borderRadius: '16px', overflow: 'hidden',
+        width: '100%', borderRadius: '16px', overflow: 'hidden', flexShrink: 0,
         border: inputBoxStyle.border,
         background: inputBoxStyle.background,
         boxShadow: inputBoxStyle.boxShadow,
@@ -290,7 +290,7 @@ export function GuessingView({ game }: Readonly<{ game: PlayState }>) {
 
         {target === 'both' && (
           <div style={{
-            width: '100%', borderRadius: '14px', overflow: 'hidden',
+            width: '100%', borderRadius: '14px', overflow: 'hidden', flexShrink: 0,
             border: '1px solid rgba(0,238,232,0.25)',
             background: 'rgba(0,238,232,0.05)',
           }}>
