@@ -656,6 +656,7 @@ export function useHostGame(): HostState {
       setPin(p);
       sessionStorage.setItem('versed_host_pin', p);
       setPlayers([]);
+      playersRef.current = [];
       setLeaderboard([]);
       setResult(null);
       setRoundIndex(0);
