@@ -35,14 +35,20 @@ export function useMorphBack(
 
 // The transition was cancelled mid-flight (a server event reset the pending
 // flag before the waiting-transition timer fired — e.g. the host
-// disconnected during the handoff) — resolve the overlay in place instead
-// of leaving it, and the shared `morphing` flag, stranded forever.
+// disconnected during the handoff, or a rejoin landed straight into an
+// already-started round and skipped the waiting screen entirely) — resolve
+// the overlay in place instead of leaving it, and the shared `morphing`
+// flag, stranded forever. If JoinView has already unmounted by the time this
+// runs (the skip-straight-to-a-live-round case), there's no logo left to
+// read a rect from — dismiss the overlay outright rather than silently no-op
+// and leave it stuck on top of the real screen.
 export function cancelPendingWaitingTransition(
   pageExitTimerRef: RefObject<ReturnType<typeof setTimeout> | null>,
   transitionTimerRef: RefObject<ReturnType<typeof setTimeout> | null>,
   logoRef: RefObject<HTMLImageElement | null>,
   setLeaving: (v: boolean) => void,
   provideTarget: ProvideTarget,
+  dismissMorph: () => void,
 ) {
   if (!pageExitTimerRef.current && !transitionTimerRef.current) return;
   if (pageExitTimerRef.current) clearTimeout(pageExitTimerRef.current);
@@ -53,6 +59,8 @@ export function cancelPendingWaitingTransition(
   if (logoRef.current) {
     const cur = logoRef.current.getBoundingClientRect();
     provideTarget({ top: cur.top, left: cur.left, width: cur.width, height: cur.height });
+  } else {
+    dismissMorph();
   }
 }
 
@@ -70,6 +78,7 @@ export function useWaitingTransitionMorph(
   beginMorph: BeginMorph,
   provideTarget: ProvideTarget,
   reducedMotion: boolean,
+  dismissMorph: () => void,
 ) {
   const pageExitTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const transitionTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -99,6 +108,7 @@ export function useWaitingTransitionMorph(
       logoRef,
       setLeaving,
       provideTarget,
+      dismissMorph,
     );
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [game.waitingTransitionPending]);

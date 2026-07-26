@@ -1,5 +1,5 @@
 import type { ReactNode } from 'react';
-import { useSearchParams } from 'react-router-dom';
+import { useSearchParams } from 'react-router';
 import { PlayingView } from './host/PlayingView';
 import { RevealView } from './host/RevealView';
 import { LobbyView } from './host/LobbyView';

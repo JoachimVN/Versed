@@ -1,5 +1,5 @@
 import { lazy, Suspense, useEffect, useRef } from 'react';
-import { BrowserRouter, Routes, Route, useLocation } from 'react-router-dom';
+import { BrowserRouter, Routes, Route, useLocation } from 'react-router';
 import { ConfettiBackground, setConfettiSpeedTarget } from './components/ConfettiBackground';
 import { useViewportLayout, useVisualViewportAnchor } from './hooks/useViewportLayout';
 import { LogoMorphProvider } from './contexts/LogoMorph';

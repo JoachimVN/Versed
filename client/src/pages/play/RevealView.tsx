@@ -1,8 +1,9 @@
-import { Flame, Zap } from 'lucide-react';
+import { Flame } from 'lucide-react';
 import LiquidGlass from '../../components/StableLiquidGlass';
 import { useAnimatedScore } from '../../hooks/useAnimatedScore';
-import { BIG_POINTS_THRESHOLD, FinalRoundAnswerContent, NoOneGotItCardContent, GotItCardContent, YearTimelineContent, PointsBreakdownList, breakdownCompact } from '../../components/RevealShared';
-import { PartyRevealExtras } from '../../components/RoundIntro';
+import { BIG_POINTS_THRESHOLD, FinalRoundAnswerContent, NoOneGotItCardContent, GotItCardContent, PointsBreakdownList, breakdownCompact } from '../../components/RevealShared';
+import { YearTimelineContent } from '../../components/YearReveal';
+import { PartyRevealExtras, MYSTERY_LANDING_MS } from '../../components/RoundIntro';
 import { LIQUID_CARD_PROPS } from '../../components/liquidGlassPresets';
 import type { RoundResultEvent } from '../../types';
 import type { PlayState } from './usePlayGame';
@@ -18,6 +19,18 @@ function guessTextClass(guess: string | null, correct: boolean): string {
 function artistGuessClass(artistCorrect: boolean, titleCorrect: boolean): string {
   if (!artistCorrect) return 'text-white/28 italic';
   return titleCorrect ? 'text-green-400' : 'text-green-400/50 italic';
+}
+
+function scoreDeltaClass(scoreDelta: number): string {
+  if (scoreDelta < 0) return 'text-sm text-red-400';
+  if (scoreDelta >= BIG_POINTS_THRESHOLD) return 'text-xl text-amber-300';
+  return 'text-sm text-sky-400';
+}
+
+function scoreDeltaAnimation(scoreDelta: number): React.CSSProperties | undefined {
+  if (scoreDelta < 0) return { animation: 'stealHit 0.6s ease-out' };
+  if (scoreDelta >= BIG_POINTS_THRESHOLD) return { animation: 'bigPointsPop 0.7s cubic-bezier(0.34, 1.56, 0.64, 1)' };
+  return undefined;
 }
 
 // Reveal for "guess the year" rounds: the year card plus everyone's distances.
@@ -45,17 +58,32 @@ function PlayRevealShell({
   // should count up rather than just appear. The "+N pts" line and its
   // breakdown stay put (no fade-out) — how many points this round earned,
   // and why, shouldn't disappear a few seconds after the reveal.
-  const { displayScore } = useAnimatedScore(myScore, myScoreDelta, 300);
+  // For mystery rounds specifically, the count-up is held back until the
+  // slot reel has actually landed (see MysteryMultiplierChip) — otherwise
+  // the score climbing gives away that a bonus is coming before the reel
+  // reveals what it is. useAnimatedScore adds its own 1s buffer on top of
+  // this delay, so that's subtracted back out, plus a short beat so the
+  // number lands before the score starts moving.
+  const isMystery = revealParty?.event === 'mystery';
+  const mysteryScoreDelay = isMystery ? Math.max(300, MYSTERY_LANDING_MS - 1000 + 250) : 300;
+  // holdDelta hides the "+N pts" line and its breakdown (below) until this
+  // same delay elapses — without it they render at mount, before the host's
+  // reel has even landed, and give away the multiplier's size in advance.
+  const { displayScore, deltaFading, revealed } = useAnimatedScore(myScore, myScoreDelta, mysteryScoreDelay, false, isMystery);
   return (
-    <div className={`page-enter relative min-h-screen flex flex-col items-center justify-center gap-5 overflow-hidden ${wide ? 'px-2 py-6' : 'p-6'}`}>
-      <img
-        src={`${import.meta.env.BASE_URL}background3.svg`}
-        alt=""
-        aria-hidden="true"
-        style={{ position: 'fixed', inset: 0, width: '100%', height: '100%', objectFit: 'cover', zIndex: 0 }}
-      />
-      <div style={{ position: 'fixed', inset: 0, zIndex: 1, background: 'rgba(5,5,14,0.82)', backdropFilter: 'blur(28px)' }} />
-      <div className="relative flex flex-col items-center gap-5 w-full" style={{ zIndex: 2 }}>
+    <div className="page-enter relative min-h-screen" style={{ overflowY: 'auto', overscrollBehavior: 'contain' }}>
+      <div className={`screen-center-safe relative flex min-h-full flex-col items-center gap-5 ${wide ? 'px-2 py-6' : 'p-6'}`} style={{ minHeight: '100%' }}>
+        <img
+          src={`${import.meta.env.BASE_URL}background3-2.png`}
+          alt=""
+          aria-hidden="true"
+          // This layer belongs to the scroll content, rather than the
+          // viewport, so the portrait artwork continues behind every reveal
+          // card and score row on a phone.
+          style={{ position: 'absolute', inset: 0, width: '100%', height: '100%', objectFit: 'cover', zIndex: 0 }}
+        />
+        <div style={{ position: 'absolute', inset: 0, zIndex: 1, background: 'rgba(5,5,14,0.82)', backdropFilter: 'blur(28px)' }} />
+        <div className="relative flex flex-col items-center gap-5 w-full" style={{ zIndex: 2 }}>
         <div className="liquid-btn relative" style={{ width: wide ? 'min(88vw, 366px)' : '310px', height: `${cardHeight}px` }}>
           <LiquidGlass
             style={{ position: 'absolute', top: '50%', left: '50%' }}
@@ -66,22 +94,31 @@ function PlayRevealShell({
           </LiquidGlass>
         </div>
 
-        {!isFinalReveal && <PartyRevealExtras result={result} stealResult={stealResult} hints={game.hints} />}
+        {!isFinalReveal && <PartyRevealExtras result={result} stealResult={stealResult} hints={game.hints} hideMysteryChip />}
 
         {guessesList}
 
         <div style={{ background: 'rgba(255,255,255,0.05)', border: '1px solid rgba(255,255,255,0.08)', borderRadius: '16px', padding: '16px 32px', textAlign: 'center' }}>
-          {myScoreDelta > 0 && (
+          {myScoreDelta !== 0 && revealed && (
             <p
-              className={`text-sm font-bold tabular-nums flex items-center justify-center gap-1 ${myScoreDelta >= BIG_POINTS_THRESHOLD ? 'text-amber-300' : 'text-sky-400'}`}
-              style={myScoreDelta >= BIG_POINTS_THRESHOLD ? { animation: 'bigPointsPop 0.6s cubic-bezier(0.34, 1.56, 0.64, 1), bigPointsGlow 1.6s ease-in-out 0.6s infinite' } : undefined}
+              className={`font-bold tabular-nums flex items-center justify-center gap-1 ${scoreDeltaClass(myScoreDelta)}`}
+              style={scoreDeltaAnimation(myScoreDelta)}
             >
-              {myScoreDelta >= BIG_POINTS_THRESHOLD && <Zap className="w-3.5 h-3.5" />}
-              +{myScoreDelta.toLocaleString()} pts
+              {myScoreDelta < 0 ? `-${Math.abs(myScoreDelta).toLocaleString()} pts` : `+${myScoreDelta.toLocaleString()} pts`}
             </p>
           )}
-          {myScoreDelta > 0 && myBreakdown && <PointsBreakdownList breakdown={myBreakdown} />}
-          <p className="text-3xl font-black text-white mt-1">{displayScore.toLocaleString()}</p>
+          {myScoreDelta > 0 && revealed && myBreakdown && <PointsBreakdownList breakdown={myBreakdown} hideMultiplier={isMystery} />}
+          <p
+            // Remounts once when deltaFading flips true (the count-up landing
+            // on its final value), replaying the one-shot flash below — the
+            // moment a huge round's total actually arrives gets its own
+            // payoff instead of just quietly stopping.
+            key={Math.abs(myScoreDelta) >= BIG_POINTS_THRESHOLD && deltaFading ? 'landed' : 'counting'}
+            className="text-3xl font-black text-white mt-1"
+            style={Math.abs(myScoreDelta) >= BIG_POINTS_THRESHOLD && deltaFading ? { animation: 'scoreLandFlash 0.7s ease-out' } : undefined}
+          >
+            {displayScore.toLocaleString()}
+          </p>
           <p className="text-white/45 text-sm">your score</p>
           {scoreExtra}
           {myStreak >= 2 && (
@@ -89,6 +126,7 @@ function PlayRevealShell({
               <Flame className="w-3 h-3" />{myStreak} in a row
             </p>
           )}
+        </div>
         </div>
       </div>
     </div>
@@ -125,7 +163,7 @@ export function YearRevealView({ game, result }: Readonly<{ game: PlayState; res
             <span className="ml-1.5 text-xs text-sky-400 font-semibold tabular-nums shrink-0">+{r.points.toLocaleString()}</span>
           </div>
           {r.breakdown && (
-            <p className="text-white/35 text-[0.62rem] text-right leading-tight break-words" style={{ overflowWrap: 'anywhere' }}>{breakdownCompact(r.breakdown)}</p>
+            <p className="text-white/35 text-[0.62rem] text-right leading-tight break-words" style={{ overflowWrap: 'anywhere' }}>{breakdownCompact(r.breakdown, result.party?.event === 'mystery')}</p>
           )}
         </div>
       ))}

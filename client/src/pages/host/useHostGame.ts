@@ -538,20 +538,32 @@ export function useHostGame(): HostState {
       setSongPlaying(false);
       setResult(data);
       setPhase('reveal');
+      // A steal round gets a second score_update once the winner picks a
+      // victim, well after this one — reset here so that later update's
+      // diff adds onto this round's deltas instead of a stale previous round.
+      setRoundDeltas({});
     });
 
     socket.on('score_update', ({ players: p }: { players: PlayerInfo[] }) => {
-      const deltas: Record<string, number> = {};
+      const diffs: Record<string, number> = {};
       const pity: Record<string, boolean> = {};
       const pityAmount: Record<string, number> = {};
       for (const updated of p) {
         const prev = playersRef.current.find(x => x.name === updated.name);
-        deltas[updated.name] = (updated.score ?? 0) - (prev?.score ?? 0);
+        diffs[updated.name] = (updated.score ?? 0) - (prev?.score ?? 0);
         pity[updated.name] = updated.pity ?? false;
         pityAmount[updated.name] = updated.pityAmount ?? 0;
       }
       playersRef.current = p;
-      setRoundDeltas(deltas);
+      // Merge rather than replace: a steal's score_update arrives after the
+      // round's own, and must add its +amount/-amount on top of the round
+      // win instead of overwriting it (and silently zeroing everyone else's
+      // already-displayed delta since their score didn't move a second time).
+      setRoundDeltas(prevDeltas => {
+        const merged = { ...prevDeltas };
+        for (const [name, diff] of Object.entries(diffs)) merged[name] = (merged[name] ?? 0) + diff;
+        return merged;
+      });
       setRoundPity(pity);
       setRoundPityAmount(pityAmount);
       setPlayers(p);
@@ -644,6 +656,7 @@ export function useHostGame(): HostState {
       setPin(p);
       sessionStorage.setItem('versed_host_pin', p);
       setPlayers([]);
+      playersRef.current = [];
       setLeaderboard([]);
       setResult(null);
       setRoundIndex(0);

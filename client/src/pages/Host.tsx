@@ -1,5 +1,5 @@
 import { useCallback, useRef, useState } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate } from 'react-router';
 import { Clock, Disc3 } from 'lucide-react';
 import LiquidGlass from '../components/StableLiquidGlass';
 import { useLogoMorph } from '../contexts/LogoMorph';

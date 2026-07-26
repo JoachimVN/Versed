@@ -71,7 +71,7 @@ function guessInputBoxStyle(isListening: boolean, focused: boolean): { border: s
 function ChoiceButtons({ options, onPick, disabled }: Readonly<{ options: string[]; onPick: (option: string) => void; disabled?: boolean }>) {
   const style = guessInputBoxStyle(false, false);
   return (
-    <div className="w-full grid grid-cols-2 gap-3">
+    <div className="w-full grid grid-cols-2 gap-3" style={{ flexShrink: 0 }}>
       {options.map(option => (
         <button
           key={option}
@@ -100,7 +100,7 @@ function ChoiceButtons({ options, onPick, disabled }: Readonly<{ options: string
 function ChaosHintButtons({ hints, onPick, disabled }: Readonly<{ hints: Hint[]; onPick: (index: number) => void; disabled?: boolean }>) {
   const style = guessInputBoxStyle(false, false);
   return (
-    <div className="w-full grid grid-cols-2 gap-2.5">
+    <div className="w-full grid grid-cols-2 gap-2.5" style={{ flexShrink: 0 }}>
       {hints.map((h, i) => (
         <button
           key={h.label}
@@ -203,7 +203,7 @@ export function GuessingView({ game }: Readonly<{ game: PlayState }>) {
     guessControl = <ChoiceButtons options={options} onPick={submitChoice} />;
   } else if (isYear) {
     guessControl = (
-      <div style={{ position: 'relative' }}>
+      <div style={{ position: 'relative', flexShrink: 0 }}>
         <YearDigitBoxes value={guessText} focused={inputFocused} />
         <input
           ref={guessInputRef}
@@ -226,7 +226,7 @@ export function GuessingView({ game }: Readonly<{ game: PlayState }>) {
   } else {
     guessControl = (
       <div style={{
-        width: '100%', borderRadius: '16px', overflow: 'hidden',
+        width: '100%', borderRadius: '16px', overflow: 'hidden', flexShrink: 0,
         border: inputBoxStyle.border,
         background: inputBoxStyle.background,
         boxShadow: inputBoxStyle.boxShadow,
@@ -255,8 +255,13 @@ export function GuessingView({ game }: Readonly<{ game: PlayState }>) {
 
   return (
     <div className="relative min-h-screen flex flex-col overflow-hidden" style={{ background: '#080812' }}>
-      <img src={`${import.meta.env.BASE_URL}background4.svg`} alt="" aria-hidden="true" style={{ position: 'fixed', inset: 0, width: '100%', height: '100%', objectFit: 'cover', zIndex: 0, transform: 'rotate(180deg)' }} />
-      <div style={{ position: 'fixed', inset: 0, zIndex: 1, background: 'rgba(5,5,14,0.82)', backdropFilter: 'blur(28px)' }} />
+      {/* absolute, not fixed: iOS Safari clips fixed elements to the shrunk
+          visual viewport while the keyboard is open, cutting the background
+          off at the keyboard's edge instead of extending behind it (see
+          App.tsx). absolute against this relative, min-h-screen wrapper
+          covers the same area without the clipping. */}
+      <img src={`${import.meta.env.BASE_URL}background4.svg`} alt="" aria-hidden="true" style={{ position: 'absolute', inset: 0, width: '100%', height: '100%', objectFit: 'cover', zIndex: 0, transform: 'rotate(180deg)' }} />
+      <div style={{ position: 'absolute', inset: 0, zIndex: 1, background: 'rgba(5,5,14,0.82)', backdropFilter: 'blur(36px)' }} />
 
       {/* Reserving the keyboard's height at the bottom is what keeps Submit and
           Skip tappable: the screen itself never resizes, the column just gets
@@ -290,7 +295,7 @@ export function GuessingView({ game }: Readonly<{ game: PlayState }>) {
 
         {target === 'both' && (
           <div style={{
-            width: '100%', borderRadius: '14px', overflow: 'hidden',
+            width: '100%', borderRadius: '14px', overflow: 'hidden', flexShrink: 0,
             border: '1px solid rgba(0,238,232,0.25)',
             background: 'rgba(0,238,232,0.05)',
           }}>
@@ -387,12 +392,12 @@ export function PassedView({ game }: Readonly<{ game: PlayState }>) {
   return (
     <div className="relative min-h-screen overflow-hidden">
       <img
-        src={`${import.meta.env.BASE_URL}background3.svg`}
+        src={`${import.meta.env.BASE_URL}background3-2.png`}
         alt=""
         aria-hidden="true"
-        style={{ position: 'fixed', inset: 0, width: '100%', height: '100%', objectFit: 'cover', zIndex: 0 }}
+        style={{ position: 'absolute', inset: 0, width: '100%', height: '100%', objectFit: 'cover', zIndex: 0 }}
       />
-      <div style={{ position: 'fixed', inset: 0, zIndex: 1, background: 'rgba(5,5,14,0.82)', backdropFilter: 'blur(28px)' }} />
+      <div style={{ position: 'absolute', inset: 0, zIndex: 1, background: 'rgba(5,5,14,0.82)', backdropFilter: 'blur(28px)' }} />
 
       <div
         className="relative flex flex-col items-center justify-center min-h-screen p-6"
@@ -484,7 +489,7 @@ export function StealPicker({ victims, onPick, onSkip }: Readonly<{
           You won the steal!
         </p>
         <p style={{ color: 'rgba(255,255,255,0.45)', fontSize: '0.85rem' }}>
-          Pick a victim: you take 15% of their score (min 300)
+          Pick a victim: you take 25% of their score (min 400)
         </p>
       </div>
       <div className="flex flex-col gap-2.5 w-full" style={{ maxWidth: '310px', maxHeight: '50vh', overflowY: 'auto' }}>

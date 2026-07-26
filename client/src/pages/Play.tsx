@@ -1,5 +1,5 @@
 import { useState, useEffect, useCallback } from 'react';
-import { useParams } from 'react-router-dom';
+import { useParams } from 'react-router';
 import { Disc3 } from 'lucide-react';
 import { RoundIntro } from '../components/RoundIntro';
 import { commonPhaseAnnouncement } from '../utils/phaseAnnouncement';

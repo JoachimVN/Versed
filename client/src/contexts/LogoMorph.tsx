@@ -19,6 +19,13 @@ interface LogoMorphApi {
    *  The arriving page should keep its real logo hidden during this window
    *  so it doesn't show alongside the overlay mid-flight. */
   morphing: boolean;
+  /** Drops the overlay immediately with no flight — for when a transition
+   *  gets cancelled and there's no arriving logo left to morph onto (e.g. a
+   *  pending join->waiting handoff interrupted by the game already being in
+   *  progress, which skips the waiting screen entirely). Without this the
+   *  overlay has no way to resolve and stays stuck on top of the real
+   *  screen. */
+  dismissMorph: () => void;
   /** Lets callers skip the coordinated exit delay when the OS asks for less
    *  motion. CSS shortens the visual transitions too, but it cannot shorten
    *  JavaScript navigation timers. */
@@ -82,6 +89,16 @@ export function LogoMorphProvider({ children }: Readonly<{ children: React.React
     scheduleRemoval();
   }, [scheduleRemoval]);
 
+  const dismissMorph = useCallback(() => {
+    if (timerRef.current) clearTimeout(timerRef.current);
+    if (removeRef.current) clearTimeout(removeRef.current);
+    timerRef.current = null;
+    removeRef.current = null;
+    setMorphing(false);
+    setAnimate(false);
+    setRect(null);
+  }, []);
+
   const animateToTarget = useCallback(
     (r: Rect) => {
       setAnimate(true);
@@ -103,8 +120,8 @@ export function LogoMorphProvider({ children }: Readonly<{ children: React.React
   );
 
   const value = useMemo(
-    () => ({ beginMorph, provideTarget, morphing, reducedMotion }),
-    [beginMorph, provideTarget, morphing, reducedMotion]
+    () => ({ beginMorph, provideTarget, morphing, dismissMorph, reducedMotion }),
+    [beginMorph, provideTarget, morphing, dismissMorph, reducedMotion]
   );
 
   return (

@@ -85,27 +85,3 @@ export function RaceHintBar({ hints }: Readonly<{ hints: Hint[] }>) {
   );
 }
 
-// Multiple Choice's 4 options, shown on the host screen purely as a
-// reference (the host never answers) — useful when the host screen is cast
-// to a shared TV so the room can see the options too.
-export function ChoiceOptionsBar({ options }: Readonly<{ options?: string[] }>) {
-  if (!options || options.length === 0) return null;
-  return (
-    <div className="grid grid-cols-2 gap-2" style={{ maxWidth: '480px' }}>
-      {options.map(option => (
-        <div
-          key={option}
-          className="rounded-xl text-center"
-          style={{
-            padding: '10px 16px',
-            background: 'rgba(255,255,255,0.04)',
-            border: '1px solid rgba(255,255,255,0.08)',
-            color: 'white', fontWeight: 700, fontSize: '0.95rem',
-          }}
-        >
-          {option}
-        </div>
-      ))}
-    </div>
-  );
-}

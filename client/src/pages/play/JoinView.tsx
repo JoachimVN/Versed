@@ -53,7 +53,7 @@ export function JoinView({ game }: Readonly<{ game: PlayState }>) {
   const keyboardOpen = useKeyboardOpen();
   const [leaving, setLeaving] = useState(false);
   const logoRef = useRef<HTMLImageElement>(null);
-  const { beginMorph, provideTarget, morphing, reducedMotion } = useLogoMorph();
+  const { beginMorph, provideTarget, morphing, dismissMorph, reducedMotion } = useLogoMorph();
   const arrivedViaMorph = useRef(morphing).current;
 
   // Only hands off to the overlay if a morph is already in flight (i.e. we
@@ -71,7 +71,7 @@ export function JoinView({ game }: Readonly<{ game: PlayState }>) {
   // Mirrors Home's goToJoin in reverse.
   const goBack = useMorphBack(logoRef, setLeaving, beginMorph, reducedMotion);
 
-  useWaitingTransitionMorph(game, logoRef, setLeaving, beginMorph, provideTarget, reducedMotion);
+  useWaitingTransitionMorph(game, logoRef, setLeaving, beginMorph, provideTarget, reducedMotion, dismissMorph);
 
   return (
     <div

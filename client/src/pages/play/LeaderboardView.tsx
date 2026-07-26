@@ -1,4 +1,4 @@
-import { useNavigate } from 'react-router-dom';
+import { useNavigate } from 'react-router';
 import LiquidGlass from '../../components/StableLiquidGlass';
 import { RankBadge } from '../../components/RankBadge';
 import { useAnimatedScore } from '../../hooks/useAnimatedScore';

@@ -53,7 +53,7 @@ Versed is a real-time multiplayer music guessing game. One player is the **host*
 
 - **Classic** — bid/tier flow (described under Game flow below).
 - **Race** — everyone guesses at once; speed-based scoring, optional winner-only and artist-only toggles.
-- **Party** — every round gets a random announced recipe (`buildPartyConfig` in `gameManager.ts`): a format (classic round, race round, or guess-the-year closest-wins), a guess target (title / artist / both, where "both" pays an artist bonus), and an optional event — double points, mystery multiplier (×1–3, hidden until the reveal), steal (round winner picks a victim via `choose_steal`/`steal_victim`, takes 15% min 300), snippet roulette (clip starts mid-song via `positionMs` on `play_song`), or full hints. Round 1 is a plain warm-up, events never repeat back-to-back, and the last round is a top-2 duel (first correct wins 1500). Non-classic party rounds ride the race flow; clients receive a sanitized `party` object on `round_start` and the revealed config on `round_result`.
+- **Party** — every round gets a random announced recipe (`buildPartyConfig` in `party.ts`): a format (classic round, race round, or guess-the-year closest-wins), a guess target (title / artist / both, where "both" pays an artist bonus), and an optional event — double points, mystery multiplier (×1–3, hidden until the reveal), steal (round winner picks a victim via `choose_steal`/`steal_victim`, takes 25% min 400), snippet roulette (clip starts mid-song via `positionMs` on `play_song`), or full hints. Round 1 is a plain warm-up, events never repeat back-to-back, and the last round is a top-2 duel (first correct wins 1500). Non-classic party rounds ride the race flow; clients receive a sanitized `party` object on `round_start` and the revealed config on `round_result`.
 
 ### Game flow
 
@@ -76,7 +76,13 @@ All game state lives in-memory on the server (`gameManager.ts`). No database.
 | File | Role |
 |---|---|
 | `server/src/index.ts` | Express + Socket.IO setup, CORS (reads `CORS_ORIGINS` or falls back to `FRONTEND_URL`), all socket event handlers |
-| `server/src/gameManager.ts` | All game logic — pure functions operating on `Game` / `Round` types. No I/O. |
+| `server/src/gameManager.ts` | The game state machine — the in-memory `games` registry and every transition a socket handler triggers. Also re-exports what the socket layer reads from the rules modules below, so handlers keep one `import * as gm`. |
+| `server/src/constants.ts` | Every tunable number (bid ladder, timers, party/steal/year/pity payouts). Leaf module. |
+| `server/src/party.ts` | Party round recipes — format/target/event draws, announcement copy, round-shape queries (`isRaceFlowRound`, `isWinnerOnlyRound`, `raceParticipants`) |
+| `server/src/songPool.ts` | The song catalog plus per-round selection: difficulty slicing, avoid-repetition filter chain, multiple-choice distractors, snippet offsets |
+| `server/src/scoring.ts` | Every points formula (`bidScore`, `calcPoints`, `calcRace*`, `difficultyBonus`, pity) |
+| `server/src/hints.ts` | Hint generation and the per-event hint sets (normal / full / underdog / chaos) |
+| `server/src/random.ts` | `pickRandom` / `shuffle` / `pickWeighted`, all over `node:crypto`'s `randomInt` |
 | `server/src/types.ts` | Shared type definitions (`Game`, `Round`, `Player`, `Song`, `BidTier`) |
 | `server/src/songLoader.ts` | Parses `src/data/music_index_full.csv` at startup into `Song[]` |
 | `server/src/fuzzyMatch.ts` | `isCorrectGuess()` — normalises text, runs Levenshtein, handles homophones |
@@ -86,15 +92,18 @@ All game state lives in-memory on the server (`gameManager.ts`). No database.
 
 | File | Role |
 |---|---|
-| `client/src/pages/Host.tsx` | All host UI phases in one file, driven by `useHostGame()` hook |
-| `client/src/pages/Play.tsx` | All player UI phases in one file, driven by `usePlayGame()` hook |
+| `client/src/pages/Host.tsx` | Host phase router — picks a view from `client/src/pages/host/`, all driven by the `useHostGame()` hook |
+| `client/src/pages/Play.tsx` | Player phase router — picks a view from `client/src/pages/play/`, all driven by the `usePlayGame()` hook |
+| `client/src/pages/host/settings/` | The settings panel's rows, chip grids and playlist list; `SettingsPanel.tsx` just composes them |
+| `client/src/components/RevealShared.tsx` | Reveal primitives shared by both reveal screens (points breakdown, awards strip, pill button, song info) |
+| `client/src/components/YearReveal.tsx` | The guess-the-year reveal — slot-reel year number and the lane-packed guess timeline |
 | `client/src/hooks/useSpotify.ts` | Spotify Web Playback SDK integration — loads SDK, manages device, `prepareTrack` / `startPrepared` / `pauseTrack` |
 | `client/src/socket.ts` | Singleton socket instance (`autoConnect: false`) |
 | `client/src/config.ts` | `BACKEND_URL` (from `VITE_SERVER_URL`) and `BID_OPTIONS` array |
 
 ### Scoring
 
-`calcPoints(bid, rank)` in `gameManager.ts`:
+`calcPoints(game, bid, rank)` in `scoring.ts`:
 - Base: 500 pts
 - Bid bonus: up to 1000 pts, stepped down the `BID_OPTIONS` ladder — one equal notch (~77 pts) per ladder position, so a 0.1s bid pays meaningfully more than a 1s bid
 - Difficulty bonus: up to 500 pts (based on song rank in the dataset)

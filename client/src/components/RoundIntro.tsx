@@ -1,4 +1,5 @@
 import { useEffect, useLayoutEffect, useRef, useState } from 'react';
+import { Sparkles } from 'lucide-react';
 import type { Hint, PartyInfo, RoundResultEvent } from '../types';
 import { useEscapeKey } from '../hooks/useEscapeKey';
 import { useFocusTrap } from '../hooks/useFocusTrap';
@@ -136,8 +137,16 @@ const MYSTERY_CANDIDATES = [1.5, 2, 3, 4, 5, 10];
 
 // Step durations for the flicker, front-loaded fast then slowing down like a
 // wheel losing momentum — the deceleration is what sells "landing" rather
-// than "the label just changed".
-const MYSTERY_SPIN_STEPS_MS = [55, 65, 80, 95, 115, 140, 170, 205, 245, 290];
+// than "the label just changed". The last two steps are the longest of all,
+// stretching out the final "is it going to be a big one?" beat. Scaled up
+// ~40% from the original curve (same shape, more room to breathe) after
+// playtesting found the reel landed before it read as a reel at all.
+const MYSTERY_SPIN_STEPS_MS = [75, 90, 110, 130, 160, 195, 235, 285, 340, 405, 485, 585];
+
+// Total time (ms) from mount until the reel lands on the real value — other
+// reveal timing (e.g. delaying the score count-up) syncs against this so the
+// multiplier is always visible before points start moving.
+export const MYSTERY_LANDING_MS = MYSTERY_SPIN_STEPS_MS.reduce((a, b) => a + b, 0);
 
 function pickMysteryCandidate(candidates: readonly number[]) {
   const randomValue = new Uint32Array(1);
@@ -145,20 +154,36 @@ function pickMysteryCandidate(candidates: readonly number[]) {
   return candidates[randomValue[0] % candidates.length]!;
 }
 
+// Picks the next decoy, excluding both the real answer (via `pool`, already
+// filtered by the caller) and whichever value is currently on screen — a
+// flicker that can repeat its immediately-previous frame reads as the reel
+// stalling rather than spinning.
+function pickNextCandidate(pool: readonly number[], previous: number | null) {
+  const options = previous === null ? pool : pool.filter(v => v !== previous);
+  return pickMysteryCandidate(options.length > 0 ? options : pool);
+}
+
+function mysteryValueFontSize(landed: boolean, superJackpot: boolean): string {
+  if (!landed) return '1.9rem';
+  return superJackpot ? '2.5rem' : '2.2rem';
+}
+
 // Slot-reel reveal for the mystery multiplier: flickers through a handful of
-// decoy values before settling on the real one, instead of the value just
-// appearing. ×5/×10 (the rare high rolls) keep pulsing gold after landing so
-// the jackpot outcome reads as more exciting than a routine ×1.5-×4.
+// decoy values (never repeating the immediately-previous one, see
+// pickNextCandidate) before settling on the real one, instead of the value
+// just appearing. ×5/×10 (the rare high rolls) keep pulsing gold after
+// landing so the jackpot outcome reads as more exciting than a routine
+// ×1.5-×4. ×10 specifically — the rarest roll in the pool — gets one further
+// touch on top of that: a single diagonal light sweep, so the best possible
+// outcome doesn't look the same as a plain ×5 without piling on more effects.
 function MysteryMultiplierChip({ multiplier }: Readonly<{ multiplier: number }>) {
   const [display, setDisplay] = useState(multiplier);
   const [tick, setTick] = useState(0);
   const [landed, setLanded] = useState(false);
-  const spunFor = useRef<number | null>(null);
+  const [reducedMotion] = useState(() => globalThis.matchMedia('(prefers-reduced-motion: reduce)').matches);
 
   useEffect(() => {
-    if (spunFor.current === multiplier) return;
-    spunFor.current = multiplier;
-    if (globalThis.matchMedia('(prefers-reduced-motion: reduce)').matches) {
+    if (reducedMotion) {
       setDisplay(multiplier);
       setLanded(true);
       return;
@@ -167,6 +192,7 @@ function MysteryMultiplierChip({ multiplier }: Readonly<{ multiplier: number }>)
     let cancelled = false;
     let timer: ReturnType<typeof setTimeout>;
     const pool = MYSTERY_CANDIDATES.filter(v => v !== multiplier);
+    let previous: number | null = null;
     let i = 0;
     const step = () => {
       if (cancelled) return;
@@ -175,22 +201,44 @@ function MysteryMultiplierChip({ multiplier }: Readonly<{ multiplier: number }>)
         setLanded(true);
         return;
       }
-      setDisplay(pickMysteryCandidate(pool));
+      const next = pickNextCandidate(pool, previous);
+      previous = next;
+      setDisplay(next);
       setTick(t => t + 1);
       timer = setTimeout(step, MYSTERY_SPIN_STEPS_MS[i]);
       i++;
     };
     step();
+    // React Strict Mode restarts effects in development. The restarted effect
+    // must schedule its own landing timer, or the first random decoy remains
+    // blurred indefinitely and can be mistaken for the real multiplier.
     return () => { cancelled = true; clearTimeout(timer); };
-  }, [multiplier]);
+  }, [multiplier, reducedMotion]);
 
   const jackpot = landed && multiplier >= 5;
-  // Landing gets a one-shot white flash on every roll (mysteryFlash) — the
-  // jackpot's gold glow only kicks in afterward, timed past the flash so the
-  // two don't visually fight for the same instant.
+  const superJackpot = jackpot && multiplier === 10 && !reducedMotion;
+  // Landing gets a one-shot white flash (slotFlash) plus an expanding ring
+  // burst (slotLandBurst) on every roll — the jackpot's gold glow only kicks
+  // in afterward, timed past those so nothing fights for the same instant.
+  // ×10 additionally gets a single diagonal light sweep (mysteryShine) rather
+  // than a second effect stacked on top of the glow — a quieter, one-shot
+  // payoff reads as considered rather than piling on more particles/rings.
   const landAnimation = jackpot
-    ? 'mysteryLand 0.6s cubic-bezier(0.34, 1.56, 0.64, 1), mysteryFlash 0.7s ease-out, mysteryJackpotGlow 1.6s ease-in-out 0.6s infinite'
-    : 'mysteryLand 0.6s cubic-bezier(0.34, 1.56, 0.64, 1), mysteryFlash 0.7s ease-out';
+    ? [
+        'slotLand 0.6s cubic-bezier(0.34, 1.56, 0.64, 1)',
+        'slotFlash 0.7s ease-out',
+        'slotLandBurst 0.6s ease-out',
+        'mysteryJackpotGlow 1.8s ease-in-out 0.6s infinite',
+        ...(superJackpot ? ['mysteryShine 1.5s ease-out 0.5s'] : []),
+      ].join(', ')
+    : 'slotLand 0.6s cubic-bezier(0.34, 1.56, 0.64, 1), slotFlash 0.7s ease-out, slotLandBurst 0.6s ease-out';
+  // A soft diagonal wash (brand cyan→purple, gold once jackpot) plus an inner
+  // top highlight and drop shadow reads as a glass card consistent with the
+  // rest of the app, rather than a single flat tinted fill with a matching
+  // border — the "sticker" look a flat color pill tends to read as.
+  const background = jackpot
+    ? 'linear-gradient(155deg, rgba(251,191,36,0.24) 0%, rgba(217,119,6,0.08) 55%, rgba(255,255,255,0.04) 100%)'
+    : 'linear-gradient(155deg, rgba(0,238,232,0.18) 0%, rgba(158,18,204,0.1) 55%, rgba(255,255,255,0.04) 100%)';
   return (
     <span
       // A fresh key per flicker tick (and a distinct one on landing) forces
@@ -198,25 +246,46 @@ function MysteryMultiplierChip({ multiplier }: Readonly<{ multiplier: number }>)
       // a stale one — a plain style-string diff wouldn't retrigger it.
       key={landed ? `landed-${multiplier}` : `spin-${tick}`}
       style={{
+        position: 'relative', overflow: 'hidden',
         display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '2px',
-        padding: '10px 24px', borderRadius: '20px',
-        background: jackpot ? 'rgba(251,191,36,0.14)' : 'rgba(0,238,232,0.1)',
-        border: `1px solid ${jackpot ? 'rgba(251,191,36,0.45)' : 'rgba(0,238,232,0.3)'}`,
-        animation: landed ? landAnimation : 'mysterySpinTick 0.14s ease-out',
+        padding: landed ? '12px 28px' : '10px 24px', borderRadius: '18px',
+        background,
+        border: `1px solid ${jackpot ? 'rgba(251,191,36,0.4)' : 'rgba(255,255,255,0.14)'}`,
+        boxShadow: `inset 0 1px 0 ${jackpot ? 'rgba(255,255,255,0.2)' : 'rgba(255,255,255,0.14)'}, 0 10px 26px rgba(0,0,0,0.35)`,
+        backdropFilter: 'blur(18px)',
+        animation: landed ? landAnimation : 'slotSpinTick 0.14s ease-out',
       }}
     >
+      {superJackpot && (
+        <span
+          aria-hidden="true"
+          style={{
+            position: 'absolute', top: 0, left: '-60%', width: '40%', height: '100%',
+            background: 'linear-gradient(75deg, transparent 0%, rgba(255,255,255,0.6) 50%, transparent 100%)',
+            transform: 'skewX(-20deg)', pointerEvents: 'none',
+            animation: 'mysteryShine 1.5s ease-out 0.5s',
+          }}
+        />
+      )}
       <span style={{
+        display: 'flex', alignItems: 'center', gap: '4px',
         fontSize: '0.62rem', fontWeight: 800, letterSpacing: '0.14em', textTransform: 'uppercase',
         color: jackpot ? 'rgba(253,224,71,0.9)' : 'rgba(94,234,212,0.9)',
       }}>
+        {jackpot && <Sparkles style={{ width: '10px', height: '10px' }} />}
         Mystery Multiplier
+        {jackpot && <Sparkles style={{ width: '10px', height: '10px' }} />}
       </span>
       <span style={{
-        fontSize: '1.9rem', fontWeight: 900, lineHeight: 1,
+        fontSize: mysteryValueFontSize(landed, superJackpot), fontWeight: 900, lineHeight: 1,
         background: jackpot
           ? 'linear-gradient(to bottom left, rgba(251,191,36,0.6) 0%, transparent 55%), linear-gradient(to top right, rgba(255,221,120,0.55) 0%, transparent 55%), #fff'
           : 'linear-gradient(to bottom left, rgba(0,238,232,0.5) 0%, transparent 55%), linear-gradient(to top right, rgba(158,18,204,0.55) 0%, transparent 55%), #fff',
         WebkitBackgroundClip: 'text', WebkitTextFillColor: 'transparent', backgroundClip: 'text',
+        // The chip itself pulses while a sharp, dim value rolls through it;
+        // a clear reel motion communicates that this is a decoy without
+        // obscuring the number.
+        animation: landed ? undefined : 'slotReelTick 0.14s ease-out',
       }}>
         ×{display}
       </span>
@@ -225,14 +294,18 @@ function MysteryMultiplierChip({ multiplier }: Readonly<{ multiplier: number }>)
 }
 
 // Party extras shown under the reveal card: revealed multiplier, steal outcome
-// (or "picking a victim…" while the thief decides). Shared by host and player.
-export function PartyRevealExtras({ result, stealResult, hints }: Readonly<{
+// (or "picking a victim…" while the thief decides). Shared by host and player
+// — hideMysteryChip lets the player's own screen opt out of the slot-reel
+// reveal entirely, keeping the "what will it be?" moment host-screen-only
+// (e.g. a shared TV) instead of every phone re-running its own reel too.
+export function PartyRevealExtras({ result, stealResult, hints, hideMysteryChip = false }: Readonly<{
   result: RoundResultEvent;
   stealResult: { thief: string; victim: string; amount: number; skipped?: boolean } | null;
   hints?: Hint[];
+  hideMysteryChip?: boolean;
 }>) {
   const party = result.party;
-  const mysteryMultiplier = party?.event === 'mystery' ? party.multiplier : null;
+  const mysteryMultiplier = !hideMysteryChip && party?.event === 'mystery' ? party.multiplier : null;
   const chips: { text: string; reveal: boolean }[] = [];
   if (party?.event === 'double') {
     chips.push({ text: 'Double points · ×2', reveal: false });
@@ -269,6 +342,10 @@ export function PartyRevealExtras({ result, stealResult, hints }: Readonly<{
           padding: '6px 16px', borderRadius: '100px',
           background: 'rgba(248,113,113,0.1)', border: '1px solid rgba(248,113,113,0.35)',
           color: 'rgba(252,165,165,0.95)', fontSize: '0.78rem', fontWeight: 600,
+          // This pill only mounts the instant the steal resolves — a quick
+          // pop sells it as "this just happened" rather than a chip that was
+          // there all along, same as the chaos-hints lie reveal above.
+          animation: 'chipReveal 0.5s cubic-bezier(0.34, 1.56, 0.64, 1)',
         }}>
           {stealResult.thief} stole {stealResult.amount.toLocaleString()} pts from {stealResult.victim}
         </span>
