@@ -375,22 +375,13 @@ select:focus-visible,
   0%   { box-shadow: 0 0 0 0 rgba(255,255,255,0.5); }
   100% { box-shadow: 0 0 0 14px rgba(255,255,255,0); }
 }
-/* Continuous gold pulse for a jackpot roll (x5/x10), so the rare high value
-   keeps drawing the eye instead of going static like a normal x1.5-x4. */
+/* Continuous pulse for a jackpot roll (x5-x10), so the rare high value keeps
+   drawing the eye instead of going static like a normal x1.5-x4. Color comes
+   from --mystery-glow-color (set inline per tier in RoundIntro.tsx) so gold
+   (x5-x9) and violet (x10) share this exact animation. */
 @keyframes mysteryJackpotGlow {
-  0%, 100% { box-shadow: 0 0 0 0 rgba(251,191,36,0.5); }
-  50%       { box-shadow: 0 0 24px 8px rgba(251,191,36,0.5); }
-}
-/* ×10 only — the rarest roll in the pool. A single diagonal light sweep
-   across the chip (clipped by its own overflow:hidden) rather than another
-   particle/ring effect stacked on top of mysteryJackpotGlow, so the best
-   possible outcome still reads as a step up from a plain ×5 without piling
-   on more motion. */
-@keyframes mysteryShine {
-  0%   { transform: translateX(0) skewX(-20deg); opacity: 0; }
-  12%  { opacity: 1; }
-  55%  { opacity: 1; }
-  100% { transform: translateX(360%) skewX(-20deg); opacity: 0; }
+  0%, 100% { box-shadow: 0 0 0 0 var(--mystery-glow-color, rgba(251,191,36,0.5)); }
+  50%       { box-shadow: 0 0 24px 8px var(--mystery-glow-color, rgba(251,191,36,0.5)); }
 }
 
 /* A player's round delta clears BIG_POINTS_THRESHOLD (RevealShared.tsx): one
