@@ -129,7 +129,7 @@ export function LogoMorphProvider({ children }: Readonly<{ children: React.React
       {children}
       {rect && (
         <img
-          src={`${import.meta.env.BASE_URL}logo.png`}
+          src={`${import.meta.env.BASE_URL}branding/logo.png`}
           alt=""
           aria-hidden="true"
           width={2560}

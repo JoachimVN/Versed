@@ -78,7 +78,7 @@ export default function App() {
         aria-hidden="true"
       >
         <img
-          src={`${import.meta.env.BASE_URL}background2.svg`}
+          src={`${import.meta.env.BASE_URL}backgrounds/background2.svg`}
           alt=""
           style={{ width: '100%', height: '100%', objectFit: 'cover', transform: 'rotate(180deg)' }}
         />

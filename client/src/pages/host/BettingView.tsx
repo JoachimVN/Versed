@@ -15,7 +15,7 @@ export function BettingView({ game }: Readonly<{ game: HostState }>) {
 
       {/* Background */}
       <img
-        src={`${import.meta.env.BASE_URL}background2.svg`}
+        src={`${import.meta.env.BASE_URL}backgrounds/background2.svg`}
         alt=""
         aria-hidden="true"
         style={{ position: 'fixed', inset: 0, width: '100%', height: '100%', objectFit: 'cover', zIndex: 0, transform: 'rotate(90deg)' }}

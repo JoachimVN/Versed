@@ -74,7 +74,7 @@ function PlayRevealShell({
     <div className="page-enter relative min-h-screen" style={{ overflowY: 'auto', overscrollBehavior: 'contain' }}>
       <div className={`screen-center-safe relative flex min-h-full flex-col items-center gap-5 ${wide ? 'px-2 py-6' : 'p-6'}`} style={{ minHeight: '100%' }}>
         <img
-          src={`${import.meta.env.BASE_URL}background3-2.png`}
+          src={`${import.meta.env.BASE_URL}backgrounds/background3-2.png`}
           alt=""
           aria-hidden="true"
           // This layer belongs to the scroll content, rather than the
@@ -145,7 +145,7 @@ export function YearRevealView({ game, result }: Readonly<{ game: PlayState; res
         result={result}
         wide
         cardHeight={result.coverUrl ? 500 : 320}
-        cardContent={<FinalRoundAnswerContent result={result} label={finalLabel} />}
+        cardContent={<FinalRoundAnswerContent result={result} label={finalLabel} muted />}
         guessesList={null}
       />
     );
@@ -175,7 +175,7 @@ export function YearRevealView({ game, result }: Readonly<{ game: PlayState; res
       result={result}
       wide
       cardHeight={result.coverUrl ? 500 : 380}
-      cardContent={<YearTimelineContent result={result} />}
+      cardContent={<YearTimelineContent result={result} muted />}
       guessesList={guessesList}
     />
   );
@@ -195,7 +195,7 @@ export function RevealView({ game, result }: Readonly<{ game: PlayState; result:
         game={game}
         result={result}
         cardHeight={result.coverUrl ? 480 : 240}
-        cardContent={<FinalRoundAnswerContent result={result} label={finalLabel} />}
+        cardContent={<FinalRoundAnswerContent result={result} label={finalLabel} muted />}
         guessesList={null}
         scoreExtra={iGotItInRace && myRaceTimeMs != null && (
           <p className="text-green-400 text-xs font-semibold mt-1">

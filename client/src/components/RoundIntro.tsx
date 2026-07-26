@@ -1,8 +1,16 @@
 import { useEffect, useLayoutEffect, useRef, useState } from 'react';
-import { Sparkles } from 'lucide-react';
+import type { CSSProperties } from 'react';
 import type { Hint, PartyInfo, RoundResultEvent } from '../types';
 import { useEscapeKey } from '../hooks/useEscapeKey';
 import { useFocusTrap } from '../hooks/useFocusTrap';
+import { REEL_STEPS_MS, useRevealReelSound } from '../hooks/useRevealReelSound';
+import type { RevealHitTier } from '../hooks/useRevealReelSound';
+
+function pickJackpotTier(multiplier: number): RevealHitTier {
+  if (multiplier === 10) return 3;
+  if (multiplier >= 5) return 2;
+  return 1;
+}
 
 // How long the announcement stays up. Betting/countdown timers run underneath,
 // so this must stay comfortably shorter than the shortest phase (5s minimum).
@@ -135,18 +143,12 @@ export function RoundIntro({ party, roundKey, dismissible = true }: Readonly<{ p
 // roll landed on (that's added back as the final, held frame).
 const MYSTERY_CANDIDATES = [1.5, 2, 3, 4, 5, 10];
 
-// Step durations for the flicker, front-loaded fast then slowing down like a
-// wheel losing momentum — the deceleration is what sells "landing" rather
-// than "the label just changed". The last two steps are the longest of all,
-// stretching out the final "is it going to be a big one?" beat. Scaled up
-// ~40% from the original curve (same shape, more room to breathe) after
-// playtesting found the reel landed before it read as a reel at all.
-const MYSTERY_SPIN_STEPS_MS = [75, 90, 110, 130, 160, 195, 235, 285, 340, 405, 485, 585];
-
 // Total time (ms) from mount until the reel lands on the real value — other
 // reveal timing (e.g. delaying the score count-up) syncs against this so the
-// multiplier is always visible before points start moving.
-export const MYSTERY_LANDING_MS = MYSTERY_SPIN_STEPS_MS.reduce((a, b) => a + b, 0);
+// multiplier is always visible before points start moving. Shares its step
+// curve and total duration (2 beats at 112bpm) with the year reel — see
+// useRevealReelSound.
+export { REEL_LAND_MS as MYSTERY_LANDING_MS } from '../hooks/useRevealReelSound';
 
 function pickMysteryCandidate(candidates: readonly number[]) {
   const randomValue = new Uint32Array(1);
@@ -163,24 +165,62 @@ function pickNextCandidate(pool: readonly number[], previous: number | null) {
   return pickMysteryCandidate(options.length > 0 ? options : pool);
 }
 
-function mysteryValueFontSize(landed: boolean, superJackpot: boolean): string {
-  if (!landed) return '1.9rem';
-  return superJackpot ? '2.5rem' : '2.2rem';
+function mysteryValueFontSize(landed: boolean): string {
+  return landed ? '2.2rem' : '1.9rem';
 }
+
+// Three color tiers for the chip: a plain cyan/purple brand wash for the
+// routine ×1.5-×4 rolls, gold for the ×5-×9 jackpot band, and a distinct
+// violet for ×10 — the rarest roll — so it reads as a step up from ×5
+// without changing the animation or layout, just the color.
+type MysteryTier = 'base' | 'gold' | 'violet';
+
+function mysteryTier(jackpot: boolean, jackpot10: boolean): MysteryTier {
+  if (jackpot10) return 'violet';
+  if (jackpot) return 'gold';
+  return 'base';
+}
+
+const MYSTERY_COLORS: Record<MysteryTier, {
+  background: string; border: string; label: string; valueGradient: string; glow: string;
+}> = {
+  base: {
+    background: 'linear-gradient(155deg, rgba(0,238,232,0.18) 0%, rgba(158,18,204,0.1) 55%, rgba(255,255,255,0.04) 100%)',
+    border: 'rgba(255,255,255,0.14)',
+    label: 'rgba(94,234,212,0.9)',
+    valueGradient: 'linear-gradient(to bottom left, rgba(0,238,232,0.5) 0%, transparent 55%), linear-gradient(to top right, rgba(158,18,204,0.55) 0%, transparent 55%), #fff',
+    glow: 'rgba(251,191,36,0.35)', // unused — base tier never plays mysteryJackpotGlow
+  },
+  gold: {
+    background: 'linear-gradient(155deg, rgba(251,191,36,0.24) 0%, rgba(217,119,6,0.08) 55%, rgba(255,255,255,0.04) 100%)',
+    border: 'rgba(251,191,36,0.4)',
+    label: 'rgba(253,224,71,0.9)',
+    valueGradient: 'linear-gradient(to bottom left, rgba(251,191,36,0.6) 0%, transparent 55%), linear-gradient(to top right, rgba(255,221,120,0.55) 0%, transparent 55%), #fff',
+    glow: 'rgba(251,191,36,0.35)',
+  },
+  violet: {
+    background: 'linear-gradient(155deg, rgba(217,70,239,0.24) 0%, rgba(126,34,206,0.08) 55%, rgba(255,255,255,0.04) 100%)',
+    border: 'rgba(217,70,239,0.4)',
+    label: 'rgba(240,171,252,0.9)',
+    valueGradient: 'linear-gradient(to bottom left, rgba(217,70,239,0.6) 0%, transparent 55%), linear-gradient(to top right, rgba(240,171,252,0.55) 0%, transparent 55%), #fff',
+    glow: 'rgba(217,70,239,0.35)',
+  },
+};
 
 // Slot-reel reveal for the mystery multiplier: flickers through a handful of
 // decoy values (never repeating the immediately-previous one, see
 // pickNextCandidate) before settling on the real one, instead of the value
-// just appearing. ×5/×10 (the rare high rolls) keep pulsing gold after
+// just appearing. ×5-×10 (the rare high rolls) keep pulsing gold after
 // landing so the jackpot outcome reads as more exciting than a routine
-// ×1.5-×4. ×10 specifically — the rarest roll in the pool — gets one further
-// touch on top of that: a single diagonal light sweep, so the best possible
-// outcome doesn't look the same as a plain ×5 without piling on more effects.
+// ×1.5-×4. ×10 — the rarest roll in the pool — reuses the exact same
+// animation but in a distinct color, so it reads as a step up from ×5
+// without the two competing for "which one is more special."
 function MysteryMultiplierChip({ multiplier }: Readonly<{ multiplier: number }>) {
   const [display, setDisplay] = useState(multiplier);
   const [tick, setTick] = useState(0);
   const [landed, setLanded] = useState(false);
   const [reducedMotion] = useState(() => globalThis.matchMedia('(prefers-reduced-motion: reduce)').matches);
+  const playReveal = useRevealReelSound();
 
   useEffect(() => {
     if (reducedMotion) {
@@ -189,6 +229,8 @@ function MysteryMultiplierChip({ multiplier }: Readonly<{ multiplier: number }>)
       return;
     }
     setLanded(false);
+    const jackpotTier = pickJackpotTier(multiplier);
+    playReveal(jackpotTier);
     let cancelled = false;
     let timer: ReturnType<typeof setTimeout>;
     const pool = MYSTERY_CANDIDATES.filter(v => v !== multiplier);
@@ -196,7 +238,7 @@ function MysteryMultiplierChip({ multiplier }: Readonly<{ multiplier: number }>)
     let i = 0;
     const step = () => {
       if (cancelled) return;
-      if (i >= MYSTERY_SPIN_STEPS_MS.length) {
+      if (i >= REEL_STEPS_MS.length) {
         setDisplay(multiplier);
         setLanded(true);
         return;
@@ -205,7 +247,7 @@ function MysteryMultiplierChip({ multiplier }: Readonly<{ multiplier: number }>)
       previous = next;
       setDisplay(next);
       setTick(t => t + 1);
-      timer = setTimeout(step, MYSTERY_SPIN_STEPS_MS[i]);
+      timer = setTimeout(step, REEL_STEPS_MS[i]);
       i++;
     };
     step();
@@ -213,32 +255,25 @@ function MysteryMultiplierChip({ multiplier }: Readonly<{ multiplier: number }>)
     // must schedule its own landing timer, or the first random decoy remains
     // blurred indefinitely and can be mistaken for the real multiplier.
     return () => { cancelled = true; clearTimeout(timer); };
-  }, [multiplier, reducedMotion]);
+  }, [multiplier, reducedMotion, playReveal]);
 
   const jackpot = landed && multiplier >= 5;
-  const superJackpot = jackpot && multiplier === 10 && !reducedMotion;
+  // ×10 shares every animation and timing beat with ×5-×9 — only the color
+  // changes, via jackpot10 below — rather than an extra effect layered on
+  // top (the previous diagonal light sweep never rendered reliably).
+  const jackpot10 = jackpot && multiplier === 10;
   // Landing gets a one-shot white flash (slotFlash) plus an expanding ring
-  // burst (slotLandBurst) on every roll — the jackpot's gold glow only kicks
-  // in afterward, timed past those so nothing fights for the same instant.
-  // ×10 additionally gets a single diagonal light sweep (mysteryShine) rather
-  // than a second effect stacked on top of the glow — a quieter, one-shot
-  // payoff reads as considered rather than piling on more particles/rings.
+  // burst (slotLandBurst) on every roll — the jackpot's glow only kicks in
+  // afterward, timed past those so nothing fights for the same instant.
   const landAnimation = jackpot
-    ? [
-        'slotLand 0.6s cubic-bezier(0.34, 1.56, 0.64, 1)',
-        'slotFlash 0.7s ease-out',
-        'slotLandBurst 0.6s ease-out',
-        'mysteryJackpotGlow 1.8s ease-in-out 0.6s infinite',
-        ...(superJackpot ? ['mysteryShine 1.5s ease-out 0.5s'] : []),
-      ].join(', ')
+    ? 'slotLand 0.6s cubic-bezier(0.34, 1.56, 0.64, 1), slotFlash 0.7s ease-out, slotLandBurst 0.6s ease-out, mysteryJackpotGlow 1.8s ease-in-out 0.6s infinite'
     : 'slotLand 0.6s cubic-bezier(0.34, 1.56, 0.64, 1), slotFlash 0.7s ease-out, slotLandBurst 0.6s ease-out';
-  // A soft diagonal wash (brand cyan→purple, gold once jackpot) plus an inner
-  // top highlight and drop shadow reads as a glass card consistent with the
-  // rest of the app, rather than a single flat tinted fill with a matching
-  // border — the "sticker" look a flat color pill tends to read as.
-  const background = jackpot
-    ? 'linear-gradient(155deg, rgba(251,191,36,0.24) 0%, rgba(217,119,6,0.08) 55%, rgba(255,255,255,0.04) 100%)'
-    : 'linear-gradient(155deg, rgba(0,238,232,0.18) 0%, rgba(158,18,204,0.1) 55%, rgba(255,255,255,0.04) 100%)';
+  // A soft diagonal wash (brand cyan→purple; gold for ×5-×9; violet for ×10)
+  // plus an inner top highlight and drop shadow reads as a glass card
+  // consistent with the rest of the app, rather than a single flat tinted
+  // fill with a matching border — the "sticker" look a flat color pill tends
+  // to read as.
+  const colors = MYSTERY_COLORS[mysteryTier(jackpot, jackpot10)];
   return (
     <span
       // A fresh key per flicker tick (and a distinct one on landing) forces
@@ -249,38 +284,23 @@ function MysteryMultiplierChip({ multiplier }: Readonly<{ multiplier: number }>)
         position: 'relative', overflow: 'hidden',
         display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '2px',
         padding: landed ? '12px 28px' : '10px 24px', borderRadius: '18px',
-        background,
-        border: `1px solid ${jackpot ? 'rgba(251,191,36,0.4)' : 'rgba(255,255,255,0.14)'}`,
+        background: colors.background,
+        border: `1px solid ${colors.border}`,
         boxShadow: `inset 0 1px 0 ${jackpot ? 'rgba(255,255,255,0.2)' : 'rgba(255,255,255,0.14)'}, 0 10px 26px rgba(0,0,0,0.35)`,
         backdropFilter: 'blur(18px)',
         animation: landed ? landAnimation : 'slotSpinTick 0.14s ease-out',
-      }}
+        '--mystery-glow-color': colors.glow,
+      } as CSSProperties}
     >
-      {superJackpot && (
-        <span
-          aria-hidden="true"
-          style={{
-            position: 'absolute', top: 0, left: '-60%', width: '40%', height: '100%',
-            background: 'linear-gradient(75deg, transparent 0%, rgba(255,255,255,0.6) 50%, transparent 100%)',
-            transform: 'skewX(-20deg)', pointerEvents: 'none',
-            animation: 'mysteryShine 1.5s ease-out 0.5s',
-          }}
-        />
-      )}
       <span style={{
-        display: 'flex', alignItems: 'center', gap: '4px',
         fontSize: '0.62rem', fontWeight: 800, letterSpacing: '0.14em', textTransform: 'uppercase',
-        color: jackpot ? 'rgba(253,224,71,0.9)' : 'rgba(94,234,212,0.9)',
+        color: colors.label,
       }}>
-        {jackpot && <Sparkles style={{ width: '10px', height: '10px' }} />}
         Mystery Multiplier
-        {jackpot && <Sparkles style={{ width: '10px', height: '10px' }} />}
       </span>
       <span style={{
-        fontSize: mysteryValueFontSize(landed, superJackpot), fontWeight: 900, lineHeight: 1,
-        background: jackpot
-          ? 'linear-gradient(to bottom left, rgba(251,191,36,0.6) 0%, transparent 55%), linear-gradient(to top right, rgba(255,221,120,0.55) 0%, transparent 55%), #fff'
-          : 'linear-gradient(to bottom left, rgba(0,238,232,0.5) 0%, transparent 55%), linear-gradient(to top right, rgba(158,18,204,0.55) 0%, transparent 55%), #fff',
+        fontSize: mysteryValueFontSize(landed), fontWeight: 900, lineHeight: 1,
+        background: colors.valueGradient,
         WebkitBackgroundClip: 'text', WebkitTextFillColor: 'transparent', backgroundClip: 'text',
         // The chip itself pulses while a sharp, dim value rolls through it;
         // a clear reel motion communicates that this is a decoy without

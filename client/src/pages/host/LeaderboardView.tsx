@@ -59,7 +59,7 @@ export function FinalResultsWrapper({ game }: Readonly<{ game: HostState }>) {
     <FinalResultsView
       leaderboard={leaderboard}
       awards={awards}
-      backgroundSrc={`${import.meta.env.BASE_URL}background6.svg`}
+      backgroundSrc={`${import.meta.env.BASE_URL}backgrounds/background6.svg`}
       footer={<PillButton onClick={game.newGame} label="New Game" />}
     />
   );
