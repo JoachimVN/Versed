@@ -206,7 +206,6 @@ function MysteryMultiplierChip({ multiplier }: Readonly<{ multiplier: number }>)
   const [display, setDisplay] = useState(multiplier);
   const [tick, setTick] = useState(0);
   const [landed, setLanded] = useState(false);
-  const spunFor = useRef<number | null>(null);
   const [reducedMotion] = useState(() => globalThis.matchMedia('(prefers-reduced-motion: reduce)').matches);
   const audioCtxRef = useRef<AudioContext | null>(null);
 
@@ -227,8 +226,6 @@ function MysteryMultiplierChip({ multiplier }: Readonly<{ multiplier: number }>)
   }, []);
 
   useEffect(() => {
-    if (spunFor.current === multiplier) return;
-    spunFor.current = multiplier;
     const tier: 'normal' | 'jackpot' | 'mega' = multiplier === 10 ? 'mega' : multiplier >= 5 ? 'jackpot' : 'normal';
     if (reducedMotion) {
       setDisplay(multiplier);
@@ -255,6 +252,9 @@ function MysteryMultiplierChip({ multiplier }: Readonly<{ multiplier: number }>)
       i++;
     };
     step();
+    // React Strict Mode restarts effects in development. The restarted effect
+    // must schedule its own landing timer, or the first random decoy remains
+    // blurred indefinitely and can be mistaken for the real multiplier.
     return () => { cancelled = true; clearTimeout(timer); };
   }, [multiplier, reducedMotion]);
 

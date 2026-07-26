@@ -55,18 +55,19 @@ function PlayRevealShell({
   const mysteryScoreDelay = revealParty?.event === 'mystery' ? Math.max(300, MYSTERY_LANDING_MS - 1000 + 250) : 300;
   const { displayScore, deltaFading } = useAnimatedScore(myScore, myScoreDelta, mysteryScoreDelay);
   return (
-    <div
-      className={`page-enter screen-center-safe relative min-h-screen flex flex-col items-center gap-5 ${wide ? 'px-2 py-6' : 'p-6'}`}
-      style={{ overflowY: 'auto', overscrollBehavior: 'contain' }}
-    >
-      <img
-        src={`${import.meta.env.BASE_URL}background3.svg`}
-        alt=""
-        aria-hidden="true"
-        style={{ position: 'fixed', inset: 0, width: '100%', height: '100%', objectFit: 'cover', zIndex: 0 }}
-      />
-      <div style={{ position: 'fixed', inset: 0, zIndex: 1, background: 'rgba(5,5,14,0.82)', backdropFilter: 'blur(28px)' }} />
-      <div className="relative flex flex-col items-center gap-5 w-full" style={{ zIndex: 2 }}>
+    <div className="page-enter relative min-h-screen" style={{ overflowY: 'auto', overscrollBehavior: 'contain' }}>
+      <div className={`screen-center-safe relative flex min-h-full flex-col items-center gap-5 ${wide ? 'px-2 py-6' : 'p-6'}`} style={{ minHeight: '100%' }}>
+        <img
+          src={`${import.meta.env.BASE_URL}background3-2.png`}
+          alt=""
+          aria-hidden="true"
+          // This layer belongs to the scroll content, rather than the
+          // viewport, so the portrait artwork continues behind every reveal
+          // card and score row on a phone.
+          style={{ position: 'absolute', inset: 0, width: '100%', height: '100%', objectFit: 'cover', zIndex: 0 }}
+        />
+        <div style={{ position: 'absolute', inset: 0, zIndex: 1, background: 'rgba(5,5,14,0.82)', backdropFilter: 'blur(28px)' }} />
+        <div className="relative flex flex-col items-center gap-5 w-full" style={{ zIndex: 2 }}>
         <div className="liquid-btn relative" style={{ width: wide ? 'min(88vw, 366px)' : '310px', height: `${cardHeight}px` }}>
           <LiquidGlass
             style={{ position: 'absolute', top: '50%', left: '50%' }}
@@ -112,6 +113,7 @@ function PlayRevealShell({
               <Flame className="w-3 h-3" />{myStreak} in a row
             </p>
           )}
+        </div>
         </div>
       </div>
     </div>

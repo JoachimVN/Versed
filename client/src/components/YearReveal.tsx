@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useState } from 'react';
 import type { RoundResultEvent } from '../types';
 
 // The "guess the year" reveal: a slot-reel that lands on the real year, and
@@ -35,12 +35,9 @@ function YearNumber({ year, compact }: Readonly<{ year: number | string; compact
   const [display, setDisplay] = useState<number | string>(year);
   const [tick, setTick] = useState(0);
   const [landed, setLanded] = useState(!isNumber);
-  const spunFor = useRef<number | string | null>(null);
 
   useEffect(() => {
     if (!isNumber) { setDisplay(year); setLanded(true); return; }
-    if (spunFor.current === year) return;
-    spunFor.current = year;
     if (globalThis.matchMedia('(prefers-reduced-motion: reduce)').matches) {
       setDisplay(year);
       setLanded(true);
@@ -63,6 +60,10 @@ function YearNumber({ year, compact }: Readonly<{ year: number | string; compact
       i++;
     };
     step();
+    // React Strict Mode intentionally cleans up and restarts effects in
+    // development. Let the restarted effect own a fresh timer: suppressing
+    // it after the first pass leaves the randomly chosen decoy on screen,
+    // blurred forever, and makes every device show a different "answer".
     return () => { cancelled = true; clearTimeout(timer); };
   }, [year, isNumber]);
 

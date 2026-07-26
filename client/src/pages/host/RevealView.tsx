@@ -237,7 +237,7 @@ function RevealShell({
   return (
     <div className={`page-enter relative min-h-screen flex flex-col items-center gap-5 overflow-hidden ${wide ? 'px-2 py-6' : 'p-6'}`}>
       <img
-        src={`${import.meta.env.BASE_URL}background3.svg`}
+        src={`${import.meta.env.BASE_URL}background3-2.png`}
         alt=""
         aria-hidden="true"
         style={{ position: 'fixed', inset: 0, width: '100%', height: '100%', objectFit: 'cover', zIndex: 0, transform: 'rotate(180deg)' }}

@@ -387,7 +387,7 @@ export function PassedView({ game }: Readonly<{ game: PlayState }>) {
   return (
     <div className="relative min-h-screen overflow-hidden">
       <img
-        src={`${import.meta.env.BASE_URL}background3.svg`}
+        src={`${import.meta.env.BASE_URL}background3-2.png`}
         alt=""
         aria-hidden="true"
         style={{ position: 'fixed', inset: 0, width: '100%', height: '100%', objectFit: 'cover', zIndex: 0 }}
