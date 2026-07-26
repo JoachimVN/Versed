@@ -323,6 +323,12 @@ function YearNumber({ year, compact }: Readonly<{ year: number | string; compact
         animation: !isNumber ? undefined : (landed
           ? 'slotLand 0.6s cubic-bezier(0.34, 1.56, 0.64, 1), slotFlash 0.7s ease-out'
           : 'slotSpinTick 0.14s ease-out'),
+        // A decoy tick at full clarity is indistinguishable from the real
+        // answer if someone glances at exactly the wrong instant — a factual
+        // "the year was" card reads as authoritative, so unlike the mystery
+        // chip's playful spin, this needs to be unmistakably unsettled while
+        // it's still resolving.
+        filter: isNumber && !landed ? 'blur(3px)' : undefined,
       }}
     >
       {display}

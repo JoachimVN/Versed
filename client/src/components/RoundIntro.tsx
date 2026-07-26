@@ -227,6 +227,10 @@ function MysteryMultiplierChip({ multiplier }: Readonly<{ multiplier: number }>)
           ? 'linear-gradient(to bottom left, rgba(251,191,36,0.6) 0%, transparent 55%), linear-gradient(to top right, rgba(255,221,120,0.55) 0%, transparent 55%), #fff'
           : 'linear-gradient(to bottom left, rgba(0,238,232,0.5) 0%, transparent 55%), linear-gradient(to top right, rgba(158,18,204,0.55) 0%, transparent 55%), #fff',
         WebkitBackgroundClip: 'text', WebkitTextFillColor: 'transparent', backgroundClip: 'text',
+        // Same reasoning as the year reveal (RevealShared.tsx): a decoy tick
+        // at full clarity could be mistaken for the real multiplier by
+        // anyone glancing at exactly the wrong instant.
+        filter: landed ? undefined : 'blur(3px)',
       }}>
         ×{display}
       </span>
