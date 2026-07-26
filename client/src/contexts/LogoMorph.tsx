@@ -99,6 +99,18 @@ export function LogoMorphProvider({ children }: Readonly<{ children: React.React
     setRect(null);
   }, []);
 
+  // The overlay's rect is a snapshot of getBoundingClientRect() at the moment
+  // of capture — unlike the real logo and every LiquidGlass button, it has no
+  // way to track a resize. Left alone it would hang at its old pixel position
+  // while the rest of the page reflows to the new viewport, so a resize
+  // mid-flight just cancels the flight the same way an interrupted
+  // transition already does.
+  useEffect(() => {
+    if (!rect) return;
+    globalThis.addEventListener?.('resize', dismissMorph);
+    return () => globalThis.removeEventListener?.('resize', dismissMorph);
+  }, [rect, dismissMorph]);
+
   const animateToTarget = useCallback(
     (r: Rect) => {
       setAnimate(true);
