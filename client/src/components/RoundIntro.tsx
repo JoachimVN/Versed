@@ -4,6 +4,13 @@ import type { Hint, PartyInfo, RoundResultEvent } from '../types';
 import { useEscapeKey } from '../hooks/useEscapeKey';
 import { useFocusTrap } from '../hooks/useFocusTrap';
 import { REEL_STEPS_MS, useRevealReelSound } from '../hooks/useRevealReelSound';
+import type { RevealHitTier } from '../hooks/useRevealReelSound';
+
+function pickJackpotTier(multiplier: number): RevealHitTier {
+  if (multiplier === 10) return 3;
+  if (multiplier >= 5) return 2;
+  return 1;
+}
 
 // How long the announcement stays up. Betting/countdown timers run underneath,
 // so this must stay comfortably shorter than the shortest phase (5s minimum).
@@ -222,7 +229,7 @@ function MysteryMultiplierChip({ multiplier }: Readonly<{ multiplier: number }>)
       return;
     }
     setLanded(false);
-    const jackpotTier = multiplier === 10 ? 3 : multiplier >= 5 ? 2 : 1;
+    const jackpotTier = pickJackpotTier(multiplier);
     playReveal(jackpotTier);
     let cancelled = false;
     let timer: ReturnType<typeof setTimeout>;
