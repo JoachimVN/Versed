@@ -1,8 +1,6 @@
 import { describe, it, expect } from 'vitest';
-import {
-  BID_OPTIONS, bidScore, bidScoreTable, calcPoints, calcRacePoints, calcRaceWinnerPoints,
-  RACE_BASE, RACE_FLOOR,
-} from './gameManager';
+import { bidScore, bidScoreTable, calcPoints, calcRacePoints, calcRaceWinnerPoints } from './scoring';
+import { BID_OPTIONS, RACE_BASE, RACE_FLOOR } from './constants';
 import type { Game } from './types';
 
 // songSource 'playlist' pins difficultyBonus to its flat 250 so these tests
