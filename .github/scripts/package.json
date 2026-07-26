@@ -9,5 +9,8 @@
         "playwright": "1.55.1",
         "pngjs": "7.0.0",
         "serve": "14.2.6"
+    },
+    "overrides": {
+        "brace-expansion": "^5.0.8"
     }
 }
