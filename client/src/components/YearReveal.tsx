@@ -1,21 +1,16 @@
 import { useEffect, useState } from 'react';
 import type { RoundResultEvent } from '../types';
+import { REEL_STEPS_MS, REEL_LAND_MS, useRevealReelSound } from '../hooks/useRevealReelSound';
 
 // The "guess the year" reveal: a slot-reel that lands on the real year, and
 // the timeline that then builds in underneath it showing where everyone's
 // guesses fell. Used by both the host and player reveal screens, and by
 // RevealShared's final-round card.
 
-// Step durations for the year's slot-reel build-up — shorter than the
-// mystery multiplier's (RoundIntro.tsx) since it's paired with a timeline
-// that also needs to animate in afterward, but the same front-loaded-then-
-// decelerating shape so it reads as "landing" rather than "the label changed".
-const YEAR_SPIN_STEPS_MS = [50, 60, 75, 90, 115, 145, 180];
-
 // Total time (ms) from mount until the year lands — YearTimelineContent
 // times its marker entrances to start after this, so the timeline builds in
 // as a second beat once the year itself has landed, not simultaneously.
-export const YEAR_LAND_MS = YEAR_SPIN_STEPS_MS.reduce((a, b) => a + b, 0);
+export const YEAR_LAND_MS = REEL_LAND_MS;
 
 const CURRENT_YEAR = new Date().getFullYear();
 
@@ -31,15 +26,20 @@ function pickYearCandidate(real: number): number {
   return goUp ? real + jitter : real - jitter;
 }
 
-// Slot-reel reveal for the year: flickers through a handful of decoy years
-// before settling on the real one, mirroring the mystery multiplier chip's
-// reel (RoundIntro.tsx) so both "hidden number" reveals feel like one system.
-// Skipped for the '-'/'–' placeholder shown when there's no year data.
-function YearNumber({ year, compact }: Readonly<{ year: number | string; compact: boolean }>) {
+// The "year was" label + big gradient number, wrapped in the same pill-chip
+// container and spin/land/flash/burst animation set as the mystery multiplier
+// chip (RoundIntro.tsx) so both "hidden number" reveals feel like one system.
+// Skipped for the '-'/'–' placeholder shown when there's no year data. Shared
+// by the compact no-timeline fallback card and the full timeline card, which
+// only differ in sizing. `muted` skips the reveal SFX — both host and player
+// devices render this reel, but on the same table/room they'd otherwise both
+// play reveal_rise/reveal_hit at once, so only the host's copy sounds.
+export function YearHeading({ year, compact, muted = false }: Readonly<{ year: number | string; compact: boolean; muted?: boolean }>) {
   const isNumber = typeof year === 'number';
   const [display, setDisplay] = useState<number | string>(year);
   const [tick, setTick] = useState(0);
   const [landed, setLanded] = useState(!isNumber);
+  const playReveal = useRevealReelSound();
 
   useEffect(() => {
     if (!isNumber) { setDisplay(year); setLanded(true); return; }
@@ -49,19 +49,20 @@ function YearNumber({ year, compact }: Readonly<{ year: number | string; compact
       return;
     }
     setLanded(false);
+    if (!muted) playReveal();
     let cancelled = false;
     let timer: ReturnType<typeof setTimeout>;
     let i = 0;
     const step = () => {
       if (cancelled) return;
-      if (i >= YEAR_SPIN_STEPS_MS.length) {
+      if (i >= REEL_STEPS_MS.length) {
         setDisplay(year);
         setLanded(true);
         return;
       }
       setDisplay(pickYearCandidate(year));
       setTick(t => t + 1);
-      timer = setTimeout(step, YEAR_SPIN_STEPS_MS[i]);
+      timer = setTimeout(step, REEL_STEPS_MS[i]);
       i++;
     };
     step();
@@ -70,50 +71,45 @@ function YearNumber({ year, compact }: Readonly<{ year: number | string; compact
     // it after the first pass leaves the randomly chosen decoy on screen,
     // blurred forever, and makes every device show a different "answer".
     return () => { cancelled = true; clearTimeout(timer); };
-  }, [year, isNumber]);
+  }, [year, isNumber, muted, playReveal]);
 
-  let animation: string | undefined;
-  if (isNumber) {
-    animation = landed
-      ? 'slotLand 0.6s cubic-bezier(0.34, 1.56, 0.64, 1), slotFlash 0.7s ease-out'
-      : 'slotReelTick 0.14s ease-out';
-  }
+  // Same land animation as the mystery chip's non-jackpot roll: flash + a
+  // one-shot ring burst off the chip's own box-shadow, so landing on the
+  // year reads as a payoff rather than the label just changing.
+  const landAnimation = 'slotLand 0.6s cubic-bezier(0.34, 1.56, 0.64, 1), slotFlash 0.7s ease-out, slotLandBurst 0.6s ease-out';
 
   return (
     <span
       // A fresh key per flicker tick (and a distinct one on landing) forces
-      // the animation to restart on every value change, same trick as the
-      // mystery chip — a plain style-string diff wouldn't retrigger it.
+      // the animation to restart on every value change instead of continuing
+      // a stale one — a plain style-string diff wouldn't retrigger it. Key
+      // lives on the chip so the container's spin/land animation and the
+      // value text's reel animation restart in lockstep, same as the mystery
+      // chip.
       key={landed ? `landed-${year}` : `spin-${tick}`}
       style={{
-        fontSize: compact ? '2.6rem' : '2.2rem', fontWeight: 900, lineHeight: 1,
-        background: 'linear-gradient(to bottom left, rgba(0,238,232,0.5) 0%, transparent 55%), linear-gradient(to top right, rgba(158,18,204,0.5) 0%, transparent 55%), #fff',
-        WebkitBackgroundClip: 'text', WebkitTextFillColor: 'transparent', backgroundClip: 'text',
-        marginBottom: compact ? '8px' : '22px', display: 'inline-block', minWidth: compact ? '160px' : '140px',
-        animation,
-        // Decoys move through the reel sharply but briefly and dimly. That
-        // makes the resolving state clear without blurring the answer text.
+        display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '2px',
+        marginBottom: compact ? '8px' : '22px',
+        animation: isNumber ? (landed ? landAnimation : 'slotSpinTick 0.14s ease-out') : undefined,
       }}
     >
-      {display}
-    </span>
-  );
-}
-
-// The "year was" label + big gradient number: shared by the compact
-// no-timeline fallback card and the full timeline card, which only differ
-// in sizing.
-export function YearHeading({ year, compact }: Readonly<{ year: number | string; compact: boolean }>) {
-  return (
-    <>
       <span style={{
-        color: 'rgba(255,255,255,0.45)', fontSize: '0.6rem', letterSpacing: '0.18em', textTransform: 'uppercase',
-        marginBottom: compact ? '6px' : '4px', display: 'inline-block',
+        color: 'rgba(94,234,212,0.9)', fontSize: '0.62rem', fontWeight: 800, letterSpacing: '0.14em', textTransform: 'uppercase',
       }}>
         The year was
       </span>
-      <YearNumber year={year} compact={compact} />
-    </>
+      <span style={{
+        fontSize: compact ? '2.6rem' : '2.2rem', fontWeight: 900, lineHeight: 1, textAlign: 'center',
+        background: 'linear-gradient(to bottom left, rgba(0,238,232,0.5) 0%, transparent 55%), linear-gradient(to top right, rgba(158,18,204,0.5) 0%, transparent 55%), #fff',
+        WebkitBackgroundClip: 'text', WebkitTextFillColor: 'transparent', backgroundClip: 'text',
+        display: 'inline-block', minWidth: compact ? '160px' : '140px',
+        // Decoys move through the reel sharply but briefly and dimly. That
+        // makes the resolving state clear without blurring the answer text.
+        animation: isNumber && !landed ? 'slotReelTick 0.14s ease-out' : undefined,
+      }}>
+        {display}
+      </span>
+    </span>
   );
 }
 
@@ -143,18 +139,18 @@ export function YearSongFooter({ result, compact }: Readonly<{ result: RoundResu
 
 // Party "guess the year" rounds: the answer is a number, so the card leads
 // with the year and the closest player instead of a got-it/no-one-got-it state.
-export function YearCardContent({ result }: Readonly<{ result: RoundResultEvent }>) {
+export function YearCardContent({ result, muted = false }: Readonly<{ result: RoundResultEvent; muted?: boolean }>) {
   const winner = result.yearResults?.find(r => r.diff !== null);
   const pluralS = winner?.diff === 1 ? '' : 's';
   const winnerDetail = winner && (winner.diff === 0 ? ' · exact!' : ` (${winner.diff} year${pluralS} off)`);
   return (
     <div style={{ width: '262px', display: 'flex', flexDirection: 'column', alignItems: 'center', textAlign: 'center' }}>
-      <YearHeading year={result.year ? Math.floor(result.year) : '–'} compact />
+      <YearHeading year={result.year ? Math.floor(result.year) : '–'} compact muted={muted} />
       {winner && (
         <span style={{
           color: 'rgba(255,255,255,0.5)', fontSize: '0.82rem', marginBottom: '12px', display: 'inline-block', minWidth: '200px',
-          // Waits for the year number to finish its own reveal (YearNumber
-          // above) so "who won" reads as the payoff of that reveal, not a
+          // Waits for the year chip above to finish its own reveal (YearHeading)
+          // so "who won" reads as the payoff of that reveal, not a
           // simultaneous, unrelated line of text.
           animation: `fadeIn 0.4s ease-out ${(YEAR_LAND_MS + 150) / 1000}s both`,
         }}>
@@ -167,12 +163,12 @@ export function YearCardContent({ result }: Readonly<{ result: RoundResultEvent 
   );
 }
 
-export function YearTimelineContent({ result, showGuessValues = true }: Readonly<{ result: RoundResultEvent; showGuessValues?: boolean }>) {
+export function YearTimelineContent({ result, showGuessValues = true, muted = false }: Readonly<{ result: RoundResultEvent; showGuessValues?: boolean; muted?: boolean }>) {
   if (!result.yearResults) return null;
 
   const year = result.year ? Math.floor(result.year) : null;
   const guesses = result.yearResults.filter(r => r.guess !== null);
-  if (!year || guesses.length === 0) return <YearCardContent result={result} />;
+  if (!year || guesses.length === 0) return <YearCardContent result={result} muted={muted} />;
 
   const minGuess = Math.min(...guesses.map(g => g.guess!));
   const maxGuess = Math.max(...guesses.map(g => g.guess!));
@@ -298,7 +294,7 @@ export function YearTimelineContent({ result, showGuessValues = true }: Readonly
 
   return (
     <div style={{ width: 'min(84vw, 330px)', display: 'flex', flexDirection: 'column', alignItems: 'center', textAlign: 'center' }}>
-      <YearHeading year={year} compact={false} />
+      <YearHeading year={year} compact={false} muted={muted} />
 
       {/* Timeline */}
       <div style={{ position: 'relative', width: '100%', height: `${timelineHeight}px`, marginBottom: '8px' }}>

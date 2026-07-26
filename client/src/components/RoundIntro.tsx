@@ -3,6 +3,7 @@ import { Sparkles } from 'lucide-react';
 import type { Hint, PartyInfo, RoundResultEvent } from '../types';
 import { useEscapeKey } from '../hooks/useEscapeKey';
 import { useFocusTrap } from '../hooks/useFocusTrap';
+import { REEL_STEPS_MS, REEL_LAND_MS, useRevealReelSound } from '../hooks/useRevealReelSound';
 
 // How long the announcement stays up. Betting/countdown timers run underneath,
 // so this must stay comfortably shorter than the shortest phase (5s minimum).
@@ -135,18 +136,12 @@ export function RoundIntro({ party, roundKey, dismissible = true }: Readonly<{ p
 // roll landed on (that's added back as the final, held frame).
 const MYSTERY_CANDIDATES = [1.5, 2, 3, 4, 5, 10];
 
-// Step durations for the flicker, front-loaded fast then slowing down like a
-// wheel losing momentum — the deceleration is what sells "landing" rather
-// than "the label just changed". The last two steps are the longest of all,
-// stretching out the final "is it going to be a big one?" beat. Scaled up
-// ~40% from the original curve (same shape, more room to breathe) after
-// playtesting found the reel landed before it read as a reel at all.
-const MYSTERY_SPIN_STEPS_MS = [75, 90, 110, 130, 160, 195, 235, 285, 340, 405, 485, 585];
-
 // Total time (ms) from mount until the reel lands on the real value — other
 // reveal timing (e.g. delaying the score count-up) syncs against this so the
-// multiplier is always visible before points start moving.
-export const MYSTERY_LANDING_MS = MYSTERY_SPIN_STEPS_MS.reduce((a, b) => a + b, 0);
+// multiplier is always visible before points start moving. Shares its step
+// curve and total duration (2 beats at 112bpm) with the year reel — see
+// useRevealReelSound.
+export const MYSTERY_LANDING_MS = REEL_LAND_MS;
 
 function pickMysteryCandidate(candidates: readonly number[]) {
   const randomValue = new Uint32Array(1);
@@ -181,6 +176,7 @@ function MysteryMultiplierChip({ multiplier }: Readonly<{ multiplier: number }>)
   const [tick, setTick] = useState(0);
   const [landed, setLanded] = useState(false);
   const [reducedMotion] = useState(() => globalThis.matchMedia('(prefers-reduced-motion: reduce)').matches);
+  const playReveal = useRevealReelSound();
 
   useEffect(() => {
     if (reducedMotion) {
@@ -189,6 +185,7 @@ function MysteryMultiplierChip({ multiplier }: Readonly<{ multiplier: number }>)
       return;
     }
     setLanded(false);
+    playReveal();
     let cancelled = false;
     let timer: ReturnType<typeof setTimeout>;
     const pool = MYSTERY_CANDIDATES.filter(v => v !== multiplier);
@@ -196,7 +193,7 @@ function MysteryMultiplierChip({ multiplier }: Readonly<{ multiplier: number }>)
     let i = 0;
     const step = () => {
       if (cancelled) return;
-      if (i >= MYSTERY_SPIN_STEPS_MS.length) {
+      if (i >= REEL_STEPS_MS.length) {
         setDisplay(multiplier);
         setLanded(true);
         return;
@@ -205,7 +202,7 @@ function MysteryMultiplierChip({ multiplier }: Readonly<{ multiplier: number }>)
       previous = next;
       setDisplay(next);
       setTick(t => t + 1);
-      timer = setTimeout(step, MYSTERY_SPIN_STEPS_MS[i]);
+      timer = setTimeout(step, REEL_STEPS_MS[i]);
       i++;
     };
     step();
@@ -213,7 +210,7 @@ function MysteryMultiplierChip({ multiplier }: Readonly<{ multiplier: number }>)
     // must schedule its own landing timer, or the first random decoy remains
     // blurred indefinitely and can be mistaken for the real multiplier.
     return () => { cancelled = true; clearTimeout(timer); };
-  }, [multiplier, reducedMotion]);
+  }, [multiplier, reducedMotion, playReveal]);
 
   const jackpot = landed && multiplier >= 5;
   const superJackpot = jackpot && multiplier === 10 && !reducedMotion;
