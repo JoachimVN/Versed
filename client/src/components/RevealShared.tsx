@@ -15,23 +15,26 @@ export const BIG_POINTS_THRESHOLD = 2500;
 // then the multiplier's own contribution, then pity last (it's added after
 // the multiplier, not scaled by it). Omits the multiplier/pity lines
 // entirely on a plain round where neither applied — everyone still sees
-// where their base/bid/difficulty points came from either way.
-export function breakdownLines(b: PointsBreakdown): string[] {
+// where their base/bid/difficulty points came from either way. hideMultiplier
+// drops just that one line — used on player screens for a mystery round,
+// where the multiplier's value is a host-screen-only reveal and shouldn't
+// leak through the point breakdown text either.
+export function breakdownLines(b: PointsBreakdown, hideMultiplier = false): string[] {
   const lines = b.parts.filter(p => p.amount !== 0).map(p => `${p.label} +${p.amount.toLocaleString()}`);
-  if (b.multiplier !== 1) lines.push(`×${b.multiplier} multiplier +${b.multiplierBonus.toLocaleString()}`);
+  if (!hideMultiplier && b.multiplier !== 1) lines.push(`×${b.multiplier} multiplier +${b.multiplierBonus.toLocaleString()}`);
   if (b.pity > 0) lines.push(`Pity +${b.pity.toLocaleString()}`);
   return lines;
 }
 
-export function breakdownCompact(b: PointsBreakdown): string {
-  return breakdownLines(b).join(' · ');
+export function breakdownCompact(b: PointsBreakdown, hideMultiplier = false): string {
+  return breakdownLines(b, hideMultiplier).join(' · ');
 }
 
 // Stacked itemization shown under a player's own score pill — every round,
 // not just ones with a bonus, so "where did my points come from" always has
 // an answer instead of only showing up when something unusual happened.
-export function PointsBreakdownList({ breakdown }: Readonly<{ breakdown: PointsBreakdown }>) {
-  const lines = breakdownLines(breakdown);
+export function PointsBreakdownList({ breakdown, hideMultiplier = false }: Readonly<{ breakdown: PointsBreakdown; hideMultiplier?: boolean }>) {
+  const lines = breakdownLines(breakdown, hideMultiplier);
   if (lines.length === 0) return null;
   return (
     <div className="flex flex-col items-center gap-0.5" style={{ marginTop: '2px' }}>

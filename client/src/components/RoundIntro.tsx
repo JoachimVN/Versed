@@ -239,14 +239,18 @@ function MysteryMultiplierChip({ multiplier }: Readonly<{ multiplier: number }>)
 }
 
 // Party extras shown under the reveal card: revealed multiplier, steal outcome
-// (or "picking a victim…" while the thief decides). Shared by host and player.
-export function PartyRevealExtras({ result, stealResult, hints }: Readonly<{
+// (or "picking a victim…" while the thief decides). Shared by host and player
+// — hideMysteryChip lets the player's own screen opt out of the slot-reel
+// reveal entirely, keeping the "what will it be?" moment host-screen-only
+// (e.g. a shared TV) instead of every phone re-running its own reel too.
+export function PartyRevealExtras({ result, stealResult, hints, hideMysteryChip = false }: Readonly<{
   result: RoundResultEvent;
   stealResult: { thief: string; victim: string; amount: number; skipped?: boolean } | null;
   hints?: Hint[];
+  hideMysteryChip?: boolean;
 }>) {
   const party = result.party;
-  const mysteryMultiplier = party?.event === 'mystery' ? party.multiplier : null;
+  const mysteryMultiplier = !hideMysteryChip && party?.event === 'mystery' ? party.multiplier : null;
   const chips: { text: string; reveal: boolean }[] = [];
   if (party?.event === 'double') {
     chips.push({ text: 'Double points · ×2', reveal: false });

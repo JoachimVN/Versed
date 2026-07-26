@@ -73,7 +73,7 @@ function PlayRevealShell({
           </LiquidGlass>
         </div>
 
-        {!isFinalReveal && <PartyRevealExtras result={result} stealResult={stealResult} hints={game.hints} />}
+        {!isFinalReveal && <PartyRevealExtras result={result} stealResult={stealResult} hints={game.hints} hideMysteryChip />}
 
         {guessesList}
 
@@ -86,7 +86,7 @@ function PlayRevealShell({
               +{myScoreDelta.toLocaleString()} pts
             </p>
           )}
-          {myScoreDelta > 0 && myBreakdown && <PointsBreakdownList breakdown={myBreakdown} />}
+          {myScoreDelta > 0 && myBreakdown && <PointsBreakdownList breakdown={myBreakdown} hideMultiplier={revealParty?.event === 'mystery'} />}
           <p
             // Remounts once when deltaFading flips true (the count-up landing
             // on its final value), replaying the one-shot flash below — the
@@ -141,7 +141,7 @@ export function YearRevealView({ game, result }: Readonly<{ game: PlayState; res
             <span className="ml-1.5 text-xs text-sky-400 font-semibold tabular-nums shrink-0">+{r.points.toLocaleString()}</span>
           </div>
           {r.breakdown && (
-            <p className="text-white/35 text-[0.62rem] text-right leading-tight break-words" style={{ overflowWrap: 'anywhere' }}>{breakdownCompact(r.breakdown)}</p>
+            <p className="text-white/35 text-[0.62rem] text-right leading-tight break-words" style={{ overflowWrap: 'anywhere' }}>{breakdownCompact(r.breakdown, result.party?.event === 'mystery')}</p>
           )}
         </div>
       ))}
