@@ -40,6 +40,12 @@ function getContext(): AudioContext {
 
 type Buffers = { rise: AudioBuffer; hit: AudioBuffer; hit2: AudioBuffer; hit3: AudioBuffer };
 
+function pickHitBuffer(tier: RevealHitTier, buffers: Buffers): AudioBuffer {
+  if (tier === 3) return buffers.hit3;
+  if (tier === 2) return buffers.hit2;
+  return buffers.hit;
+}
+
 let buffersPromise: Promise<Buffers> | null = null;
 function loadBuffers(): Promise<Buffers> {
   buffersPromise ??= (async () => {
@@ -92,7 +98,7 @@ export type RevealHitTier = 1 | 2 | 3;
 export function useRevealReelSound() {
   return useCallback((tier: RevealHitTier = 1) => {
     loadBuffers().then((buffers) => {
-      const hit = tier === 3 ? buffers.hit3 : tier === 2 ? buffers.hit2 : buffers.hit;
+      const hit = pickHitBuffer(tier, buffers);
       const audioCtx = getContext();
       const start = audioCtx.currentTime;
       const riseSource = audioCtx.createBufferSource();

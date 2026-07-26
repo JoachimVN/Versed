@@ -222,7 +222,8 @@ function MysteryMultiplierChip({ multiplier }: Readonly<{ multiplier: number }>)
       return;
     }
     setLanded(false);
-    playReveal(multiplier === 10 ? 3 : multiplier >= 5 ? 2 : 1);
+    const jackpotTier = multiplier === 10 ? 3 : multiplier >= 5 ? 2 : 1;
+    playReveal(jackpotTier);
     let cancelled = false;
     let timer: ReturnType<typeof setTimeout>;
     const pool = MYSTERY_CANDIDATES.filter(v => v !== multiplier);

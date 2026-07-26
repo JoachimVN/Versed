@@ -77,6 +77,7 @@ export function YearHeading({ year, compact, muted = false }: Readonly<{ year: n
   // one-shot ring burst off the chip's own box-shadow, so landing on the
   // year reads as a payoff rather than the label just changing.
   const landAnimation = 'slotLand 0.6s cubic-bezier(0.34, 1.56, 0.64, 1), slotFlash 0.7s ease-out, slotLandBurst 0.6s ease-out';
+  const containerAnimation = isNumber ? (landed ? landAnimation : 'slotSpinTick 0.14s ease-out') : undefined;
 
   return (
     <span
@@ -90,7 +91,7 @@ export function YearHeading({ year, compact, muted = false }: Readonly<{ year: n
       style={{
         display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '2px',
         marginBottom: compact ? '8px' : '22px',
-        animation: isNumber ? (landed ? landAnimation : 'slotSpinTick 0.14s ease-out') : undefined,
+        animation: containerAnimation,
       }}
     >
       <span style={{
