@@ -339,7 +339,7 @@ select:focus-visible,
 }
 
 /* Shared slot-reel language for both the mystery multiplier chip and the
-   guess-the-year number (RoundIntro.tsx / RevealShared.tsx): a quick flicker
+   guess-the-year number (RoundIntro.tsx / YearReveal.tsx): a quick flicker
    per decoy value, then a bigger overshoot than chipReveal for the value it
    actually lands on, so settling reads as a payoff. */
 @keyframes slotSpinTick {
