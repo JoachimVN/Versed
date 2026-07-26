@@ -3,7 +3,7 @@ import type { CSSProperties } from 'react';
 import type { Hint, PartyInfo, RoundResultEvent } from '../types';
 import { useEscapeKey } from '../hooks/useEscapeKey';
 import { useFocusTrap } from '../hooks/useFocusTrap';
-import { REEL_STEPS_MS, REEL_LAND_MS, useRevealReelSound } from '../hooks/useRevealReelSound';
+import { REEL_STEPS_MS, useRevealReelSound } from '../hooks/useRevealReelSound';
 
 // How long the announcement stays up. Betting/countdown timers run underneath,
 // so this must stay comfortably shorter than the shortest phase (5s minimum).
@@ -141,7 +141,7 @@ const MYSTERY_CANDIDATES = [1.5, 2, 3, 4, 5, 10];
 // multiplier is always visible before points start moving. Shares its step
 // curve and total duration (2 beats at 112bpm) with the year reel — see
 // useRevealReelSound.
-export const MYSTERY_LANDING_MS = REEL_LAND_MS;
+export { REEL_LAND_MS as MYSTERY_LANDING_MS } from '../hooks/useRevealReelSound';
 
 function pickMysteryCandidate(candidates: readonly number[]) {
   const randomValue = new Uint32Array(1);
