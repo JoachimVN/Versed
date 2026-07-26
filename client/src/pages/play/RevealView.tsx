@@ -54,7 +54,10 @@ function PlayRevealShell({
   const mysteryScoreDelay = revealParty?.event === 'mystery' ? Math.max(300, MYSTERY_LANDING_MS - 1000 + 250) : 300;
   const { displayScore, deltaFading } = useAnimatedScore(myScore, myScoreDelta, mysteryScoreDelay);
   return (
-    <div className={`page-enter relative min-h-screen flex flex-col items-center justify-center gap-5 overflow-hidden ${wide ? 'px-2 py-6' : 'p-6'}`}>
+    <div
+      className={`page-enter screen-center-safe relative min-h-screen flex flex-col items-center gap-5 ${wide ? 'px-2 py-6' : 'p-6'}`}
+      style={{ overflowY: 'auto', overscrollBehavior: 'contain' }}
+    >
       <img
         src={`${import.meta.env.BASE_URL}background3.svg`}
         alt=""
