@@ -138,8 +138,10 @@ const MYSTERY_CANDIDATES = [1.5, 2, 3, 4, 5, 10];
 // Step durations for the flicker, front-loaded fast then slowing down like a
 // wheel losing momentum — the deceleration is what sells "landing" rather
 // than "the label just changed". The last two steps are the longest of all,
-// stretching out the final "is it going to be a big one?" beat.
-const MYSTERY_SPIN_STEPS_MS = [55, 65, 80, 95, 115, 140, 170, 205, 245, 290, 350, 420];
+// stretching out the final "is it going to be a big one?" beat. Scaled up
+// ~40% from the original curve (same shape, more room to breathe) after
+// playtesting found the reel landed before it read as a reel at all.
+const MYSTERY_SPIN_STEPS_MS = [75, 90, 110, 130, 160, 195, 235, 285, 340, 405, 485, 585];
 
 // Total time (ms) from mount until the reel lands on the real value — other
 // reveal timing (e.g. delaying the score count-up) syncs against this so the
@@ -152,9 +154,14 @@ function pickMysteryCandidate(candidates: readonly number[]) {
   return candidates[randomValue[0] % candidates.length]!;
 }
 
-// Angles for the spark burst fired outward from the chip on a ×10 roll — one
-// full ring so it reads as an explosion rather than a directional flick.
-const MEGA_SPARK_ANGLES = [0, 45, 90, 135, 180, 225, 270, 315];
+// Picks the next decoy, excluding both the real answer (via `pool`, already
+// filtered by the caller) and whichever value is currently on screen — a
+// flicker that can repeat its immediately-previous frame reads as the reel
+// stalling rather than spinning.
+function pickNextCandidate(pool: readonly number[], previous: number | null) {
+  const options = previous === null ? pool : pool.filter(v => v !== previous);
+  return pickMysteryCandidate(options.length > 0 ? options : pool);
+}
 
 function mysteryValueFontSize(landed: boolean, superJackpot: boolean): string {
   if (!landed) return '1.9rem';
@@ -162,12 +169,13 @@ function mysteryValueFontSize(landed: boolean, superJackpot: boolean): string {
 }
 
 // Slot-reel reveal for the mystery multiplier: flickers through a handful of
-// decoy values before settling on the real one, instead of the value just
-// appearing. ×5/×10 (the rare high rolls) keep pulsing gold after landing so
-// the jackpot outcome reads as more exciting than a routine ×1.5-×4. ×10
-// specifically — the rarest roll in the pool — gets a bigger payoff again on
-// top of that: a second expanding ring, an outward spark burst, and a hotter
-// glow, so the best possible outcome doesn't look the same as a plain ×5.
+// decoy values (never repeating the immediately-previous one, see
+// pickNextCandidate) before settling on the real one, instead of the value
+// just appearing. ×5/×10 (the rare high rolls) keep pulsing gold after
+// landing so the jackpot outcome reads as more exciting than a routine
+// ×1.5-×4. ×10 specifically — the rarest roll in the pool — gets one further
+// touch on top of that: a single diagonal light sweep, so the best possible
+// outcome doesn't look the same as a plain ×5 without piling on more effects.
 function MysteryMultiplierChip({ multiplier }: Readonly<{ multiplier: number }>) {
   const [display, setDisplay] = useState(multiplier);
   const [tick, setTick] = useState(0);
@@ -184,6 +192,7 @@ function MysteryMultiplierChip({ multiplier }: Readonly<{ multiplier: number }>)
     let cancelled = false;
     let timer: ReturnType<typeof setTimeout>;
     const pool = MYSTERY_CANDIDATES.filter(v => v !== multiplier);
+    let previous: number | null = null;
     let i = 0;
     const step = () => {
       if (cancelled) return;
@@ -192,7 +201,9 @@ function MysteryMultiplierChip({ multiplier }: Readonly<{ multiplier: number }>)
         setLanded(true);
         return;
       }
-      setDisplay(pickMysteryCandidate(pool));
+      const next = pickNextCandidate(pool, previous);
+      previous = next;
+      setDisplay(next);
       setTick(t => t + 1);
       timer = setTimeout(step, MYSTERY_SPIN_STEPS_MS[i]);
       i++;
@@ -209,17 +220,25 @@ function MysteryMultiplierChip({ multiplier }: Readonly<{ multiplier: number }>)
   // Landing gets a one-shot white flash (slotFlash) plus an expanding ring
   // burst (slotLandBurst) on every roll — the jackpot's gold glow only kicks
   // in afterward, timed past those so nothing fights for the same instant.
-  // ×10 layers a second, larger ring (mysteryMegaRing) right after the first
-  // and swaps in a hotter continuous glow instead of the standard one.
+  // ×10 additionally gets a single diagonal light sweep (mysteryShine) rather
+  // than a second effect stacked on top of the glow — a quieter, one-shot
+  // payoff reads as considered rather than piling on more particles/rings.
   const landAnimation = jackpot
     ? [
         'slotLand 0.6s cubic-bezier(0.34, 1.56, 0.64, 1)',
         'slotFlash 0.7s ease-out',
         'slotLandBurst 0.6s ease-out',
-        ...(superJackpot ? ['mysteryMegaRing 0.9s ease-out 0.08s'] : []),
-        superJackpot ? 'mysteryMegaGlow 1.4s ease-in-out 0.6s infinite' : 'mysteryJackpotGlow 1.6s ease-in-out 0.6s infinite',
+        'mysteryJackpotGlow 1.8s ease-in-out 0.6s infinite',
+        ...(superJackpot ? ['mysteryShine 1.5s ease-out 0.5s'] : []),
       ].join(', ')
     : 'slotLand 0.6s cubic-bezier(0.34, 1.56, 0.64, 1), slotFlash 0.7s ease-out, slotLandBurst 0.6s ease-out';
+  // A soft diagonal wash (brand cyan→purple, gold once jackpot) plus an inner
+  // top highlight and drop shadow reads as a glass card consistent with the
+  // rest of the app, rather than a single flat tinted fill with a matching
+  // border — the "sticker" look a flat color pill tends to read as.
+  const background = jackpot
+    ? 'linear-gradient(155deg, rgba(251,191,36,0.24) 0%, rgba(217,119,6,0.08) 55%, rgba(255,255,255,0.04) 100%)'
+    : 'linear-gradient(155deg, rgba(0,238,232,0.18) 0%, rgba(158,18,204,0.1) 55%, rgba(255,255,255,0.04) 100%)';
   return (
     <span
       // A fresh key per flicker tick (and a distinct one on landing) forces
@@ -227,26 +246,27 @@ function MysteryMultiplierChip({ multiplier }: Readonly<{ multiplier: number }>)
       // a stale one — a plain style-string diff wouldn't retrigger it.
       key={landed ? `landed-${multiplier}` : `spin-${tick}`}
       style={{
-        position: 'relative',
+        position: 'relative', overflow: 'hidden',
         display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '2px',
-        padding: landed ? '12px 28px' : '10px 24px', borderRadius: '20px',
-        background: jackpot ? 'rgba(251,191,36,0.14)' : 'rgba(0,238,232,0.1)',
-        border: `1px solid ${jackpot ? 'rgba(251,191,36,0.45)' : 'rgba(0,238,232,0.3)'}`,
+        padding: landed ? '12px 28px' : '10px 24px', borderRadius: '18px',
+        background,
+        border: `1px solid ${jackpot ? 'rgba(251,191,36,0.4)' : 'rgba(255,255,255,0.14)'}`,
+        boxShadow: `inset 0 1px 0 ${jackpot ? 'rgba(255,255,255,0.2)' : 'rgba(255,255,255,0.14)'}, 0 10px 26px rgba(0,0,0,0.35)`,
+        backdropFilter: 'blur(18px)',
         animation: landed ? landAnimation : 'slotSpinTick 0.14s ease-out',
       }}
     >
-      {superJackpot && MEGA_SPARK_ANGLES.map((angle, i) => (
+      {superJackpot && (
         <span
-          key={`spark-${multiplier}-${angle}`}
+          aria-hidden="true"
           style={{
-            position: 'absolute', top: '50%', left: '50%', width: '5px', height: '5px',
-            borderRadius: '50%', pointerEvents: 'none',
-            background: 'radial-gradient(circle, #fff 0%, #fbbf24 60%, transparent 100%)',
-            '--spark-angle': `${angle}deg`,
-            animation: `mysterySpark 0.7s ease-out ${0.08 + i * 0.015}s backwards`,
-          } as React.CSSProperties}
+            position: 'absolute', top: 0, left: '-60%', width: '40%', height: '100%',
+            background: 'linear-gradient(75deg, transparent 0%, rgba(255,255,255,0.6) 50%, transparent 100%)',
+            transform: 'skewX(-20deg)', pointerEvents: 'none',
+            animation: 'mysteryShine 1.5s ease-out 0.5s',
+          }}
         />
-      ))}
+      )}
       <span style={{
         display: 'flex', alignItems: 'center', gap: '4px',
         fontSize: '0.62rem', fontWeight: 800, letterSpacing: '0.14em', textTransform: 'uppercase',
