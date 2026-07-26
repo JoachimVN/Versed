@@ -4,11 +4,8 @@ import qrcode from 'qrcode-generator';
 import { APP_NAME } from '../../config';
 
 const QR_SIZE = 148;
-const QR_CENTER_MARK_RATIO = 0.28;
-const QR_CENTER_MARK_EXTRA_MODULES = 1;
-const QR_CENTER_ICON_RATIO = 0.8;
 
-export function GradientQRCode({ value, size, title, iconUrl }: Readonly<{ value: string; size: number; title: string; iconUrl: string }>) {
+export function GradientQRCode({ value, size, title }: Readonly<{ value: string; size: number; title: string }>) {
   const gradientId = useId();
   const qr = useMemo(() => {
     qrcode.stringToBytes = (s: string) => Array.from(new TextEncoder().encode(s));
@@ -18,17 +15,11 @@ export function GradientQRCode({ value, size, title, iconUrl }: Readonly<{ value
     return nextQr;
   }, [value]);
   const moduleCount = qr.getModuleCount();
-  const centerSize = Math.max(7, Math.floor(moduleCount * QR_CENTER_MARK_RATIO)) + QR_CENTER_MARK_EXTRA_MODULES * 2;
-  const centerStart = Math.floor((moduleCount - centerSize) / 2);
-  const centerEnd = centerStart + centerSize;
-  const iconSize = centerSize * QR_CENTER_ICON_RATIO;
-  const iconInset = (centerSize - iconSize) / 2;
   const modules = [];
 
   for (let row = 0; row < moduleCount; row += 1) {
     for (let col = 0; col < moduleCount; col += 1) {
       if (!qr.isDark(row, col)) continue;
-      if (row >= centerStart && row < centerEnd && col >= centerStart && col < centerEnd) continue;
       modules.push(
         <rect
           key={`${row}-${col}`}
@@ -53,21 +44,6 @@ export function GradientQRCode({ value, size, title, iconUrl }: Readonly<{ value
       </defs>
       <rect width={moduleCount} height={moduleCount} fill="#ffffff" />
       <g fill={`url(#${gradientId})`} shapeRendering="crispEdges">{modules}</g>
-      <rect
-        x={centerStart}
-        y={centerStart}
-        width={centerSize}
-        height={centerSize}
-        fill={`url(#${gradientId})`}
-      />
-      <image
-        href={iconUrl}
-        x={centerStart + iconInset}
-        y={centerStart + iconInset}
-        width={iconSize}
-        height={iconSize}
-        preserveAspectRatio="xMidYMid meet"
-      />
     </svg>
   );
 }
@@ -77,7 +53,6 @@ export function JoinCard({ pin, copied, copyInvite }: Readonly<{ pin: string; co
   const isScreenshot = searchParams.has('v');
   const baseUrl = isScreenshot ? 'https://joavn.dev/versed' : `${globalThis.location.origin}${import.meta.env.BASE_URL}`.replace(/\/$/, '');
   const qrUrl = isScreenshot ? `https://joavn.dev/versed/play/${pin}` : `${globalThis.location.origin}${import.meta.env.BASE_URL}play/${pin}`;
-  const iconUrl = `${import.meta.env.BASE_URL}icons/icon.svg`;
 
   return (
     <div className="w-full max-w-md bg-white/5 rounded-2xl p-5">
@@ -113,7 +88,6 @@ export function JoinCard({ pin, copied, copyInvite }: Readonly<{ pin: string; co
             value={qrUrl}
             size={QR_SIZE}
             title={`Join ${APP_NAME} game ${pin}`}
-            iconUrl={iconUrl}
           />
         </div>
       </div>
