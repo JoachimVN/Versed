@@ -373,6 +373,28 @@ select:focus-visible,
   0%, 100% { box-shadow: 0 0 0 0 rgba(251,191,36,0.5); }
   50%       { box-shadow: 0 0 24px 8px rgba(251,191,36,0.5); }
 }
+/* ×10 only — the rarest roll in the pool. A hotter version of
+   mysteryJackpotGlow (wider spread, higher opacity) so the best possible
+   outcome still reads as a step up from a plain ×5 once the one-shot burst
+   below has faded. */
+@keyframes mysteryMegaGlow {
+  0%, 100% { box-shadow: 0 0 0 0 rgba(251,191,36,0.6); }
+  50%       { box-shadow: 0 0 34px 12px rgba(251,191,36,0.65); }
+}
+/* ×10 only — a second, larger ring layered right after slotLandBurst's,
+   two shells at once (gold + white) so the landing reads as hitting harder
+   than the single ring every other roll gets. */
+@keyframes mysteryMegaRing {
+  0%   { box-shadow: 0 0 0 0 rgba(251,191,36,0.55), 0 0 0 0 rgba(255,255,255,0.35); }
+  100% { box-shadow: 0 0 0 26px rgba(251,191,36,0), 0 0 0 38px rgba(255,255,255,0); }
+}
+/* ×10 only — small gold sparks fired outward from the chip in a full ring,
+   one keyframe shared by all of them via the per-particle --spark-angle
+   custom property (same trick as stealFlight's --steal-dx/--steal-dy). */
+@keyframes mysterySpark {
+  0%   { transform: translate(-50%, -50%) rotate(var(--spark-angle)) translateX(0) scale(1); opacity: 1; }
+  100% { transform: translate(-50%, -50%) rotate(var(--spark-angle)) translateX(46px) scale(0.2); opacity: 0; }
+}
 
 /* A player's round delta clears BIG_POINTS_THRESHOLD (RevealShared.tsx): one
    dramatic grow-and-flash burst (no rotation — reads as clean, not gimmicky)

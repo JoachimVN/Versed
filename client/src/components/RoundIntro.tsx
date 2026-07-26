@@ -152,22 +152,88 @@ function pickMysteryCandidate(candidates: readonly number[]) {
   return candidates[randomValue[0] % candidates.length]!;
 }
 
+// Angles for the spark burst fired outward from the chip on a ×10 roll — one
+// full ring so it reads as an explosion rather than a directional flick.
+const MEGA_SPARK_ANGLES = [0, 45, 90, 135, 180, 225, 270, 315];
+
+// One-shot tone with a short exponential attack/decay envelope. Exponential
+// ramps can't target exactly 0 (Web Audio throws), hence the 0.0001 floor.
+function playTone(ctx: AudioContext, freq: number, type: OscillatorType, startOffset: number, duration: number, peakGain: number) {
+  const osc = ctx.createOscillator();
+  const gain = ctx.createGain();
+  osc.type = type;
+  osc.frequency.value = freq;
+  const t0 = ctx.currentTime + startOffset;
+  gain.gain.setValueAtTime(0.0001, t0);
+  gain.gain.exponentialRampToValueAtTime(peakGain, t0 + 0.012);
+  gain.gain.exponentialRampToValueAtTime(0.0001, t0 + duration);
+  osc.connect(gain).connect(ctx.destination);
+  osc.start(t0);
+  osc.stop(t0 + duration + 0.02);
+}
+
+// Synthesized landing cue, tiered with the visual payoff: every roll gets a
+// soft ding, ×5 gets a two-note chime with a shimmer layer, and the rare ×10
+// gets a sub "thump" for weight plus a rising major-chord arpeggio (with an
+// octave-up shimmer doubling each note) so it reads as the jackpot.
+function playMysteryChime(ctx: AudioContext, tier: 'normal' | 'jackpot' | 'mega') {
+  if (tier === 'normal') {
+    playTone(ctx, 784, 'sine', 0, 0.22, 0.16);
+    return;
+  }
+  if (tier === 'jackpot') {
+    playTone(ctx, 587, 'sine', 0, 0.18, 0.18);
+    playTone(ctx, 784, 'sine', 0.09, 0.28, 0.2);
+    playTone(ctx, 784, 'triangle', 0.09, 0.28, 0.05);
+    return;
+  }
+  playTone(ctx, 90, 'sine', 0, 0.35, 0.3);
+  const notes = [523.25, 659.25, 783.99, 1046.5];
+  notes.forEach((f, i) => {
+    playTone(ctx, f, 'triangle', 0.05 + i * 0.075, 0.3, 0.18);
+    playTone(ctx, f * 2, 'sine', 0.05 + i * 0.075, 0.2, 0.05);
+  });
+}
+
 // Slot-reel reveal for the mystery multiplier: flickers through a handful of
 // decoy values before settling on the real one, instead of the value just
 // appearing. ×5/×10 (the rare high rolls) keep pulsing gold after landing so
-// the jackpot outcome reads as more exciting than a routine ×1.5-×4.
+// the jackpot outcome reads as more exciting than a routine ×1.5-×4. ×10
+// specifically — the rarest roll in the pool — gets a bigger payoff again on
+// top of that: a second expanding ring, an outward spark burst, and a hotter
+// glow, so the best possible outcome doesn't look the same as a plain ×5.
 function MysteryMultiplierChip({ multiplier }: Readonly<{ multiplier: number }>) {
   const [display, setDisplay] = useState(multiplier);
   const [tick, setTick] = useState(0);
   const [landed, setLanded] = useState(false);
   const spunFor = useRef<number | null>(null);
+  const [reducedMotion] = useState(() => globalThis.matchMedia('(prefers-reduced-motion: reduce)').matches);
+  const audioCtxRef = useRef<AudioContext | null>(null);
+
+  // A dedicated AudioContext for this chip rather than reusing useSoundEffect
+  // (which fetches/decodes a file) — these tones are synthesized, no asset to
+  // load. Same resume-on-gesture dance since the context starts suspended.
+  useEffect(() => {
+    const ctx = new AudioContext();
+    audioCtxRef.current = ctx;
+    const resume = () => { ctx.resume().catch(() => {}); };
+    document.addEventListener('pointerdown', resume);
+    document.addEventListener('keydown', resume);
+    return () => {
+      document.removeEventListener('pointerdown', resume);
+      document.removeEventListener('keydown', resume);
+      ctx.close().catch(() => {});
+    };
+  }, []);
 
   useEffect(() => {
     if (spunFor.current === multiplier) return;
     spunFor.current = multiplier;
-    if (globalThis.matchMedia('(prefers-reduced-motion: reduce)').matches) {
+    const tier: 'normal' | 'jackpot' | 'mega' = multiplier === 10 ? 'mega' : multiplier >= 5 ? 'jackpot' : 'normal';
+    if (reducedMotion) {
       setDisplay(multiplier);
       setLanded(true);
+      if (audioCtxRef.current) playMysteryChime(audioCtxRef.current, tier);
       return;
     }
     setLanded(false);
@@ -180,6 +246,7 @@ function MysteryMultiplierChip({ multiplier }: Readonly<{ multiplier: number }>)
       if (i >= MYSTERY_SPIN_STEPS_MS.length) {
         setDisplay(multiplier);
         setLanded(true);
+        if (audioCtxRef.current) playMysteryChime(audioCtxRef.current, tier);
         return;
       }
       setDisplay(pickMysteryCandidate(pool));
@@ -189,14 +256,23 @@ function MysteryMultiplierChip({ multiplier }: Readonly<{ multiplier: number }>)
     };
     step();
     return () => { cancelled = true; clearTimeout(timer); };
-  }, [multiplier]);
+  }, [multiplier, reducedMotion]);
 
   const jackpot = landed && multiplier >= 5;
+  const superJackpot = jackpot && multiplier === 10 && !reducedMotion;
   // Landing gets a one-shot white flash (slotFlash) plus an expanding ring
   // burst (slotLandBurst) on every roll — the jackpot's gold glow only kicks
   // in afterward, timed past those so nothing fights for the same instant.
+  // ×10 layers a second, larger ring (mysteryMegaRing) right after the first
+  // and swaps in a hotter continuous glow instead of the standard one.
   const landAnimation = jackpot
-    ? 'slotLand 0.6s cubic-bezier(0.34, 1.56, 0.64, 1), slotFlash 0.7s ease-out, slotLandBurst 0.6s ease-out, mysteryJackpotGlow 1.6s ease-in-out 0.6s infinite'
+    ? [
+        'slotLand 0.6s cubic-bezier(0.34, 1.56, 0.64, 1)',
+        'slotFlash 0.7s ease-out',
+        'slotLandBurst 0.6s ease-out',
+        ...(superJackpot ? ['mysteryMegaRing 0.9s ease-out 0.08s'] : []),
+        superJackpot ? 'mysteryMegaGlow 1.4s ease-in-out 0.6s infinite' : 'mysteryJackpotGlow 1.6s ease-in-out 0.6s infinite',
+      ].join(', ')
     : 'slotLand 0.6s cubic-bezier(0.34, 1.56, 0.64, 1), slotFlash 0.7s ease-out, slotLandBurst 0.6s ease-out';
   return (
     <span
@@ -205,6 +281,7 @@ function MysteryMultiplierChip({ multiplier }: Readonly<{ multiplier: number }>)
       // a stale one — a plain style-string diff wouldn't retrigger it.
       key={landed ? `landed-${multiplier}` : `spin-${tick}`}
       style={{
+        position: 'relative',
         display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '2px',
         padding: landed ? '12px 28px' : '10px 24px', borderRadius: '20px',
         background: jackpot ? 'rgba(251,191,36,0.14)' : 'rgba(0,238,232,0.1)',
@@ -212,6 +289,18 @@ function MysteryMultiplierChip({ multiplier }: Readonly<{ multiplier: number }>)
         animation: landed ? landAnimation : 'slotSpinTick 0.14s ease-out',
       }}
     >
+      {superJackpot && MEGA_SPARK_ANGLES.map((angle, i) => (
+        <span
+          key={`spark-${multiplier}-${angle}`}
+          style={{
+            position: 'absolute', top: '50%', left: '50%', width: '5px', height: '5px',
+            borderRadius: '50%', pointerEvents: 'none',
+            background: 'radial-gradient(circle, #fff 0%, #fbbf24 60%, transparent 100%)',
+            '--spark-angle': `${angle}deg`,
+            animation: `mysterySpark 0.7s ease-out ${0.08 + i * 0.015}s backwards`,
+          } as React.CSSProperties}
+        />
+      ))}
       <span style={{
         display: 'flex', alignItems: 'center', gap: '4px',
         fontSize: '0.62rem', fontWeight: 800, letterSpacing: '0.14em', textTransform: 'uppercase',
@@ -222,7 +311,7 @@ function MysteryMultiplierChip({ multiplier }: Readonly<{ multiplier: number }>)
         {jackpot && <Sparkles style={{ width: '10px', height: '10px' }} />}
       </span>
       <span style={{
-        fontSize: landed ? '2.2rem' : '1.9rem', fontWeight: 900, lineHeight: 1,
+        fontSize: landed ? (superJackpot ? '2.5rem' : '2.2rem') : '1.9rem', fontWeight: 900, lineHeight: 1,
         background: jackpot
           ? 'linear-gradient(to bottom left, rgba(251,191,36,0.6) 0%, transparent 55%), linear-gradient(to top right, rgba(255,221,120,0.55) 0%, transparent 55%), #fff'
           : 'linear-gradient(to bottom left, rgba(0,238,232,0.5) 0%, transparent 55%), linear-gradient(to top right, rgba(158,18,204,0.55) 0%, transparent 55%), #fff',
