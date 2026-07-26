@@ -6,7 +6,9 @@ export function useAnimatedScore(finalScore: number, delta: number, startDelay: 
   const [deltaFading, setDeltaFading] = useState(false);
 
   useEffect(() => {
-    if (instant || delta <= 0) {
+    // delta < 0 (a steal victim) counts down same as delta > 0 counts up —
+    // only an actual no-op (delta === 0) skips the animation.
+    if (instant || delta === 0) {
       setDisplayScore(finalScore);
       return;
     }

@@ -392,6 +392,28 @@ select:focus-visible,
   100% { transform: scale(1); filter: brightness(1); }
 }
 
+/* Victim's row the instant a steal lands: a sharp red shake rather than
+   bigPointsPop's golden grow — this is a loss, not a payoff, so it should
+   read as a jolt, not a celebration. */
+@keyframes stealHit {
+  0%   { transform: translateX(0) scale(1); }
+  20%  { transform: translateX(-3px) scale(1.1); }
+  40%  { transform: translateX(3px) scale(1.08); }
+  60%  { transform: translateX(-2px) scale(1.04); }
+  100% { transform: translateX(0) scale(1); }
+}
+/* Host-only: a "-N" badge travels from the victim's row to the thief's,
+   selling the steal as points physically changing hands rather than two
+   rows quietly updating in isolation. Positioned via left/top at the
+   victim's row center (JS-computed), so the keyframe only needs to add the
+   JS-supplied --steal-dx/--steal-dy offset to reach the thief's row center. */
+@keyframes stealFlight {
+  0%   { transform: translate(-50%, -50%) scale(0.85); opacity: 0; }
+  12%  { transform: translate(-50%, -50%) scale(1.1); opacity: 1; }
+  80%  { opacity: 1; }
+  100% { transform: translate(calc(-50% + var(--steal-dx)), calc(-50% + var(--steal-dy))) scale(0.7); opacity: 0; }
+}
+
 /* Re-states translate(-50%,-50%) alongside the extra scale/rotate, same as
    markerCelebrate — an animated transform always wins over the element's
    static inline one. Bigger overshoot + a slight spin than the plain-marker

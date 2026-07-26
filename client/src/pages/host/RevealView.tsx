@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import { Flame } from 'lucide-react';
 import LiquidGlass from '../../components/StableLiquidGlass';
 import { socket } from '../../socket';
@@ -21,7 +21,7 @@ function artistGuessClass(artistCorrect: boolean, titleCorrect: boolean): string
 }
 
 function RevealPlayerRow({
-  player, entry, delta, pity, pityAmount, delay, correct, instant, removePlayer,
+  player, entry, delta, pity, pityAmount, delay, correct, instant, removePlayer, registerRow,
 }: Readonly<{
   player: PlayerInfo;
   entry?: { guess: string | null; timeMs?: number | null; live?: boolean; artistGuess?: string | null; artistCorrect?: boolean };
@@ -32,6 +32,7 @@ function RevealPlayerRow({
   correct: GuessCorrectness;
   instant: boolean;
   removePlayer: (name: string) => void;
+  registerRow?: (el: HTMLButtonElement | null) => void;
 }>) {
   const { displayScore, displayDelta, deltaFading } = useAnimatedScore(player.score ?? 0, delta, delay, instant);
   const streak = player.streak ?? 0;
@@ -43,9 +44,20 @@ function RevealPlayerRow({
   }
   const correctCls = correct === 'exact' ? 'text-amber-400' : 'text-green-400';
   const guessCls = (!skipped && correct !== 'none') ? `${correctCls} text-xs break-words min-w-0` : 'text-white/28 italic text-xs break-words min-w-0';
+  const big = Math.abs(delta) >= BIG_POINTS_THRESHOLD;
+  const deltaCls = delta < 0
+    ? 'text-xs text-red-400'
+    : big ? 'text-sm font-bold text-amber-300' : 'text-xs text-sky-400';
+  const deltaAnimation = delta < 0
+    ? 'stealHit 0.6s ease-out'
+    : big ? 'bigPointsPop 0.7s cubic-bezier(0.34, 1.56, 0.64, 1)' : undefined;
+  const deltaText = delta < 0
+    ? `-${Math.abs(displayDelta).toLocaleString()}`
+    : `+${displayDelta > 0 ? displayDelta.toLocaleString() : ''}${pity ? ` (+${pityAmount.toLocaleString()} pity)` : ''}`;
+
   if (!entry) {
     return (
-      <button type="button" onClick={() => removePlayer(player.name)} aria-label={`Remove ${player.name}`} className="relative group w-full text-left py-1">
+      <button ref={registerRow} type="button" onClick={() => removePlayer(player.name)} aria-label={`Remove ${player.name}`} className="relative group w-full text-left py-1">
         <div className="flex justify-between items-center gap-2">
           <div className="flex items-center gap-1 min-w-0">
             {streak >= 2 && (
@@ -55,7 +67,17 @@ function RevealPlayerRow({
             )}
             <span className="text-xs truncate text-white/45">{player.name}</span>
           </div>
-          <p className="text-white/60 text-xs tabular-nums shrink-0">{displayScore.toLocaleString()}</p>
+          <div className="flex flex-col items-end shrink-0">
+            {delta !== 0 && (
+              <p
+                className={`tabular-nums flex items-center gap-0.5 transition-opacity duration-500 ${deltaFading ? 'opacity-0' : 'opacity-100'} ${deltaCls}`}
+                style={deltaAnimation ? { animation: deltaAnimation } : undefined}
+              >
+                {deltaText}
+              </p>
+            )}
+            <p className="text-white/60 text-xs tabular-nums">{displayScore.toLocaleString()}</p>
+          </div>
         </div>
         <span className="absolute -inset-x-3 -inset-y-1 rounded-lg backdrop-blur-sm opacity-0 group-hover:opacity-100 transition-opacity" />
       </button>
@@ -63,7 +85,7 @@ function RevealPlayerRow({
   }
 
   return (
-    <button type="button" onClick={() => removePlayer(player.name)} aria-label={`Remove ${player.name}`} className="relative group w-full text-left py-1">
+    <button ref={registerRow} type="button" onClick={() => removePlayer(player.name)} aria-label={`Remove ${player.name}`} className="relative group w-full text-left py-1">
       {/* Row 1: name + streak | delta */}
       <div className="flex justify-between items-center gap-2">
         <div className="flex items-center gap-1 min-w-0">
@@ -74,12 +96,12 @@ function RevealPlayerRow({
           )}
           <span className={`text-xs truncate ${correct === 'none' ? 'text-white/45' : 'text-white font-semibold'}`}>{player.name}</span>
         </div>
-        {delta > 0 && (
+        {delta !== 0 && (
           <p
-            className={`tabular-nums shrink-0 flex items-center gap-0.5 transition-opacity duration-500 ${deltaFading ? 'opacity-0' : 'opacity-100'} ${delta >= BIG_POINTS_THRESHOLD ? 'text-sm font-bold text-amber-300' : 'text-xs text-sky-400'}`}
-            style={delta >= BIG_POINTS_THRESHOLD ? { animation: 'bigPointsPop 0.7s cubic-bezier(0.34, 1.56, 0.64, 1)' } : undefined}
+            className={`tabular-nums shrink-0 flex items-center gap-0.5 transition-opacity duration-500 ${deltaFading ? 'opacity-0' : 'opacity-100'} ${deltaCls}`}
+            style={deltaAnimation ? { animation: deltaAnimation } : undefined}
           >
-            +{displayDelta > 0 ? displayDelta.toLocaleString() : ''}{pity && ` (+${pityAmount.toLocaleString()} pity)`}
+            {deltaText}
           </p>
         )}
       </div>
@@ -98,9 +120,9 @@ function RevealPlayerRow({
             // Remounts once when deltaFading flips true (the count-up landing
             // on its final value), replaying the one-shot flash below —
             // otherwise a huge round's total just quietly stops climbing.
-            key={delta >= BIG_POINTS_THRESHOLD && deltaFading ? 'landed' : 'counting'}
+            key={big && deltaFading ? 'landed' : 'counting'}
             className="text-white/60 text-xs tabular-nums shrink-0"
-            style={delta >= BIG_POINTS_THRESHOLD && deltaFading ? { animation: 'scoreLandFlash 0.7s ease-out' } : undefined}
+            style={big && deltaFading ? { animation: 'scoreLandFlash 0.7s ease-out' } : undefined}
           >
             {displayScore.toLocaleString()}
           </p>
@@ -113,6 +135,56 @@ function RevealPlayerRow({
       </div>
       <span className="absolute -inset-x-3 -inset-y-1 rounded-lg backdrop-blur-sm opacity-0 group-hover:opacity-100 transition-opacity" />
     </button>
+  );
+}
+
+// Host-only: floats a "-N" badge from the steal victim's row to the thief's
+// the instant a steal resolves, using their live DOM positions (rowRefs) —
+// selling the amount as points physically changing hands rather than two
+// rows updating independently. Skipped entirely for reduced-motion, same as
+// the mystery reel.
+function StealFlightOverlay({ stealResult, rowRefs }: Readonly<{
+  stealResult: { thief: string; victim: string; amount: number; skipped?: boolean } | null;
+  rowRefs: React.MutableRefObject<Record<string, HTMLButtonElement | null>>;
+}>) {
+  const [flight, setFlight] = useState<{ key: string; left: number; top: number; dx: number; dy: number; amount: number } | null>(null);
+  const firedForRef = useRef<string | null>(null);
+
+  useEffect(() => {
+    if (!stealResult || stealResult.skipped) return;
+    const token = `${stealResult.thief}|${stealResult.victim}|${stealResult.amount}`;
+    if (firedForRef.current === token) return;
+    firedForRef.current = token;
+    if (globalThis.matchMedia('(prefers-reduced-motion: reduce)').matches) return;
+    const victimEl = rowRefs.current[stealResult.victim];
+    const thiefEl = rowRefs.current[stealResult.thief];
+    if (!victimEl || !thiefEl) return;
+    const vRect = victimEl.getBoundingClientRect();
+    const tRect = thiefEl.getBoundingClientRect();
+    const from = { x: vRect.left + vRect.width / 2, y: vRect.top + vRect.height / 2 };
+    const to = { x: tRect.left + tRect.width / 2, y: tRect.top + tRect.height / 2 };
+    setFlight({ key: token, left: from.x, top: from.y, dx: to.x - from.x, dy: to.y - from.y, amount: stealResult.amount });
+    const t = setTimeout(() => setFlight(null), 950);
+    return () => clearTimeout(t);
+  }, [stealResult, rowRefs]);
+
+  if (!flight) return null;
+  return (
+    <span
+      key={flight.key}
+      aria-hidden="true"
+      style={{
+        position: 'fixed', left: `${flight.left}px`, top: `${flight.top}px`, zIndex: 55, pointerEvents: 'none',
+        padding: '4px 12px', borderRadius: '100px', whiteSpace: 'nowrap',
+        background: 'rgba(248,113,113,0.95)', color: '#fff', fontWeight: 800, fontSize: '0.78rem',
+        boxShadow: '0 6px 20px rgba(248,113,113,0.55)',
+        ['--steal-dx' as string]: `${flight.dx}px`,
+        ['--steal-dy' as string]: `${flight.dy}px`,
+        animation: 'stealFlight 0.9s cubic-bezier(0.32, 0.72, 0.35, 1) forwards',
+      } as React.CSSProperties}
+    >
+      -{flight.amount.toLocaleString()}
+    </span>
   );
 }
 
@@ -145,6 +217,22 @@ function RevealShell({
   if (revealParty?.finale && !finaleResolved) nextLabel = 'Continue';
   else if (roundIndex + 1 >= totalRounds) nextLabel = 'Final Results';
   const isFinalReveal = roundIndex + 1 >= totalRounds && (!revealParty?.finale || finaleResolved);
+
+  // A steal round's flight animation needs the victim/thief rows to hold
+  // still between "steal_result" landing and the flight finishing — but
+  // score_update resorts the list live, the instant the steal's score change
+  // arrives, which would yank both rows out from under the animation. So for
+  // steal rounds only, freeze the row order as of this reveal's first render
+  // (i.e. before anyone's points for this round, let alone the steal, have
+  // landed) instead of re-sorting live like every other round type does.
+  const isStealRound = revealParty?.event === 'steal';
+  const frozenOrderRef = useRef<string[] | null>(null);
+  if (!isStealRound) frozenOrderRef.current = null;
+  else if (!frozenOrderRef.current) frozenOrderRef.current = players.slice().sort((a, b) => (b.score ?? 0) - (a.score ?? 0)).map(p => p.name);
+  const sortedPlayers = isStealRound && frozenOrderRef.current
+    ? frozenOrderRef.current.map(name => players.find(p => p.name === name)).filter((p): p is PlayerInfo => !!p)
+    : players.slice().sort((a, b) => (b.score ?? 0) - (a.score ?? 0));
+  const rowRefs = useRef<Record<string, HTMLButtonElement | null>>({});
   return (
     <div className={`page-enter relative min-h-screen flex flex-col items-center gap-5 overflow-hidden ${wide ? 'px-2 py-6' : 'p-6'}`}>
       <img
@@ -174,7 +262,7 @@ function RevealShell({
 
       {!isFinalReveal && (
         <div style={{ position: 'relative', zIndex: 2, background: 'rgba(255,255,255,0.05)', border: '1px solid rgba(255,255,255,0.08)', borderRadius: '16px', padding: '8px 12px', width: '310px', maxWidth: '92vw' }} className="divide-y divide-white/[0.07]">
-          {players.slice().sort((a, b) => (b.score ?? 0) - (a.score ?? 0)).map((p, i) => (
+          {sortedPlayers.map((p, i) => (
             <RevealPlayerRow
               key={p.name}
               player={p}
@@ -186,10 +274,13 @@ function RevealShell({
               correct={isCorrectFor(p)}
               instant={instant}
               removePlayer={removePlayer}
+              registerRow={isStealRound ? (el => { rowRefs.current[p.name] = el; }) : undefined}
             />
           ))}
         </div>
       )}
+
+      {isStealRound && <StealFlightOverlay stealResult={stealResult} rowRefs={rowRefs} />}
 
       <PillButton
         onClick={() => socket.emit('next_round')}

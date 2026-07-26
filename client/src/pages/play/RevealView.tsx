@@ -81,12 +81,15 @@ function PlayRevealShell({
         {guessesList}
 
         <div style={{ background: 'rgba(255,255,255,0.05)', border: '1px solid rgba(255,255,255,0.08)', borderRadius: '16px', padding: '16px 32px', textAlign: 'center' }}>
-          {myScoreDelta > 0 && (
+          {myScoreDelta !== 0 && (
             <p
-              className={`font-bold tabular-nums flex items-center justify-center gap-1 ${myScoreDelta >= BIG_POINTS_THRESHOLD ? 'text-xl text-amber-300' : 'text-sm text-sky-400'}`}
-              style={myScoreDelta >= BIG_POINTS_THRESHOLD ? { animation: 'bigPointsPop 0.7s cubic-bezier(0.34, 1.56, 0.64, 1)' } : undefined}
+              className={`font-bold tabular-nums flex items-center justify-center gap-1 ${myScoreDelta < 0 ? 'text-sm text-red-400' : myScoreDelta >= BIG_POINTS_THRESHOLD ? 'text-xl text-amber-300' : 'text-sm text-sky-400'}`}
+              style={
+                myScoreDelta < 0 ? { animation: 'stealHit 0.6s ease-out' }
+                  : myScoreDelta >= BIG_POINTS_THRESHOLD ? { animation: 'bigPointsPop 0.7s cubic-bezier(0.34, 1.56, 0.64, 1)' } : undefined
+              }
             >
-              +{myScoreDelta.toLocaleString()} pts
+              {myScoreDelta < 0 ? `-${Math.abs(myScoreDelta).toLocaleString()} pts` : `+${myScoreDelta.toLocaleString()} pts`}
             </p>
           )}
           {myScoreDelta > 0 && myBreakdown && <PointsBreakdownList breakdown={myBreakdown} hideMultiplier={revealParty?.event === 'mystery'} />}
@@ -95,9 +98,9 @@ function PlayRevealShell({
             // on its final value), replaying the one-shot flash below — the
             // moment a huge round's total actually arrives gets its own
             // payoff instead of just quietly stopping.
-            key={myScoreDelta >= BIG_POINTS_THRESHOLD && deltaFading ? 'landed' : 'counting'}
+            key={Math.abs(myScoreDelta) >= BIG_POINTS_THRESHOLD && deltaFading ? 'landed' : 'counting'}
             className="text-3xl font-black text-white mt-1"
-            style={myScoreDelta >= BIG_POINTS_THRESHOLD && deltaFading ? { animation: 'scoreLandFlash 0.7s ease-out' } : undefined}
+            style={Math.abs(myScoreDelta) >= BIG_POINTS_THRESHOLD && deltaFading ? { animation: 'scoreLandFlash 0.7s ease-out' } : undefined}
           >
             {displayScore.toLocaleString()}
           </p>

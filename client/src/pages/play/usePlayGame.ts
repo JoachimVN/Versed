@@ -362,12 +362,20 @@ export function usePlayGame(pinParam?: string): PlayState {
       if (guessAutoSubmitTimerRef.current) { clearTimeout(guessAutoSubmitTimerRef.current); guessAutoSubmitTimerRef.current = null; }
       setResult(data);
       setPhase('reveal');
+      // A steal round's second score_update (once the winner picks a victim)
+      // arrives well after this one — reset here so that update's diff adds
+      // onto this round's delta instead of a stale previous round's.
+      setMyScoreDelta(0);
     });
 
     socket.on('score_update', ({ players }: { players: { name: string; score: number; streak: number; pity?: boolean; pityAmount?: number; breakdown?: PointsBreakdown }[] }) => {
       const me = players.find(p => p.name === myNameRef.current);
       if (me) {
-        setMyScoreDelta(Math.max(0, me.score - myScoreRef.current));
+        const diff = me.score - myScoreRef.current;
+        // Merge rather than replace, and allow negative: a steal's diff must
+        // add onto (not overwrite) the round's own delta, and a robbed
+        // victim's score genuinely drops — clamping to 0 hid that entirely.
+        setMyScoreDelta(prev => prev + diff);
         setMyPity(me.pity ?? false);
         setMyPityAmount(me.pityAmount ?? 0);
         setMyBreakdown(me.breakdown ?? null);

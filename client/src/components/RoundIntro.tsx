@@ -287,6 +287,10 @@ export function PartyRevealExtras({ result, stealResult, hints, hideMysteryChip 
           padding: '6px 16px', borderRadius: '100px',
           background: 'rgba(248,113,113,0.1)', border: '1px solid rgba(248,113,113,0.35)',
           color: 'rgba(252,165,165,0.95)', fontSize: '0.78rem', fontWeight: 600,
+          // This pill only mounts the instant the steal resolves — a quick
+          // pop sells it as "this just happened" rather than a chip that was
+          // there all along, same as the chaos-hints lie reveal above.
+          animation: 'chipReveal 0.5s cubic-bezier(0.34, 1.56, 0.64, 1)',
         }}>
           {stealResult.thief} stole {stealResult.amount.toLocaleString()} pts from {stealResult.victim}
         </span>
