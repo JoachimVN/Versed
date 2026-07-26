@@ -38,18 +38,29 @@ function getContext(): AudioContext {
   return ctx;
 }
 
-let buffersPromise: Promise<{ rise: AudioBuffer; hit: AudioBuffer }> | null = null;
-function loadBuffers(): Promise<{ rise: AudioBuffer; hit: AudioBuffer }> {
+type Buffers = { rise: AudioBuffer; hit: AudioBuffer; hit2: AudioBuffer; hit3: AudioBuffer };
+
+let buffersPromise: Promise<Buffers> | null = null;
+function loadBuffers(): Promise<Buffers> {
   buffersPromise ??= (async () => {
     const audioCtx = getContext();
     const base = import.meta.env.BASE_URL;
-    const [riseRes, hitRes] = await Promise.all([
+    const [riseRes, hitRes, hit2Res, hit3Res] = await Promise.all([
       fetch(`${base}sfx/reveal_rise.wav`),
       fetch(`${base}sfx/reveal_hit.wav`),
+      fetch(`${base}sfx/reveal_hit2.wav`),
+      fetch(`${base}sfx/reveal_hit3.wav`),
     ]);
-    const [riseData, hitData] = await Promise.all([riseRes.arrayBuffer(), hitRes.arrayBuffer()]);
-    const [rise, hit] = await Promise.all([audioCtx.decodeAudioData(riseData), audioCtx.decodeAudioData(hitData)]);
-    return { rise, hit };
+    const [riseData, hitData, hit2Data, hit3Data] = await Promise.all([
+      riseRes.arrayBuffer(), hitRes.arrayBuffer(), hit2Res.arrayBuffer(), hit3Res.arrayBuffer(),
+    ]);
+    const [rise, hit, hit2, hit3] = await Promise.all([
+      audioCtx.decodeAudioData(riseData),
+      audioCtx.decodeAudioData(hitData),
+      audioCtx.decodeAudioData(hit2Data),
+      audioCtx.decodeAudioData(hit3Data),
+    ]);
+    return { rise, hit, hit2, hit3 };
   })();
   return buffersPromise;
 }
@@ -63,18 +74,25 @@ const resume = () => { ctx?.resume().catch(() => {}); };
 document.addEventListener('pointerdown', resume);
 document.addEventListener('keydown', resume);
 
+// Landed-value tier for the hit sound: mystery multiplier jackpots (×5, ×10)
+// get a beefier hit than the routine ×1.5-×4 rolls or the year reveal, so the
+// rarer the roll, the more the sting sells it.
+export type RevealHitTier = 1 | 2 | 3;
+
 // Plays the reveal_rise/reveal_hit pair for a slot-reel landing, scheduled on
 // the shared AudioContext clock so reveal_hit always lands exactly REEL_SEC
 // after reveal_rise starts — independent of the setTimeout jitter driving the
 // visual reel steps above, which only need to land close enough for the eye,
-// not the ear. Call play() at the same moment the visual reel starts spinning.
+// not the ear. Call play() at the same moment the visual reel starts spinning;
+// pass the jackpot tier (2 for ×5, 3 for ×10) to swap in the bigger hit sfx.
 export function useRevealReelSound() {
-  return useCallback(() => {
-    loadBuffers().then(({ rise, hit }) => {
+  return useCallback((tier: RevealHitTier = 1) => {
+    loadBuffers().then((buffers) => {
+      const hit = tier === 3 ? buffers.hit3 : tier === 2 ? buffers.hit2 : buffers.hit;
       const audioCtx = getContext();
       const start = audioCtx.currentTime;
       const riseSource = audioCtx.createBufferSource();
-      riseSource.buffer = rise;
+      riseSource.buffer = buffers.rise;
       riseSource.connect(audioCtx.destination);
       riseSource.start(start);
       const hitSource = audioCtx.createBufferSource();
