@@ -96,7 +96,8 @@ function SubmittedPlayerRow({
   player, entry, delta, pity, pityAmount, streak, displayScore, displayDelta, deltaFading, revealed, big, correct, removePlayer, registerRow,
 }: Readonly<RevealRowProps & { entry: PlayerGuess; pity: boolean; pityAmount: number; correct: GuessCorrectness }>) {
   const skipped = entry.guess === null;
-  const guessText = skipped ? 'skipped' : `"${entry.guess}${entry.live ? '…' : ''}"`;
+  const liveGuessSuffix = entry.live ? '…' : '';
+  const guessText = skipped ? 'skipped' : `"${entry.guess}${liveGuessSuffix}"`;
   const correctCls = correct === 'exact' ? 'text-amber-400' : 'text-green-400';
   const guessCls = (!skipped && correct !== 'none') ? `${correctCls} text-xs break-words min-w-0` : 'text-white/28 italic text-xs break-words min-w-0';
   const rowDeltaClass = deltaClass(delta, big);
