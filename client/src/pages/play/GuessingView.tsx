@@ -255,8 +255,13 @@ export function GuessingView({ game }: Readonly<{ game: PlayState }>) {
 
   return (
     <div className="relative min-h-screen flex flex-col overflow-hidden" style={{ background: '#080812' }}>
-      <img src={`${import.meta.env.BASE_URL}background4.svg`} alt="" aria-hidden="true" style={{ position: 'fixed', inset: 0, width: '100%', height: '100%', objectFit: 'cover', zIndex: 0, transform: 'rotate(180deg)' }} />
-      <div style={{ position: 'fixed', inset: 0, zIndex: 1, background: 'rgba(5,5,14,0.82)', backdropFilter: 'blur(36px)' }} />
+      {/* absolute, not fixed: iOS Safari clips fixed elements to the shrunk
+          visual viewport while the keyboard is open, cutting the background
+          off at the keyboard's edge instead of extending behind it (see
+          App.tsx). absolute against this relative, min-h-screen wrapper
+          covers the same area without the clipping. */}
+      <img src={`${import.meta.env.BASE_URL}background4.svg`} alt="" aria-hidden="true" style={{ position: 'absolute', inset: 0, width: '100%', height: '100%', objectFit: 'cover', zIndex: 0, transform: 'rotate(180deg)' }} />
+      <div style={{ position: 'absolute', inset: 0, zIndex: 1, background: 'rgba(5,5,14,0.82)', backdropFilter: 'blur(36px)' }} />
 
       {/* Reserving the keyboard's height at the bottom is what keeps Submit and
           Skip tappable: the screen itself never resizes, the column just gets
@@ -390,9 +395,9 @@ export function PassedView({ game }: Readonly<{ game: PlayState }>) {
         src={`${import.meta.env.BASE_URL}background3-2.png`}
         alt=""
         aria-hidden="true"
-        style={{ position: 'fixed', inset: 0, width: '100%', height: '100%', objectFit: 'cover', zIndex: 0 }}
+        style={{ position: 'absolute', inset: 0, width: '100%', height: '100%', objectFit: 'cover', zIndex: 0 }}
       />
-      <div style={{ position: 'fixed', inset: 0, zIndex: 1, background: 'rgba(5,5,14,0.82)', backdropFilter: 'blur(28px)' }} />
+      <div style={{ position: 'absolute', inset: 0, zIndex: 1, background: 'rgba(5,5,14,0.82)', backdropFilter: 'blur(28px)' }} />
 
       <div
         className="relative flex flex-col items-center justify-center min-h-screen p-6"
