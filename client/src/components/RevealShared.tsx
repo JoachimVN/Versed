@@ -205,7 +205,7 @@ function SongInfo({ result }: Readonly<{ result: RoundResultEvent }>) {
   );
 }
 
-export function FinalRoundAnswerContent({ result, label }: Readonly<{ result: RoundResultEvent; label: string }>) {
+export function FinalRoundAnswerContent({ result, label, muted = false }: Readonly<{ result: RoundResultEvent; label: string; muted?: boolean }>) {
   const artistOnly = result.artistOnly;
   const yearOnly = result.yearOnly || result.party?.format === 'year';
   let answerTypeLabel = 'The song was';
@@ -234,7 +234,7 @@ export function FinalRoundAnswerContent({ result, label }: Readonly<{ result: Ro
       <div style={{ width: '100%', height: '1px', background: 'rgba(255,255,255,0.08)', marginBottom: '14px' }} />
       {yearOnly ? (
         <>
-          <YearHeading year={result.year ? Math.floor(result.year) : '-'} compact />
+          <YearHeading year={result.year ? Math.floor(result.year) : '-'} compact muted={muted} />
           <YearSongFooter result={result} compact />
         </>
       ) : (

@@ -145,7 +145,7 @@ export function YearRevealView({ game, result }: Readonly<{ game: PlayState; res
         result={result}
         wide
         cardHeight={result.coverUrl ? 500 : 320}
-        cardContent={<FinalRoundAnswerContent result={result} label={finalLabel} />}
+        cardContent={<FinalRoundAnswerContent result={result} label={finalLabel} muted />}
         guessesList={null}
       />
     );
@@ -175,7 +175,7 @@ export function YearRevealView({ game, result }: Readonly<{ game: PlayState; res
       result={result}
       wide
       cardHeight={result.coverUrl ? 500 : 380}
-      cardContent={<YearTimelineContent result={result} />}
+      cardContent={<YearTimelineContent result={result} muted />}
       guessesList={guessesList}
     />
   );
@@ -195,7 +195,7 @@ export function RevealView({ game, result }: Readonly<{ game: PlayState; result:
         game={game}
         result={result}
         cardHeight={result.coverUrl ? 480 : 240}
-        cardContent={<FinalRoundAnswerContent result={result} label={finalLabel} />}
+        cardContent={<FinalRoundAnswerContent result={result} label={finalLabel} muted />}
         guessesList={null}
         scoreExtra={iGotItInRace && myRaceTimeMs != null && (
           <p className="text-green-400 text-xs font-semibold mt-1">
