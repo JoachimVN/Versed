@@ -134,7 +134,7 @@ export function RoundIntro({ party, roundKey, dismissible = true }: Readonly<{ p
 // Candidate values the reel flickers through before landing — the real
 // weight pool from gameManager's MYSTERY_WEIGHTS, minus whatever the actual
 // roll landed on (that's added back as the final, held frame).
-const MYSTERY_CANDIDATES = [5, 10];
+const MYSTERY_CANDIDATES = [1.5, 2, 3, 4, 5, 10];
 
 // Total time (ms) from mount until the reel lands on the real value — other
 // reveal timing (e.g. delaying the score count-up) syncs against this so the
