@@ -12,6 +12,24 @@ import type { HostState } from './useHostGame';
 import { EndGameButton } from './dialogs';
 
 type GuessCorrectness = 'none' | 'correct' | 'exact';
+type PlayerGuess = {
+  guess: string | null;
+  timeMs?: number | null;
+  live?: boolean;
+  artistGuess?: string | null;
+  artistCorrect?: boolean;
+};
+type RevealRowProps = {
+  player: PlayerInfo;
+  delta: number;
+  streak: number;
+  displayScore: number;
+  displayDelta: number;
+  deltaFading: boolean;
+  big: boolean;
+  removePlayer: (name: string) => void;
+  registerRow?: (el: HTMLButtonElement | null) => void;
+};
 
 // The artist guess can be right even when the title guess isn't — that combo
 // scores no bonus, so it gets a muted green (visibly "correct") rather than
@@ -40,63 +58,49 @@ function deltaText(displayDelta: number, delta: number, pity: boolean, pityAmoun
   return `+${points}${pityText}`;
 }
 
-function RevealPlayerRow({
-  player, entry, delta, pity, pityAmount, delay, correct, instant, removePlayer, registerRow,
-}: Readonly<{
-  player: PlayerInfo;
-  entry?: { guess: string | null; timeMs?: number | null; live?: boolean; artistGuess?: string | null; artistCorrect?: boolean };
-  delta: number;
-  pity: boolean;
-  pityAmount: number;
-  delay: number;
-  correct: GuessCorrectness;
-  instant: boolean;
-  removePlayer: (name: string) => void;
-  registerRow?: (el: HTMLButtonElement | null) => void;
-}>) {
-  const { displayScore, displayDelta, deltaFading } = useAnimatedScore(player.score ?? 0, delta, delay, instant);
-  const streak = player.streak ?? 0;
-  const skipped = entry?.guess === null;
-  let guessText: string | null = null;
-  if (entry) {
-    const ellipsis = entry.live ? '…' : '';
-    guessText = skipped ? 'skipped' : `"${entry.guess}${ellipsis}"`;
-  }
+function UnsubmittedPlayerRow({
+  player, delta, streak, displayScore, displayDelta, deltaFading, big, pity, pityAmount, removePlayer, registerRow,
+}: Readonly<RevealRowProps & { pity: boolean; pityAmount: number }>) {
+  const rowDeltaClass = deltaClass(delta, big);
+  const rowDeltaAnimation = deltaAnimation(delta, big);
+  return (
+    <button ref={registerRow} type="button" onClick={() => removePlayer(player.name)} aria-label={`Remove ${player.name}`} className="relative group w-full text-left py-1">
+      <div className="flex justify-between items-center gap-2">
+        <div className="flex items-center gap-1 min-w-0">
+          {streak >= 2 && (
+            <span className="flex items-center gap-0.5 text-orange-400 text-xs font-bold shrink-0">
+              <Flame className="w-3 h-3" />{streak}
+            </span>
+          )}
+          <span className="text-xs truncate text-white/45">{player.name}</span>
+        </div>
+        <div className="flex flex-col items-end shrink-0">
+          {delta !== 0 && (
+            <p
+              className={`tabular-nums flex items-center gap-0.5 transition-opacity duration-500 ${deltaFading ? 'opacity-0' : 'opacity-100'} ${rowDeltaClass}`}
+              style={rowDeltaAnimation ? { animation: rowDeltaAnimation } : undefined}
+            >
+              {deltaText(displayDelta, delta, pity, pityAmount)}
+            </p>
+          )}
+          <p className="text-white/60 text-xs tabular-nums">{displayScore.toLocaleString()}</p>
+        </div>
+      </div>
+      <span className="absolute -inset-x-3 -inset-y-1 rounded-lg backdrop-blur-sm opacity-0 group-hover:opacity-100 transition-opacity" />
+    </button>
+  );
+}
+
+function SubmittedPlayerRow({
+  player, entry, delta, pity, pityAmount, streak, displayScore, displayDelta, deltaFading, big, correct, removePlayer, registerRow,
+}: Readonly<RevealRowProps & { entry: PlayerGuess; pity: boolean; pityAmount: number; correct: GuessCorrectness }>) {
+  const skipped = entry.guess === null;
+  const guessText = skipped ? 'skipped' : `"${entry.guess}${entry.live ? '…' : ''}"`;
   const correctCls = correct === 'exact' ? 'text-amber-400' : 'text-green-400';
   const guessCls = (!skipped && correct !== 'none') ? `${correctCls} text-xs break-words min-w-0` : 'text-white/28 italic text-xs break-words min-w-0';
-  const big = Math.abs(delta) >= BIG_POINTS_THRESHOLD;
   const rowDeltaClass = deltaClass(delta, big);
   const rowDeltaAnimation = deltaAnimation(delta, big);
   const rowDeltaText = deltaText(displayDelta, delta, pity, pityAmount);
-
-  if (!entry) {
-    return (
-      <button ref={registerRow} type="button" onClick={() => removePlayer(player.name)} aria-label={`Remove ${player.name}`} className="relative group w-full text-left py-1">
-        <div className="flex justify-between items-center gap-2">
-          <div className="flex items-center gap-1 min-w-0">
-            {streak >= 2 && (
-              <span className="flex items-center gap-0.5 text-orange-400 text-xs font-bold shrink-0">
-                <Flame className="w-3 h-3" />{streak}
-              </span>
-            )}
-            <span className="text-xs truncate text-white/45">{player.name}</span>
-          </div>
-          <div className="flex flex-col items-end shrink-0">
-            {delta !== 0 && (
-              <p
-                className={`tabular-nums flex items-center gap-0.5 transition-opacity duration-500 ${deltaFading ? 'opacity-0' : 'opacity-100'} ${rowDeltaClass}`}
-                style={rowDeltaAnimation ? { animation: rowDeltaAnimation } : undefined}
-              >
-                {rowDeltaText}
-              </p>
-            )}
-            <p className="text-white/60 text-xs tabular-nums">{displayScore.toLocaleString()}</p>
-          </div>
-        </div>
-        <span className="absolute -inset-x-3 -inset-y-1 rounded-lg backdrop-blur-sm opacity-0 group-hover:opacity-100 transition-opacity" />
-      </button>
-    );
-  }
 
   return (
     <button ref={registerRow} type="button" onClick={() => removePlayer(player.name)} aria-label={`Remove ${player.name}`} className="relative group w-full text-left py-1">
@@ -122,14 +126,12 @@ function RevealPlayerRow({
       {/* Row 2: guess | total score */}
       <div className="flex flex-col gap-0.5">
         <div className="flex justify-between items-start gap-2">
-          {guessText ? (
-            <p className={guessCls}>
-              {guessText}
-              {correct !== 'none' && entry?.timeMs != null && (
-                <span className="ml-1 text-white/45 text-xs">{(entry.timeMs / 1000).toFixed(1)}s</span>
-              )}
-            </p>
-          ) : <span />}
+          <p className={guessCls}>
+            {guessText}
+            {correct !== 'none' && entry.timeMs != null && (
+              <span className="ml-1 text-white/45 text-xs">{(entry.timeMs / 1000).toFixed(1)}s</span>
+            )}
+          </p>
           <p
             // Remounts once when deltaFading flips true (the count-up landing
             // on its final value), replaying the one-shot flash below —
@@ -141,7 +143,7 @@ function RevealPlayerRow({
             {displayScore.toLocaleString()}
           </p>
         </div>
-        {entry?.artistGuess && (
+        {entry.artistGuess && (
           <p className={`text-xs break-words ${artistGuessClass(!!entry.artistCorrect, correct !== 'none')}`} style={{ overflowWrap: 'anywhere' }}>
             "{entry.artistGuess}"
           </p>
@@ -150,6 +152,29 @@ function RevealPlayerRow({
       <span className="absolute -inset-x-3 -inset-y-1 rounded-lg backdrop-blur-sm opacity-0 group-hover:opacity-100 transition-opacity" />
     </button>
   );
+}
+
+function RevealPlayerRow({
+  player, entry, delta, pity, pityAmount, delay, correct, instant, removePlayer, registerRow,
+}: Readonly<{
+  player: PlayerInfo;
+  entry?: PlayerGuess;
+  delta: number;
+  pity: boolean;
+  pityAmount: number;
+  delay: number;
+  correct: GuessCorrectness;
+  instant: boolean;
+  removePlayer: (name: string) => void;
+  registerRow?: (el: HTMLButtonElement | null) => void;
+}>) {
+  const { displayScore, displayDelta, deltaFading } = useAnimatedScore(player.score ?? 0, delta, delay, instant);
+  const streak = player.streak ?? 0;
+  const big = Math.abs(delta) >= BIG_POINTS_THRESHOLD;
+  const rowProps = { player, delta, streak, displayScore, displayDelta, deltaFading, big, removePlayer, registerRow };
+  return entry
+    ? <SubmittedPlayerRow {...rowProps} entry={entry} pity={pity} pityAmount={pityAmount} correct={correct} />
+    : <UnsubmittedPlayerRow {...rowProps} pity={pity} pityAmount={pityAmount} />;
 }
 
 // Host-only: floats a "-N" badge from the steal victim's row to the thief's
