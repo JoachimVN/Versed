@@ -24,7 +24,7 @@ export const RACE_FLOOR = 200;
 export const RACE_BASE = 1000;
 
 // ─── Party mode tuning ────────────────────────────────────────────────────────
-export const STEAL_PCT = 0.25;         // steal takes 15% of the victim's score…
+export const STEAL_PCT = 0.25;         // steal takes 25% of the victim's score…
 export const STEAL_MIN = 400;          // …but never less than this (capped at their total)
 // Finale: flat bonus for winning the best-of-3 duel outright (first to 2
 // sub-round wins). Deliberately NOT scaled to the score gap between the

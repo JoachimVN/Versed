@@ -484,7 +484,7 @@ export function StealPicker({ victims, onPick, onSkip }: Readonly<{
           You won the steal!
         </p>
         <p style={{ color: 'rgba(255,255,255,0.45)', fontSize: '0.85rem' }}>
-          Pick a victim: you take 15% of their score (min 300)
+          Pick a victim: you take 25% of their score (min 400)
         </p>
       </div>
       <div className="flex flex-col gap-2.5 w-full" style={{ maxWidth: '310px', maxHeight: '50vh', overflowY: 'auto' }}>
