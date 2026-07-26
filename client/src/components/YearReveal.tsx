@@ -17,13 +17,18 @@ const YEAR_SPIN_STEPS_MS = [50, 60, 75, 90, 115, 145, 180];
 // as a second beat once the year itself has landed, not simultaneously.
 export const YEAR_LAND_MS = YEAR_SPIN_STEPS_MS.reduce((a, b) => a + b, 0);
 
+const CURRENT_YEAR = new Date().getFullYear();
+
 // Always noticeably wrong (4-53 years off) so no decoy could be mistaken for
-// the real answer mid-flicker.
+// the real answer mid-flicker. Never flickers past the real current year —
+// no song has been released in the future, so an "up" jitter that would
+// cross it falls back to "down" instead.
 function pickYearCandidate(real: number): number {
   const r = new Uint32Array(2);
   crypto.getRandomValues(r);
   const jitter = 4 + (r[0] % 50);
-  return r[1] % 2 === 0 ? real + jitter : real - jitter;
+  const goUp = r[1] % 2 === 0 && real + jitter <= CURRENT_YEAR;
+  return goUp ? real + jitter : real - jitter;
 }
 
 // Slot-reel reveal for the year: flickers through a handful of decoy years
