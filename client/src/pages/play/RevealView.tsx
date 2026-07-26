@@ -1,4 +1,4 @@
-import { Flame, Zap } from 'lucide-react';
+import { Flame } from 'lucide-react';
 import LiquidGlass from '../../components/StableLiquidGlass';
 import { useAnimatedScore } from '../../hooks/useAnimatedScore';
 import { BIG_POINTS_THRESHOLD, FinalRoundAnswerContent, NoOneGotItCardContent, GotItCardContent, YearTimelineContent, PointsBreakdownList, breakdownCompact } from '../../components/RevealShared';
@@ -80,10 +80,9 @@ function PlayRevealShell({
         <div style={{ background: 'rgba(255,255,255,0.05)', border: '1px solid rgba(255,255,255,0.08)', borderRadius: '16px', padding: '16px 32px', textAlign: 'center' }}>
           {myScoreDelta > 0 && (
             <p
-              className={`text-sm font-bold tabular-nums flex items-center justify-center gap-1 ${myScoreDelta >= BIG_POINTS_THRESHOLD ? 'text-amber-300' : 'text-sky-400'}`}
-              style={myScoreDelta >= BIG_POINTS_THRESHOLD ? { animation: 'bigPointsPop 0.6s cubic-bezier(0.34, 1.56, 0.64, 1), bigPointsGlow 1.6s ease-in-out 0.6s infinite' } : undefined}
+              className={`font-bold tabular-nums flex items-center justify-center gap-1 ${myScoreDelta >= BIG_POINTS_THRESHOLD ? 'text-xl text-amber-300' : 'text-sm text-sky-400'}`}
+              style={myScoreDelta >= BIG_POINTS_THRESHOLD ? { animation: 'bigPointsPop 0.7s cubic-bezier(0.34, 1.56, 0.64, 1)' } : undefined}
             >
-              {myScoreDelta >= BIG_POINTS_THRESHOLD && <Zap className="w-3.5 h-3.5" />}
               +{myScoreDelta.toLocaleString()} pts
             </p>
           )}

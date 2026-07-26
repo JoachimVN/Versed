@@ -1,5 +1,5 @@
 import React from 'react';
-import { Flame, Zap } from 'lucide-react';
+import { Flame } from 'lucide-react';
 import LiquidGlass from '../../components/StableLiquidGlass';
 import { socket } from '../../socket';
 import { useAnimatedScore } from '../../hooks/useAnimatedScore';
@@ -76,10 +76,9 @@ function RevealPlayerRow({
         </div>
         {delta > 0 && (
           <p
-            className={`text-xs tabular-nums shrink-0 flex items-center gap-0.5 transition-opacity duration-500 ${deltaFading ? 'opacity-0' : 'opacity-100'} ${delta >= BIG_POINTS_THRESHOLD ? 'text-amber-300' : 'text-sky-400'}`}
-            style={delta >= BIG_POINTS_THRESHOLD ? { animation: 'bigPointsPop 0.6s cubic-bezier(0.34, 1.56, 0.64, 1), bigPointsGlow 1.6s ease-in-out 0.6s infinite' } : undefined}
+            className={`tabular-nums shrink-0 flex items-center gap-0.5 transition-opacity duration-500 ${deltaFading ? 'opacity-0' : 'opacity-100'} ${delta >= BIG_POINTS_THRESHOLD ? 'text-sm font-bold text-amber-300' : 'text-xs text-sky-400'}`}
+            style={delta >= BIG_POINTS_THRESHOLD ? { animation: 'bigPointsPop 0.7s cubic-bezier(0.34, 1.56, 0.64, 1)' } : undefined}
           >
-            {delta >= BIG_POINTS_THRESHOLD && <Zap className="w-3 h-3 shrink-0" />}
             +{displayDelta > 0 ? displayDelta.toLocaleString() : ''}{pity && ` (+${pityAmount.toLocaleString()} pity)`}
           </p>
         )}
