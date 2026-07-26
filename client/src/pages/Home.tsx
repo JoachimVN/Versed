@@ -51,7 +51,7 @@ export default function Home() {
       <div className="flex flex-col items-center gap-3">
         <img
           ref={logoRef}
-          src={`${import.meta.env.BASE_URL}logo.png`}
+          src={`${import.meta.env.BASE_URL}branding/logo.png`}
           alt={APP_NAME}
           width={2560}
           height={1000}

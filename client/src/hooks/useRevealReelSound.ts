@@ -44,8 +44,8 @@ function loadBuffers(): Promise<{ rise: AudioBuffer; hit: AudioBuffer }> {
     const audioCtx = getContext();
     const base = import.meta.env.BASE_URL;
     const [riseRes, hitRes] = await Promise.all([
-      fetch(`${base}reveal_rise.wav`),
-      fetch(`${base}reveal_hit.wav`),
+      fetch(`${base}sfx/reveal_rise.wav`),
+      fetch(`${base}sfx/reveal_hit.wav`),
     ]);
     const [riseData, hitData] = await Promise.all([riseRes.arrayBuffer(), hitRes.arrayBuffer()]);
     const [rise, hit] = await Promise.all([audioCtx.decodeAudioData(riseData), audioCtx.decodeAudioData(hitData)]);

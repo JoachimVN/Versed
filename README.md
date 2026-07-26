@@ -1,5 +1,5 @@
 <p align="center">
-  <img src="client/public/logo.png" alt="Versed" width="360" />
+  <img src="client/public/branding/logo.png" alt="Versed" width="360" />
 </p>
 
 <p align="center">

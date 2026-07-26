@@ -77,7 +77,7 @@ export function JoinCard({ pin, copied, copyInvite }: Readonly<{ pin: string; co
   const isScreenshot = searchParams.has('v');
   const baseUrl = isScreenshot ? 'https://joavn.dev/versed' : `${globalThis.location.origin}${import.meta.env.BASE_URL}`.replace(/\/$/, '');
   const qrUrl = isScreenshot ? `https://joavn.dev/versed/play/${pin}` : `${globalThis.location.origin}${import.meta.env.BASE_URL}play/${pin}`;
-  const iconUrl = `${import.meta.env.BASE_URL}icon.svg`;
+  const iconUrl = `${import.meta.env.BASE_URL}icons/icon.svg`;
 
   return (
     <div className="w-full max-w-md bg-white/5 rounded-2xl p-5">

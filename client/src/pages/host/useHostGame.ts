@@ -233,7 +233,7 @@ export interface HostState {
 
 export function useHostGame(): HostState {
   const spotify = useSpotify();
-  const playBeat = useSoundEffect(`${import.meta.env.BASE_URL}timer_beat.wav`);
+  const playBeat = useSoundEffect(`${import.meta.env.BASE_URL}sfx/timer_beat.wav`);
   const savedSettings = useMemo(loadSavedHostSettings, []);
   const [phase, setPhase] = useState<Phase>('connect');
   // The PIN survives page reloads via sessionStorage so an accidental reload

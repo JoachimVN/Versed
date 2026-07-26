@@ -9,7 +9,7 @@ import { useState, useEffect, useRef } from 'react';
 // before each decode to stay reusable.
 let themeArrayBufferPromise: Promise<ArrayBuffer> | null = null;
 function preloadThemeAudio(): Promise<ArrayBuffer> {
-  themeArrayBufferPromise ??= fetch(`${import.meta.env.BASE_URL}theme.mp3`).then(res => res.arrayBuffer());
+  themeArrayBufferPromise ??= fetch(`${import.meta.env.BASE_URL}audio/theme.mp3`).then(res => res.arrayBuffer());
   return themeArrayBufferPromise;
 }
 // Routes aren't code-split, so every page (including /play joiners who never

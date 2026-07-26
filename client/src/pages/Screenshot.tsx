@@ -324,12 +324,12 @@ export default function Screenshot() {
     'year-guessing': <GuessingView game={MOCK_PLAY_YEAR_GUESSING} />,
     lobby: <LobbyView game={MOCK_HOST_LOBBY} />,
     'party-intro': <RoundIntro party={MOCK_PARTY_STEAL} roundKey={0} dismissible={false} />,
-    'final-host': <FinalResultsView leaderboard={MOCK_LEADERBOARD} awards={MOCK_AWARDS} backgroundSrc={`${import.meta.env.BASE_URL}background6.svg`} footer={<PillButton onClick={noop} label="New Game" />} />,
-    'final-host-1': <FinalResultsView leaderboard={MOCK_LEADERBOARD.slice(0, 1)} awards={[]} backgroundSrc={`${import.meta.env.BASE_URL}background6.svg`} footer={<PillButton onClick={noop} label="New Game" />} />,
-    'final-host-2': <FinalResultsView leaderboard={MOCK_LEADERBOARD.slice(0, 2)} awards={[]} backgroundSrc={`${import.meta.env.BASE_URL}background6.svg`} footer={<PillButton onClick={noop} label="New Game" />} />,
-    'final-host-long': <FinalResultsView leaderboard={MOCK_LEADERBOARD_LONG} awards={MOCK_AWARDS} backgroundSrc={`${import.meta.env.BASE_URL}background6.svg`} footer={<PillButton onClick={noop} label="New Game" />} />,
-    'final-player': <FinalResultsView leaderboard={MOCK_LEADERBOARD} awards={MOCK_AWARDS} myName="John" backgroundSrc={`${import.meta.env.BASE_URL}background5.svg`} footer={<PillButton onClick={noop} label="Leave" />} />,
-    'final-empty': <FinalResultsView leaderboard={[]} awards={[]} backgroundSrc={`${import.meta.env.BASE_URL}background6.svg`} footer={<PillButton onClick={noop} label="New Game" />} />,
+    'final-host': <FinalResultsView leaderboard={MOCK_LEADERBOARD} awards={MOCK_AWARDS} backgroundSrc={`${import.meta.env.BASE_URL}backgrounds/background6.svg`} footer={<PillButton onClick={noop} label="New Game" />} />,
+    'final-host-1': <FinalResultsView leaderboard={MOCK_LEADERBOARD.slice(0, 1)} awards={[]} backgroundSrc={`${import.meta.env.BASE_URL}backgrounds/background6.svg`} footer={<PillButton onClick={noop} label="New Game" />} />,
+    'final-host-2': <FinalResultsView leaderboard={MOCK_LEADERBOARD.slice(0, 2)} awards={[]} backgroundSrc={`${import.meta.env.BASE_URL}backgrounds/background6.svg`} footer={<PillButton onClick={noop} label="New Game" />} />,
+    'final-host-long': <FinalResultsView leaderboard={MOCK_LEADERBOARD_LONG} awards={MOCK_AWARDS} backgroundSrc={`${import.meta.env.BASE_URL}backgrounds/background6.svg`} footer={<PillButton onClick={noop} label="New Game" />} />,
+    'final-player': <FinalResultsView leaderboard={MOCK_LEADERBOARD} awards={MOCK_AWARDS} myName="John" backgroundSrc={`${import.meta.env.BASE_URL}backgrounds/background5.svg`} footer={<PillButton onClick={noop} label="Leave" />} />,
+    'final-empty': <FinalResultsView leaderboard={[]} awards={[]} backgroundSrc={`${import.meta.env.BASE_URL}backgrounds/background6.svg`} footer={<PillButton onClick={noop} label="New Game" />} />,
   };
 
   return screenshots[params.get('v') ?? '']
