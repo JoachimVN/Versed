@@ -2,7 +2,7 @@ import { Flame, Zap } from 'lucide-react';
 import LiquidGlass from '../../components/StableLiquidGlass';
 import { useAnimatedScore } from '../../hooks/useAnimatedScore';
 import { BIG_POINTS_THRESHOLD, FinalRoundAnswerContent, NoOneGotItCardContent, GotItCardContent, YearTimelineContent, PointsBreakdownList, breakdownCompact } from '../../components/RevealShared';
-import { PartyRevealExtras } from '../../components/RoundIntro';
+import { PartyRevealExtras, MYSTERY_LANDING_MS } from '../../components/RoundIntro';
 import { LIQUID_CARD_PROPS } from '../../components/liquidGlassPresets';
 import type { RoundResultEvent } from '../../types';
 import type { PlayState } from './usePlayGame';
@@ -45,7 +45,14 @@ function PlayRevealShell({
   // should count up rather than just appear. The "+N pts" line and its
   // breakdown stay put (no fade-out) — how many points this round earned,
   // and why, shouldn't disappear a few seconds after the reveal.
-  const { displayScore } = useAnimatedScore(myScore, myScoreDelta, 300);
+  // For mystery rounds specifically, the count-up is held back until the
+  // slot reel has actually landed (see MysteryMultiplierChip) — otherwise
+  // the score climbing gives away that a bonus is coming before the reel
+  // reveals what it is. useAnimatedScore adds its own 1s buffer on top of
+  // this delay, so that's subtracted back out, plus a short beat so the
+  // number lands before the score starts moving.
+  const mysteryScoreDelay = revealParty?.event === 'mystery' ? Math.max(300, MYSTERY_LANDING_MS - 1000 + 250) : 300;
+  const { displayScore, deltaFading } = useAnimatedScore(myScore, myScoreDelta, mysteryScoreDelay);
   return (
     <div className={`page-enter relative min-h-screen flex flex-col items-center justify-center gap-5 overflow-hidden ${wide ? 'px-2 py-6' : 'p-6'}`}>
       <img
@@ -81,7 +88,17 @@ function PlayRevealShell({
             </p>
           )}
           {myScoreDelta > 0 && myBreakdown && <PointsBreakdownList breakdown={myBreakdown} />}
-          <p className="text-3xl font-black text-white mt-1">{displayScore.toLocaleString()}</p>
+          <p
+            // Remounts once when deltaFading flips true (the count-up landing
+            // on its final value), replaying the one-shot flash below — the
+            // moment a huge round's total actually arrives gets its own
+            // payoff instead of just quietly stopping.
+            key={myScoreDelta >= BIG_POINTS_THRESHOLD && deltaFading ? 'landed' : 'counting'}
+            className="text-3xl font-black text-white mt-1"
+            style={myScoreDelta >= BIG_POINTS_THRESHOLD && deltaFading ? { animation: 'scoreLandFlash 0.7s ease-out' } : undefined}
+          >
+            {displayScore.toLocaleString()}
+          </p>
           <p className="text-white/45 text-sm">your score</p>
           {scoreExtra}
           {myStreak >= 2 && (

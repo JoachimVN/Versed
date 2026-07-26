@@ -338,15 +338,16 @@ select:focus-visible,
   100% { transform: scale(1); opacity: 1; }
 }
 
-/* Mystery multiplier slot reel (RoundIntro.tsx's MysteryMultiplierChip): a
-   quick flicker per decoy value, then a bigger overshoot than chipReveal for
-   the value it actually lands on, so settling reads as a payoff. */
-@keyframes mysterySpinTick {
+/* Shared slot-reel language for both the mystery multiplier chip and the
+   guess-the-year number (RoundIntro.tsx / RevealShared.tsx): a quick flicker
+   per decoy value, then a bigger overshoot than chipReveal for the value it
+   actually lands on, so settling reads as a payoff. */
+@keyframes slotSpinTick {
   0%   { transform: scale(0.85); opacity: 0.5; }
   50%  { transform: scale(1.08); opacity: 1; }
   100% { transform: scale(1); opacity: 0.85; }
 }
-@keyframes mysteryLand {
+@keyframes slotLand {
   0%   { transform: scale(0.5); opacity: 0; }
   55%  { transform: scale(1.35); opacity: 1; }
   75%  { transform: scale(0.92); }
@@ -355,15 +356,22 @@ select:focus-visible,
 /* The moment the reel settles gets a quick bright flare on every value —
    including the common ×1.5 — so the multiplier is visibly revealed rather
    than merely changing text. */
-@keyframes mysteryFlash {
+@keyframes slotFlash {
   0%, 100% { filter: brightness(1); }
   28%       { filter: brightness(2.3) drop-shadow(0 0 12px rgba(255,255,255,0.8)); }
+}
+/* One-shot ring that expands and fades from the chip the instant it lands —
+   plays once on every roll, distinct from mysteryJackpotGlow's infinite loop
+   which only continues for the rare high rolls. */
+@keyframes slotLandBurst {
+  0%   { box-shadow: 0 0 0 0 rgba(255,255,255,0.5); }
+  100% { box-shadow: 0 0 0 14px rgba(255,255,255,0); }
 }
 /* Continuous gold pulse for a jackpot roll (x5/x10), so the rare high value
    keeps drawing the eye instead of going static like a normal x1.5-x4. */
 @keyframes mysteryJackpotGlow {
   0%, 100% { box-shadow: 0 0 0 0 rgba(251,191,36,0.5); }
-  50%       { box-shadow: 0 0 18px 5px rgba(251,191,36,0.45); }
+  50%       { box-shadow: 0 0 24px 8px rgba(251,191,36,0.5); }
 }
 
 /* A player's round delta clears BIG_POINTS_THRESHOLD (RevealShared.tsx): a
@@ -378,6 +386,25 @@ select:focus-visible,
 @keyframes bigPointsGlow {
   0%, 100% { filter: drop-shadow(0 0 3px rgba(251,191,36,0.35)); }
   50%       { filter: drop-shadow(0 0 10px rgba(251,191,36,0.75)); }
+}
+/* One-shot payoff on the score total itself the instant a big-points count-up
+   finishes landing on its new value — the fading "+N" chip already covers
+   the climb, this covers the moment it actually arrives. */
+@keyframes scoreLandFlash {
+  0%   { transform: scale(1); filter: brightness(1); }
+  35%  { transform: scale(1.18); filter: brightness(1.9) drop-shadow(0 0 10px rgba(251,191,36,0.8)); }
+  100% { transform: scale(1); filter: brightness(1); }
+}
+
+/* Re-states translate(-50%,-50%) alongside the extra scale/rotate, same as
+   markerCelebrate — an animated transform always wins over the element's
+   static inline one. Bigger overshoot + a slight spin than the plain-marker
+   celebration, reserved for whichever guess actually won the round. */
+@keyframes winnerMarkerLand {
+  0%   { transform: translate(-50%, -50%) scale(0.3) rotate(-10deg); opacity: 0; }
+  55%  { transform: translate(-50%, -50%) scale(1.5) rotate(6deg); opacity: 1; }
+  75%  { transform: translate(-50%, -50%) scale(0.9) rotate(-2deg); }
+  100% { transform: translate(-50%, -50%) scale(1) rotate(0deg); opacity: 1; }
 }
 
 @keyframes markerGlowPulse {

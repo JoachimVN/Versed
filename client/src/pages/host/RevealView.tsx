@@ -4,7 +4,7 @@ import LiquidGlass from '../../components/StableLiquidGlass';
 import { socket } from '../../socket';
 import { useAnimatedScore } from '../../hooks/useAnimatedScore';
 import { BIG_POINTS_THRESHOLD, FinalRoundAnswerContent, NoOneGotItCardContent, GotItCardContent, YearTimelineContent, PillButton } from '../../components/RevealShared';
-import { PartyRevealExtras } from '../../components/RoundIntro';
+import { PartyRevealExtras, MYSTERY_LANDING_MS } from '../../components/RoundIntro';
 import { LIQUID_CARD_PROPS } from '../../components/liquidGlassPresets';
 import type { PlayerInfo, RoundResultEvent } from '../../types';
 import type { HostState } from './useHostGame';
@@ -95,7 +95,16 @@ function RevealPlayerRow({
               )}
             </p>
           ) : <span />}
-          <p className="text-white/60 text-xs tabular-nums shrink-0">{displayScore.toLocaleString()}</p>
+          <p
+            // Remounts once when deltaFading flips true (the count-up landing
+            // on its final value), replaying the one-shot flash below —
+            // otherwise a huge round's total just quietly stops climbing.
+            key={delta >= BIG_POINTS_THRESHOLD && deltaFading ? 'landed' : 'counting'}
+            className="text-white/60 text-xs tabular-nums shrink-0"
+            style={delta >= BIG_POINTS_THRESHOLD && deltaFading ? { animation: 'scoreLandFlash 0.7s ease-out' } : undefined}
+          >
+            {displayScore.toLocaleString()}
+          </p>
         </div>
         {entry?.artistGuess && (
           <p className={`text-xs break-words ${artistGuessClass(!!entry.artistCorrect, correct !== 'none')}`} style={{ overflowWrap: 'anywhere' }}>
@@ -126,6 +135,13 @@ function RevealShell({
   // label instead of prematurely promising "Final Results".
   let nextLabel = 'Next Round';
   const revealParty = result.party ?? party;
+  // A mystery round's true (multiplied) score shouldn't visibly count up
+  // until the slot reel has actually landed on the multiplier — otherwise
+  // the score climbing gives away that a bonus is coming before the reel
+  // says what it is. useAnimatedScore bakes in its own 1s buffer on top of
+  // this delay, so subtract that back out once the reel's landing time
+  // covers it, plus a short beat so the number lands before the score moves.
+  const baseScoreDelay = revealParty?.event === 'mystery' ? Math.max(400, MYSTERY_LANDING_MS - 1000 + 250) : 400;
   const finaleResolved = revealParty?.duelProgress?.wins.some(w => w.count >= 2) ?? false;
   if (revealParty?.finale && !finaleResolved) nextLabel = 'Continue';
   else if (roundIndex + 1 >= totalRounds) nextLabel = 'Final Results';
@@ -167,7 +183,7 @@ function RevealShell({
               delta={roundDeltas[p.name] ?? 0}
               pity={roundPity[p.name] ?? false}
               pityAmount={roundPityAmount[p.name] ?? 0}
-              delay={400 + i * 80}
+              delay={baseScoreDelay + i * 80}
               correct={isCorrectFor(p)}
               instant={instant}
               removePlayer={removePlayer}

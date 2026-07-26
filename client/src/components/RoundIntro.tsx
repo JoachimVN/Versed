@@ -1,4 +1,5 @@
 import { useEffect, useLayoutEffect, useRef, useState } from 'react';
+import { Sparkles } from 'lucide-react';
 import type { Hint, PartyInfo, RoundResultEvent } from '../types';
 import { useEscapeKey } from '../hooks/useEscapeKey';
 import { useFocusTrap } from '../hooks/useFocusTrap';
@@ -136,8 +137,14 @@ const MYSTERY_CANDIDATES = [1.5, 2, 3, 4, 5, 10];
 
 // Step durations for the flicker, front-loaded fast then slowing down like a
 // wheel losing momentum — the deceleration is what sells "landing" rather
-// than "the label just changed".
-const MYSTERY_SPIN_STEPS_MS = [55, 65, 80, 95, 115, 140, 170, 205, 245, 290];
+// than "the label just changed". The last two steps are the longest of all,
+// stretching out the final "is it going to be a big one?" beat.
+const MYSTERY_SPIN_STEPS_MS = [55, 65, 80, 95, 115, 140, 170, 205, 245, 290, 350, 420];
+
+// Total time (ms) from mount until the reel lands on the real value — other
+// reveal timing (e.g. delaying the score count-up) syncs against this so the
+// multiplier is always visible before points start moving.
+export const MYSTERY_LANDING_MS = MYSTERY_SPIN_STEPS_MS.reduce((a, b) => a + b, 0);
 
 function pickMysteryCandidate(candidates: readonly number[]) {
   const randomValue = new Uint32Array(1);
@@ -185,12 +192,12 @@ function MysteryMultiplierChip({ multiplier }: Readonly<{ multiplier: number }>)
   }, [multiplier]);
 
   const jackpot = landed && multiplier >= 5;
-  // Landing gets a one-shot white flash on every roll (mysteryFlash) — the
-  // jackpot's gold glow only kicks in afterward, timed past the flash so the
-  // two don't visually fight for the same instant.
+  // Landing gets a one-shot white flash (slotFlash) plus an expanding ring
+  // burst (slotLandBurst) on every roll — the jackpot's gold glow only kicks
+  // in afterward, timed past those so nothing fights for the same instant.
   const landAnimation = jackpot
-    ? 'mysteryLand 0.6s cubic-bezier(0.34, 1.56, 0.64, 1), mysteryFlash 0.7s ease-out, mysteryJackpotGlow 1.6s ease-in-out 0.6s infinite'
-    : 'mysteryLand 0.6s cubic-bezier(0.34, 1.56, 0.64, 1), mysteryFlash 0.7s ease-out';
+    ? 'slotLand 0.6s cubic-bezier(0.34, 1.56, 0.64, 1), slotFlash 0.7s ease-out, slotLandBurst 0.6s ease-out, mysteryJackpotGlow 1.6s ease-in-out 0.6s infinite'
+    : 'slotLand 0.6s cubic-bezier(0.34, 1.56, 0.64, 1), slotFlash 0.7s ease-out, slotLandBurst 0.6s ease-out';
   return (
     <span
       // A fresh key per flicker tick (and a distinct one on landing) forces
@@ -199,20 +206,23 @@ function MysteryMultiplierChip({ multiplier }: Readonly<{ multiplier: number }>)
       key={landed ? `landed-${multiplier}` : `spin-${tick}`}
       style={{
         display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '2px',
-        padding: '10px 24px', borderRadius: '20px',
+        padding: landed ? '12px 28px' : '10px 24px', borderRadius: '20px',
         background: jackpot ? 'rgba(251,191,36,0.14)' : 'rgba(0,238,232,0.1)',
         border: `1px solid ${jackpot ? 'rgba(251,191,36,0.45)' : 'rgba(0,238,232,0.3)'}`,
-        animation: landed ? landAnimation : 'mysterySpinTick 0.14s ease-out',
+        animation: landed ? landAnimation : 'slotSpinTick 0.14s ease-out',
       }}
     >
       <span style={{
+        display: 'flex', alignItems: 'center', gap: '4px',
         fontSize: '0.62rem', fontWeight: 800, letterSpacing: '0.14em', textTransform: 'uppercase',
         color: jackpot ? 'rgba(253,224,71,0.9)' : 'rgba(94,234,212,0.9)',
       }}>
+        {jackpot && <Sparkles style={{ width: '10px', height: '10px' }} />}
         Mystery Multiplier
+        {jackpot && <Sparkles style={{ width: '10px', height: '10px' }} />}
       </span>
       <span style={{
-        fontSize: '1.9rem', fontWeight: 900, lineHeight: 1,
+        fontSize: landed ? '2.2rem' : '1.9rem', fontWeight: 900, lineHeight: 1,
         background: jackpot
           ? 'linear-gradient(to bottom left, rgba(251,191,36,0.6) 0%, transparent 55%), linear-gradient(to top right, rgba(255,221,120,0.55) 0%, transparent 55%), #fff'
           : 'linear-gradient(to bottom left, rgba(0,238,232,0.5) 0%, transparent 55%), linear-gradient(to top right, rgba(158,18,204,0.55) 0%, transparent 55%), #fff',
