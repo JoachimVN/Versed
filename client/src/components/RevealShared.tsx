@@ -476,9 +476,8 @@ export function YearTimelineContent({ result, showGuessValues = true }: Readonly
   const nameLaneByGuess = new Map(groups.map((g, i) => [g.guess, nameLanes[i]]));
 
   // Non-winning guesses cascade in first; the winner then lands last with a
-  // bigger pop and a trophy, regardless of its x-position in that cascade —
-  // a deliberate "and the winner is…" beat rather than a plain leftmost-to-
-  // rightmost reveal.
+  // bigger pop, regardless of its x-position in that cascade — a deliberate
+  // "and the winner is…" beat rather than a plain leftmost-to-rightmost reveal.
   function renderMarker(group: typeof groups[number], delayS: number, isBest: boolean) {
     const isExact = group.guess === year;
     const names = group.entries.map(e => e.name).join(', ');
@@ -497,15 +496,6 @@ export function YearTimelineContent({ result, showGuessValues = true }: Readonly
           animationDelay: `${delayS}s`,
         }}
       >
-        {isBest && (
-          <Trophy
-            style={{
-              position: 'absolute', left: '50%', bottom: `${nameOffset + 12}px`, transform: 'translateX(-50%)',
-              width: '13px', height: '13px', color: winnerColor,
-              animation: `chipReveal 0.4s cubic-bezier(0.34, 1.56, 0.64, 1) ${delayS + 0.35}s both`,
-            }}
-          />
-        )}
         <span style={{
           position: 'absolute', left: '50%', transform: 'translateX(-50%)',
           bottom: `${nameOffset}px`,
