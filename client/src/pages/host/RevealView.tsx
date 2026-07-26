@@ -26,6 +26,7 @@ type RevealRowProps = {
   displayScore: number;
   displayDelta: number;
   deltaFading: boolean;
+  revealed: boolean;
   big: boolean;
   removePlayer: (name: string) => void;
   registerRow?: (el: HTMLButtonElement | null) => void;
@@ -59,7 +60,7 @@ function deltaText(displayDelta: number, delta: number, pity: boolean, pityAmoun
 }
 
 function UnsubmittedPlayerRow({
-  player, delta, streak, displayScore, displayDelta, deltaFading, big, pity, pityAmount, removePlayer, registerRow,
+  player, delta, streak, displayScore, displayDelta, deltaFading, revealed, big, pity, pityAmount, removePlayer, registerRow,
 }: Readonly<RevealRowProps & { pity: boolean; pityAmount: number }>) {
   const rowDeltaClass = deltaClass(delta, big);
   const rowDeltaAnimation = deltaAnimation(delta, big);
@@ -77,7 +78,7 @@ function UnsubmittedPlayerRow({
         <div className="flex flex-col items-end shrink-0">
           {delta !== 0 && (
             <p
-              className={`tabular-nums flex items-center gap-0.5 transition-opacity duration-500 ${deltaFading ? 'opacity-0' : 'opacity-100'} ${rowDeltaClass}`}
+              className={`tabular-nums flex items-center gap-0.5 transition-opacity duration-500 ${(deltaFading || !revealed) ? 'opacity-0' : 'opacity-100'} ${rowDeltaClass}`}
               style={rowDeltaAnimation ? { animation: rowDeltaAnimation } : undefined}
             >
               {deltaText(displayDelta, delta, pity, pityAmount)}
@@ -92,7 +93,7 @@ function UnsubmittedPlayerRow({
 }
 
 function SubmittedPlayerRow({
-  player, entry, delta, pity, pityAmount, streak, displayScore, displayDelta, deltaFading, big, correct, removePlayer, registerRow,
+  player, entry, delta, pity, pityAmount, streak, displayScore, displayDelta, deltaFading, revealed, big, correct, removePlayer, registerRow,
 }: Readonly<RevealRowProps & { entry: PlayerGuess; pity: boolean; pityAmount: number; correct: GuessCorrectness }>) {
   const skipped = entry.guess === null;
   const guessText = skipped ? 'skipped' : `"${entry.guess}${entry.live ? '…' : ''}"`;
@@ -116,7 +117,7 @@ function SubmittedPlayerRow({
         </div>
         {delta !== 0 && (
           <p
-            className={`tabular-nums shrink-0 flex items-center gap-0.5 transition-opacity duration-500 ${deltaFading ? 'opacity-0' : 'opacity-100'} ${rowDeltaClass}`}
+            className={`tabular-nums shrink-0 flex items-center gap-0.5 transition-opacity duration-500 ${(deltaFading || !revealed) ? 'opacity-0' : 'opacity-100'} ${rowDeltaClass}`}
             style={rowDeltaAnimation ? { animation: rowDeltaAnimation } : undefined}
           >
             {rowDeltaText}
@@ -155,7 +156,7 @@ function SubmittedPlayerRow({
 }
 
 function RevealPlayerRow({
-  player, entry, delta, pity, pityAmount, delay, correct, instant, removePlayer, registerRow,
+  player, entry, delta, pity, pityAmount, delay, correct, instant, holdReveal, removePlayer, registerRow,
 }: Readonly<{
   player: PlayerInfo;
   entry?: PlayerGuess;
@@ -165,13 +166,14 @@ function RevealPlayerRow({
   delay: number;
   correct: GuessCorrectness;
   instant: boolean;
+  holdReveal: boolean;
   removePlayer: (name: string) => void;
   registerRow?: (el: HTMLButtonElement | null) => void;
 }>) {
-  const { displayScore, displayDelta, deltaFading } = useAnimatedScore(player.score ?? 0, delta, delay, instant);
+  const { displayScore, displayDelta, deltaFading, revealed } = useAnimatedScore(player.score ?? 0, delta, delay, instant, holdReveal);
   const streak = player.streak ?? 0;
   const big = Math.abs(delta) >= BIG_POINTS_THRESHOLD;
-  const rowProps = { player, delta, streak, displayScore, displayDelta, deltaFading, big, removePlayer, registerRow };
+  const rowProps = { player, delta, streak, displayScore, displayDelta, deltaFading, revealed, big, removePlayer, registerRow };
   return entry
     ? <SubmittedPlayerRow {...rowProps} entry={entry} pity={pity} pityAmount={pityAmount} correct={correct} />
     : <UnsubmittedPlayerRow {...rowProps} pity={pity} pityAmount={pityAmount} />;
@@ -251,7 +253,8 @@ function RevealShell({
   // says what it is. useAnimatedScore bakes in its own 1s buffer on top of
   // this delay, so subtract that back out once the reel's landing time
   // covers it, plus a short beat so the number lands before the score moves.
-  const baseScoreDelay = revealParty?.event === 'mystery' ? Math.max(400, MYSTERY_LANDING_MS - 1000 + 250) : 400;
+  const isMystery = revealParty?.event === 'mystery';
+  const baseScoreDelay = isMystery ? Math.max(400, MYSTERY_LANDING_MS - 1000 + 250) : 400;
   const finaleResolved = revealParty?.duelProgress?.wins.some(w => w.count >= 2) ?? false;
   if (revealParty?.finale && !finaleResolved) nextLabel = 'Continue';
   else if (roundIndex + 1 >= totalRounds) nextLabel = 'Final Results';
@@ -312,6 +315,7 @@ function RevealShell({
               delay={baseScoreDelay + i * 80}
               correct={isCorrectFor(p)}
               instant={instant}
+              holdReveal={isMystery}
               removePlayer={removePlayer}
               registerRow={isStealRound ? (el => { rowRefs.current[p.name] = el; }) : undefined}
             />

@@ -64,8 +64,12 @@ function PlayRevealShell({
   // reveals what it is. useAnimatedScore adds its own 1s buffer on top of
   // this delay, so that's subtracted back out, plus a short beat so the
   // number lands before the score starts moving.
-  const mysteryScoreDelay = revealParty?.event === 'mystery' ? Math.max(300, MYSTERY_LANDING_MS - 1000 + 250) : 300;
-  const { displayScore, deltaFading } = useAnimatedScore(myScore, myScoreDelta, mysteryScoreDelay);
+  const isMystery = revealParty?.event === 'mystery';
+  const mysteryScoreDelay = isMystery ? Math.max(300, MYSTERY_LANDING_MS - 1000 + 250) : 300;
+  // holdDelta hides the "+N pts" line and its breakdown (below) until this
+  // same delay elapses — without it they render at mount, before the host's
+  // reel has even landed, and give away the multiplier's size in advance.
+  const { displayScore, deltaFading, revealed } = useAnimatedScore(myScore, myScoreDelta, mysteryScoreDelay, false, isMystery);
   return (
     <div className="page-enter relative min-h-screen" style={{ overflowY: 'auto', overscrollBehavior: 'contain' }}>
       <div className={`screen-center-safe relative flex min-h-full flex-col items-center gap-5 ${wide ? 'px-2 py-6' : 'p-6'}`} style={{ minHeight: '100%' }}>
@@ -95,7 +99,7 @@ function PlayRevealShell({
         {guessesList}
 
         <div style={{ background: 'rgba(255,255,255,0.05)', border: '1px solid rgba(255,255,255,0.08)', borderRadius: '16px', padding: '16px 32px', textAlign: 'center' }}>
-          {myScoreDelta !== 0 && (
+          {myScoreDelta !== 0 && revealed && (
             <p
               className={`font-bold tabular-nums flex items-center justify-center gap-1 ${scoreDeltaClass(myScoreDelta)}`}
               style={scoreDeltaAnimation(myScoreDelta)}
@@ -103,7 +107,7 @@ function PlayRevealShell({
               {myScoreDelta < 0 ? `-${Math.abs(myScoreDelta).toLocaleString()} pts` : `+${myScoreDelta.toLocaleString()} pts`}
             </p>
           )}
-          {myScoreDelta > 0 && myBreakdown && <PointsBreakdownList breakdown={myBreakdown} hideMultiplier={revealParty?.event === 'mystery'} />}
+          {myScoreDelta > 0 && revealed && myBreakdown && <PointsBreakdownList breakdown={myBreakdown} hideMultiplier={isMystery} />}
           <p
             // Remounts once when deltaFading flips true (the count-up landing
             // on its final value), replaying the one-shot flash below — the
