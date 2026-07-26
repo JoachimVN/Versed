@@ -64,7 +64,11 @@ function loadBuffers(): Promise<Buffers> {
   })();
   return buffersPromise;
 }
-loadBuffers().catch(() => { /* fetch/decode failed; play() just stays a no-op */ });
+try {
+  await loadBuffers();
+} catch {
+  // fetch/decode failed; play() just stays a no-op
+}
 
 // A fresh AudioContext starts suspended until a user gesture. Attached once
 // at module scope rather than per-component-mount, since by the time the
