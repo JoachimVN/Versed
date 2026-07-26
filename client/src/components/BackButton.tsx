@@ -1,5 +1,5 @@
 import { ChevronLeft } from 'lucide-react';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate } from 'react-router';
 
 export function BackButton({ zIndex = 2, beforeNavigate }: Readonly<{ zIndex?: number; beforeNavigate?: () => void | Promise<void> }>) {
   const navigate = useNavigate();
