@@ -609,6 +609,18 @@ export function usePlayGame(pinParam?: string): PlayState {
         setPin(newPin);
         newGamePinRef.current = null;
         setNewGamePin(null);
+        // The replacement game has a new Player with a zero score. Reset the
+        // local score baseline too, otherwise its first score_update is
+        // compared with the previous game's total and looks like a loss.
+        myScoreRef.current = 0;
+        setMyScore(0);
+        setMyScoreDelta(0);
+        setMyPity(false);
+        setMyPityAmount(0);
+        setMyBreakdown(null);
+        setMyStreak(0);
+        setMyRacePoints(0);
+        setMyRaceTimeMs(null);
         const session = { pin: newPin, name: n };
         setSavedSession(session);
         localStorage.setItem('versed_session', JSON.stringify(session));
