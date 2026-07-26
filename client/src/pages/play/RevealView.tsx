@@ -21,6 +21,18 @@ function artistGuessClass(artistCorrect: boolean, titleCorrect: boolean): string
   return titleCorrect ? 'text-green-400' : 'text-green-400/50 italic';
 }
 
+function scoreDeltaClass(scoreDelta: number): string {
+  if (scoreDelta < 0) return 'text-sm text-red-400';
+  if (scoreDelta >= BIG_POINTS_THRESHOLD) return 'text-xl text-amber-300';
+  return 'text-sm text-sky-400';
+}
+
+function scoreDeltaAnimation(scoreDelta: number): React.CSSProperties | undefined {
+  if (scoreDelta < 0) return { animation: 'stealHit 0.6s ease-out' };
+  if (scoreDelta >= BIG_POINTS_THRESHOLD) return { animation: 'bigPointsPop 0.7s cubic-bezier(0.34, 1.56, 0.64, 1)' };
+  return undefined;
+}
+
 // Reveal for "guess the year" rounds: the year card plus everyone's distances.
 // Shared shell for the three reveal-screen variants (year / no-one-got-it /
 // got-it): page background, liquid card, party extras, a guesses list, and
@@ -85,11 +97,8 @@ function PlayRevealShell({
         <div style={{ background: 'rgba(255,255,255,0.05)', border: '1px solid rgba(255,255,255,0.08)', borderRadius: '16px', padding: '16px 32px', textAlign: 'center' }}>
           {myScoreDelta !== 0 && (
             <p
-              className={`font-bold tabular-nums flex items-center justify-center gap-1 ${myScoreDelta < 0 ? 'text-sm text-red-400' : myScoreDelta >= BIG_POINTS_THRESHOLD ? 'text-xl text-amber-300' : 'text-sm text-sky-400'}`}
-              style={
-                myScoreDelta < 0 ? { animation: 'stealHit 0.6s ease-out' }
-                  : myScoreDelta >= BIG_POINTS_THRESHOLD ? { animation: 'bigPointsPop 0.7s cubic-bezier(0.34, 1.56, 0.64, 1)' } : undefined
-              }
+              className={`font-bold tabular-nums flex items-center justify-center gap-1 ${scoreDeltaClass(myScoreDelta)}`}
+              style={scoreDeltaAnimation(myScoreDelta)}
             >
               {myScoreDelta < 0 ? `-${Math.abs(myScoreDelta).toLocaleString()} pts` : `+${myScoreDelta.toLocaleString()} pts`}
             </p>

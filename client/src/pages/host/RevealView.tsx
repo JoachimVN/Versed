@@ -21,6 +21,25 @@ function artistGuessClass(artistCorrect: boolean, titleCorrect: boolean): string
   return titleCorrect ? 'text-green-400' : 'text-green-400/50';
 }
 
+function deltaClass(delta: number, big: boolean): string {
+  if (delta < 0) return 'text-xs text-red-400';
+  if (big) return 'text-sm font-bold text-amber-300';
+  return 'text-xs text-sky-400';
+}
+
+function deltaAnimation(delta: number, big: boolean): string | undefined {
+  if (delta < 0) return 'stealHit 0.6s ease-out';
+  if (big) return 'bigPointsPop 0.7s cubic-bezier(0.34, 1.56, 0.64, 1)';
+  return undefined;
+}
+
+function deltaText(displayDelta: number, delta: number, pity: boolean, pityAmount: number): string {
+  if (delta < 0) return `-${Math.abs(displayDelta).toLocaleString()}`;
+  const pityText = pity ? ` (+${pityAmount.toLocaleString()} pity)` : '';
+  const points = displayDelta > 0 ? displayDelta.toLocaleString() : '';
+  return `+${points}${pityText}`;
+}
+
 function RevealPlayerRow({
   player, entry, delta, pity, pityAmount, delay, correct, instant, removePlayer, registerRow,
 }: Readonly<{
@@ -46,15 +65,9 @@ function RevealPlayerRow({
   const correctCls = correct === 'exact' ? 'text-amber-400' : 'text-green-400';
   const guessCls = (!skipped && correct !== 'none') ? `${correctCls} text-xs break-words min-w-0` : 'text-white/28 italic text-xs break-words min-w-0';
   const big = Math.abs(delta) >= BIG_POINTS_THRESHOLD;
-  const deltaCls = delta < 0
-    ? 'text-xs text-red-400'
-    : big ? 'text-sm font-bold text-amber-300' : 'text-xs text-sky-400';
-  const deltaAnimation = delta < 0
-    ? 'stealHit 0.6s ease-out'
-    : big ? 'bigPointsPop 0.7s cubic-bezier(0.34, 1.56, 0.64, 1)' : undefined;
-  const deltaText = delta < 0
-    ? `-${Math.abs(displayDelta).toLocaleString()}`
-    : `+${displayDelta > 0 ? displayDelta.toLocaleString() : ''}${pity ? ` (+${pityAmount.toLocaleString()} pity)` : ''}`;
+  const rowDeltaClass = deltaClass(delta, big);
+  const rowDeltaAnimation = deltaAnimation(delta, big);
+  const rowDeltaText = deltaText(displayDelta, delta, pity, pityAmount);
 
   if (!entry) {
     return (
@@ -71,10 +84,10 @@ function RevealPlayerRow({
           <div className="flex flex-col items-end shrink-0">
             {delta !== 0 && (
               <p
-                className={`tabular-nums flex items-center gap-0.5 transition-opacity duration-500 ${deltaFading ? 'opacity-0' : 'opacity-100'} ${deltaCls}`}
-                style={deltaAnimation ? { animation: deltaAnimation } : undefined}
+                className={`tabular-nums flex items-center gap-0.5 transition-opacity duration-500 ${deltaFading ? 'opacity-0' : 'opacity-100'} ${rowDeltaClass}`}
+                style={rowDeltaAnimation ? { animation: rowDeltaAnimation } : undefined}
               >
-                {deltaText}
+                {rowDeltaText}
               </p>
             )}
             <p className="text-white/60 text-xs tabular-nums">{displayScore.toLocaleString()}</p>
@@ -99,10 +112,10 @@ function RevealPlayerRow({
         </div>
         {delta !== 0 && (
           <p
-            className={`tabular-nums shrink-0 flex items-center gap-0.5 transition-opacity duration-500 ${deltaFading ? 'opacity-0' : 'opacity-100'} ${deltaCls}`}
-            style={deltaAnimation ? { animation: deltaAnimation } : undefined}
+            className={`tabular-nums shrink-0 flex items-center gap-0.5 transition-opacity duration-500 ${deltaFading ? 'opacity-0' : 'opacity-100'} ${rowDeltaClass}`}
+            style={rowDeltaAnimation ? { animation: rowDeltaAnimation } : undefined}
           >
-            {deltaText}
+            {rowDeltaText}
           </p>
         )}
       </div>

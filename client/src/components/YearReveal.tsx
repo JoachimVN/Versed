@@ -67,6 +67,13 @@ function YearNumber({ year, compact }: Readonly<{ year: number | string; compact
     return () => { cancelled = true; clearTimeout(timer); };
   }, [year, isNumber]);
 
+  let animation: string | undefined;
+  if (isNumber) {
+    animation = landed
+      ? 'slotLand 0.6s cubic-bezier(0.34, 1.56, 0.64, 1), slotFlash 0.7s ease-out'
+      : 'slotSpinTick 0.14s ease-out';
+  }
+
   return (
     <span
       // A fresh key per flicker tick (and a distinct one on landing) forces
@@ -78,9 +85,7 @@ function YearNumber({ year, compact }: Readonly<{ year: number | string; compact
         background: 'linear-gradient(to bottom left, rgba(0,238,232,0.5) 0%, transparent 55%), linear-gradient(to top right, rgba(158,18,204,0.5) 0%, transparent 55%), #fff',
         WebkitBackgroundClip: 'text', WebkitTextFillColor: 'transparent', backgroundClip: 'text',
         marginBottom: compact ? '8px' : '22px', display: 'inline-block', minWidth: compact ? '160px' : '140px',
-        animation: !isNumber ? undefined : (landed
-          ? 'slotLand 0.6s cubic-bezier(0.34, 1.56, 0.64, 1), slotFlash 0.7s ease-out'
-          : 'slotSpinTick 0.14s ease-out'),
+        animation,
         // A decoy tick at full clarity is indistinguishable from the real
         // answer if someone glances at exactly the wrong instant — a factual
         // "the year was" card reads as authoritative, so unlike the mystery

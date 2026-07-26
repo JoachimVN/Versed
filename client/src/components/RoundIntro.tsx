@@ -195,6 +195,17 @@ function playMysteryChime(ctx: AudioContext, tier: 'normal' | 'jackpot' | 'mega'
   });
 }
 
+function mysteryTier(multiplier: number): 'normal' | 'jackpot' | 'mega' {
+  if (multiplier === 10) return 'mega';
+  if (multiplier >= 5) return 'jackpot';
+  return 'normal';
+}
+
+function mysteryValueFontSize(landed: boolean, superJackpot: boolean): string {
+  if (!landed) return '1.9rem';
+  return superJackpot ? '2.5rem' : '2.2rem';
+}
+
 // Slot-reel reveal for the mystery multiplier: flickers through a handful of
 // decoy values before settling on the real one, instead of the value just
 // appearing. ×5/×10 (the rare high rolls) keep pulsing gold after landing so
@@ -226,7 +237,7 @@ function MysteryMultiplierChip({ multiplier }: Readonly<{ multiplier: number }>)
   }, []);
 
   useEffect(() => {
-    const tier: 'normal' | 'jackpot' | 'mega' = multiplier === 10 ? 'mega' : multiplier >= 5 ? 'jackpot' : 'normal';
+    const tier = mysteryTier(multiplier);
     if (reducedMotion) {
       setDisplay(multiplier);
       setLanded(true);
@@ -311,7 +322,7 @@ function MysteryMultiplierChip({ multiplier }: Readonly<{ multiplier: number }>)
         {jackpot && <Sparkles style={{ width: '10px', height: '10px' }} />}
       </span>
       <span style={{
-        fontSize: landed ? (superJackpot ? '2.5rem' : '2.2rem') : '1.9rem', fontWeight: 900, lineHeight: 1,
+        fontSize: mysteryValueFontSize(landed, superJackpot), fontWeight: 900, lineHeight: 1,
         background: jackpot
           ? 'linear-gradient(to bottom left, rgba(251,191,36,0.6) 0%, transparent 55%), linear-gradient(to top right, rgba(255,221,120,0.55) 0%, transparent 55%), #fff'
           : 'linear-gradient(to bottom left, rgba(0,238,232,0.5) 0%, transparent 55%), linear-gradient(to top right, rgba(158,18,204,0.55) 0%, transparent 55%), #fff',

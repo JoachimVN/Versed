@@ -38,7 +38,7 @@ export function useLobbyMusic(muffled: boolean) {
   const fadeIntervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const volumeRef = useRef(1);
   const lastVolumeRef = useRef(1);
-  const [volume, setVolumeState] = useState(1);
+  const [volume, setVolume] = useState(1);
 
   useEffect(() => {
     let cancelled = false;
@@ -137,22 +137,22 @@ export function useLobbyMusic(muffled: boolean) {
 
   // Drags need to feel instant, so the slider bypasses rampGain and writes
   // the gain directly; only the mute-button toggle gets an animated fade.
-  const setVolume = (v: number) => {
+  const updateVolume = (v: number) => {
     const clamped = Math.min(1, Math.max(0, v));
     volumeRef.current = clamped;
     if (clamped > 0) lastVolumeRef.current = clamped;
-    setVolumeState(clamped);
+    setVolume(clamped);
     if (fadeIntervalRef.current) { clearInterval(fadeIntervalRef.current); fadeIntervalRef.current = null; }
     const gain = gainRef.current;
     if (gain) gain.gain.value = clamped;
   };
 
   const toggleMute = () => {
-    if (volumeRef.current > 0) { setVolume(0); return; }
+    if (volumeRef.current > 0) { updateVolume(0); return; }
     rampGain(lastVolumeRef.current || 1, 250);
     volumeRef.current = lastVolumeRef.current || 1;
-    setVolumeState(volumeRef.current);
+    setVolume(volumeRef.current);
   };
 
-  return { fadeOut, volume, setVolume, toggleMute };
+  return { fadeOut, volume, setVolume: updateVolume, toggleMute };
 }
