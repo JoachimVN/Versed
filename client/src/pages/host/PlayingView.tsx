@@ -4,7 +4,7 @@ import { CircularTimer } from '../../components/CircularTimer';
 import { AudioBars } from '../../components/AudioBars';
 import { LIQUID_CARD_PROPS } from '../../components/liquidGlassPresets';
 import type { HostState } from './useHostGame';
-import { roundAccent, usesRaceFlow, RaceHintBar, ChoiceOptionsBar } from './roundBits';
+import { roundAccent, usesRaceFlow, RaceHintBar } from './roundBits';
 import { EndGameButton } from './dialogs';
 
 export function BidTimeline({ bids, lowestBid }: Readonly<{ bids: { name: string; bid: number }[]; lowestBid: number }>) {
@@ -75,7 +75,7 @@ export function BidTimeline({ bids, lowestBid }: Readonly<{ bids: { name: string
 }
 
 export function PlayingView({ game }: Readonly<{ game: HostState }>) {
-  const { roundIndex, totalRounds, countdown, guesserNames, lowestBid, playerBids, timeLeft, timerTotal, mode, roundYearOnly, roundChoiceOptions, hints, answeredCount, players, skipTurn, endGame, party, songPlaying, songTempo } = game;
+  const { roundIndex, totalRounds, countdown, guesserNames, lowestBid, playerBids, timeLeft, timerTotal, mode, roundYearOnly, hints, answeredCount, players, skipTurn, endGame, party, songPlaying, songTempo } = game;
   // Party rounds that aren't classic-format arrive with an empty bid state and
   // behave exactly like race rounds on this screen. "Guess the year" rides
   // the race flow even in Classic mode — but only outside Party, which picks
@@ -103,7 +103,6 @@ export function PlayingView({ game }: Readonly<{ game: HostState }>) {
         <p className="text-white/45 text-sm">Round {roundIndex + 1}/{totalRounds}</p>
         <PartyBadge party={party} />
         <RaceHintBar hints={hints} />
-        <ChoiceOptionsBar options={party?.choiceOptions ?? roundChoiceOptions} />
 
         <div className="liquid-btn relative" style={{ width: 'min(77vw, 527px)', height: countdown === null ? '340px' : '306px' }}>
           <LiquidGlass
@@ -165,7 +164,7 @@ export function PlayingView({ game }: Readonly<{ game: HostState }>) {
 }
 
 export function GuessingView({ game }: Readonly<{ game: HostState }>) {
-  const { roundIndex, totalRounds, guesserNames, lowestBid, playerBids, timeLeft, timerTotal, mode, roundYearOnly, roundChoiceOptions, hints, party, skipTurn, endGame } = game;
+  const { roundIndex, totalRounds, guesserNames, lowestBid, playerBids, timeLeft, timerTotal, mode, roundYearOnly, hints, party, skipTurn, endGame } = game;
   // roundYearOnly is this round's resolved value, not the settings-panel
   // draft — see PlayingView's comment above for why that distinction matters.
   const isRace = mode === 'race' || (party === null && roundYearOnly) || (party !== null && party.format !== 'classic');
@@ -183,7 +182,6 @@ export function GuessingView({ game }: Readonly<{ game: HostState }>) {
         <p className="text-white/45 text-sm">Round {roundIndex + 1}/{totalRounds}</p>
         <PartyBadge party={party} />
         <RaceHintBar hints={hints} />
-        <ChoiceOptionsBar options={party?.choiceOptions ?? roundChoiceOptions} />
 
         <div className="liquid-btn relative" style={{ width: '310px', height: '420px' }}>
           <LiquidGlass
