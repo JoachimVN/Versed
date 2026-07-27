@@ -89,15 +89,20 @@ function isSweepStage(stage: Stage): stage is SweepStage {
 // The reveal's transitions are driven by this bar strip rather than a plain
 // crossfade or confetti burst -- it's a literal spectrum analyzer, colored
 // across the brand gradient, that gives a subtle lift between ranks (masking
-// the cut) and settles into an ambient pulse the rest of the time. Runs its
-// own rAF loop and writes directly to the DOM, matching ConfettiBackground's
-// existing hand-rolled pattern rather than pushing every frame through React
-// state. Gold holds at the same ambient level as every other stage rather
-// than its own rhythmic swell -- that extra "breathing" was reserved for the
-// champion alone and read as an unwanted extra effect.
+// the cut). Once the podium recap settles in, it powers down instead of
+// pulsing on underneath the standings/awards indefinitely: the same wave
+// keeps running, but its envelope decays to 0 over SETTLE_DECAY_MS, so the
+// bars die out in place rather than visibly switching to a different exit
+// animation. Runs its own rAF loop and writes directly to the DOM, matching
+// ConfettiBackground's existing hand-rolled pattern rather than pushing
+// every frame through React state. Gold holds at the same ambient level as
+// every other stage rather than its own rhythmic swell -- that extra
+// "breathing" was reserved for the champion alone and read as an unwanted
+// extra effect.
 
 const N_BARS = 44;
 const BAR_STOPS: [number, number, number][] = [[0, 166, 163], [60, 44, 102], [158, 18, 204]];
+const SETTLE_DECAY_MS = 650;
 
 function barColor(i: number, n: number): string {
   const t = i / (n - 1);
@@ -162,6 +167,7 @@ function computeEnergy(stage: Stage, sinceStage: number): number {
 function EqStrip({ stage, reducedMotion }: Readonly<{ stage: Stage; reducedMotion: boolean }>) {
   const barRefs = useRef<(HTMLDivElement | null)[]>([]);
   const stageStartRef = useRef(performance.now());
+  const settled = stage === 'settled';
 
   useEffect(() => { stageStartRef.current = performance.now(); }, [stage]);
 
@@ -169,26 +175,32 @@ function EqStrip({ stage, reducedMotion }: Readonly<{ stage: Stage; reducedMotio
     if (reducedMotion) {
       barRefs.current.forEach((el, i) => {
         if (!el) return;
-        el.style.transform = `scaleY(${(0.06 + 0.02 * Math.sin(i * 0.6)).toFixed(3)})`;
-        el.style.opacity = '0.3';
+        el.style.transform = `scaleY(${settled ? 0 : (0.06 + 0.02 * Math.sin(i * 0.6)).toFixed(3)})`;
+        el.style.opacity = settled ? '0' : '0.3';
       });
       return;
     }
     let rafId = 0;
     const tick = (now: number) => {
-      const energy = computeEnergy(stage, now - stageStartRef.current);
+      const sinceStage = now - stageStartRef.current;
+      const energy = computeEnergy(stage, sinceStage);
+      // Envelope multiplier, not a swap to a different animation: the wave
+      // computation below is untouched, this just scales its result down to
+      // 0 once settled, so the bars die out mid-motion instead of cutting.
+      const decay = settled ? Math.max(0, 1 - sinceStage / SETTLE_DECAY_MS) : 1;
       barRefs.current.forEach((el, i) => {
         if (!el) return;
         const wave = 0.55 + 0.45 * Math.sin(now * 0.006 - i * 0.28);
-        const amp = 0.04 + energy * Math.max(0, wave);
+        const amp = decay * (0.04 + energy * Math.max(0, wave));
         el.style.transform = `scaleY(${amp.toFixed(3)})`;
-        el.style.opacity = (0.35 + energy * 0.5).toFixed(2);
+        el.style.opacity = (decay * (0.35 + energy * 0.5)).toFixed(2);
       });
+      if (settled && decay === 0) return;
       rafId = requestAnimationFrame(tick);
     };
     rafId = requestAnimationFrame(tick);
     return () => cancelAnimationFrame(rafId);
-  }, [stage, reducedMotion]);
+  }, [stage, reducedMotion, settled]);
 
   return (
     <div
