@@ -97,38 +97,30 @@ const AWARD_COLORS: Record<Award['key'], string> = {
 export function AwardsStrip({ awards }: Readonly<{ awards: Award[] }>) {
   if (awards.length === 0) return null;
   return (
-    <div className="relative z-10 flex flex-col gap-3" style={{ width: '100%' }}>
-      <span
-        className="font-black uppercase"
-        style={{ fontSize: '0.68rem', letterSpacing: '0.28em', color: 'rgba(255,255,255,0.35)', paddingLeft: '2px' }}
-      >
-        Awards
-      </span>
-      <div className="flex flex-wrap justify-center" style={{ gap: '22px 28px' }}>
-        {awards.map((a, i) => {
-          const Icon = AWARD_ICONS[a.key];
-          const color = AWARD_COLORS[a.key];
-          return (
-            <div
-              key={a.key}
-              className="flex flex-col flex-shrink-0"
-              style={{ width: '190px', animation: `awardCardIn 0.45s cubic-bezier(0.16,1,0.3,1) ${i * 0.08}s both` }}
-            >
-              <div style={{ width: '26px', height: '3px', borderRadius: '2px', background: color, marginBottom: '10px' }} />
-              <div className="flex items-center gap-1.5" style={{ marginBottom: '6px' }}>
-                <Icon style={{ width: '14px', height: '14px', color, flexShrink: 0 }} />
-                <span style={{ color, fontSize: '0.64rem', fontWeight: 800, letterSpacing: '0.13em', textTransform: 'uppercase' }}>
-                  {AWARD_LABELS[a.key]}
-                </span>
-              </div>
-              <span className="text-white font-black leading-tight truncate" style={{ fontSize: '1.05rem' }}>
-                {a.playerNames.join(' & ')}
+    <div className="relative z-10 flex flex-wrap justify-center" style={{ width: '100%', gap: '22px 28px' }}>
+      {awards.map((a, i) => {
+        const Icon = AWARD_ICONS[a.key];
+        const color = AWARD_COLORS[a.key];
+        return (
+          <div
+            key={a.key}
+            className="flex flex-col flex-shrink-0"
+            style={{ width: '190px', animation: `awardCardIn 0.45s cubic-bezier(0.16,1,0.3,1) ${i * 0.08}s both` }}
+          >
+            <div style={{ width: '26px', height: '3px', borderRadius: '2px', background: color, marginBottom: '10px' }} />
+            <div className="flex items-center gap-1.5" style={{ marginBottom: '6px' }}>
+              <Icon style={{ width: '14px', height: '14px', color, flexShrink: 0 }} />
+              <span style={{ color, fontSize: '0.64rem', fontWeight: 800, letterSpacing: '0.13em', textTransform: 'uppercase' }}>
+                {AWARD_LABELS[a.key]}
               </span>
-              <span className="text-white/45" style={{ fontSize: '0.76rem', marginTop: '3px', lineHeight: 1.35 }}>{a.detail}</span>
             </div>
-          );
-        })}
-      </div>
+            <span className="text-white font-black leading-tight truncate" style={{ fontSize: '1.05rem' }}>
+              {a.playerNames.join(' & ')}
+            </span>
+            <span className="text-white/45" style={{ fontSize: '0.76rem', marginTop: '3px', lineHeight: 1.35 }}>{a.detail}</span>
+          </div>
+        );
+      })}
     </div>
   );
 }
