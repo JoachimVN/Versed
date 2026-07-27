@@ -105,7 +105,9 @@ export function FinalResultsPlayerView({ leaderboard, awards, myName, background
               <ResultRow key={e.name} entry={e} isMe={e.name === myName} delay={i * 60} />
             ))}
           </div>
-          <AwardsStrip awards={awards} />
+          <div style={{ marginTop: '12px' }}>
+            <AwardsStrip awards={awards} />
+          </div>
           <div className="flex flex-col items-center gap-3">{footer}</div>
         </div>
       )}

@@ -1,7 +1,7 @@
 import { Check, Trophy, X, Zap, Timer, TrendingUp, Swords } from 'lucide-react';
 import LiquidGlass from './StableLiquidGlass';
 import type { Award, PointsBreakdown, RoundResultEvent } from '../types';
-import { LIQUID_PILL_PROPS } from './liquidGlassPresets';
+import { LIQUID_CONTROL_PROPS, LIQUID_PILL_PROPS } from './liquidGlassPresets';
 import { YearHeading, YearSongFooter } from './YearReveal';
 
 // A round delta this large only happens with a multiplier event, a big
@@ -85,39 +85,85 @@ const AWARD_COLORS: Record<Award['key'], string> = {
 // identically. Ties list every qualifying name rather than picking one.
 // A centered, wrapping row of fixed-width entries rather than a strict grid:
 // a grid's uneven last row (e.g. 4 across then 1 stranded alone on the next
-// line) reads as broken. Flex-wrap + center means a lone leftover entry
-// sits centered under the row above it instead of pinned to the left edge
-// with empty space beside it, which reads as an intentional layout at any
-// count. Falls back to a single column on Play's narrow phone width and
-// spreads across two or three on Host's much wider landscape column. Each
-// entry reads as a broadcast-graphic stat line -- a colored tick, a small
-// caps label, the name, the detail -- rather than a boxed "card", which is
-// what read as generic dashboard chrome in the boxed/glowing version before
-// this.
+// line) reads as broken. The Finale Winner is intentionally excluded from
+// that group: it always gets its own dedicated victory row, whether there
+// are one or four other awards. Falls back to a single column on Play's
+// narrow phone width and spreads across two or three on Host's much wider
+// landscape column.
 export function AwardsStrip({ awards }: Readonly<{ awards: Award[] }>) {
   if (awards.length === 0) return null;
+  const standardAwards = awards.filter(a => a.key !== 'finaleWinner');
+  const finaleAwards = awards.filter(a => a.key === 'finaleWinner');
+
   return (
-    <div className="relative z-10 flex flex-wrap justify-center" style={{ width: '100%', gap: '22px 28px' }}>
-      {awards.map((a, i) => {
-        const Icon = AWARD_ICONS[a.key];
+    <div className="relative z-10 flex flex-col items-center" style={{ width: '100%', gap: '26px' }}>
+      {standardAwards.length > 0 && (
+        <div className="flex flex-wrap justify-center" style={{ width: '100%', gap: '22px 28px' }}>
+          {standardAwards.map((a, i) => {
+            const Icon = AWARD_ICONS[a.key];
+            const color = AWARD_COLORS[a.key];
+            return (
+              <div
+                key={a.key}
+                className="flex flex-col flex-shrink-0"
+                style={{ width: '190px', animation: `awardCardIn 0.45s cubic-bezier(0.16,1,0.3,1) ${i * 0.08}s both` }}
+              >
+                <div style={{ width: '26px', height: '3px', borderRadius: '2px', background: color, marginBottom: '10px' }} />
+                <div className="flex items-center gap-1.5" style={{ marginBottom: '6px' }}>
+                  <Icon style={{ width: '14px', height: '14px', color, flexShrink: 0 }} />
+                  <span style={{ color, fontSize: '0.64rem', fontWeight: 800, letterSpacing: '0.13em', textTransform: 'uppercase' }}>
+                    {AWARD_LABELS[a.key]}
+                  </span>
+                </div>
+                <span className="text-white font-black leading-tight truncate" style={{ fontSize: '1.05rem' }}>
+                  {a.playerNames.join(' & ')}
+                </span>
+                <span className="text-white/45" style={{ fontSize: '0.76rem', marginTop: '3px', lineHeight: 1.35 }}>{a.detail}</span>
+              </div>
+            );
+          })}
+        </div>
+      )}
+      {finaleAwards.map((a, i) => {
         const color = AWARD_COLORS[a.key];
         return (
           <div
             key={a.key}
-            className="flex flex-col flex-shrink-0"
-            style={{ width: '190px', animation: `awardCardIn 0.45s cubic-bezier(0.16,1,0.3,1) ${i * 0.08}s both` }}
+            className="flex items-center justify-center text-center"
+            style={{
+              width: '100%',
+              maxWidth: '560px',
+              padding: '3px 0',
+              animation: `awardCardIn 0.5s cubic-bezier(0.16,1,0.3,1) ${(standardAwards.length + i) * 0.08}s both`,
+            }}
           >
-            <div style={{ width: '26px', height: '3px', borderRadius: '2px', background: color, marginBottom: '10px' }} />
-            <div className="flex items-center gap-1.5" style={{ marginBottom: '6px' }}>
-              <Icon style={{ width: '14px', height: '14px', color, flexShrink: 0 }} />
-              <span style={{ color, fontSize: '0.64rem', fontWeight: 800, letterSpacing: '0.13em', textTransform: 'uppercase' }}>
-                {AWARD_LABELS[a.key]}
-              </span>
+            <div style={{ flex: '1 1 44px', maxWidth: '104px', height: '1px', background: `linear-gradient(90deg, transparent, color-mix(in srgb, ${color} 65%, transparent))` }} />
+            <div className="liquid-btn glass-tint-purple relative" style={{ width: '280px', height: '66px', margin: '0 14px', flexShrink: 1, borderRadius: '100px' }}>
+              <LiquidGlass
+                style={{ position: 'absolute', top: '50%', left: '50%' }}
+                {...LIQUID_CONTROL_PROPS}
+                cornerRadius={100}
+                displacementScale={24}
+                blurAmount={0.035}
+                saturation={112}
+                aberrationIntensity={0.6}
+                padding="9px 20px"
+              >
+                <div style={{ position: 'relative' }}>
+                  <div style={{ position: 'absolute', inset: '-9px -20px', borderRadius: '100px', pointerEvents: 'none', background: 'rgba(198,95,232,0.045)' }} />
+                  <div className="relative flex flex-col min-w-0 text-center" style={{ width: '240px' }}>
+                    <span style={{ color, fontSize: '0.59rem', fontWeight: 900, letterSpacing: '0.2em', textTransform: 'uppercase' }}>
+                      {AWARD_LABELS[a.key]}
+                    </span>
+                    <span className="text-white font-black leading-tight truncate" style={{ fontSize: '1.16rem', marginTop: '3px' }}>
+                      {a.playerNames.join(' & ')}
+                    </span>
+                    <span className="text-white/45" style={{ fontSize: '0.74rem', marginTop: '3px', lineHeight: 1.35 }}>{a.detail}</span>
+                  </div>
+                </div>
+              </LiquidGlass>
             </div>
-            <span className="text-white font-black leading-tight truncate" style={{ fontSize: '1.05rem' }}>
-              {a.playerNames.join(' & ')}
-            </span>
-            <span className="text-white/45" style={{ fontSize: '0.76rem', marginTop: '3px', lineHeight: 1.35 }}>{a.detail}</span>
+            <div style={{ flex: '1 1 44px', maxWidth: '104px', height: '1px', background: `linear-gradient(90deg, color-mix(in srgb, ${color} 65%, transparent), transparent)` }} />
           </div>
         );
       })}

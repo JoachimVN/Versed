@@ -525,7 +525,9 @@ export function FinalResultsView({ leaderboard, awards, backgroundSrc, footer }:
             <div style={{ maxWidth: '640px', width: '100%', margin: '0 auto' }}>
               <RestResultsList entries={rest} />
             </div>
-            <AwardsStrip awards={awards} />
+            <div style={{ marginTop: '16px' }}>
+              <AwardsStrip awards={awards} />
+            </div>
           </div>
 
           <div className="flex justify-center" style={{ animation: 'settledIn 0.5s cubic-bezier(0.16,1,0.3,1) 0.4s both' }}>
