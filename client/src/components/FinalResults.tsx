@@ -239,7 +239,7 @@ export function BackgroundLayer({ backgroundSrc, showConfetti }: Readonly<{ back
       />
       <div
         className="fixed inset-0 pointer-events-none"
-        style={{ background: 'rgba(8,8,18,0.94)', backdropFilter: 'blur(48px)', zIndex: 1 }}
+        style={{ background: 'rgba(8,8,18,0.9)', backdropFilter: 'blur(48px)', zIndex: 1 }}
       />
       {showConfetti && (
         <div style={{ position: 'fixed', inset: 0, zIndex: 2, pointerEvents: 'none', filter: 'blur(10px)' }}>
