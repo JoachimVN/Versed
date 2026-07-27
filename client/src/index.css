@@ -320,8 +320,8 @@ select:focus-visible,
    reveal -- starts after nameIn's own transform settles, so the two never
    fight over the same property mid-flight. */
 @keyframes goldGlow {
-  0%, 100% { filter: drop-shadow(0 0 0 rgba(232,121,249,0)); }
-  50%       { filter: drop-shadow(0 0 20px rgba(232,121,249,0.5)); }
+  0%, 100% { filter: drop-shadow(0 0 0 rgba(250,204,110,0)); }
+  50%       { filter: drop-shadow(0 0 20px rgba(250,204,110,0.5)); }
 }
 
 /* The champion's personal stat line arrives after their score has finished
@@ -336,6 +336,13 @@ select:focus-visible,
 @keyframes settledIn {
   from { opacity: 0; transform: translateY(10px); }
   to   { opacity: 1; transform: translateY(0); }
+}
+
+/* Award pill title: letters start splayed wide and blurred, then tighten
+   into place -- a broadcast-lower-third settle rather than a plain fade. */
+@keyframes awardPillIn {
+  from { opacity: 0; letter-spacing: 0.4em; filter: blur(3px); }
+  to   { opacity: 1; letter-spacing: 0.05em; filter: blur(0); }
 }
 
 /* Each keyframe re-states translate(-50%,-50%) alongside the scale — an

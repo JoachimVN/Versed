@@ -82,30 +82,35 @@ const AWARD_COLORS: Record<Award['key'], string> = {
 };
 
 // Final-screen superlatives — shared by Host and Play so both screens read
-// identically. Ties list every qualifying name rather than picking one.
+// identically. Ties list every qualifying name rather than picking one. Each
+// title renders as its own colored pill (rather than an inline uppercase
+// label) and settles in with a letter-tightening reveal, staggered per row.
 export function AwardsStrip({ awards }: Readonly<{ awards: Award[] }>) {
   if (awards.length === 0) return null;
   return (
-    <div className="relative z-10 flex flex-col" style={{ width: '100%', maxWidth: '420px', margin: '0 auto' }}>
+    <div className="relative z-10 flex flex-col gap-6" style={{ width: '100%', maxWidth: '480px', margin: '0 auto' }}>
       {awards.map((a, i) => {
         const Icon = AWARD_ICONS[a.key];
         const color = AWARD_COLORS[a.key];
         return (
-          <div
-            key={a.key}
-            className="flex items-start gap-3 py-3"
-            style={i < awards.length - 1 ? { borderBottom: '1px solid rgba(255,255,255,0.08)' } : undefined}
-          >
-            <Icon style={{ width: '16px', height: '16px', color, flexShrink: 0, marginTop: '2px' }} />
-            <div className="flex flex-col min-w-0">
-              <span>
-                <span style={{ color, fontSize: '0.62rem', fontWeight: 800, letterSpacing: '0.06em', textTransform: 'uppercase' }}>
-                  {AWARD_LABELS[a.key]}
-                </span>
-                <span className="text-white font-bold text-sm" style={{ marginLeft: '7px' }}>{a.playerNames.join(' & ')}</span>
-              </span>
-              <span className="text-white/40 text-[0.68rem]" style={{ marginTop: '2px' }}>{a.detail}</span>
-            </div>
+          <div key={a.key} className="flex flex-col items-start gap-2">
+            <span
+              className="inline-flex items-center gap-2"
+              style={{
+                padding: '7px 17px 7px 12px', borderRadius: '999px',
+                background: `linear-gradient(135deg, color-mix(in srgb, ${color} 26%, transparent), color-mix(in srgb, ${color} 8%, transparent))`,
+                border: `1px solid color-mix(in srgb, ${color} 45%, transparent)`,
+                color, fontSize: '0.74rem', fontWeight: 800, textTransform: 'uppercase',
+                animation: `awardPillIn 0.55s cubic-bezier(0.16,1,0.3,1) ${i * 0.09}s both`,
+              }}
+            >
+              <Icon style={{ width: '15px', height: '15px', flexShrink: 0 }} />
+              {AWARD_LABELS[a.key]}
+            </span>
+            <span className="flex items-baseline gap-2" style={{ paddingLeft: '3px' }}>
+              <span className="text-white font-bold text-base">{a.playerNames.join(' & ')}</span>
+              <span className="text-white/40 text-[0.8rem]">{a.detail}</span>
+            </span>
           </div>
         );
       })}

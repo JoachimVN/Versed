@@ -16,22 +16,32 @@ const REVEAL_STAGE: Record<PodiumRank, Stage> = { 3: 'bronze', 2: 'silver', 1: '
 // smaller echo of the same 1st > 2nd > 3rd shape as the cinematic reveal.
 const RECAP_HEIGHTS: Record<PodiumRank, number> = { 1: 150, 2: 118, 3: 96 };
 
+// Subtle, desaturated per-rank hues -- gold reads as gold, silver as a soft
+// purple, bronze as a soft cyan -- rather than the previous mixed palette
+// where the champion's own gradient didn't actually read as gold.
 const RANK_STYLE: Record<PodiumRank, { tint: string; gradient: string; label: string }> = {
-  1: { tint: '#e2a6f2', gradient: 'linear-gradient(90deg,#5eead4,#c084fc 55%,#e879f9)', label: 'Champion' },
-  2: { tint: '#b9a7e0', gradient: 'linear-gradient(90deg,#d9cdf2,#a893db)', label: 'Second Place' },
-  3: { tint: '#5ecfc3', gradient: 'linear-gradient(90deg,#8fe6dd,#5ecfc3)', label: 'Third Place' },
+  1: { tint: '#f2c879', gradient: 'linear-gradient(90deg,#fde8b8,#f3c467 55%,#e7a940)', label: 'Champion' },
+  2: { tint: '#c2a8f0', gradient: 'linear-gradient(90deg,#e3d5fb,#b28ded)', label: 'Second Place' },
+  3: { tint: '#7de8dd', gradient: 'linear-gradient(90deg,#c9f8f2,#5ecfc3)', label: 'Third Place' },
 };
 
 const INTRO_DELAY = 650;
 const HOLD_MINOR = 1850;
+// Silver's hold runs longer than bronze's -- this is the beat right before
+// the champion, so the extra length is what gives the gold vignette (below)
+// room to visibly build instead of just flickering on.
+const HOLD_SILVER = 3000;
 const HOLD_CHAMPION = 3850;
 // One shared duration for every sweep, comfortably longer than the podium
 // card's own 0.5s fade transition (below) so the outgoing and incoming cards
 // never overlap mid-cross-fade, and short enough that the wordless gap
 // between cards doesn't read as the screen freezing.
 const SWEEP_DURATION_MS = 620;
-const SWEEP_ENERGY_MUL = 0.95;
-const SWEEP_FLASH_MUL = 0.7;
+// The champion->settled cut gets a slightly longer beat than the other
+// sweeps -- the champion's own fade-out plus the settled screen fading in
+// afterward reads better with a touch more air than a plain card swap.
+const SETTLE_DURATION_MS = 750;
+const SWEEP_ENERGY_MUL = 0.4;
 
 function isSweepStage(stage: Stage): stage is SweepStage {
   return stage === 'sweepToSilver' || stage === 'sweepToGold' || stage === 'sweepToSettled';
@@ -51,14 +61,14 @@ function buildTimeline(podiumCount: number): { stage: Stage; delay: number }[] {
   }
   if (podiumCount >= 2) {
     steps.push({ stage: 'silver', delay: t });
-    t += HOLD_MINOR;
+    t += HOLD_SILVER;
     steps.push({ stage: 'sweepToGold', delay: t });
     t += SWEEP_DURATION_MS;
   }
   steps.push({ stage: 'gold', delay: t });
   t += HOLD_CHAMPION;
   steps.push({ stage: 'sweepToSettled', delay: t });
-  t += SWEEP_DURATION_MS;
+  t += SETTLE_DURATION_MS;
   steps.push({ stage: 'settled', delay: t });
   return steps;
 }
@@ -103,25 +113,24 @@ function sweepRise(progress: number): number {
   return progress < 0.55 ? progress / 0.55 : 1 - (progress - 0.55) / 0.45;
 }
 
-function computeEnergy(stage: Stage, sinceStage: number): { energy: number; flash: number } {
+function computeEnergy(stage: Stage, sinceStage: number): number {
   if (isSweepStage(stage)) {
     const p = Math.min(1, sinceStage / SWEEP_DURATION_MS);
     const rise = Math.max(0, sweepRise(p));
-    return { energy: 0.14 + rise * SWEEP_ENERGY_MUL, flash: rise * SWEEP_FLASH_MUL };
+    return 0.14 + rise * SWEEP_ENERGY_MUL;
   }
-  if (stage === 'dark') return { energy: 0.05, flash: 0 };
-  if (stage === 'settled') return { energy: 0.16, flash: 0 };
+  if (stage === 'dark') return 0.05;
+  if (stage === 'settled') return 0.16;
   if (stage === 'gold') {
     // a slow rhythmic swell instead of flat ambient -- the champion's hold
     // should feel alive, like a crowd still cheering
-    return { energy: 0.24 + 0.11 * (0.5 + 0.5 * Math.sin(sinceStage * 0.0038)), flash: 0 };
+    return 0.24 + 0.11 * (0.5 + 0.5 * Math.sin(sinceStage * 0.0038));
   }
-  return { energy: 0.22, flash: 0 };
+  return 0.22;
 }
 
 function EqStrip({ stage, reducedMotion }: Readonly<{ stage: Stage; reducedMotion: boolean }>) {
   const barRefs = useRef<(HTMLDivElement | null)[]>([]);
-  const flashRef = useRef<HTMLDivElement>(null);
   const stageStartRef = useRef(performance.now());
 
   useEffect(() => { stageStartRef.current = performance.now(); }, [stage]);
@@ -137,7 +146,7 @@ function EqStrip({ stage, reducedMotion }: Readonly<{ stage: Stage; reducedMotio
     }
     let rafId = 0;
     const tick = (now: number) => {
-      const { energy, flash } = computeEnergy(stage, now - stageStartRef.current);
+      const energy = computeEnergy(stage, now - stageStartRef.current);
       barRefs.current.forEach((el, i) => {
         if (!el) return;
         const wave = 0.55 + 0.45 * Math.sin(now * 0.006 - i * 0.28);
@@ -145,7 +154,6 @@ function EqStrip({ stage, reducedMotion }: Readonly<{ stage: Stage; reducedMotio
         el.style.transform = `scaleY(${amp.toFixed(3)})`;
         el.style.opacity = (0.35 + energy * 0.5).toFixed(2);
       });
-      if (flashRef.current) flashRef.current.style.opacity = flash.toFixed(2);
       rafId = requestAnimationFrame(tick);
     };
     rafId = requestAnimationFrame(tick);
@@ -153,36 +161,26 @@ function EqStrip({ stage, reducedMotion }: Readonly<{ stage: Stage; reducedMotio
   }, [stage, reducedMotion]);
 
   return (
-    <>
-      <div
-        aria-hidden="true"
-        style={{
-          position: 'fixed', left: 0, right: 0, bottom: 0, height: '54%',
-          display: 'flex', alignItems: 'flex-end', gap: '3px', padding: '0 20px',
-          pointerEvents: 'none', zIndex: 1,
-        }}
-      >
-        {Array.from({ length: N_BARS }, (_, i) => (
-          <div
-            key={i}
-            ref={el => { barRefs.current[i] = el; }}
-            style={{
-              flex: 1, minWidth: '2px', height: '100%', borderRadius: '2px 2px 0 0',
-              transform: 'scaleY(0.04)', transformOrigin: 'bottom', opacity: 0.5,
-              background: `linear-gradient(180deg, ${barColor(i, N_BARS)}, transparent)`,
-            }}
-          />
-        ))}
-      </div>
-      <div
-        ref={flashRef}
-        className="fixed inset-0 pointer-events-none"
-        style={{
-          zIndex: 3, opacity: 0,
-          background: 'radial-gradient(circle at 50% 62%, rgba(255,255,255,0.5), rgba(158,18,204,0.22) 45%, transparent 72%)',
-        }}
-      />
-    </>
+    <div
+      aria-hidden="true"
+      style={{
+        position: 'fixed', left: 0, right: 0, bottom: 0, height: '54%',
+        display: 'flex', alignItems: 'flex-end', gap: '3px', padding: '0 20px',
+        pointerEvents: 'none', zIndex: 1,
+      }}
+    >
+      {Array.from({ length: N_BARS }, (_, i) => (
+        <div
+          key={i}
+          ref={el => { barRefs.current[i] = el; }}
+          style={{
+            flex: 1, minWidth: '2px', height: '100%', borderRadius: '2px 2px 0 0',
+            transform: 'scaleY(0.04)', transformOrigin: 'bottom', opacity: 0.5,
+            background: `linear-gradient(180deg, ${barColor(i, N_BARS)}, transparent)`,
+          }}
+        />
+      ))}
+    </div>
   );
 }
 
@@ -389,8 +387,9 @@ export function FinalResultsView({ leaderboard, awards, backgroundSrc, footer }:
   }
 
   const settled = stage === 'settled';
+  const settling = stage === 'sweepToSettled';
   const dark = stage === 'dark';
-  const showConfetti = !reducedMotion && (stage === 'gold' || stage === 'sweepToSettled' || settled);
+  const showConfetti = !reducedMotion && (stage === 'gold' || settling || settled);
 
   return (
     <div className="relative min-h-screen flex flex-col p-6 gap-4">
