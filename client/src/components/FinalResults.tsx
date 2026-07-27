@@ -267,6 +267,12 @@ function PodiumRevealCard({ rank, entry, awards, visible, reducedMotion }: Reado
   const { tint, gradient, label } = RANK_STYLE[rank];
   const champion = rank === 1;
   const award = findAward(entry.name, awards);
+  // Once a card has counted up, it keeps showing its resolved score while
+  // fading out for the next rank's sweep -- without this, the score element
+  // unmounts back to a literal 0 mid-fade, flashing every player's score to
+  // zero for the ~0.5s the card is still visible via its opacity transition.
+  const hasRevealedRef = useRef(false);
+  if (visible) hasRevealedRef.current = true;
   const nameAnimation = visible && !reducedMotion
     ? (champion ? 'nameIn 0.7s cubic-bezier(0.2,1.4,0.4,1) both, goldGlow 2.6s ease-in-out 0.8s infinite' : 'nameIn 0.7s cubic-bezier(0.2,1.4,0.4,1) both')
     : undefined;
@@ -301,7 +307,7 @@ function PodiumRevealCard({ rank, entry, awards, visible, reducedMotion }: Reado
         className="tabular-nums"
         style={{ fontFamily: "'Nunito', sans-serif", fontWeight: 900, fontSize: champion ? 'clamp(2rem, 3vw, 2.6rem)' : 'clamp(1.7rem, 2.6vw, 2.2rem)', color: '#fff' }}
       >
-        {visible ? <AnimatedPodiumScore score={entry.score} instant={reducedMotion} champion={champion} /> : 0}
+        {hasRevealedRef.current ? <AnimatedPodiumScore score={entry.score} instant={!visible || reducedMotion} champion={champion} /> : 0}
         <span style={{ fontSize: '0.5em', fontWeight: 800, color: 'rgba(255,255,255,0.38)', marginLeft: '0.35em' }}>PTS</span>
       </span>
       {award && (
