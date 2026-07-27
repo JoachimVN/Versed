@@ -73,13 +73,15 @@ const AWARD_ICONS: Record<Award['key'], typeof Trophy> = {
 // cyan matches the existing "YOU" highlight, amber matches the 3rd-place
 // medal (fitting for a comeback climbing out of last), violet is the brand
 // accent used on the podium's CTA button, and indigo keeps the classic-mode
-// timing award visually distinct from race's cyan.
+// timing award visually distinct from race's cyan. Desaturated to match the
+// podium's own softened palette (RANK_STYLE in FinalResults.tsx) rather than
+// the saturated stock Tailwind swatches these started from.
 const AWARD_COLORS: Record<Award['key'], string> = {
-  mostCorrect: '#fbbf24',
-  fastestGuess: '#5eead4',
-  fastestClassicGuess: '#818cf8',
-  biggestSwing: '#d97706',
-  finaleWinner: '#c65fe8',
+  mostCorrect: '#e8c684',
+  fastestGuess: '#8fe0d6',
+  fastestClassicGuess: '#a8a5e0',
+  biggestSwing: '#d6a878',
+  finaleWinner: '#c2a0d9',
 };
 
 function AwardEyebrow({ award }: Readonly<{ award: Award }>) {
