@@ -81,39 +81,54 @@ const AWARD_COLORS: Record<Award['key'], string> = {
   finaleWinner: '#c65fe8',
 };
 
-// Final-screen superlatives — shared by Host and Play so both screens read
-// identically. Ties list every qualifying name rather than picking one. Each
-// title renders as its own colored pill (rather than an inline uppercase
-// label) and settles in with a letter-tightening reveal, staggered per row.
+// Final-screen awards — shared by Host and Play so both screens read
+// identically. Ties list every qualifying name rather than picking one.
+// A centered, wrapping row of fixed-width entries rather than a strict grid:
+// a grid's uneven last row (e.g. 4 across then 1 stranded alone on the next
+// line) reads as broken. Flex-wrap + center means a lone leftover entry
+// sits centered under the row above it instead of pinned to the left edge
+// with empty space beside it, which reads as an intentional layout at any
+// count. Falls back to a single column on Play's narrow phone width and
+// spreads across two or three on Host's much wider landscape column. Each
+// entry reads as a broadcast-graphic stat line -- a colored tick, a small
+// caps label, the name, the detail -- rather than a boxed "card", which is
+// what read as generic dashboard chrome in the boxed/glowing version before
+// this.
 export function AwardsStrip({ awards }: Readonly<{ awards: Award[] }>) {
   if (awards.length === 0) return null;
   return (
-    <div className="relative z-10 flex flex-col gap-6" style={{ width: '100%', maxWidth: '480px', margin: '0 auto' }}>
-      {awards.map((a, i) => {
-        const Icon = AWARD_ICONS[a.key];
-        const color = AWARD_COLORS[a.key];
-        return (
-          <div key={a.key} className="flex flex-col items-start gap-2">
-            <span
-              className="inline-flex items-center gap-2"
-              style={{
-                padding: '7px 17px 7px 12px', borderRadius: '999px',
-                background: `linear-gradient(135deg, color-mix(in srgb, ${color} 26%, transparent), color-mix(in srgb, ${color} 8%, transparent))`,
-                border: `1px solid color-mix(in srgb, ${color} 45%, transparent)`,
-                color, fontSize: '0.74rem', fontWeight: 800, textTransform: 'uppercase',
-                animation: `awardPillIn 0.55s cubic-bezier(0.16,1,0.3,1) ${i * 0.09}s both`,
-              }}
+    <div className="relative z-10 flex flex-col gap-3" style={{ width: '100%' }}>
+      <span
+        className="font-black uppercase"
+        style={{ fontSize: '0.68rem', letterSpacing: '0.28em', color: 'rgba(255,255,255,0.35)', paddingLeft: '2px' }}
+      >
+        Awards
+      </span>
+      <div className="flex flex-wrap justify-center" style={{ gap: '22px 28px' }}>
+        {awards.map((a, i) => {
+          const Icon = AWARD_ICONS[a.key];
+          const color = AWARD_COLORS[a.key];
+          return (
+            <div
+              key={a.key}
+              className="flex flex-col flex-shrink-0"
+              style={{ width: '190px', animation: `awardCardIn 0.45s cubic-bezier(0.16,1,0.3,1) ${i * 0.08}s both` }}
             >
-              <Icon style={{ width: '15px', height: '15px', flexShrink: 0 }} />
-              {AWARD_LABELS[a.key]}
-            </span>
-            <span className="flex items-baseline gap-2" style={{ paddingLeft: '3px' }}>
-              <span className="text-white font-bold text-base">{a.playerNames.join(' & ')}</span>
-              <span className="text-white/40 text-[0.8rem]">{a.detail}</span>
-            </span>
-          </div>
-        );
-      })}
+              <div style={{ width: '26px', height: '3px', borderRadius: '2px', background: color, marginBottom: '10px' }} />
+              <div className="flex items-center gap-1.5" style={{ marginBottom: '6px' }}>
+                <Icon style={{ width: '14px', height: '14px', color, flexShrink: 0 }} />
+                <span style={{ color, fontSize: '0.64rem', fontWeight: 800, letterSpacing: '0.13em', textTransform: 'uppercase' }}>
+                  {AWARD_LABELS[a.key]}
+                </span>
+              </div>
+              <span className="text-white font-black leading-tight truncate" style={{ fontSize: '1.05rem' }}>
+                {a.playerNames.join(' & ')}
+              </span>
+              <span className="text-white/45" style={{ fontSize: '0.76rem', marginTop: '3px', lineHeight: 1.35 }}>{a.detail}</span>
+            </div>
+          );
+        })}
+      </div>
     </div>
   );
 }

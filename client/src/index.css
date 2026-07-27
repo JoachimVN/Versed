@@ -359,6 +359,29 @@ select:focus-visible,
   to   { opacity: 1; letter-spacing: 0.05em; filter: blur(0); }
 }
 
+/* Awards-strip entry arrival (RevealShared.tsx AwardsStrip), staggered per
+   entry via an inline delay. */
+@keyframes awardCardIn {
+  from { opacity: 0; transform: translateY(10px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+
+/* Rest-of-field rows on the final-results screen (FinalResults.tsx
+   ResultRow), staggered per row via an inline delay. */
+@keyframes resultRowIn {
+  from { opacity: 0; transform: translateY(8px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+
+/* Settled-screen podium recap (FinalResults.tsx PodiumColumn): each column
+   rises into its step rather than just fading, echoing a medal stand
+   physically settling into place. Bronze/silver/gold share the same
+   keyframe, staggered by inline delay so gold lands last. */
+@keyframes podiumStepIn {
+  from { opacity: 0; transform: translateY(22px) scaleY(0.85); transform-origin: bottom; }
+  to   { opacity: 1; transform: translateY(0) scaleY(1); transform-origin: bottom; }
+}
+
 /* Each keyframe re-states translate(-50%,-50%) alongside the scale — an
    animated `transform` always wins over the element's static inline
    transform, so without this the marker snaps back to its unshifted

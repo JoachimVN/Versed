@@ -1,9 +1,11 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import type { ReactNode } from 'react';
 import { RankBadge } from './RankBadge';
+import LiquidGlass from './StableLiquidGlass';
 import { useAnimatedScore } from '../hooks/useAnimatedScore';
 import { ConfettiBackground } from './ConfettiBackground';
 import { AwardsStrip, AWARD_LABELS } from './RevealShared';
+import { LIQUID_CARD_PROPS } from './liquidGlassPresets';
 import type { Award, LeaderboardEntry } from '../types';
 
 type PodiumRank = 1 | 2 | 3;
@@ -12,9 +14,9 @@ type Stage = 'dark' | 'bronze' | 'silver' | 'gold' | 'settled' | SweepStage;
 
 const REVEAL_STAGE: Record<PodiumRank, Stage> = { 3: 'bronze', 2: 'silver', 1: 'gold' };
 
-// Recap-row heights (the settled screen's compact stepped podium) are a
-// smaller echo of the same 1st > 2nd > 3rd shape as the cinematic reveal.
-const RECAP_HEIGHTS: Record<PodiumRank, number> = { 1: 150, 2: 118, 3: 96 };
+// Podium-step heights (the settled screen's recap) are a smaller echo of the
+// same 1st > 2nd > 3rd shape as the cinematic reveal.
+const PODIUM_STEP_HEIGHTS: Record<PodiumRank, number> = { 1: 132, 2: 96, 3: 74 };
 
 // Subtle, desaturated per-rank hues -- gold reads as gold, silver as a soft
 // purple, bronze as a soft cyan -- rather than the previous mixed palette
@@ -40,10 +42,6 @@ const SWEEP_DURATION_MS = 620;
 // sweeps -- the champion's own fade-out plus the settled screen fading in
 // afterward reads better with a touch more air than a plain card swap.
 const SETTLE_DURATION_MS = 750;
-
-function isSweepStage(stage: Stage): stage is SweepStage {
-  return stage === 'sweepToSilver' || stage === 'sweepToGold' || stage === 'sweepToSettled';
-}
 
 // Builds the one-shot stage timeline for however many podium spots this game
 // actually has -- a 1- or 2-player game skips the ranks that don't exist,
@@ -83,6 +81,10 @@ export function findAward(name: string, awards: Award[]): Award | undefined {
   return awards.find(a => a.playerNames.includes(name));
 }
 
+function isSweepStage(stage: Stage): stage is SweepStage {
+  return stage === 'sweepToSilver' || stage === 'sweepToGold' || stage === 'sweepToSettled';
+}
+
 // ─── EQ / spectrum strip ────────────────────────────────────────────────────
 // The reveal's transitions are driven by this bar strip rather than a plain
 // crossfade or confetti burst -- it's a literal spectrum analyzer, colored
@@ -90,7 +92,9 @@ export function findAward(name: string, awards: Award[]): Award | undefined {
 // the cut) and settles into an ambient pulse the rest of the time. Runs its
 // own rAF loop and writes directly to the DOM, matching ConfettiBackground's
 // existing hand-rolled pattern rather than pushing every frame through React
-// state.
+// state. Gold holds at the same ambient level as every other stage rather
+// than its own rhythmic swell -- that extra "breathing" was reserved for the
+// champion alone and read as an unwanted extra effect.
 
 const N_BARS = 44;
 const BAR_STOPS: [number, number, number][] = [[0, 166, 163], [60, 44, 102], [158, 18, 204]];
@@ -109,18 +113,13 @@ function barColor(i: number, n: number): string {
 
 const AMBIENT_ENERGY = 0.22;
 const SETTLED_ENERGY = 0.16;
-// The value gold's own breathing formula produces right as a sweep leaves
-// or arrives at it (sin(0) term drops out), so a sweep's "to"/"from" always
-// matches gold's actual level at that instant instead of an approximation.
-const GOLD_ENTRY_ENERGY = 0.24 + 0.11 * 0.5;
 
-// bronze->silver and silver->gold both start their hump from the same
-// ambient level and rise by the same fixed amount, so neither reads as a
-// bigger wave than the other even though silver->gold ends higher (at
-// gold's own level) than bronze->silver does (back at the same ambient).
+// bronze->silver and silver->gold both start and end their hump at the same
+// flat ambient level, since gold no longer holds a different energy than
+// the other stages.
 const SWEEP_BOUNDS: Record<'sweepToSilver' | 'sweepToGold', { from: number; to: number }> = {
   sweepToSilver: { from: AMBIENT_ENERGY, to: AMBIENT_ENERGY },
-  sweepToGold: { from: AMBIENT_ENERGY, to: GOLD_ENTRY_ENERGY },
+  sweepToGold: { from: AMBIENT_ENERGY, to: AMBIENT_ENERGY },
 };
 const SWEEP_PEAK_BOW = 0.16;
 
@@ -148,7 +147,7 @@ function computeEnergy(stage: Stage, sinceStage: number): number {
     // No hump for the champion->final cut -- the confetti burst already
     // sells it, so this just eases straight down to the settled level.
     const p = Math.min(1, sinceStage / SETTLE_DURATION_MS);
-    return GOLD_ENTRY_ENERGY + (SETTLED_ENERGY - GOLD_ENTRY_ENERGY) * easeInOutCubic(p);
+    return AMBIENT_ENERGY + (SETTLED_ENERGY - AMBIENT_ENERGY) * easeInOutCubic(p);
   }
   if (isSweepStage(stage)) {
     const p = Math.min(1, sinceStage / SWEEP_DURATION_MS);
@@ -157,11 +156,6 @@ function computeEnergy(stage: Stage, sinceStage: number): number {
   }
   if (stage === 'dark') return 0.05;
   if (stage === 'settled') return SETTLED_ENERGY;
-  if (stage === 'gold') {
-    // a slow rhythmic swell instead of flat ambient -- the champion's hold
-    // should feel alive, like a crowd still cheering
-    return 0.24 + 0.11 * (0.5 + 0.5 * Math.sin(sinceStage * 0.0038));
-  }
   return AMBIENT_ENERGY;
 }
 
@@ -317,35 +311,75 @@ function PodiumRevealCard({ rank, entry, awards, visible, reducedMotion }: Reado
 
 // ─── Settled: recap podium + rest of the field ─────────────────────────────
 
-function RecapChip({ rank, entry }: Readonly<{ rank: PodiumRank; entry: LeaderboardEntry }>) {
+// One step of the recap podium -- name/score float above the step itself,
+// which carries the rank's tinted glass glow and a big translucent rank
+// numeral, so the block reads as an actual podium riser rather than a card.
+function PodiumColumn({ rank, entry, delay }: Readonly<{ rank: PodiumRank; entry: LeaderboardEntry; delay: number }>) {
   const { tint } = RANK_STYLE[rank];
-  const label = rank === 1 ? '1st' : rank === 2 ? '2nd' : '3rd';
+  const champion = rank === 1;
   return (
-    <div
-      style={{
-        flex: 1, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'flex-end', gap: '4px',
-        minHeight: `${RECAP_HEIGHTS[rank]}px`, padding: '12px 6px 10px', borderRadius: '14px',
-        border: '1px solid rgba(255,255,255,0.09)',
-        background: `linear-gradient(180deg, color-mix(in srgb, ${tint} 20%, transparent), transparent)`,
-      }}
-    >
-      <span style={{ fontWeight: 800, fontSize: '0.62rem', letterSpacing: '0.14em', color: tint, textTransform: 'uppercase' }}>{label}</span>
-      <span className="font-bold" style={{ fontSize: '1.05rem', maxWidth: '100%', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{entry.name}</span>
-      <span className="tabular-nums" style={{ fontWeight: 700, fontSize: '0.92rem', color: 'rgba(255,255,255,0.6)' }}>{entry.score.toLocaleString()}</span>
+    <div className="flex flex-col items-center" style={{ flex: 1, minWidth: 0, gap: '8px' }}>
+      <RankBadge rank={rank} />
+      <span
+        className="font-bold"
+        style={{ fontSize: champion ? '1.1rem' : '0.95rem', maxWidth: '100%', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}
+      >
+        {entry.name}
+      </span>
+      <span className="tabular-nums" style={{ fontWeight: 800, fontSize: '0.88rem', color: 'rgba(255,255,255,0.65)' }}>
+        {entry.score.toLocaleString()}
+      </span>
+      <div
+        style={{
+          width: '100%', minHeight: `${PODIUM_STEP_HEIGHTS[rank]}px`, borderRadius: '14px 14px 6px 6px',
+          display: 'flex', alignItems: 'flex-start', justifyContent: 'center', paddingTop: '10px',
+          background: `linear-gradient(180deg, color-mix(in srgb, ${tint} 30%, transparent), color-mix(in srgb, ${tint} 5%, transparent))`,
+          border: `1px solid color-mix(in srgb, ${tint} 40%, transparent)`,
+          boxShadow: `0 0 22px -6px color-mix(in srgb, ${tint} 60%, transparent) inset`,
+          animation: `podiumStepIn 0.5s cubic-bezier(0.16,1,0.3,1) ${delay}ms both`,
+        }}
+      >
+        <span className="font-black" style={{ fontSize: champion ? '1.6rem' : '1.25rem', color: `color-mix(in srgb, ${tint} 70%, white)`, opacity: 0.85 }}>
+          {rank}
+        </span>
+      </div>
     </div>
   );
 }
 
-export function ResultRow({ entry, isMe }: Readonly<{ entry: LeaderboardEntry; isMe: boolean }>) {
+// The settled screen's recap podium -- one shared liquid-glass panel (not
+// per-column, since the library sizes glass to its own measured content
+// rather than a fixed box) holding all three steps, so it reads as a single
+// frosted podium rather than three separate glass cards.
+function PodiumRecap({ podium }: Readonly<{ podium: LeaderboardEntry[] }>) {
+  return (
+    <div className="liquid-btn relative mx-auto" style={{ width: 'min(92vw, 640px)', height: '260px' }}>
+      <LiquidGlass style={{ position: 'absolute', top: '50%', left: '50%' }} {...LIQUID_CARD_PROPS} cornerRadius={28} padding="22px 26px 16px">
+        <div style={{ width: 'min(84vw, 592px)', display: 'flex', alignItems: 'flex-end', justifyContent: 'center', gap: '16px' }}>
+          {([2, 1, 3] as const).map((rank, i) => {
+            const entry = podium[rank - 1];
+            return entry ? <PodiumColumn key={rank} rank={rank} entry={entry} delay={i * 110} /> : <div key={rank} style={{ flex: 1 }} />;
+          })}
+        </div>
+      </LiquidGlass>
+    </div>
+  );
+}
+
+export function ResultRow({ entry, isMe, delay }: Readonly<{ entry: LeaderboardEntry; isMe: boolean; delay?: number }>) {
   return (
     <div
-      className={`flex items-center gap-4 px-4 py-3 rounded-xl ${isMe ? 'bg-white/10' : 'bg-white/5'}`}
-      style={isMe ? { boxShadow: '0 0 0 1px rgba(94,234,212,0.35) inset' } : undefined}
+      className="flex items-center gap-4 px-4 py-3 rounded-2xl"
+      style={{
+        background: isMe ? 'linear-gradient(90deg, rgba(94,234,212,0.14), rgba(94,234,212,0.03))' : 'rgba(255,255,255,0.04)',
+        border: isMe ? '1px solid rgba(94,234,212,0.4)' : '1px solid rgba(255,255,255,0.06)',
+        animation: delay != null ? `resultRowIn 0.4s cubic-bezier(0.16,1,0.3,1) ${delay}ms both` : undefined,
+      }}
     >
-      <span className="w-8 flex justify-center">
+      <span className="w-8 flex justify-center flex-shrink-0">
         <RankBadge rank={entry.rank} />
       </span>
-      <span className="text-white font-bold flex-1">
+      <span className="text-white font-bold flex-1 truncate">
         {entry.name}
         {isMe && (
           <span style={{ color: 'rgba(94,234,212,0.9)', fontSize: '0.6rem', fontWeight: 800, letterSpacing: '0.08em', marginLeft: '8px' }}>
@@ -362,8 +396,8 @@ export function RestResultsList({ entries, myName }: Readonly<{ entries: Leaderb
   if (entries.length === 0) return null;
   return (
     <div className="flex flex-col gap-2">
-      {entries.map(e => (
-        <ResultRow key={e.name} entry={e} isMe={e.name === myName} />
+      {entries.map((e, i) => (
+        <ResultRow key={e.name} entry={e} isMe={e.name === myName} delay={i * 60} />
       ))}
     </div>
   );
@@ -464,25 +498,21 @@ export function FinalResultsView({ leaderboard, awards, backgroundSrc, footer }:
             Final Results
           </h2>
 
-          <div
-            className="flex items-end gap-3"
-            style={{ maxWidth: '640px', width: '100%', margin: '0 auto', animation: 'settledIn 0.5s cubic-bezier(0.16,1,0.3,1) 0.13s both' }}
-          >
-            {([2, 1, 3] as const).map(rank => {
-              const entry = podium[rank - 1];
-              return entry ? <RecapChip key={rank} rank={rank} entry={entry} /> : null;
-            })}
+          <div style={{ animation: 'settledIn 0.5s cubic-bezier(0.16,1,0.3,1) 0.13s both' }}>
+            <PodiumRecap podium={podium} />
           </div>
 
-          {/* Leaderboard and awards each get their own row rather than sitting
-              side by side -- and share one scroll region so a long game's
-              awards are still reachable below a long roster, without ever
-              showing a scrollbar on a short one. */}
+          {/* Standings first (its own centered, narrower row), then awards
+              below getting the full landscape width as their own row -- the
+              grid spreads across 2-3 columns instead of being squeezed
+              beside the standings. */}
           <div
-            className="flex-1 min-h-0 overflow-y-auto flex flex-col gap-6"
-            style={{ maxWidth: '640px', width: '100%', margin: '0 auto', animation: 'settledIn 0.5s cubic-bezier(0.16,1,0.3,1) 0.22s both' }}
+            className="relative z-10 flex-1 min-h-0 overflow-y-auto flex flex-col gap-6"
+            style={{ maxWidth: '1000px', width: '100%', margin: '0 auto', animation: 'settledIn 0.5s cubic-bezier(0.16,1,0.3,1) 0.22s both' }}
           >
-            <RestResultsList entries={rest} />
+            <div style={{ maxWidth: '640px', width: '100%', margin: '0 auto' }}>
+              <RestResultsList entries={rest} />
+            </div>
             <AwardsStrip awards={awards} />
           </div>
 

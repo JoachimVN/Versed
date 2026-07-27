@@ -101,8 +101,8 @@ export function FinalResultsPlayerView({ leaderboard, awards, myName, background
         <div className="relative z-10 flex flex-col flex-1 min-h-0 gap-4 page-enter-fade">
           {myEntry && <PersonalHero entry={myEntry} awards={awards} reducedMotion={reducedMotion} />}
           <div className="flex-1 min-h-0 overflow-y-auto space-y-2">
-            {leaderboard.map(e => (
-              <ResultRow key={e.name} entry={e} isMe={e.name === myName} />
+            {leaderboard.map((e, i) => (
+              <ResultRow key={e.name} entry={e} isMe={e.name === myName} delay={i * 60} />
             ))}
           </div>
           <AwardsStrip awards={awards} />
