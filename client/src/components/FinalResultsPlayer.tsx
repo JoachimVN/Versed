@@ -98,7 +98,7 @@ export function FinalResultsPlayerView({ leaderboard, awards, myName, background
       )}
 
       {settled && (
-        <div className="relative z-10 flex flex-col flex-1 min-h-0 gap-4 page-enter">
+        <div className="relative z-10 flex flex-col flex-1 min-h-0 gap-4 page-enter-fade">
           {myEntry && <PersonalHero entry={myEntry} awards={awards} reducedMotion={reducedMotion} />}
           <div className="flex-1 min-h-0 overflow-y-auto space-y-2">
             {leaderboard.map(e => (

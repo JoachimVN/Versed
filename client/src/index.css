@@ -332,10 +332,24 @@ select:focus-visible,
 }
 
 /* Each section of the settled results screen (recap, list, awards, footer)
-   arrives on its own beat instead of one flat crossfade. */
+   arrives on its own beat instead of one flat crossfade. Fade only, no
+   translate -- this screen always arrives right after the champion hold,
+   whose own sweep/confetti already sells the cut, so stacking a slide on
+   top of that just reads as a stutter. */
 @keyframes settledIn {
-  from { opacity: 0; transform: translateY(10px); }
-  to   { opacity: 1; transform: translateY(0); }
+  from { opacity: 0; }
+  to   { opacity: 1; }
+}
+
+/* Fade-only page arrival, no translate -- for a destination that follows
+   its own big transition beat (e.g. the final-results settle, right after
+   the champion hold) where a slide-up on top of that would double up. */
+@keyframes pageEnterFadeOnly {
+  from { opacity: 0; }
+  to   { opacity: 1; }
+}
+.page-enter-fade {
+  animation: pageEnterFadeOnly 0.4s cubic-bezier(0.16, 1, 0.3, 1) forwards;
 }
 
 /* Award pill title: letters start splayed wide and blurred, then tighten

@@ -28,8 +28,7 @@ const RANK_STYLE: Record<PodiumRank, { tint: string; gradient: string; label: st
 const INTRO_DELAY = 650;
 const HOLD_MINOR = 1850;
 // Silver's hold runs longer than bronze's -- this is the beat right before
-// the champion, so the extra length is what gives the gold vignette (below)
-// room to visibly build instead of just flickering on.
+// the champion, giving that reveal a bit more suspense than the others.
 const HOLD_SILVER = 3000;
 const HOLD_CHAMPION = 3850;
 // One shared duration for every sweep, comfortably longer than the podium
@@ -41,7 +40,6 @@ const SWEEP_DURATION_MS = 620;
 // sweeps -- the champion's own fade-out plus the settled screen fading in
 // afterward reads better with a touch more air than a plain card swap.
 const SETTLE_DURATION_MS = 750;
-const SWEEP_ENERGY_MUL = 0.4;
 
 function isSweepStage(stage: Stage): stage is SweepStage {
   return stage === 'sweepToSilver' || stage === 'sweepToGold' || stage === 'sweepToSettled';
@@ -88,9 +86,9 @@ export function findAward(name: string, awards: Award[]): Award | undefined {
 // ─── EQ / spectrum strip ────────────────────────────────────────────────────
 // The reveal's transitions are driven by this bar strip rather than a plain
 // crossfade or confetti burst -- it's a literal spectrum analyzer, colored
-// across the brand gradient, that slams to peak between ranks (masking the
-// cut) and settles into an ambient pulse the rest of the time. Runs its own
-// rAF loop and writes directly to the DOM, matching ConfettiBackground's
+// across the brand gradient, that gives a subtle lift between ranks (masking
+// the cut) and settles into an ambient pulse the rest of the time. Runs its
+// own rAF loop and writes directly to the DOM, matching ConfettiBackground's
 // existing hand-rolled pattern rather than pushing every frame through React
 // state.
 
@@ -109,24 +107,62 @@ function barColor(i: number, n: number): string {
   return `rgb(${r},${g},${b})`;
 }
 
-function sweepRise(progress: number): number {
-  return progress < 0.55 ? progress / 0.55 : 1 - (progress - 0.55) / 0.45;
+const AMBIENT_ENERGY = 0.22;
+const SETTLED_ENERGY = 0.16;
+// The value gold's own breathing formula produces right as a sweep leaves
+// or arrives at it (sin(0) term drops out), so a sweep's "to"/"from" always
+// matches gold's actual level at that instant instead of an approximation.
+const GOLD_ENTRY_ENERGY = 0.24 + 0.11 * 0.5;
+
+// bronze->silver and silver->gold both start their hump from the same
+// ambient level and rise by the same fixed amount, so neither reads as a
+// bigger wave than the other even though silver->gold ends higher (at
+// gold's own level) than bronze->silver does (back at the same ambient).
+const SWEEP_BOUNDS: Record<'sweepToSilver' | 'sweepToGold', { from: number; to: number }> = {
+  sweepToSilver: { from: AMBIENT_ENERGY, to: AMBIENT_ENERGY },
+  sweepToGold: { from: AMBIENT_ENERGY, to: GOLD_ENTRY_ENERGY },
+};
+const SWEEP_PEAK_BOW = 0.16;
+
+function easeOutCubic(p: number): number {
+  return 1 - (1 - p) ** 3;
+}
+function easeInCubic(p: number): number {
+  return p ** 3;
+}
+function easeInOutCubic(p: number): number {
+  return p < 0.5 ? 4 * p ** 3 : 1 - (-2 * p + 2) ** 3 / 2;
+}
+
+// Rises from `from` to a fixed-height peak by the midpoint, then eases back
+// down to `to` -- a smooth hump landing exactly on both neighbors' actual
+// levels, rather than the old shared-floor version that snapped at both ends.
+function sweepHumpEnergy(from: number, to: number, p: number): number {
+  const peak = from + SWEEP_PEAK_BOW;
+  if (p < 0.5) return from + (peak - from) * easeOutCubic(p / 0.5);
+  return peak + (to - peak) * easeInCubic((p - 0.5) / 0.5);
 }
 
 function computeEnergy(stage: Stage, sinceStage: number): number {
+  if (stage === 'sweepToSettled') {
+    // No hump for the champion->final cut -- the confetti burst already
+    // sells it, so this just eases straight down to the settled level.
+    const p = Math.min(1, sinceStage / SETTLE_DURATION_MS);
+    return GOLD_ENTRY_ENERGY + (SETTLED_ENERGY - GOLD_ENTRY_ENERGY) * easeInOutCubic(p);
+  }
   if (isSweepStage(stage)) {
     const p = Math.min(1, sinceStage / SWEEP_DURATION_MS);
-    const rise = Math.max(0, sweepRise(p));
-    return 0.14 + rise * SWEEP_ENERGY_MUL;
+    const { from, to } = SWEEP_BOUNDS[stage];
+    return sweepHumpEnergy(from, to, p);
   }
   if (stage === 'dark') return 0.05;
-  if (stage === 'settled') return 0.16;
+  if (stage === 'settled') return SETTLED_ENERGY;
   if (stage === 'gold') {
     // a slow rhythmic swell instead of flat ambient -- the champion's hold
     // should feel alive, like a crowd still cheering
     return 0.24 + 0.11 * (0.5 + 0.5 * Math.sin(sinceStage * 0.0038));
   }
-  return 0.22;
+  return AMBIENT_ENERGY;
 }
 
 function EqStrip({ stage, reducedMotion }: Readonly<{ stage: Stage; reducedMotion: boolean }>) {
@@ -423,7 +459,7 @@ export function FinalResultsView({ leaderboard, awards, backgroundSrc, footer }:
       )}
 
       {settled && (
-        <div className="relative z-10 flex flex-col flex-1 min-h-0 gap-4 page-enter">
+        <div className="relative z-10 flex flex-col flex-1 min-h-0 gap-4">
           <h2 className="text-3xl font-black text-white text-center" style={{ animation: 'settledIn 0.5s cubic-bezier(0.16,1,0.3,1) 0.05s both' }}>
             Final Results
           </h2>
