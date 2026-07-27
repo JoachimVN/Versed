@@ -49,7 +49,7 @@ export function PointsBreakdownList({ breakdown, hideMultiplier = false }: Reado
 // bid/tier timing) are separate awards, not merged into one — the two flows
 // measure elapsed time on different scales (shared clip start vs per-tier
 // start), so a single "fastest" ranking across both would be misleading.
-const AWARD_LABELS: Record<Award['key'], string> = {
+export const AWARD_LABELS: Record<Award['key'], string> = {
   mostCorrect: 'Most Correct',
   fastestGuess: 'Fastest Race Guess',
   fastestClassicGuess: 'Fastest Classic Guess',

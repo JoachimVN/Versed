@@ -308,18 +308,34 @@ select:focus-visible,
   50%       { transform: scale(1.06); }
 }
 
-/* Final-results podium: a slot rising into place the moment its rank is
-   revealed (bronze/silver/gold), with a slight overshoot before settling. */
-@keyframes podiumRise {
-  0%   { transform: translateY(60px) scale(0.85); opacity: 0; }
-  60%  { transform: translateY(-8px) scale(1.04); opacity: 1; }
-  100% { transform: translateY(0) scale(1); opacity: 1; }
+/* Final-results ceremony: a name popping into place the moment its rank is
+   revealed, with a blur-to-focus overshoot rather than a plain fade. */
+@keyframes nameIn {
+  0%   { opacity: 0; transform: scale(1.22); filter: blur(6px); }
+  60%  { opacity: 1; transform: scale(0.975); filter: blur(0); }
+  100% { transform: scale(1); }
 }
 
-/* Dim, empty podium pedestal waiting for its rank to be revealed. */
-@keyframes pedestalPulse {
-  0%, 100% { opacity: 0.35; }
-  50%       { opacity: 0.55; }
+/* Slow breathing glow held on the champion's name for the length of their
+   reveal -- starts after nameIn's own transform settles, so the two never
+   fight over the same property mid-flight. */
+@keyframes goldGlow {
+  0%, 100% { filter: drop-shadow(0 0 0 rgba(232,121,249,0)); }
+  50%       { filter: drop-shadow(0 0 20px rgba(232,121,249,0.5)); }
+}
+
+/* The champion's personal stat line arrives after their score has finished
+   counting up, as its own small beat rather than appearing all at once. */
+@keyframes statIn {
+  from { opacity: 0; transform: translateY(6px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+
+/* Each section of the settled results screen (recap, list, awards, footer)
+   arrives on its own beat instead of one flat crossfade. */
+@keyframes settledIn {
+  from { opacity: 0; transform: translateY(10px); }
+  to   { opacity: 1; transform: translateY(0); }
 }
 
 /* Each keyframe re-states translate(-50%,-50%) alongside the scale — an

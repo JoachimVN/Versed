@@ -11,6 +11,7 @@ import { WaitingView } from './play/WaitingView';
 import type { PlayState } from './play/usePlayGame';
 import { RoundIntro } from '../components/RoundIntro';
 import { FinalResultsView } from '../components/FinalResults';
+import { FinalResultsPlayerView } from '../components/FinalResultsPlayer';
 import { PillButton } from '../components/RevealShared';
 import type { RoundResultEvent, LeaderboardEntry, PartyInfo, Award } from '../types';
 
@@ -328,7 +329,7 @@ export default function Screenshot() {
     'final-host-1': <FinalResultsView leaderboard={MOCK_LEADERBOARD.slice(0, 1)} awards={[]} backgroundSrc={`${import.meta.env.BASE_URL}backgrounds/background6.svg`} footer={<PillButton onClick={noop} label="New Game" />} />,
     'final-host-2': <FinalResultsView leaderboard={MOCK_LEADERBOARD.slice(0, 2)} awards={[]} backgroundSrc={`${import.meta.env.BASE_URL}backgrounds/background6.svg`} footer={<PillButton onClick={noop} label="New Game" />} />,
     'final-host-long': <FinalResultsView leaderboard={MOCK_LEADERBOARD_LONG} awards={MOCK_AWARDS} backgroundSrc={`${import.meta.env.BASE_URL}backgrounds/background6.svg`} footer={<PillButton onClick={noop} label="New Game" />} />,
-    'final-player': <FinalResultsView leaderboard={MOCK_LEADERBOARD} awards={MOCK_AWARDS} myName="John" backgroundSrc={`${import.meta.env.BASE_URL}backgrounds/background5.svg`} footer={<PillButton onClick={noop} label="Leave" />} />,
+    'final-player': <FinalResultsPlayerView leaderboard={MOCK_LEADERBOARD} awards={MOCK_AWARDS} myName="John" backgroundSrc={`${import.meta.env.BASE_URL}backgrounds/background5.svg`} footer={<PillButton onClick={noop} label="Leave" />} />,
     'final-empty': <FinalResultsView leaderboard={[]} awards={[]} backgroundSrc={`${import.meta.env.BASE_URL}backgrounds/background6.svg`} footer={<PillButton onClick={noop} label="New Game" />} />,
   };
 
