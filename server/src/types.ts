@@ -200,7 +200,20 @@ export interface Player {
   totalPasses: number;
   fastestCorrectMs: number | null; // race-flow (+ chaos hints) only
   fastestClassicMs: number | null; // classic bid/tier flow only — separate scale, not comparable to fastestCorrectMs
+  fastestCorrectMoment: AwardMoment | null;
+  fastestClassicMoment: AwardMoment | null;
   biggestSwing: number;            // largest single-round point gain
+}
+
+// The exact round behind a speed award. It is retained by the authoritative
+// game state so the finished screen never has to guess from stale round data.
+export interface AwardMoment {
+  playerName: string;
+  guess: string;
+  songTitle: string;
+  artist: string;
+  coverUrl?: string;
+  timeMs: number;
 }
 
 // One end-of-game superlative. Ties share the award rather than picking one
@@ -209,6 +222,7 @@ export interface Award {
   key: 'mostCorrect' | 'fastestGuess' | 'fastestClassicGuess' | 'biggestSwing' | 'finaleWinner';
   playerNames: string[];
   detail: string;
+  highlights?: AwardMoment[];
 }
 
 export type GameMode = 'classic' | 'race' | 'party';
@@ -233,7 +247,8 @@ export interface Game {
   // name.toLowerCase() → saved state, restored on rejoin
   formerPlayers: Map<string, {
     score: number; streak: number;
-    totalCorrect: number; totalPasses: number; fastestCorrectMs: number | null; fastestClassicMs: number | null; biggestSwing: number;
+    totalCorrect: number; totalPasses: number; fastestCorrectMs: number | null; fastestClassicMs: number | null;
+    fastestCorrectMoment: AwardMoment | null; fastestClassicMoment: AwardMoment | null; biggestSwing: number;
   }>;
   phase: GamePhase;
   roundIndex: number;

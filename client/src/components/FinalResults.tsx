@@ -404,14 +404,29 @@ export function ResultRow({ entry, isMe, delay }: Readonly<{ entry: LeaderboardE
   );
 }
 
-export function RestResultsList({ entries, myName }: Readonly<{ entries: LeaderboardEntry[]; myName?: string }>) {
+function RestResultCard({ entry, delay }: Readonly<{ entry: LeaderboardEntry; delay: number }>) {
+  return (
+    <div className="rest-result-card" style={{ animationDelay: `${delay}ms` }}>
+      <span className="rest-result-rank">#{entry.rank}</span>
+      <span className="text-white font-bold truncate min-w-0" style={{ fontSize: '1rem' }}>{entry.name}</span>
+      <span className="rest-result-score tabular-nums">
+        {entry.score.toLocaleString()} <small>PTS</small>
+      </span>
+    </div>
+  );
+}
+
+// Places four and below are a compact field card grid, not a long imitation
+// of the podium. That gives the 4th/5th finishers a deliberate treatment and
+// still scales neatly when a larger lobby has more names to show.
+export function RestResultsGrid({ entries }: Readonly<{ entries: LeaderboardEntry[] }>) {
   if (entries.length === 0) return null;
   return (
-    <div className="flex flex-col gap-2">
-      {entries.map((e, i) => (
-        <ResultRow key={e.name} entry={e} isMe={e.name === myName} delay={i * 60} />
-      ))}
-    </div>
+    <section aria-label="Remaining standings">
+      <div className="rest-results-grid">
+        {entries.map((entry, i) => <RestResultCard key={entry.name} entry={entry} delay={i * 70} />)}
+      </div>
+    </section>
   );
 }
 
@@ -514,16 +529,14 @@ export function FinalResultsView({ leaderboard, awards, backgroundSrc, footer }:
             <PodiumRecap podium={podium} />
           </div>
 
-          {/* Standings first (its own centered, narrower row), then awards
-              below getting the full landscape width as their own row -- the
-              grid spreads across 2-3 columns instead of being squeezed
-              beside the standings. */}
+          {/* The podium has its own hero treatment; everyone after it gets a
+              compact field grid, then the three-row awards recap. */}
           <div
             className="relative z-10 flex-1 min-h-0 overflow-y-auto flex flex-col gap-6"
             style={{ maxWidth: '1000px', width: '100%', margin: '0 auto', animation: 'settledIn 0.5s cubic-bezier(0.16,1,0.3,1) 0.22s both' }}
           >
-            <div style={{ maxWidth: '640px', width: '100%', margin: '0 auto' }}>
-              <RestResultsList entries={rest} />
+            <div style={{ maxWidth: '760px', width: '100%', margin: '0 auto' }}>
+              <RestResultsGrid entries={rest} />
             </div>
             <div style={{ marginTop: '16px' }}>
               <AwardsStrip awards={awards} />

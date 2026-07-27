@@ -23,6 +23,7 @@ try {
     await take(browser, '/screenshot?v=reveal',      'Reveal.png');
     await take(browser, '/screenshot?v=lobby',       'HostLobby.png');
     await take(browser, '/screenshot?v=party-intro', 'PartyIntro.png');
+    await take(browser, '/screenshot?v=final-host',  'FinalResults.png');
     await browser.close();
 } catch (e) {
     console.error(e);
