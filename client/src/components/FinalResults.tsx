@@ -3,7 +3,7 @@ import type { ReactNode } from 'react';
 import { RankBadge } from './RankBadge';
 import LiquidGlass from './StableLiquidGlass';
 import { useAnimatedScore } from '../hooks/useAnimatedScore';
-import { ConfettiBackground } from './ConfettiBackground';
+import { ConfettiBackground, GOLD_CONFETTI_COLORS } from './ConfettiBackground';
 import { AwardsStrip, AWARD_LABELS } from './RevealShared';
 import { LIQUID_CARD_PROPS } from './liquidGlassPresets';
 import type { Award, LeaderboardEntry } from '../types';
@@ -285,7 +285,7 @@ export function BackgroundLayer({ backgroundSrc, showConfetti, confettiEntrance 
             animation: confettiEntrance ? 'championConfettiIn 1.15s cubic-bezier(0.16, 1, 0.3, 1) both' : undefined,
           }}
         >
-          <ConfettiBackground burst persistAfterBurst speedMultiplier={3} />
+          <ConfettiBackground burst persistAfterBurst speedMultiplier={3} colors={GOLD_CONFETTI_COLORS} />
         </div>
       )}
     </>

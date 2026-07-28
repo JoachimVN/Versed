@@ -18,6 +18,11 @@ const COLORS = [
   '#00c4b0', '#b040d8',            // light teal + mid purple
   '#3c2c66',                       // dark navy (subtle contrast piece)
 ];
+
+export const GOLD_CONFETTI_COLORS = [
+  '#ffe8a3', '#f8cf68', '#e9ae3d',
+  '#c98622', '#fff5cf', '#b8731f',
+];
 const COUNT = 120;
 
 function seededRand(seed: number) {
@@ -25,7 +30,7 @@ function seededRand(seed: number) {
   return () => { s = (s * 1664525 + 1013904223) >>> 0; return s / 0xffffffff; };
 }
 
-function makeParticle(W: number, H: number, scattered = false, rand: () => number = Math.random): Particle {
+function makeParticle(W: number, H: number, scattered = false, rand: () => number = Math.random, colors: readonly string[] = COLORS): Particle {
   const circle = rand() > 0.72;
   const alpha = 0.55 + rand() * 0.45;
   return {
@@ -37,7 +42,7 @@ function makeParticle(W: number, H: number, scattered = false, rand: () => numbe
     h: circle ? 6 + rand() * 8 : 4 + rand() * 7,
     rot: rand() * Math.PI * 2,
     rotV: (rand() - 0.5) * 0.025,
-    color: COLORS[Math.floor(rand() * COLORS.length)],
+    color: colors[Math.floor(rand() * colors.length)],
     circle,
     alpha,
     initialAlpha: alpha,
@@ -71,7 +76,7 @@ export function restoreConfettiField() {
   _restoreFieldVersion++;
 }
 
-export function ConfettiBackground({ burst = false, persistAfterBurst = false, speedMultiplier = 1 }: Readonly<{ burst?: boolean; persistAfterBurst?: boolean; speedMultiplier?: number }>) {
+export function ConfettiBackground({ burst = false, persistAfterBurst = false, speedMultiplier = 1, colors = COLORS }: Readonly<{ burst?: boolean; persistAfterBurst?: boolean; speedMultiplier?: number; colors?: readonly string[] }>) {
   const canvasRef = useRef<HTMLCanvasElement>(null);
 
   useEffect(() => {
@@ -100,7 +105,7 @@ export function ConfettiBackground({ burst = false, persistAfterBurst = false, s
 
     const reduced = globalThis.matchMedia('(prefers-reduced-motion: reduce)').matches;
     const rand = reduced ? seededRand(0x5eed42) : Math.random;
-    const particles: Particle[] = Array.from({ length: COUNT }, () => makeParticle(W, H, true, rand));
+    const particles: Particle[] = Array.from({ length: COUNT }, () => makeParticle(W, H, true, rand, colors));
 
     const render = () => {
       ctx.clearRect(0, 0, W, H);
@@ -177,7 +182,7 @@ export function ConfettiBackground({ burst = false, persistAfterBurst = false, s
         p.y += p.vy * dt * _currentSpeed;
         p.rot += p.rotV * dt * _currentSpeed;
         if (p.y > H + 30 && !burst && _respawning) {
-          Object.assign(p, makeParticle(W, H, false));
+          Object.assign(p, makeParticle(W, H, false, Math.random, colors));
         }
       }
     };
@@ -186,7 +191,7 @@ export function ConfettiBackground({ burst = false, persistAfterBurst = false, s
       if (restoreFieldVersion === _restoreFieldVersion) return;
       restoreFieldVersion = _restoreFieldVersion;
       for (const p of particles) {
-        if (p.y > H + 30) Object.assign(p, makeParticle(W, H, true));
+        if (p.y > H + 30) Object.assign(p, makeParticle(W, H, true, Math.random, colors));
       }
     };
 
