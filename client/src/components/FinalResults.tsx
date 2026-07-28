@@ -5,6 +5,7 @@ import { useAnimatedScore } from '../hooks/useAnimatedScore';
 import { CONFETTI_COLORS, ConfettiBackground, GOLD_CONFETTI_COLORS } from './ConfettiBackground';
 import { AwardsStrip, AWARD_LABELS } from './RevealShared';
 import { LIQUID_CARD_PROPS } from './liquidGlassPresets';
+import { useFinalResultsRevealSound } from '../hooks/useFinalResultsRevealSound';
 import type { Award, LeaderboardEntry } from '../types';
 
 type PodiumRank = 1 | 2 | 3;
@@ -29,21 +30,31 @@ const RANK_STYLE: Record<PodiumRank, { tint: string; gradient: string; label: st
   3: { tint: '#7de8dd', gradient: 'linear-gradient(90deg,#c9f8f2,#5ecfc3)', label: 'Third Place' },
 };
 
-const INTRO_DELAY = 650;
-const HOLD_MINOR = 2400;
-// Silver's hold runs longer than bronze's -- this is the beat right before
-// the champion, giving that reveal a bit more suspense than the others.
-const HOLD_SILVER = 3000;
-const HOLD_CHAMPION = 3850;
-// One shared duration for every sweep, comfortably longer than the podium
-// card's own 0.5s fade transition (below) so the outgoing and incoming cards
-// never overlap mid-cross-fade, and short enough that the wordless gap
-// between cards doesn't read as the screen freezing.
-const SWEEP_DURATION_MS = 620;
-// The champion->settled cut gets a slightly longer beat than the other
-// sweeps -- the champion's own fade-out plus the settled screen fading in
-// afterward reads better with a touch more air than a plain card swap.
-const SETTLE_DURATION_MS = 750;
+// The ceremony is a fixed 28-beat (seven-bar) phrase at 112 BPM. Keeping the
+// visual timeline on the same grid as the sound design means every reveal,
+// transition, and final landing can be scored as a deliberate musical hit.
+export const FINAL_RESULTS_BPM = 112;
+export const FINAL_RESULTS_BEAT_MS = 60_000 / FINAL_RESULTS_BPM;
+
+const INTRO_DELAY = 2 * FINAL_RESULTS_BEAT_MS;
+// With the sound-design trigger at 1.3.1, these holds put the silver and
+// gold reveals on the downbeats at 4.1.1 and 6.1.1 respectively.
+const HOLD_MINOR = 7 * FINAL_RESULTS_BEAT_MS;
+const HOLD_SILVER = 7 * FINAL_RESULTS_BEAT_MS;
+const HOLD_CHAMPION = 8 * FINAL_RESULTS_BEAT_MS;
+// Each rank hand-off is one beat; the final cut gets two beats to resolve
+// into the recap. The full phrase is: 2 + 7 + 1 + 7 + 1 + 8 + 2 = 28 beats.
+const SWEEP_DURATION_MS = FINAL_RESULTS_BEAT_MS;
+const SETTLE_DURATION_MS = 2 * FINAL_RESULTS_BEAT_MS;
+
+// The score windows below are intentionally not all on the same downbeat.
+// They match the supplied 112-BPM sound-design cue sheet, whose transport
+// starts at 1.3.1 when the manual preview button is pressed.
+const PODIUM_SCORE_TIMING: Record<PodiumRank, { delay: number; duration: number }> = {
+  3: { delay: 2 * FINAL_RESULTS_BEAT_MS, duration: 1.25 * FINAL_RESULTS_BEAT_MS }, // 2.3.1 → 2.4.2
+  2: { delay: 1.5 * FINAL_RESULTS_BEAT_MS, duration: 1.75 * FINAL_RESULTS_BEAT_MS }, // 4.2.3 → 4.4.2
+  1: { delay: 1.75 * FINAL_RESULTS_BEAT_MS, duration: 1.75 * FINAL_RESULTS_BEAT_MS }, // 6.2.4 → 6.4.3
+};
 
 // Builds the one-shot stage timeline for however many podium spots this game
 // actually has -- a 1- or 2-player game skips the ranks that don't exist,
@@ -354,8 +365,23 @@ export function BackgroundLayer({ backgroundSrc, showConfetti, confettiEntrance 
 
 // ─── Podium reveal card ─────────────────────────────────────────────────────
 
-function AnimatedPodiumScore({ score, instant, champion }: Readonly<{ score: number; instant: boolean; champion: boolean }>) {
-  const { displayScore } = useAnimatedScore(score, score, champion ? 300 : 0, instant, false, champion ? 1300 : 900);
+function AnimatedPodiumScore({ score, instant, countDelay, countDuration }: Readonly<{
+  score: number;
+  instant: boolean;
+  countDelay: number;
+  countDuration: number;
+}>) {
+  // Each score window is deliberately timed to its music cue. The hook's
+  // normal 1s safety buffer is off here to preserve those placements.
+  const { displayScore } = useAnimatedScore(
+    score,
+    score,
+    countDelay,
+    instant,
+    false,
+    countDuration,
+    0,
+  );
   return <>{displayScore.toLocaleString()}</>;
 }
 
@@ -368,6 +394,7 @@ function PodiumRevealCard({ rank, entry, awards, visible, reducedMotion }: Reado
 }>) {
   const { tint, gradient, label } = RANK_STYLE[rank];
   const champion = rank === 1;
+  const scoreTiming = PODIUM_SCORE_TIMING[rank];
   const award = findAward(entry.name, awards);
   // Once a card has counted up, it keeps showing its resolved score while
   // fading out for the next rank's sweep -- without this, the score element
@@ -409,7 +436,14 @@ function PodiumRevealCard({ rank, entry, awards, visible, reducedMotion }: Reado
         className="tabular-nums"
         style={{ fontFamily: "'Nunito', sans-serif", fontWeight: 900, fontSize: champion ? 'clamp(2rem, 3vw, 2.6rem)' : 'clamp(1.7rem, 2.6vw, 2.2rem)', color: '#fff' }}
       >
-        {hasRevealedRef.current ? <AnimatedPodiumScore score={entry.score} instant={!visible || reducedMotion} champion={champion} /> : 0}
+        {hasRevealedRef.current ? (
+          <AnimatedPodiumScore
+            score={entry.score}
+            instant={!visible || reducedMotion}
+            countDelay={scoreTiming.delay}
+            countDuration={scoreTiming.duration}
+          />
+        ) : 0}
         <span style={{ fontSize: '0.5em', fontWeight: 800, color: 'rgba(255,255,255,0.38)', marginLeft: '0.35em' }}>PTS</span>
       </span>
       {award && (
@@ -418,7 +452,9 @@ function PodiumRevealCard({ rank, entry, awards, visible, reducedMotion }: Reado
           style={{
             fontWeight: 700, fontSize: '1rem', color: 'rgba(255,255,255,0.62)',
             opacity: champion && !reducedMotion ? 0 : 1,
-            animation: champion && visible && !reducedMotion ? 'statIn 0.5s ease 1.55s both' : undefined,
+            animation: champion && visible && !reducedMotion
+              ? `statIn ${FINAL_RESULTS_BEAT_MS}ms ease ${scoreTiming.delay + scoreTiming.duration}ms both`
+              : undefined,
           }}
         >
           <span style={{ width: '5px', height: '5px', borderRadius: '50%', background: tint, flexShrink: 0 }} />
@@ -569,17 +605,22 @@ export function FinalResultsView({ leaderboard, awards, backgroundSrc, footer }:
   const rest = useMemo(() => leaderboard.slice(podium.length), [leaderboard, podium]);
 
   const [stage, setStage] = useState<Stage>(reducedMotion ? 'settled' : 'dark');
+  const { play: playFinalResultsReveal } = useFinalResultsRevealSound();
 
   useEffect(() => {
     if (reducedMotion || podium.length === 0) { setStage('settled'); return; }
     setStage('dark');
+    const stopRevealAudio = playFinalResultsReveal();
     const timeline = buildTimeline(podium.length);
     const timers = timeline.map(step => setTimeout(() => setStage(step.stage), step.delay));
     // Cleanup fires on unmount (leaving the finished screen, or the host
     // starting a new game unmounts this component when the phase changes
     // away) so a stale timer can never fire into gone/replaced state.
-    return () => timers.forEach(clearTimeout);
-  }, [leaderboard, podium, reducedMotion]);
+    return () => {
+      timers.forEach(clearTimeout);
+      stopRevealAudio();
+    };
+  }, [leaderboard, podium, reducedMotion, playFinalResultsReveal]);
 
   const announcement = useMemo(() => {
     if (reducedMotion) {
