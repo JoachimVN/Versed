@@ -2,10 +2,16 @@ import { useEffect, useState } from 'react';
 import type { ReactNode } from 'react';
 import { useAnimatedScore } from '../hooks/useAnimatedScore';
 import { AwardsStrip, AWARD_LABELS } from './RevealShared';
-import { BackgroundLayer, ResultRow, findAward, getCeremonyDuration } from './FinalResults';
+import { BackgroundLayer, HUE_BRONZE, ResultRow, findAward, getCeremonyDuration } from './FinalResults';
 import type { Award, LeaderboardEntry } from '../types';
 
 type Phase = 'hold' | 'settled';
+
+// Only two states here (no per-rank chain like the host's cinematic reveal),
+// so the settled hue is the shortest rightward hop from HUE_BRONZE to a
+// -150deg result (140 + 70 = 210, i.e. 210deg wraps to -150deg) rather than
+// the host's multi-lap raw value.
+const HUE_PLAYER_SETTLED = 210;
 
 function PersonalHero({ entry, awards, reducedMotion }: Readonly<{ entry: LeaderboardEntry; awards: Award[]; reducedMotion: boolean }>) {
   const award = findAward(entry.name, awards);
@@ -83,7 +89,7 @@ export function FinalResultsPlayerView({ leaderboard, awards, myName, background
 
   return (
     <div className="relative min-h-screen flex flex-col p-6 gap-4">
-      <BackgroundLayer backgroundSrc={backgroundSrc} showConfetti={!reducedMotion && settled} />
+      <BackgroundLayer backgroundSrc={backgroundSrc} showConfetti={!reducedMotion && settled} hueDeg={settled ? HUE_PLAYER_SETTLED : HUE_BRONZE} />
 
       {!settled && (
         <div className="relative z-10 flex-1 flex flex-col items-center justify-center gap-3 text-center page-enter">

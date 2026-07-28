@@ -228,18 +228,54 @@ function EqStrip({ stage, reducedMotion }: Readonly<{ stage: Stage; reducedMotio
 
 // ─── Background ─────────────────────────────────────────────────────────────
 
-export function BackgroundLayer({ backgroundSrc, showConfetti }: Readonly<{ backgroundSrc: string; showConfetti: boolean }>) {
+// Hue-rotate sweeps one direction ("rightward"/increasing) across the whole
+// ceremony rather than snapping through whichever numeric distance is
+// shorter -- raw filter values keep climbing past 360 where the visual
+// target wraps back around, so every leg of the transition turns the same
+// way instead of reversing mid-sweep.
+export const HUE_BRONZE = 140;
+const HUE_SILVER = 240; // wraps to -120deg
+const HUE_CHAMPION = 360; // wraps to 0deg
+export const HUE_SETTLED = 570; // wraps to -150deg
+
+const STAGE_HUE: Record<Stage, number> = {
+  dark: HUE_BRONZE,
+  bronze: HUE_BRONZE,
+  sweepToSilver: HUE_SILVER,
+  silver: HUE_SILVER,
+  sweepToGold: HUE_CHAMPION,
+  gold: HUE_CHAMPION,
+  sweepToSettled: HUE_SETTLED,
+  settled: HUE_SETTLED,
+};
+
+// The background stays almost invisible under the overlay throughout --
+// the champion card still backs off a touch further than the rest of the
+// ceremony, since confetti plus the reveal card's own gradient text sit on
+// top of it there.
+const OVERLAY_ALPHA_REST = 0.85;
+const OVERLAY_ALPHA_WINNER = 0.90;
+
+export function BackgroundLayer({ backgroundSrc, showConfetti, hueDeg = HUE_BRONZE, overlayAlpha = OVERLAY_ALPHA_REST }: Readonly<{
+  backgroundSrc: string;
+  showConfetti: boolean;
+  hueDeg?: number;
+  overlayAlpha?: number;
+}>) {
   return (
     <>
       <img
         src={backgroundSrc}
         alt=""
         aria-hidden="true"
-        style={{ position: 'fixed', inset: 0, width: '100%', height: '100%', objectFit: 'cover', zIndex: 0 }}
+        style={{
+          position: 'fixed', inset: 0, width: '100%', height: '100%', objectFit: 'cover', zIndex: 0,
+          filter: `hue-rotate(${hueDeg}deg)`, transition: 'filter 1.5s ease',
+        }}
       />
       <div
         className="fixed inset-0 pointer-events-none"
-        style={{ background: 'rgba(8,8,18,0.9)', backdropFilter: 'blur(48px)', zIndex: 1 }}
+        style={{ backgroundColor: `rgba(8,8,18,${overlayAlpha})`, backdropFilter: 'blur(48px)', zIndex: 1, transition: 'background-color 1.5s ease' }}
       />
       {showConfetti && (
         <div style={{ position: 'fixed', inset: 0, zIndex: 2, pointerEvents: 'none', filter: 'blur(10px)' }}>
@@ -493,10 +529,12 @@ export function FinalResultsView({ leaderboard, awards, backgroundSrc, footer }:
   const settling = stage === 'sweepToSettled';
   const dark = stage === 'dark';
   const showConfetti = !reducedMotion && (stage === 'gold' || settling || settled);
+  const hueDeg = STAGE_HUE[stage];
+  const overlayAlpha = stage === 'gold' ? OVERLAY_ALPHA_WINNER : OVERLAY_ALPHA_REST;
 
   return (
     <div className="relative min-h-screen flex flex-col p-6 gap-4">
-      <BackgroundLayer backgroundSrc={backgroundSrc} showConfetti={showConfetti} />
+      <BackgroundLayer backgroundSrc={backgroundSrc} showConfetti={showConfetti} hueDeg={hueDeg} overlayAlpha={overlayAlpha} />
       <EqStrip stage={stage} reducedMotion={reducedMotion} />
 
       <div
