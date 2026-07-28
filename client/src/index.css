@@ -324,6 +324,14 @@ select:focus-visible,
   50%       { filter: drop-shadow(0 0 20px rgba(250,204,110,0.5)); }
 }
 
+/* The champion field is already populated when it mounts, so ease the whole
+   field down from above rather than letting every particle pop in at once. */
+@keyframes championConfettiIn {
+  from { opacity: 0; transform: translateY(-10%); filter: blur(18px); }
+  72%  { opacity: 0.94; transform: translateY(0.7%); filter: blur(9px); }
+  to   { opacity: 1; transform: translateY(0); filter: blur(10px); }
+}
+
 /* The champion's personal stat line arrives after their score has finished
    counting up, as its own small beat rather than appearing all at once. */
 @keyframes statIn {

@@ -236,7 +236,7 @@ function EqStrip({ stage, reducedMotion }: Readonly<{ stage: Stage; reducedMotio
 export const HUE_BRONZE = 140;
 const HUE_SILVER = 240; // wraps to -120deg
 const HUE_CHAMPION = 360; // wraps to 0deg
-export const HUE_SETTLED = 570; // wraps to -150deg
+export const HUE_SETTLED = 540; // wraps to -150deg
 
 const STAGE_HUE: Record<Stage, number> = {
   dark: HUE_BRONZE,
@@ -256,9 +256,10 @@ const STAGE_HUE: Record<Stage, number> = {
 const OVERLAY_ALPHA_REST = 0.85;
 const OVERLAY_ALPHA_WINNER = 0.90;
 
-export function BackgroundLayer({ backgroundSrc, showConfetti, hueDeg = HUE_BRONZE, overlayAlpha = OVERLAY_ALPHA_REST }: Readonly<{
+export function BackgroundLayer({ backgroundSrc, showConfetti, confettiEntrance = false, hueDeg = HUE_BRONZE, overlayAlpha = OVERLAY_ALPHA_REST }: Readonly<{
   backgroundSrc: string;
   showConfetti: boolean;
+  confettiEntrance?: boolean;
   hueDeg?: number;
   overlayAlpha?: number;
 }>) {
@@ -278,7 +279,12 @@ export function BackgroundLayer({ backgroundSrc, showConfetti, hueDeg = HUE_BRON
         style={{ backgroundColor: `rgba(8,8,18,${overlayAlpha})`, backdropFilter: 'blur(48px)', zIndex: 1, transition: 'background-color 1.5s ease' }}
       />
       {showConfetti && (
-        <div style={{ position: 'fixed', inset: 0, zIndex: 2, pointerEvents: 'none', filter: 'blur(10px)' }}>
+        <div
+          style={{
+            position: 'fixed', inset: 0, zIndex: 2, pointerEvents: 'none', filter: 'blur(10px)',
+            animation: confettiEntrance ? 'championConfettiIn 1.15s cubic-bezier(0.16, 1, 0.3, 1) both' : undefined,
+          }}
+        >
           <ConfettiBackground burst persistAfterBurst speedMultiplier={3} />
         </div>
       )}
@@ -534,7 +540,13 @@ export function FinalResultsView({ leaderboard, awards, backgroundSrc, footer }:
 
   return (
     <div className="relative min-h-screen flex flex-col p-6 gap-4">
-      <BackgroundLayer backgroundSrc={backgroundSrc} showConfetti={showConfetti} hueDeg={hueDeg} overlayAlpha={overlayAlpha} />
+      <BackgroundLayer
+        backgroundSrc={backgroundSrc}
+        showConfetti={showConfetti}
+        confettiEntrance={stage === 'gold'}
+        hueDeg={hueDeg}
+        overlayAlpha={overlayAlpha}
+      />
       <EqStrip stage={stage} reducedMotion={reducedMotion} />
 
       <div
