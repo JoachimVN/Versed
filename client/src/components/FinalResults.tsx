@@ -287,17 +287,51 @@ export function BackgroundLayer({ backgroundSrc, showConfetti, confettiEntrance 
   hueDeg?: number;
   overlayAlpha?: number;
 }>) {
+  // Cross-fades between fixed hue values instead of animating the filter's
+  // degree, which would sweep visibly through every hue in between (e.g.
+  // bronze -> silver would pass through green/blue) rather than dissolving
+  // directly from one settled color to the next. Each hue gets its own
+  // persistent layer so its filter is applied once, while invisible, and
+  // only opacity ever transitions -- reusing one element for both hues
+  // made the color itself snap instantly and only the reveal fade smoothly.
+  const idRef = useRef(0);
+  const [layers, setLayers] = useState(() => [{ id: idRef.current, hue: hueDeg }]);
+  const [topId, setTopId] = useState(0);
+
+  useEffect(() => {
+    setLayers(prev => {
+      if (prev[prev.length - 1].hue === hueDeg) return prev;
+      idRef.current += 1;
+      return [...prev, { id: idRef.current, hue: hueDeg }];
+    });
+  }, [hueDeg]);
+
+  useEffect(() => {
+    const newest = layers[layers.length - 1];
+    if (newest.id === topId) return;
+    const raf = requestAnimationFrame(() => setTopId(newest.id));
+    return () => cancelAnimationFrame(raf);
+  }, [layers, topId]);
+
   return (
     <>
-      <img
-        src={backgroundSrc}
-        alt=""
-        aria-hidden="true"
-        style={{
-          position: 'fixed', inset: 0, width: '100%', height: '100%', objectFit: 'cover', zIndex: 0,
-          filter: `hue-rotate(${hueDeg}deg)`, transition: 'filter 1.5s ease',
-        }}
-      />
+      {layers.map(layer => (
+        <img
+          key={layer.id}
+          src={backgroundSrc}
+          alt=""
+          aria-hidden="true"
+          style={{
+            position: 'fixed', inset: 0, width: '100%', height: '100%', objectFit: 'cover', zIndex: 0,
+            filter: `hue-rotate(${layer.hue}deg)`,
+            opacity: layer.id === topId ? 1 : 0, transition: 'opacity 1.5s ease',
+          }}
+          onTransitionEnd={() => {
+            if (layer.id !== topId) return;
+            setLayers(prev => (prev.length > 1 ? [prev[prev.length - 1]] : prev));
+          }}
+        />
+      ))}
       <div
         className="fixed inset-0 pointer-events-none"
         style={{ backgroundColor: `rgba(8,8,18,${overlayAlpha})`, backdropFilter: 'blur(48px)', zIndex: 1, transition: 'background-color 1.5s ease' }}
