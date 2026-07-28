@@ -306,7 +306,7 @@ export function removeSocket(socketId: string): { game: Game; wasHost: boolean }
     const player = game.players.get(socketId);
     if (player) {
       game.formerPlayers.set(player.name.toLowerCase(), {
-        score: player.score, streak: player.streak,
+        name: player.name, score: player.score, streak: player.streak,
         totalCorrect: player.totalCorrect, totalPasses: player.totalPasses,
         fastestCorrectMs: player.fastestCorrectMs, fastestClassicMs: player.fastestClassicMs,
         fastestCorrectMoment: player.fastestCorrectMoment, fastestClassicMoment: player.fastestClassicMoment,
@@ -1050,8 +1050,22 @@ export function advanceDuelOrResolve(game: Game): boolean {
   return true;
 }
 
+// Active players plus anyone who left for good and never came back — a
+// player who was leading (or fastest, or whatever else awards track) doesn't
+// just vanish off the board because their connection dropped. Skips a
+// formerPlayers entry if someone's currently playing under that same name
+// (they already rejoined, so game.players has the live, current-name copy).
+function playersIncludingFormer(game: Game): Player[] {
+  const active = Array.from(game.players.values());
+  const activeNames = new Set(active.map(p => p.name.toLowerCase()));
+  const departed: Player[] = Array.from(game.formerPlayers.entries())
+    .filter(([lowerName]) => !activeNames.has(lowerName))
+    .map(([lowerName, former]) => ({ socketId: `former:${lowerName}`, ...former }));
+  return [...active, ...departed];
+}
+
 export function getLeaderboard(game: Game) {
-  return Array.from(game.players.values())
+  return playersIncludingFormer(game)
     .sort((a, b) => b.score - a.score)
     .map((p, i) => ({ rank: i + 1, name: p.name, score: p.score }));
 }
@@ -1127,7 +1141,7 @@ function finaleWinnerAward(game: Game): Award | null {
 // count as an achievement, so an award is omitted entirely if nobody
 // actually did the thing (e.g. nobody ever guessed correctly).
 export function computeAwards(game: Game): Award[] {
-  const players = Array.from(game.players.values());
+  const players = playersIncludingFormer(game);
   const awards = [
     mostCorrectAward(players),
     fastestGuessAward(players),

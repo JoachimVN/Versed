@@ -244,9 +244,10 @@ export interface Game {
   pin: string;
   hostSocketId: string;
   players: Map<string, Player>;
-  // name.toLowerCase() → saved state, restored on rejoin
+  // name.toLowerCase() → saved state, restored on rejoin (and shown, via
+  // getLeaderboard/computeAwards, for players who never came back)
   formerPlayers: Map<string, {
-    score: number; streak: number;
+    name: string; score: number; streak: number;
     totalCorrect: number; totalPasses: number; fastestCorrectMs: number | null; fastestClassicMs: number | null;
     fastestCorrectMoment: AwardMoment | null; fastestClassicMoment: AwardMoment | null; biggestSwing: number;
   }>;
