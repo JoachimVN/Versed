@@ -19,7 +19,7 @@ const REVEAL_STAGE: Record<PodiumRank, Stage> = { 3: 'bronze', 2: 'silver', 1: '
 // is deliberately exaggerated past what the real point gaps would justify --
 // at a subtler ratio the "podium" silhouette reads as three near-identical
 // boxes instead of an actual riser.
-const PODIUM_STEP_HEIGHTS: Record<PodiumRank, number> = { 1: 152, 2: 92, 3: 64 };
+const PODIUM_STEP_HEIGHTS: Record<PodiumRank, number> = { 1: 122, 2: 76, 3: 52 };
 
 // Subtle, desaturated per-rank hues -- gold reads as gold, silver as a soft
 // purple, bronze as a soft cyan -- rather than the previous mixed palette
@@ -478,7 +478,7 @@ function PodiumRevealCard({ rank, entry, awards, visible, reducedMotion }: Reado
 
 const PANEL_PAD_V = 40;
 const PANEL_TITLE_H = 26;
-const PANEL_PODIUM_H = 208;
+const PANEL_PODIUM_H = 178;
 const PANEL_SECTION_GAP = 16;
 export const STANDINGS_ROW_H = 30;
 export const AWARD_ROW_H = 54;
@@ -721,12 +721,9 @@ export function FinalResultsView({ leaderboard, awards, backgroundSrc, footer }:
                   <h2 className="recap-title">Final Results</h2>
                   <PodiumRow podium={podium} />
                   {rest.length > 0 && (
-                    <>
-                      <div className="panel-divider" />
-                      <div className="standings-list" style={{ width: '100%' }}>
-                        {rest.map((entry, i) => <ResultRow key={entry.name} entry={entry} isMe={false} delay={i * 60} />)}
-                      </div>
-                    </>
+                    <div className="standings-list" style={{ width: '100%' }}>
+                      {rest.map((entry, i) => <ResultRow key={entry.name} entry={entry} isMe={false} delay={i * 60} />)}
+                    </div>
                   )}
                   {awards.length > 0 && (
                     <>
