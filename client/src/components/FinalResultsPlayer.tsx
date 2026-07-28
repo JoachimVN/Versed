@@ -1,21 +1,17 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import type { ReactNode } from 'react';
 import { useAnimatedScore } from '../hooks/useAnimatedScore';
 import { AwardsStrip, AWARD_LABELS } from './RevealShared';
 import LiquidGlass from './StableLiquidGlass';
 import { LIQUID_CARD_PROPS } from './liquidGlassPresets';
+import { CONFETTI_COLORS, GOLD_CONFETTI_COLORS } from './ConfettiBackground';
 import {
-  AWARD_ROW_H, BackgroundLayer, HUE_BRONZE, ResultRow, STANDINGS_ROW_H, estimatePanelHeight, findAward, getCeremonyDuration,
+  AWARD_ROW_H, BackgroundLayer, HOLD_CHAMPION, HUE_BRONZE, HUE_SETTLED, ResultRow, SETTLE_DURATION_MS, STANDINGS_ROW_H,
+  estimatePanelHeight, findAward, getCeremonyDuration,
 } from './FinalResults';
 import type { Award, LeaderboardEntry } from '../types';
 
 type Phase = 'hold' | 'settled';
-
-// Only two states here (no per-rank chain like the host's cinematic reveal),
-// so the settled hue is the shortest rightward hop from HUE_BRONZE to a
-// -150deg result (140 + 70 = 210, i.e. 210deg wraps to -150deg) rather than
-// the host's multi-lap raw value.
-const HUE_PLAYER_SETTLED = 210;
 
 function PersonalHero({ entry, awards, reducedMotion }: Readonly<{ entry: LeaderboardEntry; awards: Award[]; reducedMotion: boolean }>) {
   const award = findAward(entry.name, awards);
@@ -70,13 +66,44 @@ export function FinalResultsPlayerView({ leaderboard, awards, myName, background
   const [reducedMotion] = useState(() => globalThis.matchMedia?.('(prefers-reduced-motion: reduce)').matches ?? false);
   const [phase, setPhase] = useState<Phase>(reducedMotion || leaderboard.length === 0 ? 'settled' : 'hold');
 
+  // A reconnect (phone locked/backgrounded mid-ceremony, socket drops, then
+  // rejoins) makes the server resend this same game_over payload to resync
+  // state -- which handed us a brand-new leaderboard array every time and
+  // re-triggered the effect below, bouncing an already-settled player back
+  // to "look up at the board" for a full replay. Comparing a content
+  // signature instead of the array reference tells a genuine resync (same
+  // scores) apart from an actual new game (different scores, or a fresh
+  // mount with no prior signature at all).
+  const leaderboardSignature = useMemo(
+    () => leaderboard.map(e => `${e.name}:${e.score}`).join('|'),
+    [leaderboard],
+  );
+  const lastSignatureRef = useRef<string | null>(null);
+
   useEffect(() => {
-    if (reducedMotion || leaderboard.length === 0) { setPhase('settled'); return; }
+    if (reducedMotion || leaderboard.length === 0) { setPhase('settled'); lastSignatureRef.current = leaderboardSignature; return; }
+    if (lastSignatureRef.current === leaderboardSignature) return;
+    lastSignatureRef.current = leaderboardSignature;
     setPhase('hold');
     const podiumCount = Math.min(3, leaderboard.length);
     const timer = setTimeout(() => setPhase('settled'), getCeremonyDuration(podiumCount));
     return () => clearTimeout(timer);
-  }, [leaderboard, reducedMotion]);
+  }, [leaderboard, leaderboardSignature, reducedMotion]);
+
+  // Echoes the host's confetti arc on landing: a fast gold burst that holds,
+  // then eases into the calm cyan/purple confetti the recap settles on. The
+  // host staggers its speed and color handoff across two separate stage
+  // transitions ('gold' -> 'sweepToSettled' -> 'settled'); here there's only
+  // one landing moment, so both change together on one timer instead of
+  // visibly drifting apart.
+  const [confettiCalm, setConfettiCalm] = useState(false);
+
+  useEffect(() => {
+    if (phase !== 'settled') { setConfettiCalm(false); return; }
+    setConfettiCalm(false);
+    const timer = setTimeout(() => setConfettiCalm(true), HOLD_CHAMPION + SETTLE_DURATION_MS);
+    return () => clearTimeout(timer);
+  }, [phase]);
 
   if (leaderboard.length === 0) {
     return (
@@ -96,8 +123,15 @@ export function FinalResultsPlayerView({ leaderboard, awards, myName, background
   ]);
 
   return (
-    <div className="relative h-[100lvh] flex flex-col p-6 gap-4">
-      <BackgroundLayer backgroundSrc={backgroundSrc} showConfetti={!reducedMotion && settled} hueDeg={settled ? HUE_PLAYER_SETTLED : HUE_BRONZE} />
+    <div className="relative min-h-screen flex flex-col p-6 gap-4">
+      <BackgroundLayer
+        backgroundSrc={backgroundSrc}
+        showConfetti={!reducedMotion && settled}
+        confettiEntrance={settled}
+        confettiColors={confettiCalm ? CONFETTI_COLORS : GOLD_CONFETTI_COLORS}
+        confettiSpeedMultiplier={confettiCalm ? 1 : 3}
+        hueDeg={settled ? HUE_SETTLED : HUE_BRONZE}
+      />
 
       {!settled && (
         <div className="relative z-10 flex-1 flex flex-col items-center justify-center gap-3 text-center page-enter">

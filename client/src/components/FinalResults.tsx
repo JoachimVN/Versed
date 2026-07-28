@@ -41,11 +41,11 @@ const INTRO_DELAY = 2 * FINAL_RESULTS_BEAT_MS;
 // gold reveals on the downbeats at 4.1.1 and 6.1.1 respectively.
 const HOLD_MINOR = 7 * FINAL_RESULTS_BEAT_MS;
 const HOLD_SILVER = 7 * FINAL_RESULTS_BEAT_MS;
-const HOLD_CHAMPION = 8 * FINAL_RESULTS_BEAT_MS;
+export const HOLD_CHAMPION = 8 * FINAL_RESULTS_BEAT_MS;
 // Each rank hand-off is one beat; the final cut gets two beats to resolve
 // into the recap. The full phrase is: 2 + 7 + 1 + 7 + 1 + 8 + 2 = 28 beats.
 const SWEEP_DURATION_MS = FINAL_RESULTS_BEAT_MS;
-const SETTLE_DURATION_MS = 2 * FINAL_RESULTS_BEAT_MS;
+export const SETTLE_DURATION_MS = 2 * FINAL_RESULTS_BEAT_MS;
 
 // How long a press-and-hold takes to skip the ceremony. Long enough that a
 // stray tap can't trigger it by accident, short enough not to feel like a
