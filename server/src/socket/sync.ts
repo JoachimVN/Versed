@@ -37,9 +37,14 @@ export function emitRevealSnapshot(socket: Socket, game: Game, round: Round) {
 
 export function emitRaceTurnSnapshot(socket: Socket, game: Game, round: Round | null) {
   if (!round) return;
+  const alreadyGuessing = game.phase === 'guessing' && !!round.playStartAt && !!game.phaseEndsAt && !round.passed.has(socket.id);
   // Resend the round's own round_start first so a reconnecting client resets
   // its party/artistOnly/yearOnly state instead of keeping whatever the
   // previous round (which may have been a different format) left behind.
+  // When guessing is already underway, also carry the deadline here so the
+  // client can jump straight to the guessing screen instead of bouncing
+  // through 'watching' for the moment between this event and the `your_turn`
+  // that follows it.
   socket.emit('round_start', {
     roundIndex: game.roundIndex,
     total: game.totalRounds,
@@ -52,9 +57,10 @@ export function emitRaceTurnSnapshot(socket: Socket, game: Game, round: Round | 
     party: gm.partyView(game, round),
     tempo: round.song.tempo,
     resync: true,
+    guessingEndsAt: alreadyGuessing ? game.phaseEndsAt! : undefined,
   });
-  if (game.phase === 'guessing' && round.playStartAt && game.phaseEndsAt && !round.passed.has(socket.id)) {
-    socket.emit('your_turn', { timeLimit: game.raceTime, endsAt: game.phaseEndsAt });
+  if (alreadyGuessing) {
+    socket.emit('your_turn', { timeLimit: game.raceTime, endsAt: game.phaseEndsAt! });
   }
 }
 

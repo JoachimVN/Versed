@@ -75,6 +75,15 @@ export interface PlayState {
   completeWaitingTransition: () => void;
 }
 
+// Finale duelists (or, for underdog rounds, the trailing player(s)) are the
+// only ones who actually get a turn — everyone else just listens along.
+function isRestrictedFromTurn(party: PartyInfo | null, myName: string): boolean {
+  let restricted: string[] | null = null;
+  if (party?.finale) restricted = party.duelists;
+  else if (party?.event === 'underdog') restricted = party.restricted;
+  return !!restricted && !!myName && !restricted.includes(myName);
+}
+
 export function usePlayGame(pinParam?: string): PlayState {
   const [phase, setPhase] = useState<Phase>('join');
   const cameFromQR = !!pinParam;
@@ -260,6 +269,7 @@ export function usePlayGame(pinParam?: string): PlayState {
       bidOptions?: number[]; bidScores?: number[];
       tempo?: number | null;
       resync?: boolean;
+      guessingEndsAt?: number;
     }) => {
       // A round starting is authoritative — it must win over a still-in-flight
       // waiting-screen morph transition, not get overwritten by it landing late.
@@ -298,7 +308,17 @@ export function usePlayGame(pinParam?: string): PlayState {
 
       if (roundMode === 'race') {
         setGuesserNames([]);
-        setPhase('watching');
+        // On a resync mid-guessing window, land on the right phase in this
+        // same render instead of starting on 'watching' and waiting for the
+        // separate `your_turn` message to correct it a moment later — that
+        // gap was visible as a flash of the wait-your-turn UI.
+        if (data.guessingEndsAt) {
+          setSongPlaying(true);
+          startCountdown(data.guessingEndsAt);
+          setPhase(isRestrictedFromTurn(data.party ?? null, myNameRef.current) ? 'watching' : 'guessing');
+        } else {
+          setPhase('watching');
+        }
       } else {
         if (data.bidOptions?.length) {
           setBidOptions(data.bidOptions);
@@ -336,11 +356,7 @@ export function usePlayGame(pinParam?: string): PlayState {
       // Finale duelists (or, for underdog rounds, the trailing player(s)) are
       // the only ones who actually get to guess — everyone else just listens
       // along on the watching screen with the song + timer, no input.
-      const p = partyRef.current;
-      let restricted: string[] | null = null;
-      if (p?.finale) restricted = p.duelists;
-      else if (p?.event === 'underdog') restricted = p.restricted;
-      if (restricted && myNameRef.current && !restricted.includes(myNameRef.current)) {
+      if (isRestrictedFromTurn(partyRef.current, myNameRef.current)) {
         setSongPlaying(true);
         startCountdown(data.endsAt ?? (Date.now() + data.timeLimit * 1000));
         return;
