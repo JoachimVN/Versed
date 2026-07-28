@@ -47,6 +47,12 @@ const resumeContext = () => { getAudioContext().resume().catch(() => {}); };
 document.addEventListener('pointerdown', resumeContext);
 document.addEventListener('keydown', resumeContext);
 
+// final_results_reveal* were mastered a few dB quieter than the rest of the
+// game's audio (measured via ffmpeg loudnorm: ~-26 to -28 LUFS, vs -22 at the
+// top of the game's usual range) — boosted here rather than re-exporting the
+// source files, since it's a single constant to re-tune.
+const FINAL_RESULTS_GAIN = 1.8;
+
 /**
  * Preloads and plays the one-piece final-results score. `play()` returns a
  * cancel function so leaving the finished screen cannot leave the ceremony
@@ -102,6 +108,7 @@ export function useFinalResultsRevealSound(podiumCount = 3) {
       const context = getAudioContext();
       const source = context.createBufferSource();
       const gain = context.createGain();
+      gain.gain.value = FINAL_RESULTS_GAIN;
       source.buffer = buffer;
       source.connect(gain);
       gain.connect(context.destination);
