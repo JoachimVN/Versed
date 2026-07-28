@@ -223,6 +223,36 @@ export function usePlayGame(pinParam?: string): PlayState {
     setTimeLeft(0);
   }
 
+  function applyRaceRoundStart(data: { guessingEndsAt?: number; party?: PartyInfo | null }) {
+    setGuesserNames([]);
+    // On a resync mid-guessing window, land on the right phase in this
+    // same render instead of starting on 'watching' and waiting for the
+    // separate `your_turn` message to correct it a moment later — that
+    // gap was visible as a flash of the wait-your-turn UI.
+    if (data.guessingEndsAt) {
+      setSongPlaying(true);
+      startCountdown(data.guessingEndsAt);
+      setPhase(isRestrictedFromTurn(data.party ?? null, myNameRef.current) ? 'watching' : 'guessing');
+    } else {
+      setPhase('watching');
+    }
+  }
+
+  function applyClassicRoundStart(data: { bidOptions?: number[]; bidScores?: number[]; bettingTime?: number; endsAt?: number }) {
+    if (data.bidOptions?.length) {
+      setBidOptions(data.bidOptions);
+      bidOptionsRef.current = data.bidOptions;
+      bidIndexRef.current = Math.min(bidIndexRef.current, data.bidOptions.length - 1);
+      setBidIndex(i => Math.min(i, data.bidOptions!.length - 1));
+    }
+    if (data.bidScores?.length) setBidScores(data.bidScores);
+    setBettingTime(data.bettingTime ?? 15);
+    const endsAt = data.endsAt ?? (Date.now() + (data.bettingTime ?? 15) * 1000);
+    autoSubmitTimerRef.current = setTimeout(autoSubmitBid, endsAt - Date.now());
+    startCountdown(endsAt);
+    setPhase('betting');
+  }
+
   useEffect(() => {
     socket.connect();
 
@@ -307,31 +337,9 @@ export function usePlayGame(pinParam?: string): PlayState {
       setChoiceOptions(data.choiceOptions ?? []);
 
       if (roundMode === 'race') {
-        setGuesserNames([]);
-        // On a resync mid-guessing window, land on the right phase in this
-        // same render instead of starting on 'watching' and waiting for the
-        // separate `your_turn` message to correct it a moment later — that
-        // gap was visible as a flash of the wait-your-turn UI.
-        if (data.guessingEndsAt) {
-          setSongPlaying(true);
-          startCountdown(data.guessingEndsAt);
-          setPhase(isRestrictedFromTurn(data.party ?? null, myNameRef.current) ? 'watching' : 'guessing');
-        } else {
-          setPhase('watching');
-        }
+        applyRaceRoundStart(data);
       } else {
-        if (data.bidOptions?.length) {
-          setBidOptions(data.bidOptions);
-          bidOptionsRef.current = data.bidOptions;
-          bidIndexRef.current = Math.min(bidIndexRef.current, data.bidOptions.length - 1);
-          setBidIndex(i => Math.min(i, data.bidOptions!.length - 1));
-        }
-        if (data.bidScores?.length) setBidScores(data.bidScores);
-        setBettingTime(data.bettingTime ?? 15);
-        const endsAt = data.endsAt ?? (Date.now() + (data.bettingTime ?? 15) * 1000);
-        autoSubmitTimerRef.current = setTimeout(autoSubmitBid, endsAt - Date.now());
-        startCountdown(endsAt);
-        setPhase('betting');
+        applyClassicRoundStart(data);
       }
     });
 
