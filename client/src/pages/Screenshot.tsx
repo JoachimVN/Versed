@@ -321,16 +321,19 @@ const MOCK_PLAY_YEAR_GUESSING: PlayState = {
 // A manual fixture gives sound design a reliable downbeat: the real
 // FinalResultsView does not mount until the button is pressed, so its own
 // two-beat black intro begins at that exact click rather than on page load.
-function FinalResultsPreview() {
+function FinalResultsPreview({ leaderboard = MOCK_LEADERBOARD, awards = MOCK_AWARDS }: Readonly<{
+  leaderboard?: LeaderboardEntry[];
+  awards?: Award[];
+}>) {
   const [started, setStarted] = useState(false);
-  const { ready } = useFinalResultsRevealSound();
+  const { ready } = useFinalResultsRevealSound(Math.min(3, leaderboard.length));
   const backgroundSrc = `${import.meta.env.BASE_URL}backgrounds/background7.png`;
 
   if (started) {
     return (
       <FinalResultsView
-        leaderboard={MOCK_LEADERBOARD}
-        awards={MOCK_AWARDS}
+        leaderboard={leaderboard}
+        awards={awards}
         backgroundSrc={backgroundSrc}
         footer={<PillButton onClick={noop} label="New Game" />}
       />
@@ -377,8 +380,8 @@ export default function Screenshot() {
     'final-host-classic-only': <FinalResultsView leaderboard={MOCK_LEADERBOARD} awards={MOCK_AWARDS.filter(a => a.key !== 'fastestGuess' && a.key !== 'finaleWinner')} backgroundSrc={`${import.meta.env.BASE_URL}backgrounds/background7.png`} footer={<PillButton onClick={noop} label="New Game" />} />,
     'final-host-race-only': <FinalResultsView leaderboard={MOCK_LEADERBOARD} awards={MOCK_AWARDS.filter(a => a.key !== 'fastestClassicGuess' && a.key !== 'finaleWinner')} backgroundSrc={`${import.meta.env.BASE_URL}backgrounds/background7.png`} footer={<PillButton onClick={noop} label="New Game" />} />,
     'final-host-no-speed': <FinalResultsView leaderboard={MOCK_LEADERBOARD} awards={MOCK_AWARDS.filter(a => a.key !== 'fastestClassicGuess' && a.key !== 'fastestGuess' && a.key !== 'finaleWinner')} backgroundSrc={`${import.meta.env.BASE_URL}backgrounds/background7.png`} footer={<PillButton onClick={noop} label="New Game" />} />,
-    'final-host-1': <FinalResultsView leaderboard={MOCK_LEADERBOARD.slice(0, 1)} awards={[]} backgroundSrc={`${import.meta.env.BASE_URL}backgrounds/background7.png`} footer={<PillButton onClick={noop} label="New Game" />} />,
-    'final-host-2': <FinalResultsView leaderboard={MOCK_LEADERBOARD.slice(0, 2)} awards={[]} backgroundSrc={`${import.meta.env.BASE_URL}backgrounds/background7.png`} footer={<PillButton onClick={noop} label="New Game" />} />,
+    'final-host-1': <FinalResultsPreview leaderboard={MOCK_LEADERBOARD.slice(0, 1)} awards={[]} />,
+    'final-host-2': <FinalResultsPreview leaderboard={MOCK_LEADERBOARD.slice(0, 2)} awards={[]} />,
     'final-host-long': <FinalResultsView leaderboard={MOCK_LEADERBOARD_LONG} awards={MOCK_AWARDS} backgroundSrc={`${import.meta.env.BASE_URL}backgrounds/background7.png`} footer={<PillButton onClick={noop} label="New Game" />} />,
     'final-player': <FinalResultsPlayerView leaderboard={MOCK_LEADERBOARD} awards={MOCK_AWARDS} myName="John" backgroundSrc={`${import.meta.env.BASE_URL}backgrounds/background5.svg`} footer={<PillButton onClick={noop} label="Leave" />} />,
     'final-empty': <FinalResultsView leaderboard={[]} awards={[]} backgroundSrc={`${import.meta.env.BASE_URL}backgrounds/background7.png`} footer={<PillButton onClick={noop} label="New Game" />} />,

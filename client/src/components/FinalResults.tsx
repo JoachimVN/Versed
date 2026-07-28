@@ -605,7 +605,7 @@ export function FinalResultsView({ leaderboard, awards, backgroundSrc, footer }:
   const rest = useMemo(() => leaderboard.slice(podium.length), [leaderboard, podium]);
 
   const [stage, setStage] = useState<Stage>(reducedMotion ? 'settled' : 'dark');
-  const { play: playFinalResultsReveal } = useFinalResultsRevealSound();
+  const { play: playFinalResultsReveal } = useFinalResultsRevealSound(podium.length);
 
   useEffect(() => {
     if (reducedMotion || podium.length === 0) { setStage('settled'); return; }

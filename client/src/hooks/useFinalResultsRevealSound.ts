@@ -1,28 +1,41 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 
-const SOUND_SRC = `${import.meta.env.BASE_URL}sfx/final_results_reveal.wav`;
+const SOUND_SRCS = {
+  1: `${import.meta.env.BASE_URL}sfx/final_results_reveal3.wav`,
+  2: `${import.meta.env.BASE_URL}sfx/final_results_reveal2.wav`,
+  3: `${import.meta.env.BASE_URL}sfx/final_results_reveal.wav`,
+} as const;
 
 let audioContext: AudioContext | null = null;
-let bufferPromise: Promise<AudioBuffer> | null = null;
+const bufferPromises = new Map<1 | 2 | 3, Promise<AudioBuffer>>();
 
 function getAudioContext(): AudioContext {
   audioContext ??= new AudioContext();
   return audioContext;
 }
 
-function loadBuffer(): Promise<AudioBuffer> {
-  bufferPromise ??= (async () => {
-    const response = await fetch(SOUND_SRC);
+function podiumSize(podiumCount: number): 1 | 2 | 3 {
+  return podiumCount <= 1 ? 1 : podiumCount === 2 ? 2 : 3;
+}
+
+function loadBuffer(podiumCount: number): Promise<AudioBuffer> {
+  const size = podiumSize(podiumCount);
+  let bufferPromise = bufferPromises.get(size);
+  if (!bufferPromise) {
+    bufferPromise = (async () => {
+      const response = await fetch(SOUND_SRCS[size]);
     if (!response.ok) throw new Error(`Could not load final-results audio: ${response.status}`);
     return getAudioContext().decodeAudioData(await response.arrayBuffer());
-  })();
+    })();
+    bufferPromises.set(size, bufferPromise);
+  }
   return bufferPromise;
 }
 
-// Begin fetching/decoding as soon as the final-results code is loaded. A
-// normal game spends far longer than this in earlier rounds; the manual
-// screenshot preview additionally waits for readiness before enabling start.
-void loadBuffer().catch(() => {});
+// Begin fetching/decoding every ceremony variant as soon as this code loads.
+// The finished screen must start in sync on its first frame, whichever of the
+// one-, two-, or three-player endings the game reaches.
+void Promise.all([1, 2, 3].map(loadBuffer)).catch(() => {});
 
 const resumeContext = () => { getAudioContext().resume().catch(() => {}); };
 document.addEventListener('pointerdown', resumeContext);
@@ -33,17 +46,17 @@ document.addEventListener('keydown', resumeContext);
  * cancel function so leaving the finished screen cannot leave the ceremony
  * playing over a newly started game.
  */
-export function useFinalResultsRevealSound() {
+export function useFinalResultsRevealSound(podiumCount = 3) {
   const [ready, setReady] = useState(false);
   const sourceRef = useRef<AudioBufferSourceNode | null>(null);
 
   useEffect(() => {
     let active = true;
-    loadBuffer().then(() => {
+    loadBuffer(podiumCount).then(() => {
       if (active) setReady(true);
     }).catch(() => {});
     return () => { active = false; };
-  }, []);
+  }, [podiumCount]);
 
   const stop = useCallback(() => {
     const source = sourceRef.current;
@@ -57,7 +70,7 @@ export function useFinalResultsRevealSound() {
     stop();
     let cancelled = false;
 
-    loadBuffer().then(buffer => {
+    loadBuffer(podiumCount).then(buffer => {
       if (cancelled) return;
       const context = getAudioContext();
       const source = context.createBufferSource();
@@ -74,7 +87,7 @@ export function useFinalResultsRevealSound() {
       cancelled = true;
       stop();
     };
-  }, [stop]);
+  }, [podiumCount, stop]);
 
   useEffect(() => stop, [stop]);
 
