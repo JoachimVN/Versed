@@ -92,7 +92,7 @@ export default function Play() {
       {phase === 'leaderboard' && <LeaderboardView game={game} />}
       {phase === 'finished' && <FinalResultsWrapper game={game} />}
 
-      <RoundIntro party={game.party} roundKey={game.roundIndex} dismissible={false} />
+      <RoundIntro party={game.introParty} roundKey={game.roundIndex} dismissible={false} />
       {game.stealVictims && <StealPicker victims={game.stealVictims} onPick={game.submitStealVictim} onSkip={game.skipSteal} />}
 
       {reconnecting && (

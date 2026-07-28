@@ -51,6 +51,7 @@ export function emitRaceTurnSnapshot(socket: Socket, game: Game, round: Round | 
     choiceOptions: round.choiceOptions,
     party: gm.partyView(game, round),
     tempo: round.song.tempo,
+    resync: true,
   });
   if (game.phase === 'guessing' && round.playStartAt && game.phaseEndsAt && !round.passed.has(socket.id)) {
     socket.emit('your_turn', { timeLimit: game.raceTime, endsAt: game.phaseEndsAt });
@@ -73,6 +74,7 @@ export function emitClassicPhaseSnapshot(socket: Socket, game: Game, round: Roun
       bidOptions: gm.BID_OPTIONS,
       bidScores: gm.bidScoreTable(),
       tempo: round.song.tempo,
+      resync: true,
     });
     return;
   }
@@ -94,6 +96,7 @@ export function emitClassicPhaseSnapshot(socket: Socket, game: Game, round: Roun
     bidOptions: gm.BID_OPTIONS,
     bidScores: gm.bidScoreTable(),
     tempo: round.song.tempo,
+    resync: true,
   });
 
   const guesserNames = round.guesserSocketIds

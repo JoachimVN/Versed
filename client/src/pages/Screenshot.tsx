@@ -275,6 +275,7 @@ const MOCK_PLAY: PlayState = {
   yearOnly: false,
   choiceOptions: [],
   party: null,
+  introParty: null,
   artistGuessText: '',
   stealVictims: null,
   stealResult: null,

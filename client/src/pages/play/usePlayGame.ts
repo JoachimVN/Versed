@@ -38,6 +38,7 @@ export interface PlayState {
   yearOnly: boolean;
   choiceOptions: string[];
   party: PartyInfo | null;
+  introParty: PartyInfo | null;
   artistGuessText: string;
   stealVictims: { name: string; score: number }[] | null;
   stealResult: { thief: string; victim: string; amount: number; skipped?: boolean } | null;
@@ -116,6 +117,12 @@ export function usePlayGame(pinParam?: string): PlayState {
   const [choiceOptions, setChoiceOptions] = useState<string[]>([]);
   const [party, setParty] = useState<PartyInfo | null>(null);
   const partyRef = useRef<PartyInfo | null>(null);
+  // Separate from `party`: only updated on a genuine round start, never on
+  // the `resync` round_start a reconnecting/mid-round-joining client gets
+  // (see server/src/socket/sync.ts) — otherwise a player who steps away and
+  // comes back mid-round would get the full-screen round announcement
+  // replayed over a round already in progress.
+  const [introParty, setIntroParty] = useState<PartyInfo | null>(null);
   const [artistGuessText, setArtistGuessText] = useState('');
   const artistGuessTextRef = useRef('');
   const [stealVictims, setStealVictims] = useState<{ name: string; score: number }[] | null>(null);
@@ -252,6 +259,7 @@ export function usePlayGame(pinParam?: string): PlayState {
       party?: PartyInfo;
       bidOptions?: number[]; bidScores?: number[];
       tempo?: number | null;
+      resync?: boolean;
     }) => {
       // A round starting is authoritative — it must win over a still-in-flight
       // waiting-screen morph transition, not get overwritten by it landing late.
@@ -271,6 +279,7 @@ export function usePlayGame(pinParam?: string): PlayState {
       setMyRaceTimeMs(null);
       setParty(data.party ?? null);
       partyRef.current = data.party ?? null;
+      if (!data.resync) setIntroParty(data.party ?? null);
       setStealVictims(null);
       setStealResult(null);
       bidSubmittedRef.current = false;
@@ -653,7 +662,7 @@ export function usePlayGame(pinParam?: string): PlayState {
     phase, pin, name, myName, error, roundIndex, totalRounds, hints,
     timeLeft, timerTotal, bettingTime, bidIndex, bidOptions, bidScores, myBid, guesserNames, lowestBid,
     guessText, result, myScore, myScoreDelta, myPity, myPityAmount, myBreakdown, myStreak, mode, artistOnly, yearOnly, choiceOptions, myRacePoints, myRaceTimeMs,
-    party, artistGuessText, stealVictims, stealResult,
+    party, introParty, artistGuessText, stealVictims, stealResult,
     leaderboard, leaderboardDeltas, awards, songPlaying, songTempo, reconnecting, hostReconnecting, savedSession, guessInputRef,
     cameFromQR, newGamePin, rejoinNewGame,
     setPin, setName,
