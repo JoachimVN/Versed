@@ -93,7 +93,8 @@ export type RevealHitTier = 1 | 2 | 3;
 // game's audio (measured via ffmpeg loudnorm: -43 to -45 LUFS / -27 to -35
 // dBTP peak, vs -22 to -28 LUFS elsewhere) — boosted here rather than
 // re-exporting the source files, since it's a single constant to re-tune.
-const REVEAL_GAIN = 8;
+// (Was 8 — that overshot and sat too hot in the mix, pulled back down.)
+const REVEAL_GAIN = 5;
 
 // Plays the reveal_rise/reveal_hit pair for a slot-reel landing, scheduled on
 // the shared AudioContext clock so reveal_hit always lands exactly REEL_SEC
