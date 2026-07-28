@@ -402,9 +402,12 @@ function PodiumRevealCard({ rank, entry, awards, visible, reducedMotion }: Reado
   // zero for the ~0.5s the card is still visible via its opacity transition.
   const hasRevealedRef = useRef(false);
   if (visible) hasRevealedRef.current = true;
-  const nameAnimation = visible && !reducedMotion
-    ? (champion ? 'nameIn 0.7s cubic-bezier(0.2,1.4,0.4,1) both, goldGlow 2.6s ease-in-out 0.8s infinite' : 'nameIn 0.7s cubic-bezier(0.2,1.4,0.4,1) both')
-    : undefined;
+  let nameAnimation: string | undefined;
+  if (visible && !reducedMotion) {
+    nameAnimation = champion
+      ? 'nameIn 0.7s cubic-bezier(0.2,1.4,0.4,1) both, goldGlow 2.6s ease-in-out 0.8s infinite'
+      : 'nameIn 0.7s cubic-bezier(0.2,1.4,0.4,1) both';
+  }
 
   return (
     <div

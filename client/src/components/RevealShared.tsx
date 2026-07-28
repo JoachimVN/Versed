@@ -1,7 +1,7 @@
 import { Check, Target, Trophy, X, Zap, Timer, TrendingUp, Swords } from 'lucide-react';
 import LiquidGlass from './StableLiquidGlass';
 import type { Award, PointsBreakdown, RoundResultEvent } from '../types';
-import { LIQUID_CONTROL_PROPS, LIQUID_PILL_PROPS } from './liquidGlassPresets';
+import { LIQUID_PILL_PROPS } from './liquidGlassPresets';
 import { YearHeading, YearSongFooter } from './YearReveal';
 
 // A round delta this large only happens with a multiplier event, a big
@@ -94,7 +94,7 @@ const AWARD_ORDER: Award['key'][] = ['mostCorrect', 'biggestSwing', 'fastestClas
 // doesn't have to repeat it a second time in prose. Awards with no leading
 // number (the finale duel has none) just fall through with no stat call-out.
 function leadingStat(detail: string): string | null {
-  const m = detail.match(/^[+-]?\d[\d,.]*s?/);
+  const m = /^[+-]?\d[\d,.]*s?/.exec(detail);
   return m ? m[0] : null;
 }
 

@@ -15,7 +15,9 @@ function getAudioContext(): AudioContext {
 }
 
 function podiumSize(podiumCount: number): 1 | 2 | 3 {
-  return podiumCount <= 1 ? 1 : podiumCount === 2 ? 2 : 3;
+  if (podiumCount <= 1) return 1;
+  if (podiumCount === 2) return 2;
+  return 3;
 }
 
 function loadBuffer(podiumCount: number): Promise<AudioBuffer> {
@@ -35,7 +37,11 @@ function loadBuffer(podiumCount: number): Promise<AudioBuffer> {
 // Begin fetching/decoding every ceremony variant as soon as this code loads.
 // The finished screen must start in sync on its first frame, whichever of the
 // one-, two-, or three-player endings the game reaches.
-void Promise.all([1, 2, 3].map(loadBuffer)).catch(() => {});
+try {
+  await Promise.all([1, 2, 3].map(loadBuffer));
+} catch {
+  // preload failures surface again when a screen actually calls loadBuffer
+}
 
 const resumeContext = () => { getAudioContext().resume().catch(() => {}); };
 document.addEventListener('pointerdown', resumeContext);
