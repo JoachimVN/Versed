@@ -89,6 +89,12 @@ document.addEventListener('keydown', resume);
 // rarer the roll, the more the sting sells it.
 export type RevealHitTier = 1 | 2 | 3;
 
+// reveal_rise/reveal_hit* were mastered ~18dB quieter than the rest of the
+// game's audio (measured via ffmpeg loudnorm: -43 to -45 LUFS / -27 to -35
+// dBTP peak, vs -22 to -28 LUFS elsewhere) — boosted here rather than
+// re-exporting the source files, since it's a single constant to re-tune.
+const REVEAL_GAIN = 8;
+
 // Plays the reveal_rise/reveal_hit pair for a slot-reel landing, scheduled on
 // the shared AudioContext clock so reveal_hit always lands exactly REEL_SEC
 // after reveal_rise starts — independent of the setTimeout jitter driving the
@@ -103,11 +109,15 @@ export function useRevealReelSound() {
       const start = audioCtx.currentTime;
       const riseSource = audioCtx.createBufferSource();
       riseSource.buffer = buffers.rise;
-      riseSource.connect(audioCtx.destination);
+      const riseGain = audioCtx.createGain();
+      riseGain.gain.value = REVEAL_GAIN;
+      riseSource.connect(riseGain).connect(audioCtx.destination);
       riseSource.start(start);
       const hitSource = audioCtx.createBufferSource();
       hitSource.buffer = hit;
-      hitSource.connect(audioCtx.destination);
+      const hitGain = audioCtx.createGain();
+      hitGain.gain.value = REVEAL_GAIN;
+      hitSource.connect(hitGain).connect(audioCtx.destination);
       hitSource.start(start + REEL_SEC);
     }).catch(() => { /* buffers never loaded; play() just stays silent */ });
   }, []);
