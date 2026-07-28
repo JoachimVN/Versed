@@ -1111,7 +1111,19 @@ export function computeAwards(game: Game): Award[] {
 
   if (game.duelChampion) {
     const champ = game.players.get(game.duelChampion);
-    if (champ) awards.push({ key: 'finaleWinner', playerNames: [champ.name], detail: 'Won the finale duel' });
+    const opponentId = game.duelDuelistIds.find(id => id !== game.duelChampion);
+    const opponent = opponentId ? game.players.get(opponentId) : undefined;
+    if (champ) {
+      const champWins = game.duelWins[game.duelChampion] ?? 2;
+      const opponentWins = opponentId ? game.duelWins[opponentId] ?? 0 : 0;
+      awards.push({
+        key: 'finaleWinner',
+        playerNames: [champ.name],
+        detail: opponent
+          ? `Beat ${opponent.name} ${champWins}\u2013${opponentWins} in the finale duel`
+          : 'Won the finale duel',
+      });
+    }
   }
 
   return awards;

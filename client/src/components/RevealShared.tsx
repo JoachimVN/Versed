@@ -54,7 +54,7 @@ export const AWARD_LABELS: Record<Award['key'], string> = {
   fastestGuess: 'Fastest Race Guess',
   fastestClassicGuess: 'Fastest Classic Guess',
   biggestSwing: 'Biggest Swing',
-  finaleWinner: 'Finale Winner',
+  finaleWinner: 'Finale Duel',
 };
 
 // Typed against Award['key'] so a future award key fails type-check here
@@ -105,8 +105,8 @@ function leadingStat(detail: string): string | null {
 // scoreboard-style number pulled from the award's own detail text. The
 // quoted guess itself uses the same green used everywhere else a correct
 // answer is confirmed.
-// The finale duel has no leading stat and no highlight (server sends only
-// a flat "Won the finale duel" detail) -- rather than an icon-less row that
+// The finale duel has no leading stat and no highlight (the server names the
+// opponent and final score) -- rather than an icon-less row that
 // reads as an accidentally-broken version of the others, it gets its own
 // upgraded card treatment (glow, gradient wash, bigger name) so the last
 // award in the list reads as a deliberate capstone, not a downgrade.

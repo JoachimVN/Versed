@@ -224,7 +224,7 @@ const MOCK_AWARDS: Award[] = [
     highlights: [{ playerName: 'Priya', guess: 'Billie Jean', songTitle: 'Billie Jean', artist: 'Michael Jackson', coverUrl: MOCK_RESULT.coverUrl, timeMs: 1200 }],
   },
   { key: 'biggestSwing', playerNames: ['Olivia', 'Marcus'], detail: '+1200 point single-round swing' },
-  { key: 'finaleWinner', playerNames: ['Sofia'], detail: 'Won the finale duel' },
+  { key: 'finaleWinner', playerNames: ['Anna'], detail: 'Beat John 2\u20131 in the finale duel' },
 ];
 
 // LobbyView is the only view that reads `game.spotify` directly, so it needs
