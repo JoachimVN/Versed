@@ -1056,77 +1056,86 @@ export function getLeaderboard(game: Game) {
     .map((p, i) => ({ rank: i + 1, name: p.name, score: p.score }));
 }
 
+function mostCorrectAward(players: Player[]): Award | null {
+  const mostCorrect = Math.max(0, ...players.map(p => p.totalCorrect));
+  if (mostCorrect <= 0) return null;
+  return {
+    key: 'mostCorrect',
+    playerNames: players.filter(p => p.totalCorrect === mostCorrect).map(p => p.name),
+    detail: `${mostCorrect} correct guess${mostCorrect === 1 ? '' : 'es'}`,
+  };
+}
+
+function fastestGuessAward(players: Player[]): Award | null {
+  const timed = players.filter(p => p.fastestCorrectMs !== null);
+  if (timed.length === 0) return null;
+  const fastestMs = Math.min(...timed.map(p => p.fastestCorrectMs!));
+  const winners = timed.filter(p => p.fastestCorrectMs === fastestMs);
+  return {
+    key: 'fastestGuess',
+    playerNames: winners.map(p => p.name),
+    detail: `${(fastestMs / 1000).toFixed(1)}s`,
+    highlights: winners.flatMap(p => p.fastestCorrectMoment ? [p.fastestCorrectMoment] : []),
+  };
+}
+
+// Separate award, not merged with fastestGuessAward: classic's per-tier
+// timing isn't on the same scale as race's shared-clip-start timing, so
+// comparing them directly would be misleading.
+function fastestClassicGuessAward(players: Player[]): Award | null {
+  const timedClassic = players.filter(p => p.fastestClassicMs !== null);
+  if (timedClassic.length === 0) return null;
+  const fastestClassicMs = Math.min(...timedClassic.map(p => p.fastestClassicMs!));
+  const winners = timedClassic.filter(p => p.fastestClassicMs === fastestClassicMs);
+  return {
+    key: 'fastestClassicGuess',
+    playerNames: winners.map(p => p.name),
+    detail: `${(fastestClassicMs / 1000).toFixed(1)}s`,
+    highlights: winners.flatMap(p => p.fastestClassicMoment ? [p.fastestClassicMoment] : []),
+  };
+}
+
+function biggestSwingAward(players: Player[]): Award | null {
+  const biggestSwing = Math.max(0, ...players.map(p => p.biggestSwing));
+  if (biggestSwing <= 0) return null;
+  return {
+    key: 'biggestSwing',
+    playerNames: players.filter(p => p.biggestSwing === biggestSwing).map(p => p.name),
+    detail: `+${biggestSwing.toLocaleString()} in one round`,
+  };
+}
+
+function finaleWinnerAward(game: Game): Award | null {
+  if (!game.duelChampion) return null;
+  const champ = game.players.get(game.duelChampion);
+  if (!champ) return null;
+  const opponentId = game.duelDuelistIds.find(id => id !== game.duelChampion);
+  const opponent = opponentId ? game.players.get(opponentId) : undefined;
+  const champWins = game.duelWins[game.duelChampion] ?? 2;
+  const opponentWins = opponentId ? game.duelWins[opponentId] ?? 0 : 0;
+  return {
+    key: 'finaleWinner',
+    playerNames: [champ.name],
+    detail: opponent
+      ? `Beat ${opponent.name} ${champWins}\u2013${opponentWins} in the finale duel`
+      : 'Won the finale duel',
+  };
+}
+
 // End-of-game superlatives, computed once the game's over. Ties share the
 // award rather than picking one name arbitrarily. A stat of zero doesn't
 // count as an achievement, so an award is omitted entirely if nobody
 // actually did the thing (e.g. nobody ever guessed correctly).
 export function computeAwards(game: Game): Award[] {
   const players = Array.from(game.players.values());
-  const awards: Award[] = [];
-
-  const mostCorrect = Math.max(0, ...players.map(p => p.totalCorrect));
-  if (mostCorrect > 0) {
-    awards.push({
-      key: 'mostCorrect',
-      playerNames: players.filter(p => p.totalCorrect === mostCorrect).map(p => p.name),
-      detail: `${mostCorrect} correct guess${mostCorrect === 1 ? '' : 'es'}`,
-    });
-  }
-
-  const timed = players.filter(p => p.fastestCorrectMs !== null);
-  if (timed.length > 0) {
-    const fastestMs = Math.min(...timed.map(p => p.fastestCorrectMs!));
-    const winners = timed.filter(p => p.fastestCorrectMs === fastestMs);
-    awards.push({
-      key: 'fastestGuess',
-      playerNames: winners.map(p => p.name),
-      detail: `${(fastestMs / 1000).toFixed(1)}s`,
-      highlights: winners.flatMap(p => p.fastestCorrectMoment ? [p.fastestCorrectMoment] : []),
-    });
-  }
-
-  // Separate award, not merged with the race-flow one above: classic's
-  // per-tier timing isn't on the same scale as race's shared-clip-start
-  // timing, so comparing them directly would be misleading.
-  const timedClassic = players.filter(p => p.fastestClassicMs !== null);
-  if (timedClassic.length > 0) {
-    const fastestClassicMs = Math.min(...timedClassic.map(p => p.fastestClassicMs!));
-    const winners = timedClassic.filter(p => p.fastestClassicMs === fastestClassicMs);
-    awards.push({
-      key: 'fastestClassicGuess',
-      playerNames: winners.map(p => p.name),
-      detail: `${(fastestClassicMs / 1000).toFixed(1)}s`,
-      highlights: winners.flatMap(p => p.fastestClassicMoment ? [p.fastestClassicMoment] : []),
-    });
-  }
-
-  const biggestSwing = Math.max(0, ...players.map(p => p.biggestSwing));
-  if (biggestSwing > 0) {
-    awards.push({
-      key: 'biggestSwing',
-      playerNames: players.filter(p => p.biggestSwing === biggestSwing).map(p => p.name),
-      detail: `+${biggestSwing.toLocaleString()} in one round`,
-    });
-  }
-
-  if (game.duelChampion) {
-    const champ = game.players.get(game.duelChampion);
-    const opponentId = game.duelDuelistIds.find(id => id !== game.duelChampion);
-    const opponent = opponentId ? game.players.get(opponentId) : undefined;
-    if (champ) {
-      const champWins = game.duelWins[game.duelChampion] ?? 2;
-      const opponentWins = opponentId ? game.duelWins[opponentId] ?? 0 : 0;
-      awards.push({
-        key: 'finaleWinner',
-        playerNames: [champ.name],
-        detail: opponent
-          ? `Beat ${opponent.name} ${champWins}\u2013${opponentWins} in the finale duel`
-          : 'Won the finale duel',
-      });
-    }
-  }
-
-  return awards;
+  const awards = [
+    mostCorrectAward(players),
+    fastestGuessAward(players),
+    fastestClassicGuessAward(players),
+    biggestSwingAward(players),
+    finaleWinnerAward(game),
+  ];
+  return awards.filter((a): a is Award => a !== null);
 }
 
 export function updateSocketPin(socketId: string, pin: string) {
