@@ -651,14 +651,22 @@ export function FinalResultsView({ leaderboard, awards, backgroundSrc, footer }:
   }, [fadeOutRevealAudio]);
 
   const [holding, setHolding] = useState(false);
+  // Bumped on every press so the fill bar's key changes and its CSS
+  // animation restarts from empty, instead of resuming a stale one from a
+  // previous, released-early attempt.
+  const [holdKey, setHoldKey] = useState(0);
   const holdTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
+  // A single quick tap still leaves the fill bar on screen, frozen wherever
+  // it got to and fading out rather than vanishing on release -- so the
+  // press visibly registered instead of just flickering.
   const cancelHold = useCallback(() => {
     if (holdTimerRef.current) { clearTimeout(holdTimerRef.current); holdTimerRef.current = null; }
     setHolding(false);
   }, []);
 
   const startHold = useCallback(() => {
+    setHoldKey(k => k + 1);
     setHolding(true);
     holdTimerRef.current = setTimeout(() => {
       holdTimerRef.current = null;
@@ -739,18 +747,24 @@ export function FinalResultsView({ leaderboard, awards, backgroundSrc, footer }:
         />
       )}
 
-      {holding && (
+      {!settled && (
         <div
           className="fixed flex items-center gap-2"
-          style={{ bottom: '28px', right: '28px', zIndex: 26, pointerEvents: 'none' }}
+          style={{
+            bottom: '28px', right: '28px', zIndex: 26, pointerEvents: 'none',
+            opacity: holding ? 1 : 0,
+            transition: holding ? 'none' : 'opacity 0.6s ease 0.15s',
+          }}
         >
           <span className="text-white/70 font-bold text-xs uppercase tracking-[0.14em]">Hold to skip</span>
           <div style={{ width: '64px', height: '4px', borderRadius: '2px', background: 'rgba(255,255,255,0.18)', overflow: 'hidden' }}>
             <div
+              key={holdKey}
               style={{
                 width: '100%', height: '100%', background: 'rgba(255,255,255,0.9)',
                 transformOrigin: 'left', transform: 'scaleX(0)',
                 animation: `holdToSkipFill ${HOLD_TO_SKIP_MS}ms linear forwards`,
+                animationPlayState: holding ? 'running' : 'paused',
               }}
             />
           </div>
