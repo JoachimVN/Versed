@@ -7,7 +7,7 @@ import { useState, useEffect } from 'react';
 // displayDelta starts at 0 and only becomes real once the delayed count-up
 // begins, exactly the moment the reel has landed.
 export function useAnimatedScore(finalScore: number, delta: number, startDelay: number, instant = false, holdDelta = false, duration = 900) {
-  const [displayScore, setDisplayScore] = useState(finalScore);
+  const [displayScore, setDisplayScore] = useState(() => (instant || delta === 0 ? finalScore : finalScore - delta));
   const [displayDelta, setDisplayDelta] = useState(holdDelta ? 0 : delta);
   const [deltaFading, setDeltaFading] = useState(false);
   const [revealed, setRevealed] = useState(!holdDelta);
