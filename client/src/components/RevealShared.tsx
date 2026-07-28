@@ -1,4 +1,4 @@
-import { Check, Trophy, X, Zap, Timer, TrendingUp, Swords } from 'lucide-react';
+import { Check, Target, Trophy, X, Zap, Timer, TrendingUp, Swords } from 'lucide-react';
 import LiquidGlass from './StableLiquidGlass';
 import type { Award, PointsBreakdown, RoundResultEvent } from '../types';
 import { LIQUID_PILL_PROPS } from './liquidGlassPresets';
@@ -49,18 +49,18 @@ export function PointsBreakdownList({ breakdown, hideMultiplier = false }: Reado
 // bid/tier timing) are separate awards, not merged into one — the two flows
 // measure elapsed time on different scales (shared clip start vs per-tier
 // start), so a single "fastest" ranking across both would be misleading.
-const AWARD_LABELS: Record<Award['key'], string> = {
+export const AWARD_LABELS: Record<Award['key'], string> = {
   mostCorrect: 'Most Correct',
   fastestGuess: 'Fastest Race Guess',
   fastestClassicGuess: 'Fastest Classic Guess',
   biggestSwing: 'Biggest Swing',
-  finaleWinner: 'Finale Winner',
+  finaleWinner: 'Finale Duel',
 };
 
 // Typed against Award['key'] so a future award key fails type-check here
 // instead of silently rendering a badge with no icon.
 const AWARD_ICONS: Record<Award['key'], typeof Trophy> = {
-  mostCorrect: Trophy,
+  mostCorrect: Target,
   fastestGuess: Zap,
   fastestClassicGuess: Timer,
   biggestSwing: TrendingUp,
@@ -72,44 +72,91 @@ const AWARD_ICONS: Record<Award['key'], typeof Trophy> = {
 // cyan matches the existing "YOU" highlight, amber matches the 3rd-place
 // medal (fitting for a comeback climbing out of last), violet is the brand
 // accent used on the podium's CTA button, and indigo keeps the classic-mode
-// timing award visually distinct from race's cyan.
+// timing award visually distinct from race's cyan. Desaturated to match the
+// podium's own softened palette (RANK_STYLE in FinalResults.tsx) rather than
+// the saturated stock Tailwind swatches these started from.
 const AWARD_COLORS: Record<Award['key'], string> = {
-  mostCorrect: '#fbbf24',
-  fastestGuess: '#5eead4',
-  fastestClassicGuess: '#818cf8',
-  biggestSwing: '#d97706',
-  finaleWinner: '#c65fe8',
+  mostCorrect: '#e8c684',
+  fastestGuess: '#8fe0d6',
+  fastestClassicGuess: '#a8a5e0',
+  biggestSwing: '#d6a878',
+  finaleWinner: '#c2a0d9',
 };
 
-// Final-screen superlatives — shared by Host and Play so both screens read
-// identically. Ties list every qualifying name rather than picking one.
+// Recap order: game-wide stats, the two distinct timing formats, then the
+// optional finale champion. Missing formats simply drop out of the list; no
+// empty row suggests a round type that was never played.
+const AWARD_ORDER: Award['key'][] = ['mostCorrect', 'biggestSwing', 'fastestClassicGuess', 'fastestGuess', 'finaleWinner'];
+
+// The server's own award.detail text already leads with the number that
+// matters ("7 correct guesses", "+1,200 in one round", "1.2s") -- pulling
+// that token out to stand alone as a scoreboard-style numeral means the row
+// doesn't have to repeat it a second time in prose. Awards with no leading
+// number (the finale duel has none) just fall through with no stat call-out.
+function leadingStat(detail: string): string | null {
+  const m = /^[+-]?\d[\d,.]*s?/.exec(detail);
+  return m ? m[0] : null;
+}
+
+// One row per award, matching the standings rows' own plain, divided-list
+// shape -- no icon badges, glow, or per-row color wash. The two timing
+// awards get the real winning moment (the actual guess, song, and cover
+// art) instead of decoration; the rest lean on a bold name and a single
+// scoreboard-style number pulled from the award's own detail text. The
+// quoted guess itself uses the same green used everywhere else a correct
+// answer is confirmed.
+// The finale duel has no leading stat and no highlight (the server names the
+// opponent and final score) -- rather than an icon-less row that
+// reads as an accidentally-broken version of the others, it gets its own
+// upgraded card treatment (glow, gradient wash, bigger name) so the last
+// award in the list reads as a deliberate capstone, not a downgrade.
+function FinaleAwardRow({ award, delay }: Readonly<{ award: Award; delay: number }>) {
+  const color = AWARD_COLORS[award.key];
+  return (
+    <div className="award-row-item award-row-finale" style={{ animationDelay: `${delay}ms` }}>
+      <div className="award-row-text">
+        <span className="award-row-label" style={{ color }}>{AWARD_LABELS[award.key]}</span>
+        <span className="award-row-name award-row-name-finale">{award.playerNames.join(' & ')}</span>
+        <span className="award-row-quote">{award.detail}</span>
+      </div>
+    </div>
+  );
+}
+
+function AwardRow({ award, delay }: Readonly<{ award: Award; delay: number }>) {
+  if (award.key === 'finaleWinner') return <FinaleAwardRow award={award} delay={delay} />;
+  const Icon = AWARD_ICONS[award.key];
+  const color = AWARD_COLORS[award.key];
+  const highlight = award.highlights?.[0];
+  const stat = leadingStat(award.detail);
+  const hasArt = Boolean(highlight?.coverUrl);
+  return (
+    <div className={`award-row-item${hasArt ? '' : ' award-row-compact'}`} style={{ animationDelay: `${delay}ms` }}>
+      {hasArt
+        ? <img className="award-row-art" src={highlight!.coverUrl} alt="" />
+        : <span className="award-row-mark" style={{ color }}><Icon style={{ width: '18px', height: '18px' }} /></span>}
+      <div className="award-row-text">
+        <span className="award-row-label" style={{ color }}>{AWARD_LABELS[award.key]}</span>
+        <span className="award-row-name">{award.playerNames.join(' & ')}</span>
+        {highlight && (
+          <span className="award-row-quote">
+            <span className="award-row-guess">“{highlight.guess}”</span> · {highlight.songTitle}
+          </span>
+        )}
+        {!stat && !highlight && <span className="award-row-quote">{award.detail}</span>}
+      </div>
+      {stat && <span className="award-row-stat" style={{ color }}>{stat}</span>}
+    </div>
+  );
+}
+
 export function AwardsStrip({ awards }: Readonly<{ awards: Award[] }>) {
   if (awards.length === 0) return null;
+  const ordered = AWARD_ORDER.map(key => awards.find(a => a.key === key)).filter((a): a is Award => Boolean(a));
   return (
-    <div className="relative z-10 flex flex-col" style={{ width: '100%', maxWidth: '420px', margin: '0 auto' }}>
-      {awards.map((a, i) => {
-        const Icon = AWARD_ICONS[a.key];
-        const color = AWARD_COLORS[a.key];
-        return (
-          <div
-            key={a.key}
-            className="flex items-start gap-3 py-3"
-            style={i < awards.length - 1 ? { borderBottom: '1px solid rgba(255,255,255,0.08)' } : undefined}
-          >
-            <Icon style={{ width: '16px', height: '16px', color, flexShrink: 0, marginTop: '2px' }} />
-            <div className="flex flex-col min-w-0">
-              <span>
-                <span style={{ color, fontSize: '0.62rem', fontWeight: 800, letterSpacing: '0.06em', textTransform: 'uppercase' }}>
-                  {AWARD_LABELS[a.key]}
-                </span>
-                <span className="text-white font-bold text-sm" style={{ marginLeft: '7px' }}>{a.playerNames.join(' & ')}</span>
-              </span>
-              <span className="text-white/40 text-[0.68rem]" style={{ marginTop: '2px' }}>{a.detail}</span>
-            </div>
-          </div>
-        );
-      })}
-    </div>
+    <section className="awards-list" aria-label="Game awards">
+      {ordered.map((award, i) => <AwardRow key={award.key} award={award} delay={i * 70} />)}
+    </section>
   );
 }
 

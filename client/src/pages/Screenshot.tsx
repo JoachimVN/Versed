@@ -1,4 +1,4 @@
-import type { ReactNode } from 'react';
+import { useState, type ReactNode } from 'react';
 import { useSearchParams } from 'react-router';
 import { PlayingView } from './host/PlayingView';
 import { RevealView } from './host/RevealView';
@@ -11,7 +11,9 @@ import { WaitingView } from './play/WaitingView';
 import type { PlayState } from './play/usePlayGame';
 import { RoundIntro } from '../components/RoundIntro';
 import { FinalResultsView } from '../components/FinalResults';
+import { FinalResultsPlayerView } from '../components/FinalResultsPlayer';
 import { PillButton } from '../components/RevealShared';
+import { useFinalResultsRevealSound } from '../hooks/useFinalResultsRevealSound';
 import type { RoundResultEvent, LeaderboardEntry, PartyInfo, Award } from '../types';
 
 // ─── Fixture data ─────────────────────────────────────────────────────────────
@@ -213,11 +215,17 @@ const MOCK_LEADERBOARD_LONG: LeaderboardEntry[] = [
 ];
 
 const MOCK_AWARDS: Award[] = [
-  { key: 'mostCorrect', playerNames: ['Anna'], detail: '9/10 correct guesses this game, more than anyone else' },
-  { key: 'fastestGuess', playerNames: ['John'], detail: '0.8s fastest correct guess' },
-  { key: 'fastestClassicGuess', playerNames: ['Priya'], detail: '1.2s fastest correct guess' },
+  { key: 'mostCorrect', playerNames: ['Anna'], detail: '9/10 correct guesses' },
+  {
+    key: 'fastestGuess', playerNames: ['John'], detail: '0.8s fastest correct guess',
+    highlights: [{ playerName: 'John', guess: 'Billie Jean', songTitle: 'Billie Jean', artist: 'Michael Jackson', coverUrl: MOCK_RESULT.coverUrl, timeMs: 800 }],
+  },
+  {
+    key: 'fastestClassicGuess', playerNames: ['Priya'], detail: '1.2s fastest correct guess',
+    highlights: [{ playerName: 'Priya', guess: 'Billie Jean', songTitle: 'Billie Jean', artist: 'Michael Jackson', coverUrl: MOCK_RESULT.coverUrl, timeMs: 1200 }],
+  },
   { key: 'biggestSwing', playerNames: ['Olivia', 'Marcus'], detail: '+1200 point single-round swing' },
-  { key: 'finaleWinner', playerNames: ['Sofia'], detail: 'Won the finale duel' },
+  { key: 'finaleWinner', playerNames: ['Anna'], detail: 'Beat John 2\u20131 in the finale duel' },
 ];
 
 // LobbyView is the only view that reads `game.spotify` directly, so it needs
@@ -267,6 +275,7 @@ const MOCK_PLAY: PlayState = {
   yearOnly: false,
   choiceOptions: [],
   party: null,
+  introParty: null,
   artistGuessText: '',
   stealVictims: null,
   stealResult: null,
@@ -310,6 +319,50 @@ const MOCK_PLAY_YEAR_GUESSING: PlayState = {
 
 // ─── Entry ────────────────────────────────────────────────────────────────────
 
+// A manual fixture gives sound design a reliable downbeat: the real
+// FinalResultsView does not mount until the button is pressed, so its own
+// two-beat black intro begins at that exact click rather than on page load.
+function FinalResultsPreview({ leaderboard = MOCK_LEADERBOARD, awards = MOCK_AWARDS }: Readonly<{
+  leaderboard?: LeaderboardEntry[];
+  awards?: Award[];
+}>) {
+  const [started, setStarted] = useState(false);
+  const { ready } = useFinalResultsRevealSound(Math.min(3, leaderboard.length));
+  const backgroundSrc = `${import.meta.env.BASE_URL}backgrounds/background7.png`;
+
+  if (started) {
+    return (
+      <FinalResultsView
+        leaderboard={leaderboard}
+        awards={awards}
+        backgroundSrc={backgroundSrc}
+        footer={<PillButton onClick={noop} label="New Game" />}
+      />
+    );
+  }
+
+  return (
+    <main className="relative min-h-screen flex items-center justify-center overflow-hidden bg-black p-6">
+      <img
+        src={backgroundSrc}
+        alt=""
+        aria-hidden="true"
+        className="absolute inset-0 h-full w-full object-cover opacity-15"
+      />
+      <div className="absolute inset-0 bg-black/80" aria-hidden="true" />
+      <button
+        type="button"
+        onClick={() => setStarted(true)}
+        disabled={!ready}
+        className="relative z-10 rounded-full border border-white/30 bg-white/10 px-7 py-4 text-center text-white shadow-xl backdrop-blur-sm transition hover:bg-white/20 disabled:cursor-wait disabled:opacity-50 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-4 focus-visible:outline-white"
+      >
+        <span className="block text-base font-black uppercase tracking-[0.16em]">{ready ? 'Start final reveal' : 'Loading final reveal'}</span>
+        <span className="mt-1 block text-xs font-bold tracking-[0.12em] text-white/60">112 BPM · 2-beat intro</span>
+      </button>
+    </main>
+  );
+}
+
 export default function Screenshot() {
   const [params] = useSearchParams();
   const screenshots: Record<string, ReactNode> = {
@@ -324,14 +377,17 @@ export default function Screenshot() {
     'year-guessing': <GuessingView game={MOCK_PLAY_YEAR_GUESSING} />,
     lobby: <LobbyView game={MOCK_HOST_LOBBY} />,
     'party-intro': <RoundIntro party={MOCK_PARTY_STEAL} roundKey={0} dismissible={false} />,
-    'final-host': <FinalResultsView leaderboard={MOCK_LEADERBOARD} awards={MOCK_AWARDS} backgroundSrc={`${import.meta.env.BASE_URL}backgrounds/background6.svg`} footer={<PillButton onClick={noop} label="New Game" />} />,
-    'final-host-1': <FinalResultsView leaderboard={MOCK_LEADERBOARD.slice(0, 1)} awards={[]} backgroundSrc={`${import.meta.env.BASE_URL}backgrounds/background6.svg`} footer={<PillButton onClick={noop} label="New Game" />} />,
-    'final-host-2': <FinalResultsView leaderboard={MOCK_LEADERBOARD.slice(0, 2)} awards={[]} backgroundSrc={`${import.meta.env.BASE_URL}backgrounds/background6.svg`} footer={<PillButton onClick={noop} label="New Game" />} />,
-    'final-host-long': <FinalResultsView leaderboard={MOCK_LEADERBOARD_LONG} awards={MOCK_AWARDS} backgroundSrc={`${import.meta.env.BASE_URL}backgrounds/background6.svg`} footer={<PillButton onClick={noop} label="New Game" />} />,
-    'final-player': <FinalResultsView leaderboard={MOCK_LEADERBOARD} awards={MOCK_AWARDS} myName="John" backgroundSrc={`${import.meta.env.BASE_URL}backgrounds/background5.svg`} footer={<PillButton onClick={noop} label="Leave" />} />,
-    'final-empty': <FinalResultsView leaderboard={[]} awards={[]} backgroundSrc={`${import.meta.env.BASE_URL}backgrounds/background6.svg`} footer={<PillButton onClick={noop} label="New Game" />} />,
+    'final-host': <FinalResultsPreview />,
+    'final-host-classic-only': <FinalResultsView leaderboard={MOCK_LEADERBOARD} awards={MOCK_AWARDS.filter(a => a.key !== 'fastestGuess' && a.key !== 'finaleWinner')} backgroundSrc={`${import.meta.env.BASE_URL}backgrounds/background7.png`} footer={<PillButton onClick={noop} label="New Game" />} />,
+    'final-host-race-only': <FinalResultsView leaderboard={MOCK_LEADERBOARD} awards={MOCK_AWARDS.filter(a => a.key !== 'fastestClassicGuess' && a.key !== 'finaleWinner')} backgroundSrc={`${import.meta.env.BASE_URL}backgrounds/background7.png`} footer={<PillButton onClick={noop} label="New Game" />} />,
+    'final-host-no-speed': <FinalResultsView leaderboard={MOCK_LEADERBOARD} awards={MOCK_AWARDS.filter(a => a.key !== 'fastestClassicGuess' && a.key !== 'fastestGuess' && a.key !== 'finaleWinner')} backgroundSrc={`${import.meta.env.BASE_URL}backgrounds/background7.png`} footer={<PillButton onClick={noop} label="New Game" />} />,
+    'final-host-1': <FinalResultsPreview leaderboard={MOCK_LEADERBOARD.slice(0, 1)} awards={[]} />,
+    'final-host-2': <FinalResultsPreview leaderboard={MOCK_LEADERBOARD.slice(0, 2)} awards={[]} />,
+    'final-host-long': <FinalResultsView leaderboard={MOCK_LEADERBOARD_LONG} awards={MOCK_AWARDS} backgroundSrc={`${import.meta.env.BASE_URL}backgrounds/background7.png`} footer={<PillButton onClick={noop} label="New Game" />} />,
+    'final-player': <FinalResultsPlayerView leaderboard={MOCK_LEADERBOARD} awards={MOCK_AWARDS} myName="John" backgroundSrc={`${import.meta.env.BASE_URL}backgrounds/background5.svg`} footer={<PillButton onClick={noop} label="Leave" />} />,
+    'final-empty': <FinalResultsView leaderboard={[]} awards={[]} backgroundSrc={`${import.meta.env.BASE_URL}backgrounds/background7.png`} footer={<PillButton onClick={noop} label="New Game" />} />,
   };
 
   return screenshots[params.get('v') ?? '']
-    ?? <p className="text-white p-6 font-mono">?v=playing|reveal|year|mystery-reveal|big-points-reveal|watching|guessing|year-guessing|lobby|party-intro|final-host|final-host-1|final-host-2|final-host-long|final-player|final-empty</p>;
+    ?? <p className="text-white p-6 font-mono">?v=playing|reveal|year|mystery-reveal|big-points-reveal|watching|guessing|year-guessing|lobby|party-intro|final-host|final-host-classic-only|final-host-race-only|final-host-no-speed|final-host-1|final-host-2|final-host-long|final-player|final-empty</p>;
 }

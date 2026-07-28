@@ -160,6 +160,10 @@ select:focus-visible,
 .glass-tint-cyan > .liquid-glass-stabilizer > :nth-child(5) {
   box-shadow: 0 0 0 1px rgba(0,238,232,0.35) inset, 0 1px 4px rgba(0,0,0,0.35) !important;
 }
+.glass-tint-blue > .liquid-glass-stabilizer > :nth-child(4),
+.glass-tint-blue > .liquid-glass-stabilizer > :nth-child(5) {
+  box-shadow: 0 0 0 1px rgba(59,130,246,0.18) inset, 0 1px 4px rgba(0,0,0,0.35) !important;
+}
 
 /* Volume control's edge ring at half strength — opacity (not just the
    box-shadow tint above) so the library's own white cursor-tracking sheen on
@@ -308,18 +312,303 @@ select:focus-visible,
   50%       { transform: scale(1.06); }
 }
 
-/* Final-results podium: a slot rising into place the moment its rank is
-   revealed (bronze/silver/gold), with a slight overshoot before settling. */
-@keyframes podiumRise {
-  0%   { transform: translateY(60px) scale(0.85); opacity: 0; }
-  60%  { transform: translateY(-8px) scale(1.04); opacity: 1; }
-  100% { transform: translateY(0) scale(1); opacity: 1; }
+/* Final-results ceremony: a name popping into place the moment its rank is
+   revealed, with a blur-to-focus overshoot rather than a plain fade. */
+@keyframes nameIn {
+  0%   { opacity: 0; transform: scale(1.22); filter: blur(6px); }
+  60%  { opacity: 1; transform: scale(0.975); filter: blur(0); }
+  100% { transform: scale(1); }
 }
 
-/* Dim, empty podium pedestal waiting for its rank to be revealed. */
-@keyframes pedestalPulse {
-  0%, 100% { opacity: 0.35; }
-  50%       { opacity: 0.55; }
+/* Slow breathing glow held on the champion's name for the length of their
+   reveal -- starts after nameIn's own transform settles, so the two never
+   fight over the same property mid-flight. */
+@keyframes goldGlow {
+  0%, 100% { filter: drop-shadow(0 0 0 rgba(250,204,110,0)); }
+  50%       { filter: drop-shadow(0 0 20px rgba(250,204,110,0.5)); }
+}
+
+/* The champion field is already populated when it mounts, so ease the whole
+   field down from above rather than letting every particle pop in at once. */
+@keyframes championConfettiIn {
+  from { opacity: 0; transform: translateY(-10%); filter: blur(18px); }
+  72%  { opacity: 0.94; transform: translateY(0.7%); filter: blur(9px); }
+  to   { opacity: 1; transform: translateY(0); filter: blur(10px); }
+}
+
+/* The champion's personal stat line arrives after their score has finished
+   counting up, as its own small beat rather than appearing all at once. */
+@keyframes statIn {
+  from { opacity: 0; transform: translateY(6px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+
+/* Each section of the settled results screen (recap, list, awards, footer)
+   arrives on its own beat instead of one flat crossfade. Fade only, no
+   translate -- this screen always arrives right after the champion hold,
+   whose own sweep/confetti already sells the cut, so stacking a slide on
+   top of that just reads as a stutter. */
+@keyframes settledIn {
+  from { opacity: 0; }
+  to   { opacity: 1; }
+}
+
+/* Fade-only page arrival, no translate -- for a destination that follows
+   its own big transition beat (e.g. the final-results settle, right after
+   the champion hold) where a slide-up on top of that would double up. */
+@keyframes pageEnterFadeOnly {
+  from { opacity: 0; }
+  to   { opacity: 1; }
+}
+.page-enter-fade {
+  animation: pageEnterFadeOnly 0.4s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+}
+
+/* Final-results awards use a quiet, broadcast-style recap: one flat row per
+   award, staggered in via an inline delay. The styling is intentionally
+   flat and editorial, not a collection of decorative floating badges. */
+@keyframes awardRowIn {
+  from { opacity: 0; transform: translateY(12px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+/* Hold-to-skip progress fill (FinalResults.tsx) -- scales up from the left
+   edge over the hold duration, same idiom as a video player's seek buffer. */
+@keyframes holdToSkipFill {
+  from { transform: scaleX(0); }
+  to { transform: scaleX(1); }
+}
+
+/* ─── Final-results unified recap panel ─────────────────────────────────
+   Podium, standings, and awards share one liquid-glass surface as three
+   plain, divider-separated sections instead of a stack of separately-boxed
+   cards -- standings and award rows differ only by icon/color, not by
+   shape, so the whole panel reads as one coherent list. */
+
+.recap-title {
+  font-family: 'Montserrat', sans-serif;
+  font-weight: 900;
+  font-size: 1.5rem;
+  color: #fff;
+  text-align: center;
+}
+
+.panel-divider {
+  width: 100%;
+  height: 1px;
+  background: rgba(255,255,255,0.08);
+}
+
+.podium-row {
+  display: flex;
+  align-items: flex-end;
+  justify-content: center;
+  gap: 16px;
+  width: 100%;
+}
+
+.podium-spot {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  flex: 1;
+  min-width: 0;
+  gap: 8px;
+}
+
+.podium-riser {
+  width: 100%;
+  border-radius: 14px 14px 6px 6px;
+  display: flex;
+  align-items: flex-start;
+  justify-content: center;
+  padding-top: 10px;
+  animation: podiumStepIn 0.5s cubic-bezier(0.16, 1, 0.3, 1) both;
+}
+
+/* Settled-screen podium recap (FinalResults.tsx PodiumSpot): each step
+   rises into place rather than just fading, echoing a medal stand
+   physically settling. Bronze/silver/gold share the same keyframe,
+   staggered by inline delay so gold lands last. */
+@keyframes podiumStepIn {
+  from { opacity: 0; transform: translateY(22px) scaleY(0.85); transform-origin: bottom; }
+  to   { opacity: 1; transform: translateY(0) scaleY(1); transform-origin: bottom; }
+}
+
+/* Rank numeral used by list rows (FinalResults.tsx RankMark) -- a small
+   tinted circle for the podium ranks, echoing the riser's own numeral,
+   instead of the mid-game leaderboard's medal emoji. */
+.rank-mark {
+  width: 24px;
+  height: 24px;
+  border-radius: 50%;
+  display: grid;
+  place-items: center;
+  font-weight: 900;
+  font-size: 0.74rem;
+  flex-shrink: 0;
+}
+
+.rank-mark-plain {
+  width: auto;
+  height: auto;
+  border-radius: 0;
+  color: rgba(255,255,255,0.4);
+  font-size: 0.82rem;
+  font-weight: 800;
+}
+
+.standings-list,
+.awards-list {
+  display: flex;
+  flex-direction: column;
+  width: 100%;
+}
+
+.standings-row {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 7px 2px;
+  animation: resultRowIn 0.4s cubic-bezier(0.16, 1, 0.3, 1) both;
+}
+
+.standings-row + .standings-row {
+  border-top: 1px solid rgba(255,255,255,0.05);
+}
+
+.standings-row-me {
+  border-left: 2px solid rgba(94,234,212,0.6);
+  padding-left: 10px;
+  margin-left: -12px;
+}
+
+.standings-you-tag {
+  color: rgba(94,234,212,0.9);
+  font-size: 0.6rem;
+  font-weight: 800;
+  letter-spacing: 0.08em;
+  margin-left: 8px;
+}
+
+.standings-row-score {
+  margin-left: auto;
+  color: rgba(255,255,255,0.68);
+  font-weight: 800;
+  font-size: 0.9rem;
+}
+
+/* Rest-of-field / full-standings rows (FinalResults.tsx ResultRow),
+   staggered per row via an inline delay. */
+@keyframes resultRowIn {
+  from { opacity: 0; transform: translateY(8px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+
+.award-row-item {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  padding: 12px 2px;
+  animation: awardRowIn 0.42s cubic-bezier(0.16, 1, 0.3, 1) both;
+}
+
+.award-row-item + .award-row-item {
+  border-top: 1px solid rgba(255,255,255,0.05);
+}
+
+.award-row-mark {
+  width: 44px;
+  height: 44px;
+  flex-shrink: 0;
+  display: grid;
+  place-items: center;
+}
+
+.award-row-art {
+  width: 44px;
+  height: 44px;
+  border-radius: 8px;
+  flex-shrink: 0;
+  object-fit: cover;
+  border: 1px solid rgba(255,255,255,0.14);
+}
+
+/* Icon-only awards (Most Correct, Biggest Swing) don't need the taller row
+   the cover-art awards get -- there's no image to give room to, so they
+   fall back to the original compact height and icon-mark size. */
+.award-row-compact {
+  padding: 8px 2px;
+}
+
+.award-row-compact .award-row-mark {
+  width: 30px;
+  height: 30px;
+}
+
+/* Finale winner: an upgraded capstone card rather than a plain divided row
+   -- no leading icon, a gradient wash + glow in the same violet used for its
+   label/stat color, and a bigger name to read as the last, biggest award. */
+.award-row-finale {
+  border-top: none;
+  margin-top: 6px;
+  padding: 14px 16px;
+  border-radius: 14px;
+  background: linear-gradient(135deg, rgba(194,160,217,0.16) 0%, rgba(194,160,217,0.05) 55%, rgba(255,255,255,0.02) 100%);
+  border: 1px solid rgba(194,160,217,0.32);
+  box-shadow: 0 0 28px rgba(194,160,217,0.14);
+}
+
+.award-row-name-finale {
+  font-size: 1.2rem;
+}
+
+.award-row-text {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+  flex: 1;
+  gap: 1px;
+}
+
+.award-row-label {
+  font-size: 0.6rem;
+  font-weight: 800;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+}
+
+.award-row-name {
+  font-size: 0.94rem;
+  font-weight: 800;
+  color: #fff;
+}
+
+.award-row-quote {
+  font-size: 0.78rem;
+  color: rgba(255,255,255,0.45);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* The player's actual guess, called out in the same green used everywhere
+   else a correct answer is confirmed. */
+.award-row-guess {
+  color: #4ade80;
+  font-weight: 700;
+}
+
+.award-row-stat {
+  flex-shrink: 0;
+  font-weight: 900;
+  font-size: 1.15rem;
+  font-family: 'Montserrat', sans-serif;
+  font-variant-numeric: tabular-nums;
+}
+
+@media (max-width: 639px) {
+  .award-row-quote { white-space: normal; }
 }
 
 /* Each keyframe re-states translate(-50%,-50%) alongside the scale — an

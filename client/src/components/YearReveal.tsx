@@ -1,6 +1,17 @@
 import { useEffect, useState } from 'react';
 import type { RoundResultEvent } from '../types';
 import { REEL_STEPS_MS, REEL_LAND_MS, useRevealReelSound } from '../hooks/useRevealReelSound';
+import type { RevealHitTier } from '../hooks/useRevealReelSound';
+
+// Spot-on year guesses get a beefier hit than the routine reveal — and a
+// second exact guess (rare — two people landing the exact year) bumps it
+// again, same "rarer roll, bigger sting" idea as the mystery multiplier tiers.
+function pickYearHitTier(result: RoundResultEvent): RevealHitTier {
+  const exactCount = result.yearResults?.filter(r => r.diff === 0).length ?? 0;
+  if (exactCount > 1) return 3;
+  if (exactCount === 1) return 2;
+  return 1;
+}
 
 // The "guess the year" reveal: a slot-reel that lands on the real year, and
 // the timeline that then builds in underneath it showing where everyone's
@@ -34,7 +45,7 @@ function pickYearCandidate(real: number): number {
 // only differ in sizing. `muted` skips the reveal SFX — both host and player
 // devices render this reel, but on the same table/room they'd otherwise both
 // play reveal_rise/reveal_hit at once, so only the host's copy sounds.
-export function YearHeading({ year, compact, muted = false }: Readonly<{ year: number | string; compact: boolean; muted?: boolean }>) {
+export function YearHeading({ year, compact, muted = false, hitTier = 1 }: Readonly<{ year: number | string; compact: boolean; muted?: boolean; hitTier?: RevealHitTier }>) {
   const isNumber = typeof year === 'number';
   const [display, setDisplay] = useState<number | string>(year);
   const [tick, setTick] = useState(0);
@@ -49,7 +60,7 @@ export function YearHeading({ year, compact, muted = false }: Readonly<{ year: n
       return;
     }
     setLanded(false);
-    if (!muted) playReveal();
+    if (!muted) playReveal(hitTier);
     let cancelled = false;
     let timer: ReturnType<typeof setTimeout>;
     let i = 0;
@@ -71,7 +82,7 @@ export function YearHeading({ year, compact, muted = false }: Readonly<{ year: n
     // it after the first pass leaves the randomly chosen decoy on screen,
     // blurred forever, and makes every device show a different "answer".
     return () => { cancelled = true; clearTimeout(timer); };
-  }, [year, isNumber, muted, playReveal]);
+  }, [year, isNumber, muted, hitTier, playReveal]);
 
   // Same land animation as the mystery chip's non-jackpot roll: flash + a
   // one-shot ring burst off the chip's own box-shadow, so landing on the
@@ -147,7 +158,7 @@ export function YearCardContent({ result, muted = false }: Readonly<{ result: Ro
   const winnerDetail = winner && (winner.diff === 0 ? ' · exact!' : ` (${winner.diff} year${pluralS} off)`);
   return (
     <div style={{ width: '262px', display: 'flex', flexDirection: 'column', alignItems: 'center', textAlign: 'center' }}>
-      <YearHeading year={result.year ? Math.floor(result.year) : '–'} compact muted={muted} />
+      <YearHeading year={result.year ? Math.floor(result.year) : '–'} compact muted={muted} hitTier={pickYearHitTier(result)} />
       {winner && (
         <span style={{
           color: 'rgba(255,255,255,0.5)', fontSize: '0.82rem', marginBottom: '12px', display: 'inline-block', minWidth: '200px',
@@ -296,7 +307,7 @@ export function YearTimelineContent({ result, showGuessValues = true, muted = fa
 
   return (
     <div style={{ width: 'min(84vw, 330px)', display: 'flex', flexDirection: 'column', alignItems: 'center', textAlign: 'center' }}>
-      <YearHeading year={year} compact={false} muted={muted} />
+      <YearHeading year={year} compact={false} muted={muted} hitTier={pickYearHitTier(result)} />
 
       {/* Timeline */}
       <div style={{ position: 'relative', width: '100%', height: `${timelineHeight}px`, marginBottom: '8px' }}>

@@ -38,6 +38,7 @@ export interface PlayState {
   yearOnly: boolean;
   choiceOptions: string[];
   party: PartyInfo | null;
+  introParty: PartyInfo | null;
   artistGuessText: string;
   stealVictims: { name: string; score: number }[] | null;
   stealResult: { thief: string; victim: string; amount: number; skipped?: boolean } | null;
@@ -72,6 +73,15 @@ export interface PlayState {
   renamePlayer: (newName: string) => void;
   waitingTransitionPending: boolean;
   completeWaitingTransition: () => void;
+}
+
+// Finale duelists (or, for underdog rounds, the trailing player(s)) are the
+// only ones who actually get a turn — everyone else just listens along.
+function isRestrictedFromTurn(party: PartyInfo | null, myName: string): boolean {
+  let restricted: string[] | null = null;
+  if (party?.finale) restricted = party.duelists;
+  else if (party?.event === 'underdog') restricted = party.restricted;
+  return !!restricted && !!myName && !restricted.includes(myName);
 }
 
 export function usePlayGame(pinParam?: string): PlayState {
@@ -116,6 +126,12 @@ export function usePlayGame(pinParam?: string): PlayState {
   const [choiceOptions, setChoiceOptions] = useState<string[]>([]);
   const [party, setParty] = useState<PartyInfo | null>(null);
   const partyRef = useRef<PartyInfo | null>(null);
+  // Separate from `party`: only updated on a genuine round start, never on
+  // the `resync` round_start a reconnecting/mid-round-joining client gets
+  // (see server/src/socket/sync.ts) — otherwise a player who steps away and
+  // comes back mid-round would get the full-screen round announcement
+  // replayed over a round already in progress.
+  const [introParty, setIntroParty] = useState<PartyInfo | null>(null);
   const [artistGuessText, setArtistGuessText] = useState('');
   const artistGuessTextRef = useRef('');
   const [stealVictims, setStealVictims] = useState<{ name: string; score: number }[] | null>(null);
@@ -207,6 +223,36 @@ export function usePlayGame(pinParam?: string): PlayState {
     setTimeLeft(0);
   }
 
+  function applyRaceRoundStart(data: { guessingEndsAt?: number; party?: PartyInfo | null }) {
+    setGuesserNames([]);
+    // On a resync mid-guessing window, land on the right phase in this
+    // same render instead of starting on 'watching' and waiting for the
+    // separate `your_turn` message to correct it a moment later — that
+    // gap was visible as a flash of the wait-your-turn UI.
+    if (data.guessingEndsAt) {
+      setSongPlaying(true);
+      startCountdown(data.guessingEndsAt);
+      setPhase(isRestrictedFromTurn(data.party ?? null, myNameRef.current) ? 'watching' : 'guessing');
+    } else {
+      setPhase('watching');
+    }
+  }
+
+  function applyClassicRoundStart(data: { bidOptions?: number[]; bidScores?: number[]; bettingTime?: number; endsAt?: number }) {
+    if (data.bidOptions?.length) {
+      setBidOptions(data.bidOptions);
+      bidOptionsRef.current = data.bidOptions;
+      bidIndexRef.current = Math.min(bidIndexRef.current, data.bidOptions.length - 1);
+      setBidIndex(i => Math.min(i, data.bidOptions!.length - 1));
+    }
+    if (data.bidScores?.length) setBidScores(data.bidScores);
+    setBettingTime(data.bettingTime ?? 15);
+    const endsAt = data.endsAt ?? (Date.now() + (data.bettingTime ?? 15) * 1000);
+    autoSubmitTimerRef.current = setTimeout(autoSubmitBid, endsAt - Date.now());
+    startCountdown(endsAt);
+    setPhase('betting');
+  }
+
   useEffect(() => {
     socket.connect();
 
@@ -252,6 +298,8 @@ export function usePlayGame(pinParam?: string): PlayState {
       party?: PartyInfo;
       bidOptions?: number[]; bidScores?: number[];
       tempo?: number | null;
+      resync?: boolean;
+      guessingEndsAt?: number;
     }) => {
       // A round starting is authoritative — it must win over a still-in-flight
       // waiting-screen morph transition, not get overwritten by it landing late.
@@ -271,6 +319,7 @@ export function usePlayGame(pinParam?: string): PlayState {
       setMyRaceTimeMs(null);
       setParty(data.party ?? null);
       partyRef.current = data.party ?? null;
+      if (!data.resync) setIntroParty(data.party ?? null);
       setStealVictims(null);
       setStealResult(null);
       bidSubmittedRef.current = false;
@@ -288,21 +337,9 @@ export function usePlayGame(pinParam?: string): PlayState {
       setChoiceOptions(data.choiceOptions ?? []);
 
       if (roundMode === 'race') {
-        setGuesserNames([]);
-        setPhase('watching');
+        applyRaceRoundStart(data);
       } else {
-        if (data.bidOptions?.length) {
-          setBidOptions(data.bidOptions);
-          bidOptionsRef.current = data.bidOptions;
-          bidIndexRef.current = Math.min(bidIndexRef.current, data.bidOptions.length - 1);
-          setBidIndex(i => Math.min(i, data.bidOptions!.length - 1));
-        }
-        if (data.bidScores?.length) setBidScores(data.bidScores);
-        setBettingTime(data.bettingTime ?? 15);
-        const endsAt = data.endsAt ?? (Date.now() + (data.bettingTime ?? 15) * 1000);
-        autoSubmitTimerRef.current = setTimeout(autoSubmitBid, endsAt - Date.now());
-        startCountdown(endsAt);
-        setPhase('betting');
+        applyClassicRoundStart(data);
       }
     });
 
@@ -327,11 +364,7 @@ export function usePlayGame(pinParam?: string): PlayState {
       // Finale duelists (or, for underdog rounds, the trailing player(s)) are
       // the only ones who actually get to guess — everyone else just listens
       // along on the watching screen with the song + timer, no input.
-      const p = partyRef.current;
-      let restricted: string[] | null = null;
-      if (p?.finale) restricted = p.duelists;
-      else if (p?.event === 'underdog') restricted = p.restricted;
-      if (restricted && myNameRef.current && !restricted.includes(myNameRef.current)) {
+      if (isRestrictedFromTurn(partyRef.current, myNameRef.current)) {
         setSongPlaying(true);
         startCountdown(data.endsAt ?? (Date.now() + data.timeLimit * 1000));
         return;
@@ -653,7 +686,7 @@ export function usePlayGame(pinParam?: string): PlayState {
     phase, pin, name, myName, error, roundIndex, totalRounds, hints,
     timeLeft, timerTotal, bettingTime, bidIndex, bidOptions, bidScores, myBid, guesserNames, lowestBid,
     guessText, result, myScore, myScoreDelta, myPity, myPityAmount, myBreakdown, myStreak, mode, artistOnly, yearOnly, choiceOptions, myRacePoints, myRaceTimeMs,
-    party, artistGuessText, stealVictims, stealResult,
+    party, introParty, artistGuessText, stealVictims, stealResult,
     leaderboard, leaderboardDeltas, awards, songPlaying, songTempo, reconnecting, hostReconnecting, savedSession, guessInputRef,
     cameFromQR, newGamePin, rejoinNewGame,
     setPin, setName,

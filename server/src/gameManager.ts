@@ -1,6 +1,6 @@
 import { randomInt } from 'node:crypto';
 import {
-  Award, Game, GuessTarget, Player, PlaylistTrackInput, PointsBreakdown, PointsBreakdownPart, Round, Song, YearResult,
+  Award, AwardMoment, Game, GuessTarget, Player, PlaylistTrackInput, PointsBreakdown, PointsBreakdownPart, Round, Song, YearResult,
 } from './types';
 import { isCorrectGuess, isCorrectArtistGuess } from './fuzzyMatch';
 import {
@@ -223,6 +223,8 @@ export function addPlayer(game: Game, socketId: string, name: string): Player | 
     socketId, name: name.trim(), score: former?.score ?? 0, streak: former?.streak ?? 0,
     totalCorrect: former?.totalCorrect ?? 0, totalPasses: former?.totalPasses ?? 0,
     fastestCorrectMs: former?.fastestCorrectMs ?? null, fastestClassicMs: former?.fastestClassicMs ?? null,
+    fastestCorrectMoment: former?.fastestCorrectMoment ?? null,
+    fastestClassicMoment: former?.fastestClassicMoment ?? null,
     biggestSwing: former?.biggestSwing ?? 0,
   };
   game.players.set(socketId, player);
@@ -304,9 +306,10 @@ export function removeSocket(socketId: string): { game: Game; wasHost: boolean }
     const player = game.players.get(socketId);
     if (player) {
       game.formerPlayers.set(player.name.toLowerCase(), {
-        score: player.score, streak: player.streak,
+        name: player.name, score: player.score, streak: player.streak,
         totalCorrect: player.totalCorrect, totalPasses: player.totalPasses,
         fastestCorrectMs: player.fastestCorrectMs, fastestClassicMs: player.fastestClassicMs,
+        fastestCorrectMoment: player.fastestCorrectMoment, fastestClassicMoment: player.fastestClassicMoment,
         biggestSwing: player.biggestSwing,
       });
     }
@@ -496,7 +499,7 @@ function applyClassicWin(
   if (points > player.biggestSwing) player.biggestSwing = points;
   round.scoredSocketIds.add(socketId);
   round.guessTimes.set(socketId, elapsedMs);
-  player.fastestClassicMs = player.fastestClassicMs === null ? elapsedMs : Math.min(player.fastestClassicMs, elapsedMs);
+  recordFastestMoment(player, 'classic', round, elapsedMs, round.guesses.get(socketId) ?? 'Correct guess');
   if (round.party?.event === 'steal') {
     round.stealBy = socketId;
     round.stealDone = false;
@@ -510,6 +513,26 @@ function applyClassicWin(
   game.phase = 'reveal';
   settleStreaks(game, round);
   return { correct: true, points, guesserName, allDone: false };
+}
+
+function recordFastestMoment(
+  player: Player, flow: 'classic' | 'race', round: Round, elapsedMs: number, guess: string,
+): void {
+  const timeKey = flow === 'classic' ? 'fastestClassicMs' : 'fastestCorrectMs';
+  const momentKey = flow === 'classic' ? 'fastestClassicMoment' : 'fastestCorrectMoment';
+  const current = player[timeKey];
+  if (current !== null && elapsedMs > current) return;
+
+  player[timeKey] = elapsedMs;
+  const moment: AwardMoment = {
+    playerName: player.name,
+    guess,
+    songTitle: round.song.title,
+    artist: round.song.artist,
+    coverUrl: round.coverUrl ?? round.song.albumArtUrl ?? undefined,
+    timeMs: elapsedMs,
+  };
+  player[momentKey] = moment;
 }
 
 // A guesser forfeits their turn without guessing. Once every guesser in the
@@ -548,7 +571,7 @@ export function markTierStarted(game: Game): void {
 }
 
 function applyRaceCorrectGuess(
-  game: Game, round: Round, socketId: string, elapsedMs: number, artistBonus: boolean,
+  game: Game, round: Round, socketId: string, elapsedMs: number, artistBonus: boolean, guess: string,
 ): number {
   const isFirst = round.firstCorrectAt === null;
   if (isFirst) round.firstCorrectAt = Date.now();
@@ -579,7 +602,7 @@ function applyRaceCorrectGuess(
     round.stealBy = socketId;
     round.stealDone = false;
   }
-  applyRaceScoreToPlayer(game, round, socketId, elapsedMs, points);
+  applyRaceScoreToPlayer(game, round, socketId, elapsedMs, points, guess);
   recordFinaleRaceWin(game, round, socketId, isFirst);
   // The mystery multiplier stays hidden until everyone sees the shared
   // reveal, so the guesser's own immediate ack can't carry the true
@@ -590,7 +613,7 @@ function applyRaceCorrectGuess(
 }
 
 function applyRaceScoreToPlayer(
-  game: Game, round: Round, socketId: string, elapsedMs: number, points: number,
+  game: Game, round: Round, socketId: string, elapsedMs: number, points: number, guess: string,
 ): void {
   const player = game.players.get(socketId)!;
   player.score += points;
@@ -598,7 +621,7 @@ function applyRaceScoreToPlayer(
     player.streak += 1;
     player.totalCorrect += 1;
     if (points > player.biggestSwing) player.biggestSwing = points;
-    player.fastestCorrectMs = player.fastestCorrectMs === null ? elapsedMs : Math.min(player.fastestCorrectMs, elapsedMs);
+    recordFastestMoment(player, 'race', round, elapsedMs, guess);
     round.scoredSocketIds.add(socketId);
   }
 }
@@ -643,7 +666,7 @@ export function recordRaceGuess(
   const { correct, artistBonus } = checkGuess(target, text, artistText, round.song);
   const trimmedArtist = artistText?.trim();
   if (target === 'both' && trimmedArtist) round.artistGuesses.set(socketId, trimmedArtist);
-  const points = correct ? applyRaceCorrectGuess(game, round, socketId, elapsedMs, artistBonus) : 0;
+  const points = correct ? applyRaceCorrectGuess(game, round, socketId, elapsedMs, artistBonus, text) : 0;
 
   const allDone = ((isWinnerOnlyRound(game, round) || round.party?.finale === true) && correct)
     || participants.every(id => round.passed.has(id));
@@ -703,7 +726,7 @@ function applyChaosHintTap(
     player.streak += 1;
     player.totalCorrect += 1;
     if (points > player.biggestSwing) player.biggestSwing = points;
-    player.fastestCorrectMs = player.fastestCorrectMs === null ? elapsedMs : Math.min(player.fastestCorrectMs, elapsedMs);
+    recordFastestMoment(player, 'race', round, elapsedMs, 'Found the fake hint');
     round.scoredSocketIds.add(socketId);
   }
   recordFinaleRaceWin(game, round, socketId, isFirst);
@@ -1027,10 +1050,90 @@ export function advanceDuelOrResolve(game: Game): boolean {
   return true;
 }
 
+// Active players plus anyone who left for good and never came back — a
+// player who was leading (or fastest, or whatever else awards track) doesn't
+// just vanish off the board because their connection dropped. Skips a
+// formerPlayers entry if someone's currently playing under that same name
+// (they already rejoined, so game.players has the live, current-name copy).
+function playersIncludingFormer(game: Game): Player[] {
+  const active = Array.from(game.players.values());
+  const activeNames = new Set(active.map(p => p.name.toLowerCase()));
+  const departed: Player[] = Array.from(game.formerPlayers.entries())
+    .filter(([lowerName]) => !activeNames.has(lowerName))
+    .map(([lowerName, former]) => ({ socketId: `former:${lowerName}`, ...former }));
+  return [...active, ...departed];
+}
+
 export function getLeaderboard(game: Game) {
-  return Array.from(game.players.values())
+  return playersIncludingFormer(game)
     .sort((a, b) => b.score - a.score)
     .map((p, i) => ({ rank: i + 1, name: p.name, score: p.score }));
+}
+
+function mostCorrectAward(players: Player[]): Award | null {
+  const mostCorrect = Math.max(0, ...players.map(p => p.totalCorrect));
+  if (mostCorrect <= 0) return null;
+  return {
+    key: 'mostCorrect',
+    playerNames: players.filter(p => p.totalCorrect === mostCorrect).map(p => p.name),
+    detail: `${mostCorrect} correct guess${mostCorrect === 1 ? '' : 'es'}`,
+  };
+}
+
+function fastestGuessAward(players: Player[]): Award | null {
+  const timed = players.filter(p => p.fastestCorrectMs !== null);
+  if (timed.length === 0) return null;
+  const fastestMs = Math.min(...timed.map(p => p.fastestCorrectMs!));
+  const winners = timed.filter(p => p.fastestCorrectMs === fastestMs);
+  return {
+    key: 'fastestGuess',
+    playerNames: winners.map(p => p.name),
+    detail: `${(fastestMs / 1000).toFixed(1)}s`,
+    highlights: winners.flatMap(p => p.fastestCorrectMoment ? [p.fastestCorrectMoment] : []),
+  };
+}
+
+// Separate award, not merged with fastestGuessAward: classic's per-tier
+// timing isn't on the same scale as race's shared-clip-start timing, so
+// comparing them directly would be misleading.
+function fastestClassicGuessAward(players: Player[]): Award | null {
+  const timedClassic = players.filter(p => p.fastestClassicMs !== null);
+  if (timedClassic.length === 0) return null;
+  const fastestClassicMs = Math.min(...timedClassic.map(p => p.fastestClassicMs!));
+  const winners = timedClassic.filter(p => p.fastestClassicMs === fastestClassicMs);
+  return {
+    key: 'fastestClassicGuess',
+    playerNames: winners.map(p => p.name),
+    detail: `${(fastestClassicMs / 1000).toFixed(1)}s`,
+    highlights: winners.flatMap(p => p.fastestClassicMoment ? [p.fastestClassicMoment] : []),
+  };
+}
+
+function biggestSwingAward(players: Player[]): Award | null {
+  const biggestSwing = Math.max(0, ...players.map(p => p.biggestSwing));
+  if (biggestSwing <= 0) return null;
+  return {
+    key: 'biggestSwing',
+    playerNames: players.filter(p => p.biggestSwing === biggestSwing).map(p => p.name),
+    detail: `+${biggestSwing.toLocaleString()} in one round`,
+  };
+}
+
+function finaleWinnerAward(game: Game): Award | null {
+  if (!game.duelChampion) return null;
+  const champ = game.players.get(game.duelChampion);
+  if (!champ) return null;
+  const opponentId = game.duelDuelistIds.find(id => id !== game.duelChampion);
+  const opponent = opponentId ? game.players.get(opponentId) : undefined;
+  const champWins = game.duelWins[game.duelChampion] ?? 2;
+  const opponentWins = opponentId ? game.duelWins[opponentId] ?? 0 : 0;
+  return {
+    key: 'finaleWinner',
+    playerNames: [champ.name],
+    detail: opponent
+      ? `Beat ${opponent.name} ${champWins}\u2013${opponentWins} in the finale duel`
+      : 'Won the finale duel',
+  };
 }
 
 // End-of-game superlatives, computed once the game's over. Ties share the
@@ -1038,56 +1141,15 @@ export function getLeaderboard(game: Game) {
 // count as an achievement, so an award is omitted entirely if nobody
 // actually did the thing (e.g. nobody ever guessed correctly).
 export function computeAwards(game: Game): Award[] {
-  const players = Array.from(game.players.values());
-  const awards: Award[] = [];
-
-  const mostCorrect = Math.max(0, ...players.map(p => p.totalCorrect));
-  if (mostCorrect > 0) {
-    awards.push({
-      key: 'mostCorrect',
-      playerNames: players.filter(p => p.totalCorrect === mostCorrect).map(p => p.name),
-      detail: `${mostCorrect} correct guess${mostCorrect === 1 ? '' : 'es'}`,
-    });
-  }
-
-  const timed = players.filter(p => p.fastestCorrectMs !== null);
-  if (timed.length > 0) {
-    const fastestMs = Math.min(...timed.map(p => p.fastestCorrectMs!));
-    awards.push({
-      key: 'fastestGuess',
-      playerNames: timed.filter(p => p.fastestCorrectMs === fastestMs).map(p => p.name),
-      detail: `${(fastestMs / 1000).toFixed(1)}s`,
-    });
-  }
-
-  // Separate award, not merged with the race-flow one above: classic's
-  // per-tier timing isn't on the same scale as race's shared-clip-start
-  // timing, so comparing them directly would be misleading.
-  const timedClassic = players.filter(p => p.fastestClassicMs !== null);
-  if (timedClassic.length > 0) {
-    const fastestClassicMs = Math.min(...timedClassic.map(p => p.fastestClassicMs!));
-    awards.push({
-      key: 'fastestClassicGuess',
-      playerNames: timedClassic.filter(p => p.fastestClassicMs === fastestClassicMs).map(p => p.name),
-      detail: `${(fastestClassicMs / 1000).toFixed(1)}s`,
-    });
-  }
-
-  const biggestSwing = Math.max(0, ...players.map(p => p.biggestSwing));
-  if (biggestSwing > 0) {
-    awards.push({
-      key: 'biggestSwing',
-      playerNames: players.filter(p => p.biggestSwing === biggestSwing).map(p => p.name),
-      detail: `+${biggestSwing.toLocaleString()} in one round`,
-    });
-  }
-
-  if (game.duelChampion) {
-    const champ = game.players.get(game.duelChampion);
-    if (champ) awards.push({ key: 'finaleWinner', playerNames: [champ.name], detail: 'Won the finale duel' });
-  }
-
-  return awards;
+  const players = playersIncludingFormer(game);
+  const awards = [
+    mostCorrectAward(players),
+    fastestGuessAward(players),
+    fastestClassicGuessAward(players),
+    biggestSwingAward(players),
+    finaleWinnerAward(game),
+  ];
+  return awards.filter((a): a is Award => a !== null);
 }
 
 export function updateSocketPin(socketId: string, pin: string) {

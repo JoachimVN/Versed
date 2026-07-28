@@ -6,8 +6,16 @@ import { useState, useEffect } from 'react';
 // away the size of the bonus while the reel is still spinning. When set,
 // displayDelta starts at 0 and only becomes real once the delayed count-up
 // begins, exactly the moment the reel has landed.
-export function useAnimatedScore(finalScore: number, delta: number, startDelay: number, instant = false, holdDelta = false) {
-  const [displayScore, setDisplayScore] = useState(finalScore);
+export function useAnimatedScore(
+  finalScore: number,
+  delta: number,
+  startDelay: number,
+  instant = false,
+  holdDelta = false,
+  duration = 900,
+  bufferDelay = 1000,
+) {
+  const [displayScore, setDisplayScore] = useState(() => (instant || delta === 0 ? finalScore : finalScore - delta));
   const [displayDelta, setDisplayDelta] = useState(holdDelta ? 0 : delta);
   const [deltaFading, setDeltaFading] = useState(false);
   const [revealed, setRevealed] = useState(!holdDelta);
@@ -27,7 +35,6 @@ export function useAnimatedScore(finalScore: number, delta: number, startDelay: 
     }
 
     const startScore = finalScore - delta;
-    const DURATION = 900;
     let rafId = 0;
     let startTime = -1;
 
@@ -35,7 +42,7 @@ export function useAnimatedScore(finalScore: number, delta: number, startDelay: 
       setRevealed(true);
       const step = (now: number) => {
         if (startTime < 0) startTime = now;
-        const t = Math.min((now - startTime) / DURATION, 1);
+        const t = Math.min((now - startTime) / duration, 1);
         const ease = 1 - (1 - t) ** 3; // ease-out cubic
         const current = Math.round(startScore + delta * ease);
         setDisplayScore(current);
@@ -49,7 +56,7 @@ export function useAnimatedScore(finalScore: number, delta: number, startDelay: 
         }
       };
       rafId = requestAnimationFrame(step);
-    }, startDelay + 1000);
+    }, startDelay + bufferDelay);
 
     return () => {
       clearTimeout(timeoutId);
@@ -57,7 +64,7 @@ export function useAnimatedScore(finalScore: number, delta: number, startDelay: 
     };
     // round_result mounts this before score_update delivers the real delta/score,
     // so the animation must restart once those props catch up to their real values.
-  }, [finalScore, delta, startDelay, instant, holdDelta]);
+  }, [finalScore, delta, startDelay, instant, holdDelta, duration]);
 
   return { displayScore, displayDelta, deltaFading, revealed };
 }

@@ -2,7 +2,7 @@ import { useNavigate } from 'react-router';
 import LiquidGlass from '../../components/StableLiquidGlass';
 import { RankBadge } from '../../components/RankBadge';
 import { useAnimatedScore } from '../../hooks/useAnimatedScore';
-import { FinalResultsView } from '../../components/FinalResults';
+import { FinalResultsPlayerView } from '../../components/FinalResultsPlayer';
 import { LIQUID_PILL_PROPS } from '../../components/liquidGlassPresets';
 import type { LeaderboardEntry } from '../../types';
 import type { PlayState } from './usePlayGame';
@@ -138,11 +138,11 @@ function FinalResultsFooter({ game }: Readonly<{ game: PlayState }>) {
 export function FinalResultsWrapper({ game }: Readonly<{ game: PlayState }>) {
   const { leaderboard, awards, myName } = game;
   return (
-    <FinalResultsView
+    <FinalResultsPlayerView
       leaderboard={leaderboard}
       awards={awards}
       myName={myName}
-      backgroundSrc={`${import.meta.env.BASE_URL}backgrounds/background5.svg`}
+      backgroundSrc={`${import.meta.env.BASE_URL}backgrounds/background7.png`}
       footer={<FinalResultsFooter game={game} />}
     />
   );

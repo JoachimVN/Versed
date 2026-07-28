@@ -28,6 +28,16 @@ export interface Award {
   key: 'mostCorrect' | 'fastestGuess' | 'fastestClassicGuess' | 'biggestSwing' | 'finaleWinner';
   playerNames: string[];
   detail: string;
+  highlights?: AwardMoment[];
+}
+
+export interface AwardMoment {
+  playerName: string;
+  guess: string;
+  songTitle: string;
+  artist: string;
+  coverUrl?: string;
+  timeMs: number;
 }
 
 export interface PlayerInfo {
