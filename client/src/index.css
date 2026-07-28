@@ -160,6 +160,10 @@ select:focus-visible,
 .glass-tint-cyan > .liquid-glass-stabilizer > :nth-child(5) {
   box-shadow: 0 0 0 1px rgba(0,238,232,0.35) inset, 0 1px 4px rgba(0,0,0,0.35) !important;
 }
+.glass-tint-blue > .liquid-glass-stabilizer > :nth-child(4),
+.glass-tint-blue > .liquid-glass-stabilizer > :nth-child(5) {
+  box-shadow: 0 0 0 1px rgba(59,130,246,0.18) inset, 0 1px 4px rgba(0,0,0,0.35) !important;
+}
 
 /* Volume control's edge ring at half strength — opacity (not just the
    box-shadow tint above) so the library's own white cursor-tracking sheen on

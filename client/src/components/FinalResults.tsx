@@ -665,7 +665,7 @@ export function FinalResultsView({ leaderboard, awards, backgroundSrc, footer }:
   ]);
 
   return (
-    <div className="relative min-h-screen flex flex-col p-6 gap-4">
+    <div className="relative h-[100lvh] flex flex-col p-6 gap-4">
       <BackgroundLayer
         backgroundSrc={backgroundSrc}
         showConfetti={showConfetti}
@@ -709,7 +709,7 @@ export function FinalResultsView({ leaderboard, awards, backgroundSrc, footer }:
             className="relative z-10 flex-1 min-h-0 overflow-y-auto flex"
             style={{ animation: 'settledIn 0.5s cubic-bezier(0.16,1,0.3,1) 0.1s both' }}
           >
-            <div className="liquid-btn relative" style={{ width: 'min(94vw, 720px)', height: `${panelHeight}px`, margin: 'auto' }}>
+            <div className="liquid-btn glass-tint-blue relative" style={{ width: 'min(94vw, 720px)', height: `${panelHeight}px`, margin: 'auto' }}>
               <LiquidGlass
                 style={{ position: 'absolute', top: '50%', left: '50%' }}
                 {...LIQUID_CARD_PROPS}

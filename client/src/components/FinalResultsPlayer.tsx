@@ -96,7 +96,7 @@ export function FinalResultsPlayerView({ leaderboard, awards, myName, background
   ]);
 
   return (
-    <div className="relative min-h-screen flex flex-col p-6 gap-4">
+    <div className="relative h-[100lvh] flex flex-col p-6 gap-4">
       <BackgroundLayer backgroundSrc={backgroundSrc} showConfetti={!reducedMotion && settled} hueDeg={settled ? HUE_PLAYER_SETTLED : HUE_BRONZE} />
 
       {!settled && (
@@ -115,7 +115,7 @@ export function FinalResultsPlayerView({ leaderboard, awards, myName, background
         <div className="relative z-10 flex flex-col flex-1 min-h-0 gap-4 page-enter-fade">
           {myEntry && <PersonalHero entry={myEntry} awards={awards} reducedMotion={reducedMotion} />}
           <div className="flex-1 min-h-0 overflow-y-auto flex">
-            <div className="liquid-btn relative" style={{ width: 'min(94vw, 520px)', height: `${panelHeight}px`, margin: 'auto' }}>
+            <div className="liquid-btn glass-tint-blue relative" style={{ width: 'min(94vw, 520px)', height: `${panelHeight}px`, margin: 'auto' }}>
               <LiquidGlass
                 style={{ position: 'absolute', top: '50%', left: '50%' }}
                 {...LIQUID_CARD_PROPS}
