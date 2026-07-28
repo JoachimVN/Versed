@@ -372,6 +372,13 @@ select:focus-visible,
   to { opacity: 1; transform: translateY(0); }
 }
 
+/* Hold-to-skip progress fill (FinalResults.tsx) -- scales up from the left
+   edge over the hold duration, same idiom as a video player's seek buffer. */
+@keyframes holdToSkipFill {
+  from { transform: scaleX(0); }
+  to { transform: scaleX(1); }
+}
+
 /* ─── Final-results unified recap panel ─────────────────────────────────
    Podium, standings, and awards share one liquid-glass surface as three
    plain, divider-separated sections instead of a stack of separately-boxed

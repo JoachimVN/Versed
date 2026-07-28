@@ -55,6 +55,7 @@ document.addEventListener('keydown', resumeContext);
 export function useFinalResultsRevealSound(podiumCount = 3) {
   const [ready, setReady] = useState(false);
   const sourceRef = useRef<AudioBufferSourceNode | null>(null);
+  const gainRef = useRef<GainNode | null>(null);
 
   useEffect(() => {
     let active = true;
@@ -67,9 +68,29 @@ export function useFinalResultsRevealSound(podiumCount = 3) {
   const stop = useCallback(() => {
     const source = sourceRef.current;
     sourceRef.current = null;
+    gainRef.current = null;
     if (source) {
       try { source.stop(); } catch { /* source may already have ended */ }
     }
+  }, []);
+
+  // Skipping the ceremony shouldn't cut the score off mid-note -- ramps the
+  // currently playing source's gain to silence over `durationMs`, then stops
+  // it, instead of stop()'s instant cut.
+  const fadeOut = useCallback((durationMs = 450) => {
+    const source = sourceRef.current;
+    const gain = gainRef.current;
+    sourceRef.current = null;
+    gainRef.current = null;
+    if (!source || !gain) return;
+    const context = getAudioContext();
+    const now = context.currentTime;
+    gain.gain.cancelScheduledValues(now);
+    gain.gain.setValueAtTime(gain.gain.value, now);
+    gain.gain.linearRampToValueAtTime(0, now + durationMs / 1000);
+    setTimeout(() => {
+      try { source.stop(); } catch { /* source may already have ended */ }
+    }, durationMs + 30);
   }, []);
 
   const play = useCallback(() => {
@@ -80,12 +101,16 @@ export function useFinalResultsRevealSound(podiumCount = 3) {
       if (cancelled) return;
       const context = getAudioContext();
       const source = context.createBufferSource();
+      const gain = context.createGain();
       source.buffer = buffer;
-      source.connect(context.destination);
+      source.connect(gain);
+      gain.connect(context.destination);
       source.onended = () => {
         if (sourceRef.current === source) sourceRef.current = null;
+        if (gainRef.current === gain) gainRef.current = null;
       };
       sourceRef.current = source;
+      gainRef.current = gain;
       source.start();
     }).catch(() => {});
 
@@ -97,5 +122,5 @@ export function useFinalResultsRevealSound(podiumCount = 3) {
 
   useEffect(() => stop, [stop]);
 
-  return { ready, play };
+  return { ready, play, fadeOut };
 }

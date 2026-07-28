@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import type { ReactNode } from 'react';
 import LiquidGlass from './StableLiquidGlass';
 import { useAnimatedScore } from '../hooks/useAnimatedScore';
@@ -46,6 +46,11 @@ const HOLD_CHAMPION = 8 * FINAL_RESULTS_BEAT_MS;
 // into the recap. The full phrase is: 2 + 7 + 1 + 7 + 1 + 8 + 2 = 28 beats.
 const SWEEP_DURATION_MS = FINAL_RESULTS_BEAT_MS;
 const SETTLE_DURATION_MS = 2 * FINAL_RESULTS_BEAT_MS;
+
+// How long a press-and-hold takes to skip the ceremony. Long enough that a
+// stray tap can't trigger it by accident, short enough not to feel like a
+// second wait on top of the one being skipped.
+const HOLD_TO_SKIP_MS = 700;
 
 // The score windows below are intentionally not all on the same downbeat.
 // They match the supplied 112-BPM sound-design cue sheet, whose transport
@@ -608,22 +613,61 @@ export function FinalResultsView({ leaderboard, awards, backgroundSrc, footer }:
   const rest = useMemo(() => leaderboard.slice(podium.length), [leaderboard, podium]);
 
   const [stage, setStage] = useState<Stage>(reducedMotion ? 'settled' : 'dark');
-  const { play: playFinalResultsReveal } = useFinalResultsRevealSound(podium.length);
+  const { play: playFinalResultsReveal, fadeOut: fadeOutRevealAudio } = useFinalResultsRevealSound(podium.length);
+
+  // Holds every pending stage timer -- both the normal ceremony timeline
+  // below and the skip handler's own settle timer -- so a skip mid-ceremony
+  // can cancel whatever's still scheduled instead of racing it.
+  const stageTimersRef = useRef<ReturnType<typeof setTimeout>[]>([]);
+  const skippedRef = useRef(false);
 
   useEffect(() => {
     if (reducedMotion || podium.length === 0) { setStage('settled'); return; }
     setStage('dark');
+    skippedRef.current = false;
     const stopRevealAudio = playFinalResultsReveal();
     const timeline = buildTimeline(podium.length);
-    const timers = timeline.map(step => setTimeout(() => setStage(step.stage), step.delay));
+    stageTimersRef.current = timeline.map(step => setTimeout(() => setStage(step.stage), step.delay));
     // Cleanup fires on unmount (leaving the finished screen, or the host
     // starting a new game unmounts this component when the phase changes
     // away) so a stale timer can never fire into gone/replaced state.
     return () => {
-      timers.forEach(clearTimeout);
+      stageTimersRef.current.forEach(clearTimeout);
+      stageTimersRef.current = [];
       stopRevealAudio();
     };
   }, [leaderboard, podium, reducedMotion, playFinalResultsReveal]);
+
+  // Jumps straight to the same sweep-then-settle tail the ceremony already
+  // ends on, rather than a hard cut, so a skip from any point still lands
+  // the same way the unskipped ceremony would have.
+  const handleSkip = useCallback(() => {
+    if (skippedRef.current) return;
+    skippedRef.current = true;
+    stageTimersRef.current.forEach(clearTimeout);
+    fadeOutRevealAudio();
+    setStage('sweepToSettled');
+    stageTimersRef.current = [setTimeout(() => setStage('settled'), SETTLE_DURATION_MS)];
+  }, [fadeOutRevealAudio]);
+
+  const [holding, setHolding] = useState(false);
+  const holdTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  const cancelHold = useCallback(() => {
+    if (holdTimerRef.current) { clearTimeout(holdTimerRef.current); holdTimerRef.current = null; }
+    setHolding(false);
+  }, []);
+
+  const startHold = useCallback(() => {
+    setHolding(true);
+    holdTimerRef.current = setTimeout(() => {
+      holdTimerRef.current = null;
+      setHolding(false);
+      handleSkip();
+    }, HOLD_TO_SKIP_MS);
+  }, [handleSkip]);
+
+  useEffect(() => () => { if (holdTimerRef.current) clearTimeout(holdTimerRef.current); }, []);
 
   const announcement = useMemo(() => {
     if (reducedMotion) {
@@ -683,6 +727,35 @@ export function FinalResultsView({ leaderboard, awards, backgroundSrc, footer }:
       />
 
       <div aria-live="polite" className="sr-only">{announcement}</div>
+
+      {!settled && (
+        <div
+          className="fixed inset-0"
+          style={{ zIndex: 25, cursor: 'pointer' }}
+          onPointerDown={startHold}
+          onPointerUp={cancelHold}
+          onPointerLeave={cancelHold}
+          onPointerCancel={cancelHold}
+        />
+      )}
+
+      {holding && (
+        <div
+          className="fixed flex items-center gap-2"
+          style={{ bottom: '28px', right: '28px', zIndex: 26, pointerEvents: 'none' }}
+        >
+          <span className="text-white/70 font-bold text-xs uppercase tracking-[0.14em]">Hold to skip</span>
+          <div style={{ width: '64px', height: '4px', borderRadius: '2px', background: 'rgba(255,255,255,0.18)', overflow: 'hidden' }}>
+            <div
+              style={{
+                width: '100%', height: '100%', background: 'rgba(255,255,255,0.9)',
+                transformOrigin: 'left', transform: 'scaleX(0)',
+                animation: `holdToSkipFill ${HOLD_TO_SKIP_MS}ms linear forwards`,
+              }}
+            />
+          </div>
+        </div>
+      )}
 
       {!settled && (
         <div className="relative flex-1 flex items-center justify-center" style={{ zIndex: 21 }}>
