@@ -30,7 +30,7 @@ const RANK_STYLE: Record<PodiumRank, { tint: string; gradient: string; label: st
 };
 
 const INTRO_DELAY = 650;
-const HOLD_MINOR = 1850;
+const HOLD_MINOR = 2400;
 // Silver's hold runs longer than bronze's -- this is the beat right before
 // the champion, giving that reveal a bit more suspense than the others.
 const HOLD_SILVER = 3000;
