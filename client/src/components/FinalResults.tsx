@@ -102,14 +102,15 @@ function isSweepStage(stage: Stage): stage is SweepStage {
 
 const N_BARS = 44;
 const BAR_STOPS: [number, number, number][] = [[0, 166, 163], [60, 44, 102], [158, 18, 204]];
+const GOLD_BAR_STOPS: [number, number, number][] = [[243, 196, 103], [248, 207, 104], [201, 134, 34]];
 const SETTLE_DECAY_MS = 650;
 
-function barColor(i: number, n: number): string {
+function barColor(i: number, n: number, stops = BAR_STOPS): string {
   const t = i / (n - 1);
   const seg = t < 0.5 ? 0 : 1;
   const localT = t < 0.5 ? t / 0.5 : (t - 0.5) / 0.5;
-  const [r1, g1, b1] = BAR_STOPS[seg];
-  const [r2, g2, b2] = BAR_STOPS[seg + 1];
+  const [r1, g1, b1] = stops[seg];
+  const [r2, g2, b2] = stops[seg + 1];
   const r = Math.round(r1 + (r2 - r1) * localT);
   const g = Math.round(g1 + (g2 - g1) * localT);
   const b = Math.round(b1 + (b2 - b1) * localT);
@@ -168,6 +169,7 @@ function EqStrip({ stage, reducedMotion }: Readonly<{ stage: Stage; reducedMotio
   const barRefs = useRef<(HTMLDivElement | null)[]>([]);
   const stageStartRef = useRef(performance.now());
   const settled = stage === 'settled';
+  const showGold = stage === 'sweepToGold' || stage === 'gold' || stage === 'sweepToSettled' || stage === 'settled';
 
   useEffect(() => { stageStartRef.current = performance.now(); }, [stage]);
 
@@ -216,11 +218,25 @@ function EqStrip({ stage, reducedMotion }: Readonly<{ stage: Stage; reducedMotio
           key={i}
           ref={el => { barRefs.current[i] = el; }}
           style={{
-            flex: 1, minWidth: '2px', height: '100%', borderRadius: '2px 2px 0 0',
+            flex: 1, minWidth: '2px', height: '100%', borderRadius: '2px 2px 0 0', position: 'relative', overflow: 'hidden',
             transform: 'scaleY(0.04)', transformOrigin: 'bottom', opacity: 0.5,
-            background: `linear-gradient(180deg, ${barColor(i, N_BARS)}, transparent)`,
           }}
-        />
+        >
+          <div
+            style={{
+              position: 'absolute', inset: 0,
+              background: `linear-gradient(180deg, ${barColor(i, N_BARS, BAR_STOPS)}, transparent)`,
+              opacity: showGold ? 0 : 1, transition: 'opacity 0.62s ease',
+            }}
+          />
+          <div
+            style={{
+              position: 'absolute', inset: 0,
+              background: `linear-gradient(180deg, ${barColor(i, N_BARS, GOLD_BAR_STOPS)}, transparent)`,
+              opacity: showGold ? 1 : 0, transition: 'opacity 0.62s ease',
+            }}
+          />
+        </div>
       ))}
     </div>
   );
