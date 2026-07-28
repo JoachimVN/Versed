@@ -51,7 +51,7 @@ document.addEventListener('keydown', resumeContext);
 // game's audio (measured via ffmpeg loudnorm: ~-26 to -28 LUFS, vs -22 at the
 // top of the game's usual range) — boosted here rather than re-exporting the
 // source files, since it's a single constant to re-tune.
-const FINAL_RESULTS_GAIN = 1.8;
+const FINAL_RESULTS_GAIN = 2.5;
 
 /**
  * Preloads and plays the one-piece final-results score. `play()` returns a
