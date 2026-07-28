@@ -102,7 +102,10 @@ function isSweepStage(stage: Stage): stage is SweepStage {
 
 const N_BARS = 44;
 const BAR_STOPS: [number, number, number][] = [[0, 166, 163], [60, 44, 102], [158, 18, 204]];
+const BRONZE_BAR_STOPS: [number, number, number][] = [[125, 232, 221], [31, 192, 181], [0, 133, 132]];
+const SILVER_BAR_STOPS: [number, number, number][] = [[227, 213, 251], [178, 141, 237], [120, 65, 178]];
 const GOLD_BAR_STOPS: [number, number, number][] = [[243, 196, 103], [248, 207, 104], [201, 134, 34]];
+const EQ_PALETTES = [BAR_STOPS, BRONZE_BAR_STOPS, SILVER_BAR_STOPS, GOLD_BAR_STOPS];
 const SETTLE_DECAY_MS = 650;
 
 function barColor(i: number, n: number, stops = BAR_STOPS): string {
@@ -165,11 +168,18 @@ function computeEnergy(stage: Stage, sinceStage: number): number {
   return AMBIENT_ENERGY;
 }
 
+function eqStopsForStage(stage: Stage) {
+  if (stage === 'bronze') return BRONZE_BAR_STOPS;
+  if (stage === 'sweepToSilver' || stage === 'silver') return SILVER_BAR_STOPS;
+  if (stage === 'sweepToGold' || stage === 'gold' || stage === 'sweepToSettled' || stage === 'settled') return GOLD_BAR_STOPS;
+  return BAR_STOPS;
+}
+
 function EqStrip({ stage, reducedMotion }: Readonly<{ stage: Stage; reducedMotion: boolean }>) {
   const barRefs = useRef<(HTMLDivElement | null)[]>([]);
   const stageStartRef = useRef(performance.now());
   const settled = stage === 'settled';
-  const showGold = stage === 'sweepToGold' || stage === 'gold' || stage === 'sweepToSettled' || stage === 'settled';
+  const activeStops = eqStopsForStage(stage);
 
   useEffect(() => { stageStartRef.current = performance.now(); }, [stage]);
 
@@ -222,20 +232,16 @@ function EqStrip({ stage, reducedMotion }: Readonly<{ stage: Stage; reducedMotio
             transform: 'scaleY(0.04)', transformOrigin: 'bottom', opacity: 0.5,
           }}
         >
-          <div
-            style={{
-              position: 'absolute', inset: 0,
-              background: `linear-gradient(180deg, ${barColor(i, N_BARS, BAR_STOPS)}, transparent)`,
-              opacity: showGold ? 0 : 1, transition: 'opacity 0.62s ease',
-            }}
-          />
-          <div
-            style={{
-              position: 'absolute', inset: 0,
-              background: `linear-gradient(180deg, ${barColor(i, N_BARS, GOLD_BAR_STOPS)}, transparent)`,
-              opacity: showGold ? 1 : 0, transition: 'opacity 0.62s ease',
-            }}
-          />
+          {EQ_PALETTES.map(stops => (
+            <div
+              key={stops[0].join('-')}
+              style={{
+                position: 'absolute', inset: 0,
+                background: `linear-gradient(180deg, ${barColor(i, N_BARS, stops)}, transparent)`,
+                opacity: stops === activeStops ? 1 : 0, transition: 'opacity 0.62s ease',
+              }}
+            />
+          ))}
         </div>
       ))}
     </div>
