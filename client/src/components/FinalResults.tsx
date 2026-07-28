@@ -3,7 +3,7 @@ import type { ReactNode } from 'react';
 import { RankBadge } from './RankBadge';
 import LiquidGlass from './StableLiquidGlass';
 import { useAnimatedScore } from '../hooks/useAnimatedScore';
-import { ConfettiBackground, GOLD_CONFETTI_COLORS } from './ConfettiBackground';
+import { CONFETTI_COLORS, ConfettiBackground, GOLD_CONFETTI_COLORS } from './ConfettiBackground';
 import { AwardsStrip, AWARD_LABELS } from './RevealShared';
 import { LIQUID_CARD_PROPS } from './liquidGlassPresets';
 import type { Award, LeaderboardEntry } from '../types';
@@ -188,7 +188,7 @@ function EqStrip({ stage, reducedMotion }: Readonly<{ stage: Stage; reducedMotio
       barRefs.current.forEach((el, i) => {
         if (!el) return;
         el.style.transform = `scaleY(${settled ? 0 : (0.06 + 0.02 * Math.sin(i * 0.6)).toFixed(3)})`;
-        el.style.opacity = settled ? '0' : '0.3';
+        el.style.opacity = settled ? '0' : '0.06';
       });
       return;
     }
@@ -205,7 +205,7 @@ function EqStrip({ stage, reducedMotion }: Readonly<{ stage: Stage; reducedMotio
         const wave = 0.55 + 0.45 * Math.sin(now * 0.006 - i * 0.28);
         const amp = decay * (0.04 + energy * Math.max(0, wave));
         el.style.transform = `scaleY(${amp.toFixed(3)})`;
-        el.style.opacity = (decay * (0.35 + energy * 0.5)).toFixed(2);
+        el.style.opacity = (decay * (0.06 + energy * 0.16)).toFixed(2);
       });
       if (settled && decay === 0) return;
       rafId = requestAnimationFrame(tick);
@@ -278,10 +278,12 @@ const STAGE_HUE: Record<Stage, number> = {
 const OVERLAY_ALPHA_REST = 0.85;
 const OVERLAY_ALPHA_WINNER = 0.90;
 
-export function BackgroundLayer({ backgroundSrc, showConfetti, confettiEntrance = false, hueDeg = HUE_BRONZE, overlayAlpha = OVERLAY_ALPHA_REST }: Readonly<{
+export function BackgroundLayer({ backgroundSrc, showConfetti, confettiEntrance = false, confettiColors = GOLD_CONFETTI_COLORS, confettiSpeedMultiplier = 3, hueDeg = HUE_BRONZE, overlayAlpha = OVERLAY_ALPHA_REST }: Readonly<{
   backgroundSrc: string;
   showConfetti: boolean;
   confettiEntrance?: boolean;
+  confettiColors?: readonly string[];
+  confettiSpeedMultiplier?: number;
   hueDeg?: number;
   overlayAlpha?: number;
 }>) {
@@ -307,7 +309,7 @@ export function BackgroundLayer({ backgroundSrc, showConfetti, confettiEntrance 
             animation: confettiEntrance ? 'championConfettiIn 1.15s cubic-bezier(0.16, 1, 0.3, 1) both' : undefined,
           }}
         >
-          <ConfettiBackground burst persistAfterBurst speedMultiplier={3} colors={GOLD_CONFETTI_COLORS} />
+          <ConfettiBackground burst persistAfterBurst speedMultiplier={confettiSpeedMultiplier} colors={confettiColors} />
         </div>
       )}
     </>
@@ -557,6 +559,10 @@ export function FinalResultsView({ leaderboard, awards, backgroundSrc, footer }:
   const settling = stage === 'sweepToSettled';
   const dark = stage === 'dark';
   const showConfetti = !reducedMotion && (stage === 'gold' || settling || settled);
+  // Set to true to restore the EQ strip after this no-strip visual comparison.
+  const showEq = false;
+  const confettiSpeedMultiplier = settling || settled ? 1 : 3;
+  const confettiColors = settled ? CONFETTI_COLORS : GOLD_CONFETTI_COLORS;
   const hueDeg = STAGE_HUE[stage];
   const overlayAlpha = stage === 'gold' ? OVERLAY_ALPHA_WINNER : OVERLAY_ALPHA_REST;
 
@@ -566,10 +572,12 @@ export function FinalResultsView({ leaderboard, awards, backgroundSrc, footer }:
         backgroundSrc={backgroundSrc}
         showConfetti={showConfetti}
         confettiEntrance={stage === 'gold'}
+        confettiColors={confettiColors}
+        confettiSpeedMultiplier={confettiSpeedMultiplier}
         hueDeg={hueDeg}
         overlayAlpha={overlayAlpha}
       />
-      <EqStrip stage={stage} reducedMotion={reducedMotion} />
+      {showEq && <EqStrip stage={stage} reducedMotion={reducedMotion} />}
 
       <div
         className="fixed inset-0 pointer-events-none"

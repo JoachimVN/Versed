@@ -6,12 +6,13 @@ interface Particle {
   w: number; h: number;
   rot: number; rotV: number;
   color: string;
+  fromColor?: string;
   circle: boolean;
   alpha: number;
   initialAlpha: number;
 }
 
-const COLORS = [
+export const CONFETTI_COLORS = [
   '#00a6a3', '#00b5a3',           // teals
   '#9e12cc', '#804a92',            // purples
   '#c84ee8',                       // bright violet
@@ -24,13 +25,21 @@ export const GOLD_CONFETTI_COLORS = [
   '#c98622', '#fff5cf', '#b8731f',
 ];
 const COUNT = 120;
+const COLOR_TRANSITION_MS = 650;
 
 function seededRand(seed: number) {
   let s = seed;
   return () => { s = (s * 1664525 + 1013904223) >>> 0; return s / 0xffffffff; };
 }
 
-function makeParticle(W: number, H: number, scattered = false, rand: () => number = Math.random, colors: readonly string[] = COLORS): Particle {
+function mixHexColors(from: string, to: string, progress: number): string {
+  const fromValue = Number.parseInt(from.slice(1), 16);
+  const toValue = Number.parseInt(to.slice(1), 16);
+  const mix = (shift: number) => Math.round(((fromValue >> shift) & 0xff) + ((((toValue >> shift) & 0xff) - ((fromValue >> shift) & 0xff)) * progress));
+  return `rgb(${mix(16)}, ${mix(8)}, ${mix(0)})`;
+}
+
+function makeParticle(W: number, H: number, scattered = false, rand: () => number = Math.random, colors: readonly string[] = CONFETTI_COLORS): Particle {
   const circle = rand() > 0.72;
   const alpha = 0.55 + rand() * 0.45;
   return {
@@ -76,8 +85,12 @@ export function restoreConfettiField() {
   _restoreFieldVersion++;
 }
 
-export function ConfettiBackground({ burst = false, persistAfterBurst = false, speedMultiplier = 1, colors = COLORS }: Readonly<{ burst?: boolean; persistAfterBurst?: boolean; speedMultiplier?: number; colors?: readonly string[] }>) {
+export function ConfettiBackground({ burst = false, persistAfterBurst = false, speedMultiplier = 1, colors = CONFETTI_COLORS }: Readonly<{ burst?: boolean; persistAfterBurst?: boolean; speedMultiplier?: number; colors?: readonly string[] }>) {
   const canvasRef = useRef<HTMLCanvasElement>(null);
+  const speedMultiplierRef = useRef(speedMultiplier);
+  const colorsRef = useRef(colors);
+  speedMultiplierRef.current = speedMultiplier;
+  colorsRef.current = colors;
 
   useEffect(() => {
     const canvas = canvasRef.current;
@@ -106,6 +119,21 @@ export function ConfettiBackground({ burst = false, persistAfterBurst = false, s
     const reduced = globalThis.matchMedia('(prefers-reduced-motion: reduce)').matches;
     const rand = reduced ? seededRand(0x5eed42) : Math.random;
     const particles: Particle[] = Array.from({ length: COUNT }, () => makeParticle(W, H, true, rand, colors));
+    let appliedColors = colors;
+    let colorTransitionStart: number | null = null;
+    let colorTransitionProgress = 1;
+
+    const syncColors = (now: number) => {
+      const nextColors = colorsRef.current;
+      if (nextColors === appliedColors) return;
+      appliedColors = nextColors;
+      for (const particle of particles) {
+        particle.fromColor = particle.color;
+        particle.color = nextColors[Math.floor(rand() * nextColors.length)];
+      }
+      colorTransitionStart = now;
+      colorTransitionProgress = 0;
+    };
 
     const render = () => {
       ctx.clearRect(0, 0, W, H);
@@ -114,7 +142,7 @@ export function ConfettiBackground({ burst = false, persistAfterBurst = false, s
         ctx.globalAlpha = p.alpha;
         ctx.translate(p.x, p.y);
         ctx.rotate(p.rot);
-        ctx.fillStyle = p.color;
+        ctx.fillStyle = p.fromColor ? mixHexColors(p.fromColor, p.color, colorTransitionProgress) : p.color;
         if (p.circle) {
           ctx.beginPath();
           ctx.arc(0, 0, p.w / 2, 0, Math.PI * 2);
@@ -165,7 +193,7 @@ export function ConfettiBackground({ burst = false, persistAfterBurst = false, s
         frozen = true;
       }
       const burstProgress = burstElapsed / burstDuration;
-      _currentSpeed = (persistAfterBurst ? 0.5 : 3 * (1 - burstProgress)) * speedMultiplier;
+      _currentSpeed = (persistAfterBurst ? 0.5 : 3 * (1 - burstProgress)) * speedMultiplierRef.current;
       for (const p of particles) {
         if (persistAfterBurst || burstProgress < 0.6) {
           p.alpha = p.initialAlpha;
@@ -182,7 +210,7 @@ export function ConfettiBackground({ burst = false, persistAfterBurst = false, s
         p.y += p.vy * dt * _currentSpeed;
         p.rot += p.rotV * dt * _currentSpeed;
         if (p.y > H + 30 && !burst && _respawning) {
-          Object.assign(p, makeParticle(W, H, false, Math.random, colors));
+          Object.assign(p, makeParticle(W, H, false, Math.random, colorsRef.current));
         }
       }
     };
@@ -191,7 +219,7 @@ export function ConfettiBackground({ burst = false, persistAfterBurst = false, s
       if (restoreFieldVersion === _restoreFieldVersion) return;
       restoreFieldVersion = _restoreFieldVersion;
       for (const p of particles) {
-        if (p.y > H + 30) Object.assign(p, makeParticle(W, H, true, Math.random, colors));
+        if (p.y > H + 30) Object.assign(p, makeParticle(W, H, true, Math.random, colorsRef.current));
       }
     };
 
@@ -204,6 +232,14 @@ export function ConfettiBackground({ burst = false, persistAfterBurst = false, s
       if (updateFrameRate(now)) return;
 
       restoreDrainedParticles();
+      syncColors(now);
+      if (colorTransitionStart !== null) {
+        colorTransitionProgress = Math.min(1, (now - colorTransitionStart) / COLOR_TRANSITION_MS);
+        if (colorTransitionProgress === 1) {
+          colorTransitionStart = null;
+          for (const particle of particles) delete particle.fromColor;
+        }
+      }
 
       if (burst) {
         updateBurst(now);
