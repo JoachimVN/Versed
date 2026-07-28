@@ -145,7 +145,6 @@ export function FinalResultsPlayerView({ leaderboard, awards, myName, background
           <h1 className="font-black uppercase" style={{ fontFamily: "'Montserrat', sans-serif", fontSize: '1.6rem' }}>
             Look up at the board
           </h1>
-          <p className="text-white/60 font-semibold">Your result is coming up</p>
         </div>
       )}
 
