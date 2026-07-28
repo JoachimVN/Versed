@@ -142,7 +142,7 @@ export function FinalResultsWrapper({ game }: Readonly<{ game: PlayState }>) {
       leaderboard={leaderboard}
       awards={awards}
       myName={myName}
-      backgroundSrc={`${import.meta.env.BASE_URL}backgrounds/background5.svg`}
+      backgroundSrc={`${import.meta.env.BASE_URL}backgrounds/background7.png`}
       footer={<FinalResultsFooter game={game} />}
     />
   );
