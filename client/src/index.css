@@ -462,7 +462,7 @@ select:focus-visible,
   display: flex;
   align-items: center;
   gap: 12px;
-  padding: 10px 2px;
+  padding: 7px 2px;
   animation: resultRowIn 0.4s cubic-bezier(0.16, 1, 0.3, 1) both;
 }
 
@@ -502,7 +502,7 @@ select:focus-visible,
   display: flex;
   align-items: center;
   gap: 14px;
-  padding: 16px 2px;
+  padding: 12px 2px;
   animation: awardRowIn 0.42s cubic-bezier(0.16, 1, 0.3, 1) both;
 }
 
@@ -531,7 +531,7 @@ select:focus-visible,
    the cover-art awards get -- there's no image to give room to, so they
    fall back to the original compact height and icon-mark size. */
 .award-row-compact {
-  padding: 11px 2px;
+  padding: 8px 2px;
 }
 
 .award-row-compact .award-row-mark {
@@ -544,8 +544,8 @@ select:focus-visible,
    label/stat color, and a bigger name to read as the last, biggest award. */
 .award-row-finale {
   border-top: none;
-  margin-top: 10px;
-  padding: 18px 16px;
+  margin-top: 6px;
+  padding: 14px 16px;
   border-radius: 14px;
   background: linear-gradient(135deg, rgba(194,160,217,0.16) 0%, rgba(194,160,217,0.05) 55%, rgba(255,255,255,0.02) 100%);
   border: 1px solid rgba(194,160,217,0.32);

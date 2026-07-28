@@ -476,12 +476,12 @@ function PodiumRevealCard({ rank, entry, awards, visible, reducedMotion }: Reado
 // is an estimate computed from actual row counts up front, matching the
 // cardHeight-prop idiom RevealView.tsx already uses for the same reason.
 
-const PANEL_PAD_V = 56;
-const PANEL_TITLE_H = 44;
-const PANEL_PODIUM_H = 224;
-const PANEL_SECTION_GAP = 26;
-export const STANDINGS_ROW_H = 46;
-export const AWARD_ROW_H = 62;
+const PANEL_PAD_V = 40;
+const PANEL_TITLE_H = 26;
+const PANEL_PODIUM_H = 208;
+const PANEL_SECTION_GAP = 16;
+export const STANDINGS_ROW_H = 30;
+export const AWARD_ROW_H = 54;
 
 export function estimatePanelHeight(sectionHeights: number[]): number {
   const present = sectionHeights.filter(h => h > 0);
@@ -715,9 +715,9 @@ export function FinalResultsView({ leaderboard, awards, backgroundSrc, footer }:
                 {...LIQUID_CARD_PROPS}
                 elasticity={0}
                 cornerRadius={28}
-                padding="32px 32px 26px"
+                padding="22px 24px 18px"
               >
-                <div style={{ width: 'min(88vw, 656px)', display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '22px' }}>
+                <div style={{ width: 'min(88vw, 656px)', display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '16px' }}>
                   <h2 className="recap-title">Final Results</h2>
                   <PodiumRow podium={podium} />
                   {rest.length > 0 && (
