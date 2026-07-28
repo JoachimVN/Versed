@@ -50,7 +50,7 @@ const SETTLE_DURATION_MS = 2 * FINAL_RESULTS_BEAT_MS;
 // How long a press-and-hold takes to skip the ceremony. Long enough that a
 // stray tap can't trigger it by accident, short enough not to feel like a
 // second wait on top of the one being skipped.
-const HOLD_TO_SKIP_MS = 700;
+const HOLD_TO_SKIP_MS = 1400;
 
 // The score windows below are intentionally not all on the same downbeat.
 // They match the supplied 112-BPM sound-design cue sheet, whose transport
