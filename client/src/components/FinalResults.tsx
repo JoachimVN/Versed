@@ -1,6 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import type { ReactNode } from 'react';
-import { RankBadge } from './RankBadge';
 import LiquidGlass from './StableLiquidGlass';
 import { useAnimatedScore } from '../hooks/useAnimatedScore';
 import { CONFETTI_COLORS, ConfettiBackground, GOLD_CONFETTI_COLORS } from './ConfettiBackground';
@@ -15,8 +14,11 @@ type Stage = 'dark' | 'bronze' | 'silver' | 'gold' | 'settled' | SweepStage;
 const REVEAL_STAGE: Record<PodiumRank, Stage> = { 3: 'bronze', 2: 'silver', 1: 'gold' };
 
 // Podium-step heights (the settled screen's recap) are a smaller echo of the
-// same 1st > 2nd > 3rd shape as the cinematic reveal.
-const PODIUM_STEP_HEIGHTS: Record<PodiumRank, number> = { 1: 132, 2: 96, 3: 74 };
+// same 1st > 2nd > 3rd shape as the cinematic reveal. The gap between steps
+// is deliberately exaggerated past what the real point gaps would justify --
+// at a subtler ratio the "podium" silhouette reads as three near-identical
+// boxes instead of an actual riser.
+const PODIUM_STEP_HEIGHTS: Record<PodiumRank, number> = { 1: 152, 2: 92, 3: 64 };
 
 // Subtle, desaturated per-rank hues -- gold reads as gold, silver as a soft
 // purple, bronze as a soft cyan -- rather than the previous mixed palette
@@ -427,37 +429,89 @@ function PodiumRevealCard({ rank, entry, awards, visible, reducedMotion }: Reado
   );
 }
 
-// ─── Settled: recap podium + rest of the field ─────────────────────────────
+// ─── Settled: one unified recap panel ──────────────────────────────────────
+// The whole settled screen -- podium, standings, awards -- lives inside a
+// single liquid-glass surface instead of a stack of separately-boxed cards.
+// The library measures/centers its glass content once on mount rather than
+// tracking layout live (see StableLiquidGlass.tsx), so the wrapper's height
+// is an estimate computed from actual row counts up front, matching the
+// cardHeight-prop idiom RevealView.tsx already uses for the same reason.
+
+const PANEL_PAD_V = 56;
+const PANEL_TITLE_H = 44;
+const PANEL_PODIUM_H = 224;
+const PANEL_SECTION_GAP = 26;
+export const STANDINGS_ROW_H = 46;
+export const AWARD_ROW_H = 62;
+
+export function estimatePanelHeight(sectionHeights: number[]): number {
+  const present = sectionHeights.filter(h => h > 0);
+  const gaps = Math.max(0, present.length - 1) * PANEL_SECTION_GAP;
+  return PANEL_PAD_V + present.reduce((a, b) => a + b, 0) + gaps;
+}
+
+// Rank badge for a plain list row: ranks 1-3 get a small tinted numeral
+// (echoing the podium riser's own numeral) rather than the mid-game
+// leaderboard's medal emoji, which reads inconsistently against this
+// screen's custom gradient/glass look. Rank 4+ is a plain "#N", matching how
+// this screen has always shown the rest of the field.
+export function RankMark({ rank }: Readonly<{ rank: number }>) {
+  if (rank >= 1 && rank <= 3) {
+    const { tint } = RANK_STYLE[rank as PodiumRank];
+    return (
+      <span
+        className="rank-mark"
+        style={{
+          background: `color-mix(in srgb, ${tint} 22%, transparent)`,
+          border: `1px solid color-mix(in srgb, ${tint} 45%, transparent)`,
+          color: tint,
+        }}
+      >
+        {rank}
+      </span>
+    );
+  }
+  return <span className="rank-mark rank-mark-plain">#{rank}</span>;
+}
 
 // One step of the recap podium -- name/score float above the step itself,
 // which carries the rank's tinted glass glow and a big translucent rank
 // numeral, so the block reads as an actual podium riser rather than a card.
-function PodiumColumn({ rank, entry, delay }: Readonly<{ rank: PodiumRank; entry: LeaderboardEntry; delay: number }>) {
-  const { tint } = RANK_STYLE[rank];
+// The champion's name borrows the cinematic reveal's own gradient (at a
+// smaller scale) so the recap reads as a continuation of the ceremony that
+// just played, not an unrelated summary screen.
+function PodiumSpot({ rank, entry, delay }: Readonly<{ rank: PodiumRank; entry: LeaderboardEntry; delay: number }>) {
+  const { tint, gradient } = RANK_STYLE[rank];
   const champion = rank === 1;
   return (
-    <div className="flex flex-col items-center" style={{ flex: 1, minWidth: 0, gap: '8px' }}>
-      <RankBadge rank={rank} />
+    <div className="podium-spot">
       <span
-        className="font-bold"
-        style={{ fontSize: champion ? '1.1rem' : '0.95rem', maxWidth: '100%', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}
+        className={champion ? 'font-black' : 'font-bold'}
+        style={{
+          fontFamily: champion ? "'Montserrat', sans-serif" : undefined,
+          fontSize: champion ? '1.32rem' : '1rem',
+          maxWidth: '100%', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap',
+          ...(champion
+            ? { background: gradient, WebkitBackgroundClip: 'text', backgroundClip: 'text', WebkitTextFillColor: 'transparent' }
+            : { color: '#fff' }),
+        }}
       >
         {entry.name}
       </span>
-      <span className="tabular-nums" style={{ fontWeight: 800, fontSize: '0.88rem', color: 'rgba(255,255,255,0.65)' }}>
+      <span className="tabular-nums" style={{ fontWeight: 800, fontSize: champion ? '0.98rem' : '0.86rem', color: 'rgba(255,255,255,0.65)' }}>
         {entry.score.toLocaleString()}
       </span>
       <div
+        className="podium-riser"
         style={{
-          width: '100%', minHeight: `${PODIUM_STEP_HEIGHTS[rank]}px`, borderRadius: '14px 14px 6px 6px',
-          display: 'flex', alignItems: 'flex-start', justifyContent: 'center', paddingTop: '10px',
+          minHeight: `${PODIUM_STEP_HEIGHTS[rank]}px`,
           background: `linear-gradient(180deg, color-mix(in srgb, ${tint} 30%, transparent), color-mix(in srgb, ${tint} 5%, transparent))`,
           border: `1px solid color-mix(in srgb, ${tint} 40%, transparent)`,
           boxShadow: `0 0 22px -6px color-mix(in srgb, ${tint} 60%, transparent) inset`,
-          animation: `podiumStepIn 0.5s cubic-bezier(0.16,1,0.3,1) ${delay}ms both`,
+          animationDelay: `${delay}ms`,
         }}
       >
-        <span className="font-black" style={{ fontSize: champion ? '1.6rem' : '1.25rem', color: `color-mix(in srgb, ${tint} 70%, white)`, opacity: 0.85 }}>
+        <span className="font-black" style={{ fontSize: champion ? '1.7rem' : '1.3rem', color: `color-mix(in srgb, ${tint} 70%, white)`, opacity: 0.85 }}>
           {rank}
         </span>
       </div>
@@ -465,74 +519,34 @@ function PodiumColumn({ rank, entry, delay }: Readonly<{ rank: PodiumRank; entry
   );
 }
 
-// The settled screen's recap podium -- one shared liquid-glass panel (not
-// per-column, since the library sizes glass to its own measured content
-// rather than a fixed box) holding all three steps, so it reads as a single
-// frosted podium rather than three separate glass cards.
-function PodiumRecap({ podium }: Readonly<{ podium: LeaderboardEntry[] }>) {
+function PodiumRow({ podium }: Readonly<{ podium: LeaderboardEntry[] }>) {
   return (
-    <div className="liquid-btn relative mx-auto" style={{ width: 'min(92vw, 640px)', height: '260px' }}>
-      <LiquidGlass style={{ position: 'absolute', top: '50%', left: '50%' }} {...LIQUID_CARD_PROPS} cornerRadius={28} padding="22px 26px 16px">
-        <div style={{ width: 'min(84vw, 592px)', display: 'flex', alignItems: 'flex-end', justifyContent: 'center', gap: '16px' }}>
-          {([2, 1, 3] as const).map((rank, i) => {
-            const entry = podium[rank - 1];
-            return entry ? <PodiumColumn key={rank} rank={rank} entry={entry} delay={i * 110} /> : <div key={rank} style={{ flex: 1 }} />;
-          })}
-        </div>
-      </LiquidGlass>
+    <div className="podium-row">
+      {([2, 1, 3] as const).map((rank, i) => {
+        const entry = podium[rank - 1];
+        return entry ? <PodiumSpot key={rank} rank={rank} entry={entry} delay={i * 110} /> : <div key={rank} style={{ flex: 1 }} />;
+      })}
     </div>
   );
 }
 
+// Shared by both the host's rest-of-field rows and the player's full
+// standings list -- one row shape for "everyone not on the podium spotlight"
+// rather than a card grid on one screen and a different row style on the
+// other.
 export function ResultRow({ entry, isMe, delay }: Readonly<{ entry: LeaderboardEntry; isMe: boolean; delay?: number }>) {
   return (
     <div
-      className="flex items-center gap-4 px-4 py-3 rounded-2xl"
-      style={{
-        background: isMe ? 'linear-gradient(90deg, rgba(94,234,212,0.14), rgba(94,234,212,0.03))' : 'rgba(255,255,255,0.04)',
-        border: isMe ? '1px solid rgba(94,234,212,0.4)' : '1px solid rgba(255,255,255,0.06)',
-        animation: delay != null ? `resultRowIn 0.4s cubic-bezier(0.16,1,0.3,1) ${delay}ms both` : undefined,
-      }}
+      className={`standings-row${isMe ? ' standings-row-me' : ''}`}
+      style={{ animation: delay != null ? `resultRowIn 0.4s cubic-bezier(0.16,1,0.3,1) ${delay}ms both` : undefined }}
     >
-      <span className="w-8 flex justify-center flex-shrink-0">
-        <RankBadge rank={entry.rank} />
-      </span>
-      <span className="text-white font-bold flex-1 truncate">
+      <RankMark rank={entry.rank} />
+      <span className="text-white font-bold flex-1 truncate" style={{ fontSize: '0.92rem' }}>
         {entry.name}
-        {isMe && (
-          <span style={{ color: 'rgba(94,234,212,0.9)', fontSize: '0.6rem', fontWeight: 800, letterSpacing: '0.08em', marginLeft: '8px' }}>
-            YOU
-          </span>
-        )}
+        {isMe && <span className="standings-you-tag">YOU</span>}
       </span>
-      <p className="text-white/60 font-semibold tabular-nums min-w-[64px] text-right">{entry.score.toLocaleString()}</p>
+      <span className="standings-row-score tabular-nums">{entry.score.toLocaleString()}</span>
     </div>
-  );
-}
-
-function RestResultCard({ entry, delay }: Readonly<{ entry: LeaderboardEntry; delay: number }>) {
-  return (
-    <div className="rest-result-card" style={{ animationDelay: `${delay}ms` }}>
-      <span className="rest-result-rank">#{entry.rank}</span>
-      <span className="text-white font-bold truncate min-w-0" style={{ fontSize: '1rem' }}>{entry.name}</span>
-      <span className="rest-result-score tabular-nums">
-        {entry.score.toLocaleString()} <small>PTS</small>
-      </span>
-    </div>
-  );
-}
-
-// Places four and below are a compact field card grid, not a long imitation
-// of the podium. That gives the 4th/5th finishers a deliberate treatment and
-// still scales neatly when a larger lobby has more names to show.
-export function RestResultsGrid({ entries }: Readonly<{ entries: LeaderboardEntry[] }>) {
-  if (entries.length === 0) return null;
-  return (
-    <section aria-label="Remaining standings">
-      <div className="rest-results-grid">
-        {entries.map((entry, i) => <RestResultCard key={entry.name} entry={entry} delay={i * 70} />)}
-      </div>
-    </section>
   );
 }
 
@@ -599,6 +613,12 @@ export function FinalResultsView({ leaderboard, awards, backgroundSrc, footer }:
   const confettiColors = settled ? CONFETTI_COLORS : GOLD_CONFETTI_COLORS;
   const hueDeg = STAGE_HUE[stage];
   const overlayAlpha = stage === 'gold' ? OVERLAY_ALPHA_WINNER : OVERLAY_ALPHA_REST;
+  const panelHeight = estimatePanelHeight([
+    PANEL_TITLE_H,
+    PANEL_PODIUM_H,
+    rest.length > 0 ? rest.length * STANDINGS_ROW_H : 0,
+    awards.length > 0 ? awards.length * AWARD_ROW_H : 0,
+  ]);
 
   return (
     <div className="relative min-h-screen flex flex-col p-6 gap-4">
@@ -641,25 +661,37 @@ export function FinalResultsView({ leaderboard, awards, backgroundSrc, footer }:
 
       {settled && (
         <div className="relative z-10 flex flex-col flex-1 min-h-0 gap-4">
-          <h2 className="text-3xl font-black text-white text-center" style={{ animation: 'settledIn 0.5s cubic-bezier(0.16,1,0.3,1) 0.05s both' }}>
-            Final Results
-          </h2>
-
-          <div style={{ animation: 'settledIn 0.5s cubic-bezier(0.16,1,0.3,1) 0.13s both' }}>
-            <PodiumRecap podium={podium} />
-          </div>
-
-          {/* The podium has its own hero treatment; everyone after it gets a
-              compact field grid, then the three-row awards recap. */}
           <div
-            className="relative z-10 flex-1 min-h-0 overflow-y-auto flex flex-col gap-6"
-            style={{ maxWidth: '1000px', width: '100%', margin: '0 auto', animation: 'settledIn 0.5s cubic-bezier(0.16,1,0.3,1) 0.22s both' }}
+            className="relative z-10 flex-1 min-h-0 overflow-y-auto flex"
+            style={{ animation: 'settledIn 0.5s cubic-bezier(0.16,1,0.3,1) 0.1s both' }}
           >
-            <div style={{ maxWidth: '760px', width: '100%', margin: '0 auto' }}>
-              <RestResultsGrid entries={rest} />
-            </div>
-            <div style={{ marginTop: '16px' }}>
-              <AwardsStrip awards={awards} />
+            <div className="liquid-btn relative" style={{ width: 'min(94vw, 720px)', height: `${panelHeight}px`, margin: 'auto' }}>
+              <LiquidGlass
+                style={{ position: 'absolute', top: '50%', left: '50%' }}
+                {...LIQUID_CARD_PROPS}
+                elasticity={0}
+                cornerRadius={28}
+                padding="32px 32px 26px"
+              >
+                <div style={{ width: 'min(88vw, 656px)', display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '22px' }}>
+                  <h2 className="recap-title">Final Results</h2>
+                  <PodiumRow podium={podium} />
+                  {rest.length > 0 && (
+                    <>
+                      <div className="panel-divider" />
+                      <div className="standings-list" style={{ width: '100%' }}>
+                        {rest.map((entry, i) => <ResultRow key={entry.name} entry={entry} isMe={false} delay={i * 60} />)}
+                      </div>
+                    </>
+                  )}
+                  {awards.length > 0 && (
+                    <>
+                      <div className="panel-divider" />
+                      <AwardsStrip awards={awards} />
+                    </>
+                  )}
+                </div>
+              </LiquidGlass>
             </div>
           </div>
 

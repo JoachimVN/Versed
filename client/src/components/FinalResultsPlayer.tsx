@@ -2,7 +2,11 @@ import { useEffect, useState } from 'react';
 import type { ReactNode } from 'react';
 import { useAnimatedScore } from '../hooks/useAnimatedScore';
 import { AwardsStrip, AWARD_LABELS } from './RevealShared';
-import { BackgroundLayer, HUE_BRONZE, ResultRow, findAward, getCeremonyDuration } from './FinalResults';
+import LiquidGlass from './StableLiquidGlass';
+import { LIQUID_CARD_PROPS } from './liquidGlassPresets';
+import {
+  AWARD_ROW_H, BackgroundLayer, HUE_BRONZE, ResultRow, STANDINGS_ROW_H, estimatePanelHeight, findAward, getCeremonyDuration,
+} from './FinalResults';
 import type { Award, LeaderboardEntry } from '../types';
 
 type Phase = 'hold' | 'settled';
@@ -86,6 +90,10 @@ export function FinalResultsPlayerView({ leaderboard, awards, myName, background
 
   const settled = phase === 'settled';
   const myEntry = leaderboard.find(e => e.name === myName);
+  const panelHeight = estimatePanelHeight([
+    leaderboard.length * STANDINGS_ROW_H,
+    awards.length > 0 ? awards.length * AWARD_ROW_H : 0,
+  ]);
 
   return (
     <div className="relative min-h-screen flex flex-col p-6 gap-4">
@@ -106,13 +114,28 @@ export function FinalResultsPlayerView({ leaderboard, awards, myName, background
       {settled && (
         <div className="relative z-10 flex flex-col flex-1 min-h-0 gap-4 page-enter-fade">
           {myEntry && <PersonalHero entry={myEntry} awards={awards} reducedMotion={reducedMotion} />}
-          <div className="flex-1 min-h-0 overflow-y-auto space-y-2">
-            {leaderboard.map((e, i) => (
-              <ResultRow key={e.name} entry={e} isMe={e.name === myName} delay={i * 60} />
-            ))}
-          </div>
-          <div style={{ marginTop: '12px' }}>
-            <AwardsStrip awards={awards} />
+          <div className="flex-1 min-h-0 overflow-y-auto flex">
+            <div className="liquid-btn relative" style={{ width: 'min(94vw, 520px)', height: `${panelHeight}px`, margin: 'auto' }}>
+              <LiquidGlass
+                style={{ position: 'absolute', top: '50%', left: '50%' }}
+                {...LIQUID_CARD_PROPS}
+                elasticity={0}
+                cornerRadius={26}
+                padding="24px 22px 18px"
+              >
+                <div style={{ width: 'min(88vw, 472px)', display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '18px' }}>
+                  <div className="standings-list" style={{ width: '100%' }}>
+                    {leaderboard.map((e, i) => <ResultRow key={e.name} entry={e} isMe={e.name === myName} delay={i * 60} />)}
+                  </div>
+                  {awards.length > 0 && (
+                    <>
+                      <div className="panel-divider" />
+                      <AwardsStrip awards={awards} />
+                    </>
+                  )}
+                </div>
+              </LiquidGlass>
+            </div>
           </div>
           <div className="flex flex-col items-center gap-3">{footer}</div>
         </div>

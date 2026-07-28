@@ -1,5 +1,4 @@
 import { Check, Trophy, X, Zap, Timer, TrendingUp, Swords } from 'lucide-react';
-import type { CSSProperties } from 'react';
 import LiquidGlass from './StableLiquidGlass';
 import type { Award, PointsBreakdown, RoundResultEvent } from '../types';
 import { LIQUID_CONTROL_PROPS, LIQUID_PILL_PROPS } from './liquidGlassPresets';
@@ -84,98 +83,59 @@ const AWARD_COLORS: Record<Award['key'], string> = {
   finaleWinner: '#c2a0d9',
 };
 
-function AwardEyebrow({ award }: Readonly<{ award: Award }>) {
+// Recap order: game-wide stats, the two distinct timing formats, then the
+// optional finale champion. Missing formats simply drop out of the list; no
+// empty row suggests a round type that was never played.
+const AWARD_ORDER: Award['key'][] = ['mostCorrect', 'biggestSwing', 'fastestClassicGuess', 'fastestGuess', 'finaleWinner'];
+
+// The server's own award.detail text already leads with the number that
+// matters ("7 correct guesses", "+1,200 in one round", "1.2s") -- pulling
+// that token out to stand alone as a scoreboard-style numeral means the row
+// doesn't have to repeat it a second time in prose. Awards with no leading
+// number (the finale duel has none) just fall through with no stat call-out.
+function leadingStat(detail: string): string | null {
+  const m = detail.match(/^[+-]?\d[\d,.]*s?/);
+  return m ? m[0] : null;
+}
+
+// One row per award, matching the standings rows' own plain, divided-list
+// shape -- no icon badges, glow, or per-row color wash. The two timing
+// awards get the real winning moment (the actual guess, song, and cover
+// art) instead of decoration; the rest lean on a bold name and a single
+// scoreboard-style number pulled from the award's own detail text. The
+// quoted guess itself uses the same green used everywhere else a correct
+// answer is confirmed.
+function AwardRow({ award, delay }: Readonly<{ award: Award; delay: number }>) {
   const Icon = AWARD_ICONS[award.key];
   const color = AWARD_COLORS[award.key];
+  const highlight = award.highlights?.[0];
+  const stat = leadingStat(award.detail);
   return (
-    <div className="flex items-center gap-2" style={{ color }}>
-      <Icon style={{ width: '14px', height: '14px', flexShrink: 0 }} />
-      <span style={{ fontSize: '0.62rem', fontWeight: 900, letterSpacing: '0.16em', textTransform: 'uppercase' }}>{AWARD_LABELS[award.key]}</span>
-    </div>
-  );
-}
-
-function StatAwardCard({ award }: Readonly<{ award: Award }>) {
-  const color = AWARD_COLORS[award.key];
-  return (
-    <div className="award-stat-card" style={{ '--award-color': color } as CSSProperties}>
-      <AwardEyebrow award={award} />
-      <strong className="text-white leading-tight truncate" style={{ fontSize: '1.25rem', marginTop: '10px' }}>{award.playerNames.join(' & ')}</strong>
-      <span className="text-white/50" style={{ fontSize: '0.78rem', marginTop: '4px' }}>{award.detail}</span>
-    </div>
-  );
-}
-
-function SpeedAwardCard({ award }: Readonly<{ award: Award }>) {
-  const color = AWARD_COLORS[award.key];
-  const moments = award.highlights ?? [];
-  return (
-    <div className="award-speed-card" style={{ '--award-color': color } as CSSProperties}>
-      <AwardEyebrow award={award} />
-      <div className="flex flex-col" style={{ marginTop: '12px', gap: '10px' }}>
-        {moments.length > 0 ? moments.map(moment => (
-          <div key={`${moment.playerName}-${moment.songTitle}`} className="award-speed-moment">
-            {moment.coverUrl ? (
-              <img className="award-album-art" src={moment.coverUrl} alt={`Album art for ${moment.songTitle}`} />
-            ) : <div className="award-album-art" aria-hidden="true" />}
-            <div className="min-w-0 flex-1 flex flex-col">
-              <strong className="text-white truncate" style={{ fontSize: '0.98rem' }}>{moment.playerName}</strong>
-              <span className="text-white/55 truncate" style={{ fontSize: '0.76rem', marginTop: '2px' }}>
-                <span style={{ color: '#4ade80', fontWeight: 800 }}>“{moment.guess}”</span> on {moment.songTitle}
-              </span>
-              <span className="text-white/35 truncate" style={{ fontSize: '0.7rem', marginTop: '2px' }}>{moment.artist}</span>
-            </div>
-            <span className="tabular-nums" style={{ color, fontSize: '1.05rem', fontWeight: 900 }}>{(moment.timeMs / 1000).toFixed(1)}s</span>
-          </div>
-        )) : (
-          <div className="flex flex-col" style={{ gap: '3px' }}>
-            <strong className="text-white truncate" style={{ fontSize: '1.05rem' }}>{award.playerNames.join(' & ')}</strong>
-            <span className="text-white/50" style={{ fontSize: '0.78rem' }}>{award.detail}</span>
-          </div>
+    <div className="award-row-item" style={{ animationDelay: `${delay}ms` }}>
+      {highlight?.coverUrl
+        ? <img className="award-row-art" src={highlight.coverUrl} alt="" />
+        : <span className="award-row-mark" style={{ color }}><Icon style={{ width: '18px', height: '18px' }} /></span>}
+      <div className="award-row-text">
+        <span className="award-row-label" style={{ color }}>{AWARD_LABELS[award.key]}</span>
+        <span className="award-row-name">{award.playerNames.join(' & ')}</span>
+        {highlight && (
+          <span className="award-row-quote">
+            <span className="award-row-guess">“{highlight.guess}”</span> · {highlight.songTitle}
+          </span>
         )}
+        {!stat && !highlight && <span className="award-row-quote">{award.detail}</span>}
       </div>
+      {stat && <span className="award-row-stat" style={{ color }}>{stat}</span>}
     </div>
   );
 }
 
-function FinaleAwardCard({ award }: Readonly<{ award: Award }>) {
-  const color = AWARD_COLORS[award.key];
-  return (
-    <div className="award-finale-card" style={{ '--award-color': color } as CSSProperties}>
-      <div className="award-finale-mark"><Swords style={{ width: '22px', height: '22px', color }} /></div>
-      <div className="min-w-0 flex flex-col">
-        <span style={{ color, fontSize: '0.6rem', fontWeight: 900, letterSpacing: '0.18em', textTransform: 'uppercase' }}>Finale champion</span>
-        <strong className="text-white truncate" style={{ fontSize: '1.32rem', marginTop: '3px' }}>{award.playerNames.join(' & ')}</strong>
-        <span className="text-white/45" style={{ fontSize: '0.72rem', marginTop: '2px' }}>{award.detail}</span>
-      </div>
-    </div>
-  );
-}
-
-// The recap is deliberately three short rows: two game-wide stats, the two
-// distinct timing formats with their real winning moments, then the optional
-// finale champion. Missing formats simply collapse their column; no empty
-// slot suggests a round type that was never played.
 export function AwardsStrip({ awards }: Readonly<{ awards: Award[] }>) {
   if (awards.length === 0) return null;
-  const find = (key: Award['key']) => awards.find(award => award.key === key);
-  const stats = [find('mostCorrect'), find('biggestSwing')].filter((award): award is Award => Boolean(award));
-  const speed = [find('fastestClassicGuess'), find('fastestGuess')].filter((award): award is Award => Boolean(award));
-  const finale = find('finaleWinner');
-
+  const ordered = AWARD_ORDER.map(key => awards.find(a => a.key === key)).filter((a): a is Award => Boolean(a));
   return (
-    <section className="relative z-10 flex flex-col" aria-label="Game awards" style={{ width: '100%', gap: '14px' }}>
-      {stats.length > 0 && (
-        <div className="award-row award-row-one" style={{ gridTemplateColumns: `repeat(${Math.min(stats.length, 2)}, minmax(0, 1fr))` }}>
-          {stats.map(award => <StatAwardCard key={award.key} award={award} />)}
-        </div>
-      )}
-      {speed.length > 0 && (
-        <div className="award-row award-row-two" style={{ gridTemplateColumns: `repeat(${Math.min(speed.length, 2)}, minmax(0, 1fr))` }}>
-          {speed.map(award => <SpeedAwardCard key={award.key} award={award} />)}
-        </div>
-      )}
-      {finale && <div className="award-row-three"><FinaleAwardCard award={finale} /></div>}
+    <section className="awards-list" aria-label="Game awards">
+      {ordered.map((award, i) => <AwardRow key={award.key} award={award} delay={i * 70} />)}
     </section>
   );
 }

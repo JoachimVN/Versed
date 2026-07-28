@@ -360,181 +360,215 @@ select:focus-visible,
   animation: pageEnterFadeOnly 0.4s cubic-bezier(0.16, 1, 0.3, 1) forwards;
 }
 
-/* Award pill title: letters start splayed wide and blurred, then tighten
-   into place -- a broadcast-lower-third settle rather than a plain fade. */
-@keyframes awardPillIn {
-  from { opacity: 0; letter-spacing: 0.4em; filter: blur(3px); }
-  to   { opacity: 1; letter-spacing: 0.05em; filter: blur(0); }
-}
-
-/* Awards-strip entry arrival (RevealShared.tsx AwardsStrip), staggered per
-   entry via an inline delay. */
-@keyframes awardCardIn {
-  from { opacity: 0; transform: translateY(10px); }
-  to   { opacity: 1; transform: translateY(0); }
-}
-
-/* Final-results awards use a quiet, broadcast-style recap: stats settle
-   first, the two song moments follow, then an optional finale champion gets
-   a small closing beat. The styling is intentionally flat and editorial,
-   not a collection of decorative floating badges. */
+/* Final-results awards use a quiet, broadcast-style recap: one flat row per
+   award, staggered in via an inline delay. The styling is intentionally
+   flat and editorial, not a collection of decorative floating badges. */
 @keyframes awardRowIn {
   from { opacity: 0; transform: translateY(12px); }
   to { opacity: 1; transform: translateY(0); }
 }
 
-@keyframes awardAlbumIn {
-  from { opacity: 0; transform: scale(0.88); }
-  to { opacity: 1; transform: scale(1); }
+/* ─── Final-results unified recap panel ─────────────────────────────────
+   Podium, standings, and awards share one liquid-glass surface as three
+   plain, divider-separated sections instead of a stack of separately-boxed
+   cards -- standings and award rows differ only by icon/color, not by
+   shape, so the whole panel reads as one coherent list. */
+
+.recap-title {
+  font-family: 'Montserrat', sans-serif;
+  font-weight: 900;
+  font-size: 1.5rem;
+  color: #fff;
+  text-align: center;
 }
 
-.award-row {
-  display: grid;
-  gap: 12px;
+.panel-divider {
+  width: 100%;
+  height: 1px;
+  background: rgba(255,255,255,0.08);
+}
+
+.podium-row {
+  display: flex;
+  align-items: flex-end;
+  justify-content: center;
+  gap: 16px;
   width: 100%;
 }
 
-.award-row-one { animation: awardRowIn 0.42s cubic-bezier(0.16, 1, 0.3, 1) 0.08s both; }
-.award-row-two { animation: awardRowIn 0.46s cubic-bezier(0.16, 1, 0.3, 1) 0.18s both; }
-.award-row-three { animation: awardRowIn 0.48s cubic-bezier(0.16, 1, 0.3, 1) 0.3s both; }
-
-.award-stat-card,
-.award-speed-card {
-  position: relative;
-  overflow: hidden;
-  border: 1px solid color-mix(in srgb, var(--award-color) 18%, rgba(255,255,255,0.08));
-  border-radius: 16px;
-  background: linear-gradient(118deg, color-mix(in srgb, var(--award-color) 7%, rgba(12,12,24,0.86)), rgba(12,12,24,0.78) 68%);
-  box-shadow: 0 14px 34px -28px color-mix(in srgb, var(--award-color) 55%, transparent);
-}
-
-.award-stat-card { padding: 15px 17px; min-height: 104px; display: flex; flex-direction: column; }
-.award-speed-card { padding: 15px 17px; min-height: 126px; }
-
-.award-stat-card::after,
-.award-speed-card::after {
-  content: '';
-  position: absolute;
-  top: 0;
-  left: 17px;
-  width: 36px;
-  height: 2px;
-  background: var(--award-color);
-  opacity: 0.6;
-}
-
-.award-speed-moment {
+.podium-spot {
   display: flex;
+  flex-direction: column;
   align-items: center;
+  flex: 1;
   min-width: 0;
-  gap: 10px;
-  padding-top: 2px;
+  gap: 8px;
 }
 
-.award-album-art {
-  width: 52px;
-  height: 52px;
-  flex-shrink: 0;
-  object-fit: cover;
-  border-radius: 8px;
-  border: 1px solid rgba(255,255,255,0.13);
-  background: linear-gradient(135deg, color-mix(in srgb, var(--award-color) 32%, #151424), #0e0d17);
-  animation: awardAlbumIn 0.42s cubic-bezier(0.16, 1, 0.3, 1) 0.35s both;
+.podium-riser {
+  width: 100%;
+  border-radius: 14px 14px 6px 6px;
+  display: flex;
+  align-items: flex-start;
+  justify-content: center;
+  padding-top: 10px;
+  animation: podiumStepIn 0.5s cubic-bezier(0.16, 1, 0.3, 1) both;
 }
 
-.award-finale-card {
-  display: grid;
-  grid-template-columns: auto minmax(0, 1fr) auto;
-  align-items: center;
-  gap: 13px;
-  width: min(100%, 620px);
-  min-height: 82px;
-  margin: 2px auto 0;
-  padding: 12px 18px;
-  border: 1px solid color-mix(in srgb, var(--award-color) 24%, rgba(255,255,255,0.08));
-  border-radius: 17px;
-  background: linear-gradient(100deg, color-mix(in srgb, var(--award-color) 11%, rgba(13,12,25,0.93)), rgba(13,12,25,0.82) 56%, color-mix(in srgb, var(--award-color) 5%, rgba(13,12,25,0.83)));
-  box-shadow: 0 18px 42px -32px color-mix(in srgb, var(--award-color) 60%, transparent);
+/* Settled-screen podium recap (FinalResults.tsx PodiumSpot): each step
+   rises into place rather than just fading, echoing a medal stand
+   physically settling. Bronze/silver/gold share the same keyframe,
+   staggered by inline delay so gold lands last. */
+@keyframes podiumStepIn {
+  from { opacity: 0; transform: translateY(22px) scaleY(0.85); transform-origin: bottom; }
+  to   { opacity: 1; transform: translateY(0) scaleY(1); transform-origin: bottom; }
 }
 
-.award-finale-mark {
-  width: 46px;
-  height: 46px;
+/* Rank numeral used by list rows (FinalResults.tsx RankMark) -- a small
+   tinted circle for the podium ranks, echoing the riser's own numeral,
+   instead of the mid-game leaderboard's medal emoji. */
+.rank-mark {
+  width: 24px;
+  height: 24px;
+  border-radius: 50%;
   display: grid;
   place-items: center;
-  border: 1px solid color-mix(in srgb, var(--award-color) 30%, transparent);
-  border-radius: 50%;
-  background: color-mix(in srgb, var(--award-color) 8%, transparent);
-}
-
-@media (max-width: 639px) {
-  .award-row { grid-template-columns: minmax(0, 1fr) !important; }
-  .award-speed-card { min-height: 112px; }
-  .award-finale-card { padding: 11px 14px; }
-}
-
-/* The host board treats places four onward as a compact, equal field. Large
-   rank numerals and aligned scores give #4 and #5 presence without trying to
-   compete with the podium ceremony above. */
-.rest-results-grid {
-  display: grid;
-  grid-template-columns: repeat(2, minmax(0, 1fr));
-  gap: 9px;
-}
-
-.rest-result-card {
-  display: grid;
-  grid-template-columns: auto minmax(0, 1fr) auto;
-  align-items: center;
-  min-height: 58px;
-  gap: 12px;
-  padding: 10px 14px;
-  border: 1px solid rgba(255,255,255,0.08);
-  border-radius: 14px;
-  background: linear-gradient(105deg, rgba(255,255,255,0.07), rgba(255,255,255,0.025));
-  animation: resultRowIn 0.42s cubic-bezier(0.16, 1, 0.3, 1) both;
-}
-
-.rest-result-rank {
-  min-width: 31px;
-  color: rgba(255,255,255,0.78);
-  font-family: 'Montserrat', sans-serif;
-  font-size: 1.06rem;
   font-weight: 900;
-  letter-spacing: -0.06em;
+  font-size: 0.74rem;
+  flex-shrink: 0;
 }
 
-.rest-result-score {
-  color: rgba(255,255,255,0.8);
-  font-size: 0.92rem;
-  font-weight: 800;
-  text-align: right;
-}
-
-.rest-result-score small {
-  color: rgba(255,255,255,0.32);
-  font-size: 0.58rem;
+.rank-mark-plain {
+  width: auto;
+  height: auto;
+  border-radius: 0;
+  color: rgba(255,255,255,0.4);
+  font-size: 0.82rem;
   font-weight: 800;
 }
 
-@media (max-width: 639px) {
-  .rest-results-grid { grid-template-columns: minmax(0, 1fr); }
+.standings-list,
+.awards-list {
+  display: flex;
+  flex-direction: column;
+  width: 100%;
 }
 
-/* Rest-of-field rows on the final-results screen (FinalResults.tsx
-   ResultRow), staggered per row via an inline delay. */
+.standings-row {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 10px 2px;
+  animation: resultRowIn 0.4s cubic-bezier(0.16, 1, 0.3, 1) both;
+}
+
+.standings-row + .standings-row {
+  border-top: 1px solid rgba(255,255,255,0.05);
+}
+
+.standings-row-me {
+  border-left: 2px solid rgba(94,234,212,0.6);
+  padding-left: 10px;
+  margin-left: -12px;
+}
+
+.standings-you-tag {
+  color: rgba(94,234,212,0.9);
+  font-size: 0.6rem;
+  font-weight: 800;
+  letter-spacing: 0.08em;
+  margin-left: 8px;
+}
+
+.standings-row-score {
+  margin-left: auto;
+  color: rgba(255,255,255,0.68);
+  font-weight: 800;
+  font-size: 0.9rem;
+}
+
+/* Rest-of-field / full-standings rows (FinalResults.tsx ResultRow),
+   staggered per row via an inline delay. */
 @keyframes resultRowIn {
   from { opacity: 0; transform: translateY(8px); }
   to   { opacity: 1; transform: translateY(0); }
 }
 
-/* Settled-screen podium recap (FinalResults.tsx PodiumColumn): each column
-   rises into its step rather than just fading, echoing a medal stand
-   physically settling into place. Bronze/silver/gold share the same
-   keyframe, staggered by inline delay so gold lands last. */
-@keyframes podiumStepIn {
-  from { opacity: 0; transform: translateY(22px) scaleY(0.85); transform-origin: bottom; }
-  to   { opacity: 1; transform: translateY(0) scaleY(1); transform-origin: bottom; }
+.award-row-item {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 11px 2px;
+  animation: awardRowIn 0.42s cubic-bezier(0.16, 1, 0.3, 1) both;
+}
+
+.award-row-item + .award-row-item {
+  border-top: 1px solid rgba(255,255,255,0.05);
+}
+
+.award-row-mark {
+  width: 30px;
+  height: 30px;
+  flex-shrink: 0;
+  display: grid;
+  place-items: center;
+}
+
+.award-row-art {
+  width: 30px;
+  height: 30px;
+  border-radius: 6px;
+  flex-shrink: 0;
+  object-fit: cover;
+  border: 1px solid rgba(255,255,255,0.14);
+}
+
+.award-row-text {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+  flex: 1;
+  gap: 1px;
+}
+
+.award-row-label {
+  font-size: 0.6rem;
+  font-weight: 800;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+}
+
+.award-row-name {
+  font-size: 0.94rem;
+  font-weight: 800;
+  color: #fff;
+}
+
+.award-row-quote {
+  font-size: 0.78rem;
+  color: rgba(255,255,255,0.45);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* The player's actual guess, called out in the same green used everywhere
+   else a correct answer is confirmed. */
+.award-row-guess {
+  color: #4ade80;
+  font-weight: 700;
+}
+
+.award-row-stat {
+  flex-shrink: 0;
+  font-weight: 900;
+  font-size: 1.15rem;
+  font-family: 'Montserrat', sans-serif;
+  font-variant-numeric: tabular-nums;
+}
+
+@media (max-width: 639px) {
+  .award-row-quote { white-space: normal; }
 }
 
 /* Each keyframe re-states translate(-50%,-50%) alongside the scale — an
