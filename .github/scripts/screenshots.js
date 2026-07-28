@@ -5,12 +5,19 @@ const BASE = 'http://localhost:4321';
 const OUT = 'docs/screenshots';
 const VIEWPORT = { width: 1280, height: 800 };
 
-async function take(browser, url, outFile) {
+async function take(browser, url, outFile, options = {}) {
     const page = await browser.newPage();
     await prepPage(page);
     await page.setViewportSize(VIEWPORT);
     await page.goto(`${BASE}${url}`);
     await page.waitForTimeout(800);
+    if (options.click) {
+        await page.click(options.click);
+    }
+    if (options.waitFor) {
+        await page.waitForSelector(options.waitFor);
+        await page.waitForTimeout(300);
+    }
     await saveIfChanged(page, `${OUT}/${outFile}`);
     await page.close();
     console.log(`${outFile} done.`);
@@ -23,7 +30,7 @@ try {
     await take(browser, '/screenshot?v=reveal',      'Reveal.png');
     await take(browser, '/screenshot?v=lobby',       'HostLobby.png');
     await take(browser, '/screenshot?v=party-intro', 'PartyIntro.png');
-    await take(browser, '/screenshot?v=final-host',  'FinalResults.png');
+    await take(browser, '/screenshot?v=final-host',  'FinalResults.png', { click: 'button:has-text("final reveal")', waitFor: '.standings-list' });
     await browser.close();
 } catch (e) {
     console.error(e);
