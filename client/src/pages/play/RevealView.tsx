@@ -151,9 +151,11 @@ export function YearRevealView({ game, result }: Readonly<{ game: PlayState; res
     );
   }
 
-  // The timeline card already shows every player's guess and distance —
-  // this strip only adds what it doesn't: points earned this round.
-  const scorers = (result.yearResults ?? []).filter(r => r.points > 0).sort((a, b) => b.points - a.points);
+  // The timeline card already shows every player's guess and distance, and
+  // the score box below already shows the current player's own points +
+  // breakdown — this strip only adds what neither of those does: other
+  // players' points earned this round.
+  const scorers = (result.yearResults ?? []).filter(r => r.points > 0 && r.name !== myName).sort((a, b) => b.points - a.points);
   const guessesList = scorers.length > 0 && (
     <div style={{ background: 'rgba(255,255,255,0.05)', border: '1px solid rgba(255,255,255,0.08)', borderRadius: '16px', padding: '8px 12px', width: '310px', maxWidth: '92vw' }} className="space-y-1">
       {scorers.map(r => (
