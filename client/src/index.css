@@ -497,8 +497,8 @@ select:focus-visible,
 .award-row-item {
   display: flex;
   align-items: center;
-  gap: 12px;
-  padding: 11px 2px;
+  gap: 14px;
+  padding: 16px 2px;
   animation: awardRowIn 0.42s cubic-bezier(0.16, 1, 0.3, 1) both;
 }
 
@@ -507,20 +507,49 @@ select:focus-visible,
 }
 
 .award-row-mark {
-  width: 30px;
-  height: 30px;
+  width: 44px;
+  height: 44px;
   flex-shrink: 0;
   display: grid;
   place-items: center;
 }
 
 .award-row-art {
-  width: 30px;
-  height: 30px;
-  border-radius: 6px;
+  width: 44px;
+  height: 44px;
+  border-radius: 8px;
   flex-shrink: 0;
   object-fit: cover;
   border: 1px solid rgba(255,255,255,0.14);
+}
+
+/* Icon-only awards (Most Correct, Biggest Swing) don't need the taller row
+   the cover-art awards get -- there's no image to give room to, so they
+   fall back to the original compact height and icon-mark size. */
+.award-row-compact {
+  padding: 11px 2px;
+}
+
+.award-row-compact .award-row-mark {
+  width: 30px;
+  height: 30px;
+}
+
+/* Finale winner: an upgraded capstone card rather than a plain divided row
+   -- no leading icon, a gradient wash + glow in the same violet used for its
+   label/stat color, and a bigger name to read as the last, biggest award. */
+.award-row-finale {
+  border-top: none;
+  margin-top: 10px;
+  padding: 18px 16px;
+  border-radius: 14px;
+  background: linear-gradient(135deg, rgba(194,160,217,0.16) 0%, rgba(194,160,217,0.05) 55%, rgba(255,255,255,0.02) 100%);
+  border: 1px solid rgba(194,160,217,0.32);
+  box-shadow: 0 0 28px rgba(194,160,217,0.14);
+}
+
+.award-row-name-finale {
+  font-size: 1.2rem;
 }
 
 .award-row-text {

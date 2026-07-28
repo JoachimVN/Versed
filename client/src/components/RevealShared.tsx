@@ -1,4 +1,4 @@
-import { Check, Trophy, X, Zap, Timer, TrendingUp, Swords } from 'lucide-react';
+import { Check, Target, Trophy, X, Zap, Timer, TrendingUp, Swords } from 'lucide-react';
 import LiquidGlass from './StableLiquidGlass';
 import type { Award, PointsBreakdown, RoundResultEvent } from '../types';
 import { LIQUID_CONTROL_PROPS, LIQUID_PILL_PROPS } from './liquidGlassPresets';
@@ -60,7 +60,7 @@ export const AWARD_LABELS: Record<Award['key'], string> = {
 // Typed against Award['key'] so a future award key fails type-check here
 // instead of silently rendering a badge with no icon.
 const AWARD_ICONS: Record<Award['key'], typeof Trophy> = {
-  mostCorrect: Trophy,
+  mostCorrect: Target,
   fastestGuess: Zap,
   fastestClassicGuess: Timer,
   biggestSwing: TrendingUp,
@@ -105,15 +105,35 @@ function leadingStat(detail: string): string | null {
 // scoreboard-style number pulled from the award's own detail text. The
 // quoted guess itself uses the same green used everywhere else a correct
 // answer is confirmed.
+// The finale duel has no leading stat and no highlight (server sends only
+// a flat "Won the finale duel" detail) -- rather than an icon-less row that
+// reads as an accidentally-broken version of the others, it gets its own
+// upgraded card treatment (glow, gradient wash, bigger name) so the last
+// award in the list reads as a deliberate capstone, not a downgrade.
+function FinaleAwardRow({ award, delay }: Readonly<{ award: Award; delay: number }>) {
+  const color = AWARD_COLORS[award.key];
+  return (
+    <div className="award-row-item award-row-finale" style={{ animationDelay: `${delay}ms` }}>
+      <div className="award-row-text">
+        <span className="award-row-label" style={{ color }}>{AWARD_LABELS[award.key]}</span>
+        <span className="award-row-name award-row-name-finale">{award.playerNames.join(' & ')}</span>
+        <span className="award-row-quote">{award.detail}</span>
+      </div>
+    </div>
+  );
+}
+
 function AwardRow({ award, delay }: Readonly<{ award: Award; delay: number }>) {
+  if (award.key === 'finaleWinner') return <FinaleAwardRow award={award} delay={delay} />;
   const Icon = AWARD_ICONS[award.key];
   const color = AWARD_COLORS[award.key];
   const highlight = award.highlights?.[0];
   const stat = leadingStat(award.detail);
+  const hasArt = Boolean(highlight?.coverUrl);
   return (
-    <div className="award-row-item" style={{ animationDelay: `${delay}ms` }}>
-      {highlight?.coverUrl
-        ? <img className="award-row-art" src={highlight.coverUrl} alt="" />
+    <div className={`award-row-item${hasArt ? '' : ' award-row-compact'}`} style={{ animationDelay: `${delay}ms` }}>
+      {hasArt
+        ? <img className="award-row-art" src={highlight!.coverUrl} alt="" />
         : <span className="award-row-mark" style={{ color }}><Icon style={{ width: '18px', height: '18px' }} /></span>}
       <div className="award-row-text">
         <span className="award-row-label" style={{ color }}>{AWARD_LABELS[award.key]}</span>
