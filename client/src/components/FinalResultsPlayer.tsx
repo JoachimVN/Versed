@@ -81,14 +81,18 @@ export function FinalResultsPlayerView({ leaderboard, awards, myName, background
   const lastSignatureRef = useRef<string | null>(null);
 
   useEffect(() => {
-    if (reducedMotion || leaderboard.length === 0) { setPhase('settled'); lastSignatureRef.current = leaderboardSignature; return; }
+    if (reducedMotion || leaderboardSignature === '') { setPhase('settled'); lastSignatureRef.current = leaderboardSignature; return; }
     if (lastSignatureRef.current === leaderboardSignature) return;
     lastSignatureRef.current = leaderboardSignature;
     setPhase('hold');
-    const podiumCount = Math.min(3, leaderboard.length);
+    const podiumCount = Math.min(3, leaderboardSignature.split('|').length);
     const timer = setTimeout(() => setPhase('settled'), getCeremonyDuration(podiumCount));
     return () => clearTimeout(timer);
-  }, [leaderboard, leaderboardSignature, reducedMotion]);
+    // Keying off the content signature (not the `leaderboard` array reference) is
+    // deliberate: a reconnect resync resends an equal-content but new-reference
+    // array, which would otherwise cancel this timer without rescheduling it,
+    // leaving the player stuck on "Look up at the board" forever.
+  }, [leaderboardSignature, reducedMotion]);
 
   // Echoes the host's confetti arc on landing: a fast gold burst that holds,
   // then eases into the calm cyan/purple confetti the recap settles on. The
