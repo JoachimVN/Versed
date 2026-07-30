@@ -602,11 +602,12 @@ export function ResultRow({ entry, isMe, delay }: Readonly<{ entry: LeaderboardE
  * recap podium + full standings + awards. Landscape, meant for the shared
  * screen -- see FinalResultsPlayer.tsx for the player's phone-side view.
  */
-export function FinalResultsView({ leaderboard, awards, backgroundSrc, footer }: Readonly<{
+export function FinalResultsView({ leaderboard, awards, backgroundSrc, footer, onSkip }: Readonly<{
   leaderboard: LeaderboardEntry[];
   awards: Award[];
   backgroundSrc: string;
   footer: ReactNode;
+  onSkip?: () => void;
 }>) {
   const [reducedMotion] = useState(() => globalThis.matchMedia?.('(prefers-reduced-motion: reduce)').matches ?? false);
   const podium = useMemo(() => leaderboard.slice(0, Math.min(3, leaderboard.length)), [leaderboard]);
@@ -648,7 +649,8 @@ export function FinalResultsView({ leaderboard, awards, backgroundSrc, footer }:
     fadeOutRevealAudio();
     setStage('sweepToSettled');
     stageTimersRef.current = [setTimeout(() => setStage('settled'), SETTLE_DURATION_MS)];
-  }, [fadeOutRevealAudio]);
+    onSkip?.();
+  }, [fadeOutRevealAudio, onSkip]);
 
   const [holding, setHolding] = useState(false);
   // Bumped on every press so the fill bar's key changes and its CSS

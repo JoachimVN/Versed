@@ -47,6 +47,7 @@ export interface PlayState {
   leaderboard: LeaderboardEntry[];
   leaderboardDeltas: Record<string, number>;
   awards: Award[];
+  finalResultsSkipped: boolean;
   songPlaying: boolean;
   songTempo: number | null;
   reconnecting: boolean;
@@ -142,6 +143,7 @@ export function usePlayGame(pinParam?: string): PlayState {
   const leaderboardRef = useRef<LeaderboardEntry[]>([]);
   const [leaderboardDeltas, setLeaderboardDeltas] = useState<Record<string, number>>({});
   const [awards, setAwards] = useState<Award[]>([]);
+  const [finalResultsSkipped, setFinalResultsSkipped] = useState(false);
   const [songPlaying, setSongPlaying] = useState(false);
   const [songTempo, setSongTempo] = useState<number | null>(null);
   const [reconnecting, setReconnecting] = useState(false);
@@ -456,7 +458,15 @@ export function usePlayGame(pinParam?: string): PlayState {
       clearRoundTimers();
       applyLeaderboard(lb);
       setAwards(aw ?? []);
+      setFinalResultsSkipped(false);
       setPhase('finished');
+    });
+
+    // Host held down "skip" on the final-results cinematic — settle
+    // immediately instead of sitting out the rest of the fixed-length
+    // "look up at the board" timer for a ceremony that already ended.
+    socket.on('final_results_skipped', () => {
+      setFinalResultsSkipped(true);
     });
 
     socket.on('host_reconnecting', () => {
@@ -505,7 +515,7 @@ export function usePlayGame(pinParam?: string): PlayState {
       if (autoSubmitTimerRef.current) clearTimeout(autoSubmitTimerRef.current);
       if (guessAutoSubmitTimerRef.current) clearTimeout(guessAutoSubmitTimerRef.current);
       ['connect','disconnect','round_start','betting_closed','song_playing','guessing_start','your_turn',
-       'round_result','score_update','score_sync','leaderboard','game_over',
+       'round_result','score_update','score_sync','leaderboard','game_over','final_results_skipped',
        'host_reconnecting','host_reconnected','host_disconnected','game_restarted','kicked',
        'choose_steal','steal_result']
         .forEach(e => socket.off(e));
@@ -687,7 +697,7 @@ export function usePlayGame(pinParam?: string): PlayState {
     timeLeft, timerTotal, bettingTime, bidIndex, bidOptions, bidScores, myBid, guesserNames, lowestBid,
     guessText, result, myScore, myScoreDelta, myPity, myPityAmount, myBreakdown, myStreak, mode, artistOnly, yearOnly, choiceOptions, myRacePoints, myRaceTimeMs,
     party, introParty, artistGuessText, stealVictims, stealResult,
-    leaderboard, leaderboardDeltas, awards, songPlaying, songTempo, reconnecting, hostReconnecting, savedSession, guessInputRef,
+    leaderboard, leaderboardDeltas, awards, finalResultsSkipped, songPlaying, songTempo, reconnecting, hostReconnecting, savedSession, guessInputRef,
     cameFromQR, newGamePin, rejoinNewGame,
     setPin, setName,
     setArtistGuessText: (v: string) => {

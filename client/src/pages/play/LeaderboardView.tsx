@@ -136,7 +136,7 @@ function FinalResultsFooter({ game }: Readonly<{ game: PlayState }>) {
 }
 
 export function FinalResultsWrapper({ game }: Readonly<{ game: PlayState }>) {
-  const { leaderboard, awards, myName } = game;
+  const { leaderboard, awards, myName, finalResultsSkipped } = game;
   return (
     <FinalResultsPlayerView
       leaderboard={leaderboard}
@@ -144,6 +144,7 @@ export function FinalResultsWrapper({ game }: Readonly<{ game: PlayState }>) {
       myName={myName}
       backgroundSrc={`${import.meta.env.BASE_URL}backgrounds/background7.png`}
       footer={<FinalResultsFooter game={game} />}
+      skipped={finalResultsSkipped}
     />
   );
 }

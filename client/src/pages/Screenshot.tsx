@@ -284,6 +284,7 @@ const MOCK_PLAY: PlayState = {
   leaderboard: [],
   leaderboardDeltas: {},
   awards: [],
+  finalResultsSkipped: false,
   songPlaying: true,
   songTempo: 117,
   reconnecting: false,
