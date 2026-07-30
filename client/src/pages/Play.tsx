@@ -83,7 +83,7 @@ export default function Play() {
       {phase === 'bid_submitted' && <BidSubmittedView game={game} />}
       {phase === 'watching' && !imGuessing && <WatchingView game={game} />}
       {(phase === 'guessing' || (phase === 'watching' && imGuessing)) && <GuessingView game={game} />}
-      {phase === 'passed' && <PassedView game={game} />}
+      {phase === 'passed' && <PassedView />}
       {phase === 'reveal' && result && (
         result.party?.format === 'year' || result.yearOnly
           ? <YearRevealView game={game} result={result} />

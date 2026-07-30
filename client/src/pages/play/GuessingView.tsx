@@ -377,17 +377,13 @@ export function GuessingView({ game }: Readonly<{ game: PlayState }>) {
   );
 }
 
-export function PassedView({ game }: Readonly<{ game: PlayState }>) {
-  const { mode, myRacePoints, myRaceTimeMs, party } = game;
+export function PassedView() {
   const [visible, setVisible] = useState(false);
   useEffect(() => { const t = setTimeout(() => setVisible(true), 30); return () => clearTimeout(t); }, []);
-  const gotIt = mode === 'race' && myRacePoints > 0;
-  // Mystery's multiplier is still hidden at this point (see partyView on the
-  // server), so the points shown here are the pre-multiplier amount — flag
-  // that up front rather than let it read as the final score.
-  const mysteryPending = gotIt && party?.event === 'mystery';
-  let cardHeight = '150px';
-  if (gotIt) cardHeight = mysteryPending ? '204px' : '180px';
+  // Correctness is deliberately not surfaced here — every guesser sees the
+  // same "waiting" state, and results reveal simultaneously for everyone via
+  // RevealView once round_result arrives.
+  const cardHeight = '150px';
 
   return (
     <div className="relative min-h-screen overflow-hidden">
@@ -415,45 +411,19 @@ export function PassedView({ game }: Readonly<{ game: PlayState }>) {
             padding="28px 28px"
           >
             <div style={{ width: '254px', display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '14px' }}>
-              {gotIt ? (
-                <>
-                  <span style={{ display: 'inline-block', minWidth: '120px', color: '#4ade80', fontWeight: 900, fontSize: '1.6rem', textAlign: 'center' }}>
-                    Got it!
-                  </span>
-                  <div style={{ width: '100%', height: '1px', background: 'rgba(255,255,255,0.07)' }} />
-                  <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
-                    {myRaceTimeMs !== null && (
-                      <span style={{ display: 'inline-block', color: 'rgba(255,255,255,0.45)', fontSize: '0.9rem' }}>
-                        {(myRaceTimeMs / 1000).toFixed(1)}s
-                      </span>
-                    )}
-                    <span style={{ display: 'inline-block', color: '#38bdf8', fontWeight: 700, fontSize: '1rem' }}>
-                      +{myRacePoints} pts
-                    </span>
-                  </div>
-                  {mysteryPending && (
-                    <span style={{ color: 'rgba(94,234,212,0.8)', fontSize: '0.72rem', fontWeight: 700, letterSpacing: '0.06em', textTransform: 'uppercase' }}>
-                      Mystery multiplier pending…
-                    </span>
-                  )}
-                </>
-              ) : (
-                <>
-                  <div style={{ display: 'flex', gap: '6px' }}>
-                    {[0, 1, 2].map(i => (
-                      <div key={i} style={{
-                        width: '6px', height: '6px', borderRadius: '50%',
-                        background: 'rgba(0,166,163,0.8)',
-                        animationName: 'dotBounce', animationDuration: '1.4s', animationTimingFunction: 'ease-in-out', animationIterationCount: 'infinite',
-                        animationDelay: `${i * 0.18}s`,
-                      }} />
-                    ))}
-                  </div>
-                  <span style={{ display: 'inline-block', minWidth: '180px', color: 'rgba(255,255,255,0.45)', fontSize: '0.9rem', textAlign: 'center' }}>
-                    Waiting for others…
-                  </span>
-                </>
-              )}
+              <div style={{ display: 'flex', gap: '6px' }}>
+                {[0, 1, 2].map(i => (
+                  <div key={i} style={{
+                    width: '6px', height: '6px', borderRadius: '50%',
+                    background: 'rgba(0,166,163,0.8)',
+                    animationName: 'dotBounce', animationDuration: '1.4s', animationTimingFunction: 'ease-in-out', animationIterationCount: 'infinite',
+                    animationDelay: `${i * 0.18}s`,
+                  }} />
+                ))}
+              </div>
+              <span style={{ display: 'inline-block', minWidth: '180px', color: 'rgba(255,255,255,0.45)', fontSize: '0.9rem', textAlign: 'center' }}>
+                Waiting for others…
+              </span>
             </div>
           </LiquidGlass>
         </div>
