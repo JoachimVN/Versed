@@ -238,8 +238,11 @@ function toPlaylistTrackInput(t: SpotifyTrack | null): PlaylistTrackInput | null
     spotifyTrackId: t.id,
     title: t.name,
     artist: t.artists[0].name,
+    // ';'-joined, not ',': an artist name can itself contain a comma (e.g.
+    // "Tyler, The Creator"), which would make a comma join ambiguous to
+    // split back apart server-side (fuzzyMatch.ts/songPool.ts split on ';').
     featuredArtists: t.artists.length > 1
-      ? t.artists.slice(1).map(a => a.name).join(', ')
+      ? t.artists.slice(1).map(a => a.name).join(';')
       : undefined,
     durationMs: t.duration_ms ?? null,
     year: parseYear(t.album?.release_date),

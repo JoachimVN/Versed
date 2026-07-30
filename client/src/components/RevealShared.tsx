@@ -19,6 +19,12 @@ export const BIG_POINTS_THRESHOLD = 2500;
 // drops just that one line — used on player screens for a mystery round,
 // where the multiplier's value is a host-screen-only reveal and shouldn't
 // leak through the point breakdown text either.
+// featuredArtists arrives ';'-joined (individual names can contain commas
+// themselves, e.g. "Tyler, The Creator"), rendered here for humans.
+function formatFeaturedArtists(featuredArtists: string): string {
+  return featuredArtists.split(';').join(', ');
+}
+
 export function breakdownLines(b: PointsBreakdown, hideMultiplier = false): string[] {
   const lines = b.parts.filter(p => p.amount !== 0).map(p => `${p.label} +${p.amount.toLocaleString()}`);
   if (!hideMultiplier && b.multiplier !== 1) lines.push(`×${b.multiplier} multiplier +${b.multiplierBonus.toLocaleString()}`);
@@ -227,7 +233,7 @@ function SongInfo({ result }: Readonly<{ result: RoundResultEvent }>) {
         <>
           <span style={{ color: 'white', fontWeight: 900, fontSize: '1.1rem', lineHeight: 1.3, display: 'inline-block', minWidth: '220px' }}>
             {result.artist}
-            {result.featuredArtists && <span style={{ color: 'rgba(255,255,255,0.45)', fontWeight: 400, fontSize: '0.875rem' }}> feat. {result.featuredArtists}</span>}
+            {result.featuredArtists && <span style={{ color: 'rgba(255,255,255,0.45)', fontWeight: 400, fontSize: '0.875rem' }}> feat. {formatFeaturedArtists(result.featuredArtists)}</span>}
           </span>
           <span style={{ color: 'rgba(255,255,255,0.45)', fontSize: '0.875rem', marginTop: '3px', display: 'inline-block', minWidth: '220px' }}>
             {result.songTitle}
@@ -239,7 +245,7 @@ function SongInfo({ result }: Readonly<{ result: RoundResultEvent }>) {
             {result.songTitle}
           </span>
           <span style={{ color: 'rgba(255,255,255,0.45)', fontSize: '0.875rem', marginTop: '3px', display: 'inline-block', minWidth: '220px' }}>
-            {result.artist}{result.featuredArtists ? <span style={{ color: 'rgba(255,255,255,0.45)' }}> feat. {result.featuredArtists}</span> : null}
+            {result.artist}{result.featuredArtists ? <span style={{ color: 'rgba(255,255,255,0.45)' }}> feat. {formatFeaturedArtists(result.featuredArtists)}</span> : null}
           </span>
         </>
       )}

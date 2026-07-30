@@ -95,10 +95,11 @@ function normalizeArtistName(name: string): string {
   return name.trim().toLowerCase().replace(/\s+/g, ' ');
 }
 
-// featuredArtists is already comma-joined by the time it reaches Song, both
-// via songLoader.ts's CSV parse and customSongPool.ts's playlist adapter.
+// featuredArtists is already ';'-joined by the time it reaches Song, both
+// via songLoader.ts's CSV parse and customSongPool.ts's playlist adapter —
+// not ',', since individual names can contain commas themselves.
 function artistNames(song: Song): string[] {
-  const names = [song.artist, ...(song.featuredArtists ? song.featuredArtists.split(',') : [])];
+  const names = [song.artist, ...(song.featuredArtists ? song.featuredArtists.split(';') : [])];
   return names.map(normalizeArtistName).filter(Boolean);
 }
 

@@ -42,7 +42,7 @@ function timeHint(song: Song): Hint | null {
 }
 
 function fullArtistLine(song: Song): string {
-  return song.featuredArtists ? `${song.artist} feat. ${song.featuredArtists}` : song.artist;
+  return song.featuredArtists ? `${song.artist} feat. ${song.featuredArtists.split(';').join(', ')}` : song.artist;
 }
 
 function artistHint(song: Song): Hint {
