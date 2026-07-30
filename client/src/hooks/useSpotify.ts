@@ -198,6 +198,31 @@ export function useSpotify() {
     if (stopTimerRef.current) { clearTimeout(stopTimerRef.current); stopTimerRef.current = null; }
   }
 
+  // A 'not_ready' device is usually transient (tab was backgrounded, brief
+  // network blip, Spotify Connect handed playback elsewhere for a moment) —
+  // the SDK reconnects and fires 'ready' again on its own within a couple of
+  // seconds. Previously prepareTrack failed immediately and permanently once
+  // this happened, breaking every subsequent round (including new games)
+  // until the page was reloaded. Give the SDK a real chance to recover
+  // before giving up, nudging it with an explicit connect() in case the
+  // automatic reconnect stalled.
+  function waitForDeviceReady(timeoutMs: number): Promise<string | null> {
+    if (deviceIdRef.current) return Promise.resolve(deviceIdRef.current);
+    playerRef.current?.connect().catch(() => { /* best-effort nudge */ });
+    return new Promise((resolve) => {
+      const start = Date.now();
+      const poll = setInterval(() => {
+        if (deviceIdRef.current) {
+          clearInterval(poll);
+          resolve(deviceIdRef.current);
+        } else if (Date.now() - start > timeoutMs) {
+          clearInterval(poll);
+          resolve(null);
+        }
+      }, 150);
+    });
+  }
+
   // Resolve once audio is genuinely playing from near the intended start, so
   // the play window is timed from the audible start rather than the resume()
   // call (which precedes real output by 100-300ms of device/SDK latency).
@@ -230,9 +255,13 @@ export function useSpotify() {
   // gapless. Returns true once Spotify accepted the play request.
   async function prepareTrack(trackId: string, positionMs = 0) {
     const token = accessTokenRef.current;
-    const device = deviceIdRef.current;
-    if (!device || !token) {
-      reportPlaybackError('prepareTrack called but not ready', { device, hasToken: !!token });
+    if (!token) {
+      reportPlaybackError('prepareTrack called but not ready', { device: deviceIdRef.current, hasToken: false });
+      return false;
+    }
+    const device = deviceIdRef.current ?? await waitForDeviceReady(4000);
+    if (!device) {
+      reportPlaybackError('prepareTrack called but not ready', { device, hasToken: true });
       return false;
     }
     clearStopTimer();
