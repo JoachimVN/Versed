@@ -335,7 +335,7 @@ async function collectPlaylistTracks(
 }
 
 async function refreshAccessToken(): Promise<string | null> {
-  const refreshToken = sessionStorage.getItem('spotify_rt');
+  const refreshToken = localStorage.getItem('spotify_rt');
   if (!refreshToken) return null;
   try {
     const res = await fetch(`${BACKEND_URL}/api/auth/refresh`, {
@@ -348,7 +348,7 @@ async function refreshAccessToken(): Promise<string | null> {
     // useSpotify's URL-fragment flow — never write it to storage unvalidated.
     const accessToken = sanitizeToken(data.access_token);
     if (accessToken) {
-      sessionStorage.setItem('spotify_at', accessToken);
+      localStorage.setItem('spotify_at', accessToken);
       return accessToken;
     }
   } catch (err) {

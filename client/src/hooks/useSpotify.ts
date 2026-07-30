@@ -4,7 +4,7 @@ import { BACKEND_URL } from '../config';
 let sdkLoaded = false;
 
 // Spotify OAuth tokens are base64url-ish strings. Reject anything that doesn't
-// match before it touches sessionStorage, since both URL params and the
+// match before it touches localStorage, since both URL params and the
 // refresh-token API response are attacker-influenceable (tainted) input.
 const TOKEN_PATTERN = /^[A-Za-z0-9_-]{10,512}$/;
 export function sanitizeToken(value: string | null | undefined): string | null {
@@ -44,7 +44,7 @@ export function useSpotify() {
   // Where the prepared track starts (party "snippet" rounds start mid-song);
   // startPrepared seeks here and playback detection is offset by it.
   const preparedPositionRef = useRef(0);
-  // True when the access token was restored from sessionStorage: it may be
+  // True when the access token was restored from localStorage: it may be
   // arbitrarily old (tokens live 1h), so refresh it right away instead of
   // waiting out the first 50-minute interval.
   const staleTokenRef = useRef(false);
@@ -118,12 +118,12 @@ export function useSpotify() {
       accessTokenRef.current = at;
       setAccessToken(at);
       setRefreshToken(rt);
-      sessionStorage.setItem('spotify_at', at);
-      if (rt) sessionStorage.setItem('spotify_rt', rt);
+      localStorage.setItem('spotify_at', at);
+      if (rt) localStorage.setItem('spotify_rt', rt);
       globalThis.history.replaceState({}, '', globalThis.location.pathname);
     } else {
-      const stored = sanitizeToken(sessionStorage.getItem('spotify_at'));
-      const storedRt = sanitizeToken(sessionStorage.getItem('spotify_rt'));
+      const stored = sanitizeToken(localStorage.getItem('spotify_at'));
+      const storedRt = sanitizeToken(localStorage.getItem('spotify_rt'));
       if (stored) {
         accessTokenRef.current = stored;
         setAccessToken(stored);
@@ -147,7 +147,7 @@ export function useSpotify() {
         if (newAt) {
           accessTokenRef.current = newAt;
           setAccessToken(newAt);
-          sessionStorage.setItem('spotify_at', newAt);
+          localStorage.setItem('spotify_at', newAt);
         }
       } catch { /* silently retry next interval */ }
     };
@@ -311,8 +311,8 @@ export function useSpotify() {
   }
 
   function disconnect() {
-    sessionStorage.removeItem('spotify_at');
-    sessionStorage.removeItem('spotify_rt');
+    localStorage.removeItem('spotify_at');
+    localStorage.removeItem('spotify_rt');
     accessTokenRef.current = null;
     playerRef.current?.disconnect();
     playerRef.current = null;
