@@ -674,6 +674,12 @@ export function useHostGame(): HostState {
       setStealResult(null);
       stopCountdown();
       stopPlaybackBar();
+      // A stale playback generation or leftover "song playing" state from the
+      // previous game must not carry into this one, even though the server's
+      // Game object is already a full fresh one at this point.
+      ++playGenRef.current;
+      setSongPlaying(false);
+      setSongTempo(null);
       setPhase('lobby');
     });
   };

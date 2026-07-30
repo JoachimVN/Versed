@@ -61,6 +61,7 @@ export function FinalResultsWrapper({ game }: Readonly<{ game: HostState }>) {
       awards={awards}
       backgroundSrc={`${import.meta.env.BASE_URL}backgrounds/background7.png`}
       footer={<PillButton onClick={game.newGame} label="New Game" />}
+      onSkip={() => socket.emit('skip_final_results')}
     />
   );
 }

@@ -4,7 +4,7 @@ import { BACKEND_URL } from '../config';
 let sdkLoaded = false;
 
 // Spotify OAuth tokens are base64url-ish strings. Reject anything that doesn't
-// match before it touches sessionStorage, since both URL params and the
+// match before it touches localStorage, since both URL params and the
 // refresh-token API response are attacker-influenceable (tainted) input.
 const TOKEN_PATTERN = /^[A-Za-z0-9_-]{10,512}$/;
 export function sanitizeToken(value: string | null | undefined): string | null {
@@ -44,7 +44,7 @@ export function useSpotify() {
   // Where the prepared track starts (party "snippet" rounds start mid-song);
   // startPrepared seeks here and playback detection is offset by it.
   const preparedPositionRef = useRef(0);
-  // True when the access token was restored from sessionStorage: it may be
+  // True when the access token was restored from localStorage: it may be
   // arbitrarily old (tokens live 1h), so refresh it right away instead of
   // waiting out the first 50-minute interval.
   const staleTokenRef = useRef(false);
@@ -83,7 +83,16 @@ export function useSpotify() {
       setPlayerReady(true);
       setPlaybackError(null);
     });
-    player.addListener('not_ready', () => setPlayerReady(false));
+    // The device backing deviceIdRef just went offline (tab backgrounded,
+    // network blip, playback moved elsewhere). Clear it so prepareTrack fails
+    // fast with a clear "not ready" reason instead of silently PUTing to a
+    // now-invalid device_id and failing the same confusing way every round
+    // until the page is reloaded. The SDK re-fires 'ready' with a device_id
+    // (often the same one) once it's back, which repopulates this normally.
+    player.addListener('not_ready', () => {
+      deviceIdRef.current = null;
+      setPlayerReady(false);
+    });
     player.addListener('initialization_error', (data: unknown) => reportPlaybackError('initialization_error', data));
     player.addListener('authentication_error', (data: unknown) => reportPlaybackError('authentication_error', data));
     player.addListener('account_error', (data: unknown) => reportPlaybackError('account_error', data));
@@ -109,12 +118,12 @@ export function useSpotify() {
       accessTokenRef.current = at;
       setAccessToken(at);
       setRefreshToken(rt);
-      sessionStorage.setItem('spotify_at', at);
-      if (rt) sessionStorage.setItem('spotify_rt', rt);
+      localStorage.setItem('spotify_at', at);
+      if (rt) localStorage.setItem('spotify_rt', rt);
       globalThis.history.replaceState({}, '', globalThis.location.pathname);
     } else {
-      const stored = sanitizeToken(sessionStorage.getItem('spotify_at'));
-      const storedRt = sanitizeToken(sessionStorage.getItem('spotify_rt'));
+      const stored = sanitizeToken(localStorage.getItem('spotify_at'));
+      const storedRt = sanitizeToken(localStorage.getItem('spotify_rt'));
       if (stored) {
         accessTokenRef.current = stored;
         setAccessToken(stored);
@@ -138,7 +147,7 @@ export function useSpotify() {
         if (newAt) {
           accessTokenRef.current = newAt;
           setAccessToken(newAt);
-          sessionStorage.setItem('spotify_at', newAt);
+          localStorage.setItem('spotify_at', newAt);
         }
       } catch { /* silently retry next interval */ }
     };
@@ -189,6 +198,31 @@ export function useSpotify() {
     if (stopTimerRef.current) { clearTimeout(stopTimerRef.current); stopTimerRef.current = null; }
   }
 
+  // A 'not_ready' device is usually transient (tab was backgrounded, brief
+  // network blip, Spotify Connect handed playback elsewhere for a moment) —
+  // the SDK reconnects and fires 'ready' again on its own within a couple of
+  // seconds. Previously prepareTrack failed immediately and permanently once
+  // this happened, breaking every subsequent round (including new games)
+  // until the page was reloaded. Give the SDK a real chance to recover
+  // before giving up, nudging it with an explicit connect() in case the
+  // automatic reconnect stalled.
+  function waitForDeviceReady(timeoutMs: number): Promise<string | null> {
+    if (deviceIdRef.current) return Promise.resolve(deviceIdRef.current);
+    playerRef.current?.connect().catch(() => { /* best-effort nudge */ });
+    return new Promise((resolve) => {
+      const start = Date.now();
+      const poll = setInterval(() => {
+        if (deviceIdRef.current) {
+          clearInterval(poll);
+          resolve(deviceIdRef.current);
+        } else if (Date.now() - start > timeoutMs) {
+          clearInterval(poll);
+          resolve(null);
+        }
+      }, 150);
+    });
+  }
+
   // Resolve once audio is genuinely playing from near the intended start, so
   // the play window is timed from the audible start rather than the resume()
   // call (which precedes real output by 100-300ms of device/SDK latency).
@@ -221,9 +255,13 @@ export function useSpotify() {
   // gapless. Returns true once Spotify accepted the play request.
   async function prepareTrack(trackId: string, positionMs = 0) {
     const token = accessTokenRef.current;
-    const device = deviceIdRef.current;
-    if (!device || !token) {
-      console.error('[Spotify] prepareTrack called but not ready', { device, hasToken: !!token });
+    if (!token) {
+      reportPlaybackError('prepareTrack called but not ready', { device: deviceIdRef.current, hasToken: false });
+      return false;
+    }
+    const device = deviceIdRef.current ?? await waitForDeviceReady(4000);
+    if (!device) {
+      reportPlaybackError('prepareTrack called but not ready', { device, hasToken: true });
       return false;
     }
     clearStopTimer();
@@ -242,7 +280,7 @@ export function useSpotify() {
       });
       if (!res.ok) {
         const body = await res.text();
-        console.error(`[Spotify] prepare failed ${res.status}:`, body);
+        reportPlaybackError(`prepare failed ${res.status}`, body);
         playStateRef.current = 'idle';
         return false;
       }
@@ -302,8 +340,8 @@ export function useSpotify() {
   }
 
   function disconnect() {
-    sessionStorage.removeItem('spotify_at');
-    sessionStorage.removeItem('spotify_rt');
+    localStorage.removeItem('spotify_at');
+    localStorage.removeItem('spotify_rt');
     accessTokenRef.current = null;
     playerRef.current?.disconnect();
     playerRef.current = null;

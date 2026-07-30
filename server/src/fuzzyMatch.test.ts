@@ -124,9 +124,13 @@ describe('isCorrectArtistGuess', () => {
     expect(isCorrectArtistGuess('tayler swift', 'Taylor Swift')).toBe(true);
   });
 
-  it('matches any featured artist from the comma list', () => {
-    expect(isCorrectArtistGuess('Doja Cat', 'Ariana Grande', 'Doja Cat, Megan Thee Stallion')).toBe(true);
-    expect(isCorrectArtistGuess('Megan Thee Stallion', 'Ariana Grande', 'Doja Cat, Megan Thee Stallion')).toBe(true);
+  it('matches any featured artist from the list', () => {
+    expect(isCorrectArtistGuess('Doja Cat', 'Ariana Grande', 'Doja Cat;Megan Thee Stallion')).toBe(true);
+    expect(isCorrectArtistGuess('Megan Thee Stallion', 'Ariana Grande', 'Doja Cat;Megan Thee Stallion')).toBe(true);
+  });
+
+  it('matches a featured artist whose own name contains a comma', () => {
+    expect(isCorrectArtistGuess('Tyler, The Creator', 'Pharrell Williams', '21 Savage;Tyler, The Creator')).toBe(true);
   });
 
   it('rejects an unrelated artist', () => {

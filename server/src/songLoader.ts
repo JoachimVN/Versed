@@ -28,20 +28,6 @@ function parseCSVLine(line: string): string[] {
   return result;
 }
 
-// The artist column separates genuinely distinct collaborators with ';', but
-// a handful of single-artist stage names that contain a comma (e.g. "Tyler,
-// The Creator") got encoded with that same ';' upstream — indistinguishable
-// from a real collaborator split without a lookup like this one.
-const KNOWN_COMMA_ARTISTS = ['Tyler;The Creator'];
-
-function fixKnownCommaArtists(rawArtist: string): string {
-  let fixed = rawArtist;
-  for (const name of KNOWN_COMMA_ARTISTS) {
-    fixed = fixed.split(name).join(name.replace(';', ', '));
-  }
-  return fixed;
-}
-
 function num(s: string): number | null {
   const n = Number.parseFloat(s);
   return Number.isNaN(n) ? null : n;
@@ -89,13 +75,18 @@ export function loadSongs(): Song[] {
     const trackId = extractTrackId(f[col.spotify_url] ?? '');
     if (!trackId) continue;
 
-    const rawArtist = fixKnownCommaArtists(f[col.artist].replace(/^"|"$/g, ''));
+    const rawArtist = f[col.artist].replace(/^"|"$/g, '');
     songs.push({
       rank: num(f[col.rank]) ?? i,
       title: f[col.title].replace(/^"|"$/g, '').trim(),
       artist: (rawArtist.split(';')[0] ?? '').trim(),
+      // ';'-joined (not ', '): individual artist names can themselves contain
+      // commas (e.g. "Tyler, The Creator", "Crosby, Stills & Nash"), so a
+      // comma join would be ambiguous to split back apart downstream. See
+      // fuzzyMatch.ts/songPool.ts, which split this on ';'; display sites
+      // render it as ', ' for humans.
       featuredArtists: rawArtist.includes(';')
-        ? rawArtist.split(';').slice(1).join(', ').trim()
+        ? rawArtist.split(';').slice(1).join(';').trim()
         : undefined,
       year: num(f[col.year]),
       decade: num(f[col.decade]),

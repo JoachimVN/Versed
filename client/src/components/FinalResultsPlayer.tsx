@@ -56,12 +56,13 @@ function PersonalHero({ entry, awards, reducedMotion }: Readonly<{ entry: Leader
  * result card -- rank, score, and this player's own award if they earned one
  * -- followed by the full standings and every award, same as before.
  */
-export function FinalResultsPlayerView({ leaderboard, awards, myName, backgroundSrc, footer }: Readonly<{
+export function FinalResultsPlayerView({ leaderboard, awards, myName, backgroundSrc, footer, skipped }: Readonly<{
   leaderboard: LeaderboardEntry[];
   awards: Award[];
   myName: string;
   backgroundSrc: string;
   footer: ReactNode;
+  skipped?: boolean;
 }>) {
   const [reducedMotion] = useState(() => globalThis.matchMedia?.('(prefers-reduced-motion: reduce)').matches ?? false);
   const [phase, setPhase] = useState<Phase>(reducedMotion || leaderboard.length === 0 ? 'settled' : 'hold');
@@ -93,6 +94,13 @@ export function FinalResultsPlayerView({ leaderboard, awards, myName, background
     // array, which would otherwise cancel this timer without rescheduling it,
     // leaving the player stuck on "Look up at the board" forever.
   }, [leaderboardSignature, reducedMotion]);
+
+  // Host held down the hold-to-skip control on their own cinematic — jump
+  // straight to settled instead of sitting out the rest of the fixed-length
+  // timer above with nothing left on the board to look up at.
+  useEffect(() => {
+    if (skipped) setPhase('settled');
+  }, [skipped]);
 
   // Echoes the host's confetti arc on landing: a fast gold burst that holds,
   // then eases into the calm cyan/purple confetti the recap settles on. The

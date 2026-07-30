@@ -203,6 +203,18 @@ export function registerHostHandlers(socket: Socket) {
     getIo().to(game.pin).emit('game_over', { leaderboard: gm.getLeaderboard(game), awards: gm.computeAwards(game) });
   });
 
+  // ── Host: skip the final-results cinematic ─────────────────────────────────
+  // The host's own skip is purely a local UI shortcut (see FinalResults.tsx),
+  // so this just relays it to players — they run their own independently
+  // timed "look up at the board" holding screen and have no other way to
+  // know the host already settled.
+  socket.on('skip_final_results', () => {
+    const game = gm.getGameBySocket(socket.id);
+    if (game?.hostSocketId !== socket.id) return;
+    if (game.phase !== 'finished') return;
+    getIo().to(`player:${game.pin}`).emit('final_results_skipped');
+  });
+
   // ── Host: advance to next round ────────────────────────────────────────────
   socket.on('next_round', () => {
     const game = gm.getGameBySocket(socket.id);

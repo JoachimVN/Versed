@@ -238,8 +238,11 @@ function toPlaylistTrackInput(t: SpotifyTrack | null): PlaylistTrackInput | null
     spotifyTrackId: t.id,
     title: t.name,
     artist: t.artists[0].name,
+    // ';'-joined, not ',': an artist name can itself contain a comma (e.g.
+    // "Tyler, The Creator"), which would make a comma join ambiguous to
+    // split back apart server-side (fuzzyMatch.ts/songPool.ts split on ';').
     featuredArtists: t.artists.length > 1
-      ? t.artists.slice(1).map(a => a.name).join(', ')
+      ? t.artists.slice(1).map(a => a.name).join(';')
       : undefined,
     durationMs: t.duration_ms ?? null,
     year: parseYear(t.album?.release_date),
@@ -335,7 +338,7 @@ async function collectPlaylistTracks(
 }
 
 async function refreshAccessToken(): Promise<string | null> {
-  const refreshToken = sessionStorage.getItem('spotify_rt');
+  const refreshToken = localStorage.getItem('spotify_rt');
   if (!refreshToken) return null;
   try {
     const res = await fetch(`${BACKEND_URL}/api/auth/refresh`, {
@@ -348,7 +351,7 @@ async function refreshAccessToken(): Promise<string | null> {
     // useSpotify's URL-fragment flow — never write it to storage unvalidated.
     const accessToken = sanitizeToken(data.access_token);
     if (accessToken) {
-      sessionStorage.setItem('spotify_at', accessToken);
+      localStorage.setItem('spotify_at', accessToken);
       return accessToken;
     }
   } catch (err) {

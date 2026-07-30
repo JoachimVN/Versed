@@ -147,7 +147,7 @@ export function isCorrectArtistGuess(guess: string, artist: string, featuredArti
   if (!g) return false;
   if (matchesText(g, gRaw, artist)) return true;
   if (featuredArtists) {
-    for (const name of featuredArtists.split(',')) {
+    for (const name of featuredArtists.split(';')) {
       if (matchesText(g, gRaw, name)) return true;
     }
   }
