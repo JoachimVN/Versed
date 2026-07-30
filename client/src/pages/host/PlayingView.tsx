@@ -75,7 +75,7 @@ export function BidTimeline({ bids, lowestBid }: Readonly<{ bids: { name: string
 }
 
 export function PlayingView({ game }: Readonly<{ game: HostState }>) {
-  const { roundIndex, totalRounds, countdown, guesserNames, lowestBid, playerBids, timeLeft, timerTotal, mode, roundYearOnly, hints, answeredCount, players, skipTurn, endGame, party, songPlaying, songTempo } = game;
+  const { roundIndex, totalRounds, countdown, guesserNames, lowestBid, playerBids, timeLeft, timerTotal, mode, roundYearOnly, hints, answeredCount, players, skipTurn, endGame, party, songPlaying, songTempo, spotify } = game;
   // Party rounds that aren't classic-format arrive with an empty bid state and
   // behave exactly like race rounds on this screen. "Guess the year" rides
   // the race flow even in Classic mode — but only outside Party, which picks
@@ -151,6 +151,12 @@ export function PlayingView({ game }: Readonly<{ game: HostState }>) {
             </div>
           </LiquidGlass>
         </div>
+
+        {spotify.playbackError && (
+          <p className="max-w-sm text-center text-red-300 text-sm" aria-live="assertive">
+            {spotify.playbackError}
+          </p>
+        )}
 
         <div className="flex flex-col items-center gap-2 mt-2">
           <button type="button" onClick={skipTurn} className="text-white/20 text-xs hover:text-white/35 transition-colors">

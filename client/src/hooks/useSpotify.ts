@@ -83,7 +83,16 @@ export function useSpotify() {
       setPlayerReady(true);
       setPlaybackError(null);
     });
-    player.addListener('not_ready', () => setPlayerReady(false));
+    // The device backing deviceIdRef just went offline (tab backgrounded,
+    // network blip, playback moved elsewhere). Clear it so prepareTrack fails
+    // fast with a clear "not ready" reason instead of silently PUTing to a
+    // now-invalid device_id and failing the same confusing way every round
+    // until the page is reloaded. The SDK re-fires 'ready' with a device_id
+    // (often the same one) once it's back, which repopulates this normally.
+    player.addListener('not_ready', () => {
+      deviceIdRef.current = null;
+      setPlayerReady(false);
+    });
     player.addListener('initialization_error', (data: unknown) => reportPlaybackError('initialization_error', data));
     player.addListener('authentication_error', (data: unknown) => reportPlaybackError('authentication_error', data));
     player.addListener('account_error', (data: unknown) => reportPlaybackError('account_error', data));
@@ -223,7 +232,7 @@ export function useSpotify() {
     const token = accessTokenRef.current;
     const device = deviceIdRef.current;
     if (!device || !token) {
-      console.error('[Spotify] prepareTrack called but not ready', { device, hasToken: !!token });
+      reportPlaybackError('prepareTrack called but not ready', { device, hasToken: !!token });
       return false;
     }
     clearStopTimer();
@@ -242,7 +251,7 @@ export function useSpotify() {
       });
       if (!res.ok) {
         const body = await res.text();
-        console.error(`[Spotify] prepare failed ${res.status}:`, body);
+        reportPlaybackError(`prepare failed ${res.status}`, body);
         playStateRef.current = 'idle';
         return false;
       }
