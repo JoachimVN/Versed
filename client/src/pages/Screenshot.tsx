@@ -36,7 +36,7 @@ const MOCK_RESULT: RoundResultEvent = {
 };
 
 const MOCK_HOST: HostState = {
-  spotify: null as any,
+  spotify: { playerReady: true, playbackError: null, activatePlayer: noop } as any,
   phase: 'playing',
   pin: '123',
   players: [
@@ -228,12 +228,9 @@ const MOCK_AWARDS: Award[] = [
   { key: 'finaleWinner', playerNames: ['Anna'], detail: 'Beat John 2\u20131 in the finale duel' },
 ];
 
-// LobbyView is the only view that reads `game.spotify` directly, so it needs
-// a minimal stand-in rather than the `null as any` the other views get away with.
 const MOCK_HOST_LOBBY: HostState = {
   ...MOCK_HOST,
   phase: 'lobby',
-  spotify: { playerReady: true } as any,
 };
 
 // Steal Round is party mode's showiest mechanic (win, then rob a victim), so
