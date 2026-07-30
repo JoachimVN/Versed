@@ -22,7 +22,7 @@ export const BIG_POINTS_THRESHOLD = 2500;
 // featuredArtists arrives ';'-joined (individual names can contain commas
 // themselves, e.g. "Tyler, The Creator"), rendered here for humans.
 function formatFeaturedArtists(featuredArtists: string): string {
-  return featuredArtists.split(';').join(', ');
+  return featuredArtists.replaceAll(';', ', ');
 }
 
 export function breakdownLines(b: PointsBreakdown, hideMultiplier = false): string[] {
