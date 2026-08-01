@@ -6,6 +6,7 @@ import { CONFETTI_COLORS, ConfettiBackground, GOLD_CONFETTI_COLORS } from './Con
 import { AwardsStrip, AWARD_LABELS } from './RevealShared';
 import { LIQUID_CARD_PROPS } from './liquidGlassPresets';
 import { useFinalResultsRevealSound } from '../hooks/useFinalResultsRevealSound';
+import { runWhenVisible } from '../hooks/runWhenVisible';
 import type { Award, LeaderboardEntry } from '../types';
 
 type PodiumRank = 1 | 2 | 3;
@@ -626,16 +627,25 @@ export function FinalResultsView({ leaderboard, awards, backgroundSrc, footer, o
     if (reducedMotion || podium.length === 0) { setStage('settled'); return; }
     setStage('dark');
     skippedRef.current = false;
-    const stopRevealAudio = playFinalResultsReveal();
-    const timeline = buildTimeline(podium.length);
-    stageTimersRef.current = timeline.map(step => setTimeout(() => setStage(step.stage), step.delay));
+    let stopRevealAudio: (() => void) | undefined;
+    // Waits for the tab to actually be visible before starting the ceremony:
+    // starting the audio + the whole 28-beat stage timeline while backgrounded
+    // means the setTimeout chain gets throttled and can burst through several
+    // stages at once on refocus, out of step with the (now-resumed) audio --
+    // same class of bug as the reveal reel, see runWhenVisible.
+    const stopWaiting = runWhenVisible(() => {
+      stopRevealAudio = playFinalResultsReveal();
+      const timeline = buildTimeline(podium.length);
+      stageTimersRef.current = timeline.map(step => setTimeout(() => setStage(step.stage), step.delay));
+    });
     // Cleanup fires on unmount (leaving the finished screen, or the host
     // starting a new game unmounts this component when the phase changes
     // away) so a stale timer can never fire into gone/replaced state.
     return () => {
+      stopWaiting();
       stageTimersRef.current.forEach(clearTimeout);
       stageTimersRef.current = [];
-      stopRevealAudio();
+      stopRevealAudio?.();
     };
   }, [leaderboard, podium, reducedMotion, playFinalResultsReveal]);
 
