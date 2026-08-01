@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react';
 import type { RoundResultEvent } from '../types';
 import { REEL_STEPS_MS, REEL_LAND_MS, useRevealReelSound } from '../hooks/useRevealReelSound';
 import type { RevealHitTier } from '../hooks/useRevealReelSound';
+import { runWhenVisible } from '../hooks/runWhenVisible';
 
 // Spot-on year guesses get a beefier hit than the routine reveal — and a
 // second exact guess (rare — two people landing the exact year) bumps it
@@ -60,28 +61,36 @@ export function YearHeading({ year, compact, muted = false, hitTier = 1 }: Reado
       return;
     }
     setLanded(false);
-    if (!muted) playReveal(hitTier);
     let cancelled = false;
     let timer: ReturnType<typeof setTimeout>;
-    let i = 0;
-    const step = () => {
+    // Waits for the tab to actually be visible before playing the SFX or
+    // starting the flicker: starting either while backgrounded either feeds a
+    // suspended AudioContext (rise/hit end up bursting out together on
+    // refocus instead of landing REEL_SEC apart) or gets the flicker's
+    // setTimeout chain throttled and stretched out, so the reel looks stuck.
+    const stopWaiting = runWhenVisible(() => {
       if (cancelled) return;
-      if (i >= REEL_STEPS_MS.length) {
-        setDisplay(year);
-        setLanded(true);
-        return;
-      }
-      setDisplay(pickYearCandidate(year));
-      setTick(t => t + 1);
-      timer = setTimeout(step, REEL_STEPS_MS[i]);
-      i++;
-    };
-    step();
+      if (!muted) playReveal(hitTier);
+      let i = 0;
+      const step = () => {
+        if (cancelled) return;
+        if (i >= REEL_STEPS_MS.length) {
+          setDisplay(year);
+          setLanded(true);
+          return;
+        }
+        setDisplay(pickYearCandidate(year));
+        setTick(t => t + 1);
+        timer = setTimeout(step, REEL_STEPS_MS[i]);
+        i++;
+      };
+      step();
+    });
     // React Strict Mode intentionally cleans up and restarts effects in
     // development. Let the restarted effect own a fresh timer: suppressing
     // it after the first pass leaves the randomly chosen decoy on screen,
     // blurred forever, and makes every device show a different "answer".
-    return () => { cancelled = true; clearTimeout(timer); };
+    return () => { cancelled = true; clearTimeout(timer); stopWaiting(); };
   }, [year, isNumber, muted, hitTier, playReveal]);
 
   // Same land animation as the mystery chip's non-jackpot roll: flash + a

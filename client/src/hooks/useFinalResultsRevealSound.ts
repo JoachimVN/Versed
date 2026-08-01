@@ -46,6 +46,10 @@ try {
 const resumeContext = () => { getAudioContext().resume().catch(() => {}); };
 document.addEventListener('pointerdown', resumeContext);
 document.addEventListener('keydown', resumeContext);
+// Backgrounding the tab suspends the context; resume the instant it's
+// foregrounded again instead of silently waiting for a click on the page —
+// same pattern as useLobbyMusic.ts.
+document.addEventListener('visibilitychange', () => { if (document.visibilityState === 'visible') resumeContext(); });
 
 // final_results_reveal* were mastered a few dB quieter than the rest of the
 // game's audio (measured via ffmpeg loudnorm: ~-26 to -28 LUFS, vs -22 at the

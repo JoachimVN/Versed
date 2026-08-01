@@ -83,6 +83,10 @@ try {
 const resume = () => { ctx?.resume().catch(() => {}); };
 document.addEventListener('pointerdown', resume);
 document.addEventListener('keydown', resume);
+// Backgrounding the tab suspends the context; resume the instant it's
+// foregrounded again instead of silently waiting for a click on the page —
+// same pattern as useLobbyMusic.ts.
+document.addEventListener('visibilitychange', () => { if (document.visibilityState === 'visible') resume(); });
 
 // Landed-value tier for the hit sound: mystery multiplier jackpots (×5, ×10)
 // get a beefier hit than the routine ×1.5-×4 rolls or the year reveal, so the
