@@ -5,6 +5,7 @@ import { useEscapeKey } from '../hooks/useEscapeKey';
 import { useFocusTrap } from '../hooks/useFocusTrap';
 import { REEL_STEPS_MS, useRevealReelSound } from '../hooks/useRevealReelSound';
 import type { RevealHitTier } from '../hooks/useRevealReelSound';
+import { runWhenVisible } from '../hooks/runWhenVisible';
 
 function pickJackpotTier(multiplier: number): RevealHitTier {
   if (multiplier === 10) return 3;
@@ -26,11 +27,45 @@ export function RoundIntro({ party, roundKey, dismissible = true }: Readonly<{ p
 
   // Arm the announcement before the browser paints the new round screen.
   // A normal effect leaves one frame where hints can be visible underneath.
+  //
+  // The dismiss countdown only runs while the tab is actually visible: a
+  // plain setTimeout(4000) gets throttled while backgrounded, so someone who
+  // tabs away right as a round starts would come back to find the overlay
+  // still stuck up (having missed its whole window to auto-dismiss) instead
+  // of the intended "read it for 4s, then it's gone." Tracking remaining time
+  // and re-arming on visibilitychange gives it 4 seconds of actual look time
+  // no matter when you tab back in.
   useLayoutEffect(() => {
     if (!party) return;
     setVisible(true);
-    const t = setTimeout(() => setVisible(false), INTRO_MS);
-    return () => clearTimeout(t);
+    let remainingMs = INTRO_MS;
+    let visibleSince = document.hidden ? null : Date.now();
+    let timer: ReturnType<typeof setTimeout> | undefined;
+
+    const scheduleDismiss = () => {
+      clearTimeout(timer);
+      timer = setTimeout(() => setVisible(false), remainingMs);
+    };
+    if (visibleSince !== null) scheduleDismiss();
+
+    const onVisibilityChange = () => {
+      if (document.hidden) {
+        if (visibleSince !== null) {
+          remainingMs = Math.max(0, remainingMs - (Date.now() - visibleSince));
+          visibleSince = null;
+          clearTimeout(timer);
+        }
+      } else {
+        visibleSince = Date.now();
+        scheduleDismiss();
+      }
+    };
+    document.addEventListener('visibilitychange', onVisibilityChange);
+
+    return () => {
+      document.removeEventListener('visibilitychange', onVisibilityChange);
+      clearTimeout(timer);
+    };
   }, [party, roundKey]);
 
   const dismiss = () => setVisible(false);
@@ -229,32 +264,40 @@ function MysteryMultiplierChip({ multiplier }: Readonly<{ multiplier: number }>)
       return;
     }
     setLanded(false);
-    const jackpotTier = pickJackpotTier(multiplier);
-    playReveal(jackpotTier);
     let cancelled = false;
     let timer: ReturnType<typeof setTimeout>;
-    const pool = MYSTERY_CANDIDATES.filter(v => v !== multiplier);
-    let previous: number | null = null;
-    let i = 0;
-    const step = () => {
+    // Waits for the tab to actually be visible before playing the SFX or
+    // starting the flicker: starting either while backgrounded either feeds a
+    // suspended AudioContext (rise/hit end up bursting out together on
+    // refocus instead of landing REEL_SEC apart) or gets the flicker's
+    // setTimeout chain throttled and stretched out, so the reel looks stuck.
+    const stopWaiting = runWhenVisible(() => {
       if (cancelled) return;
-      if (i >= REEL_STEPS_MS.length) {
-        setDisplay(multiplier);
-        setLanded(true);
-        return;
-      }
-      const next = pickNextCandidate(pool, previous);
-      previous = next;
-      setDisplay(next);
-      setTick(t => t + 1);
-      timer = setTimeout(step, REEL_STEPS_MS[i]);
-      i++;
-    };
-    step();
+      const jackpotTier = pickJackpotTier(multiplier);
+      playReveal(jackpotTier);
+      const pool = MYSTERY_CANDIDATES.filter(v => v !== multiplier);
+      let previous: number | null = null;
+      let i = 0;
+      const step = () => {
+        if (cancelled) return;
+        if (i >= REEL_STEPS_MS.length) {
+          setDisplay(multiplier);
+          setLanded(true);
+          return;
+        }
+        const next = pickNextCandidate(pool, previous);
+        previous = next;
+        setDisplay(next);
+        setTick(t => t + 1);
+        timer = setTimeout(step, REEL_STEPS_MS[i]);
+        i++;
+      };
+      step();
+    });
     // React Strict Mode restarts effects in development. The restarted effect
     // must schedule its own landing timer, or the first random decoy remains
     // blurred indefinitely and can be mistaken for the real multiplier.
-    return () => { cancelled = true; clearTimeout(timer); };
+    return () => { cancelled = true; clearTimeout(timer); stopWaiting(); };
   }, [multiplier, reducedMotion, playReveal]);
 
   const jackpot = landed && multiplier >= 5;
