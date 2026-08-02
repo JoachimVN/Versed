@@ -31,11 +31,12 @@ const COMPACT_HEIGHT_PX_BOTH = 540;
 // side by side instead of stacked.
 const ULTRA_COMPACT_HEIGHT_PX = 260;
 
-function useGuessingLayout(bothTarget: boolean): { compact: boolean; ultraCompact: boolean } {
+function useGuessingLayout(bothTarget: boolean): { compact: boolean; ultraCompact: boolean; landscape: boolean } {
   const threshold = bothTarget ? COMPACT_HEIGHT_PX_BOTH : COMPACT_HEIGHT_PX;
   const measure = () => {
     const h = typeof window !== 'undefined' ? window.innerHeight - readKeyboardInset() : Infinity;
-    return { compact: h < threshold, ultraCompact: h < ULTRA_COMPACT_HEIGHT_PX };
+    const landscape = typeof window !== 'undefined' && window.innerWidth > window.innerHeight;
+    return { compact: h < threshold, ultraCompact: h < ULTRA_COMPACT_HEIGHT_PX, landscape };
   };
   const [layout, setLayout] = useState(measure);
   useEffect(() => {
@@ -74,8 +75,25 @@ function ListeningHeader({ songPlaying, songTempo, isYear, compact }: Readonly<{
 // CircularTimer dial for LinearTimer's thin bar — confirmed by measurement
 // to be the single biggest header cost on a short landscape/keyboard-up
 // screen (see COMPACT_HEIGHT_PX above).
-function ActiveHeader({ timeLeft, timerTotal, myScore, isRace, isYear, songPlaying, songTempo, compact, ultraCompact }: Readonly<{ timeLeft: number; timerTotal: number; myScore: number; isRace: boolean; isYear: boolean; songPlaying: boolean; songTempo: number | null; compact: boolean; ultraCompact: boolean }>) {
+function ActiveHeader({ timeLeft, timerTotal, myScore, isRace, isYear, songPlaying, songTempo, compact, ultraCompact, landscape }: Readonly<{ timeLeft: number; timerTotal: number; myScore: number; isRace: boolean; isYear: boolean; songPlaying: boolean; songTempo: number | null; compact: boolean; ultraCompact: boolean; landscape: boolean }>) {
   const accent = isYear ? 'year' : 'race';
+  // At the tightest squeeze (ultraCompact), a landscape phone has width to
+  // spare even though it has no height to spare — folding "Your turn"/pts
+  // into the same row as the timer bar removes a whole row's height, which
+  // is exactly the room a "both" target's stacked fields need below (see
+  // GuessingView's COMPACT_HEIGHT_PX_BOTH comment: that's what was getting
+  // scrolled up under the badge chip when the guess field grabbed focus).
+  if (ultraCompact && landscape) {
+    return (
+      <div className="flex items-center justify-between w-full gap-2 px-4 pt-1 pb-0">
+        <span style={{ color: 'rgba(255,255,255,0.45)', fontSize: '0.62rem', fontWeight: 600, whiteSpace: 'nowrap' }}>Your turn</span>
+        <LinearTimer timeLeft={timeLeft} total={timerTotal} />
+        <span style={{ color: 'rgba(255,255,255,0.45)', fontSize: '0.6rem', fontWeight: 500, whiteSpace: 'nowrap' }}>
+          {myScore.toLocaleString()} pts
+        </span>
+      </div>
+    );
+  }
   return (
     <div className={`flex flex-col items-center ${ultraCompact ? 'gap-1 pt-1 pb-0' : compact ? 'gap-2 pt-2 pb-1' : 'gap-2 pt-4 pb-3'}`}>
       <div className="flex items-center justify-between w-full px-5">
@@ -241,7 +259,7 @@ export function GuessingView({ game }: Readonly<{ game: PlayState }>) {
   const target = resolveTarget(party, artistOnly, yearOnly);
   const isYear = target === 'year';
   const isBoth = target === 'both';
-  const { compact, ultraCompact } = useGuessingLayout(isBoth);
+  const { compact, ultraCompact, landscape } = useGuessingLayout(isBoth);
   const canSubmit = isYear ? guessText.trim().length === 4 : guessText.trim().length > 0;
   const [inputFocused, setInputFocused] = useState(false);
   const inputBoxStyle = guessInputBoxStyle(isListening, inputFocused, ultraCompact);
@@ -379,7 +397,7 @@ export function GuessingView({ game }: Readonly<{ game: PlayState }>) {
       {/* Header: waveform while listening, timer + score when active */}
       {isListening
         ? <ListeningHeader songPlaying={songPlaying} songTempo={songTempo} isYear={isYear} compact={compact} />
-        : <ActiveHeader timeLeft={timeLeft} timerTotal={timerTotal} myScore={myScore} isRace={mode === 'race'} isYear={isYear} songPlaying={songPlaying} songTempo={songTempo} compact={compact} ultraCompact={ultraCompact} />}
+        : <ActiveHeader timeLeft={timeLeft} timerTotal={timerTotal} myScore={myScore} isRace={mode === 'race'} isYear={isYear} songPlaying={songPlaying} songTempo={songTempo} compact={compact} ultraCompact={ultraCompact} landscape={landscape} />}
 
       {/* Input area. min-h-0 lets it actually shrink when the keyboard takes
           the bottom of the column, and scrolling is the escape hatch for the
