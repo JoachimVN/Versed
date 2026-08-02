@@ -460,7 +460,9 @@ function eventBit(party: PartyInfo): string | null {
 }
 
 // Small chip summarising the active round's recipe, shown on in-round screens.
-export function PartyBadge({ party }: Readonly<{ party: PartyInfo | null }>) {
+// `compact` shrinks the chip further for the guessing screen's tightest
+// squeeze (a landscape phone with the keyboard up) — see GuessingView.
+export function PartyBadge({ party, compact }: Readonly<{ party: PartyInfo | null; compact?: boolean }>) {
   if (!party) return null;
   const bits: string[] = [formatBit(party)];
   if (party.finale) {
@@ -483,11 +485,11 @@ export function PartyBadge({ party }: Readonly<{ party: PartyInfo | null }>) {
         <span
           key={b}
           style={{
-            padding: '4px 12px', borderRadius: '100px',
+            padding: compact ? '2px 9px' : '4px 12px', borderRadius: '100px',
             background: 'rgba(0,238,232,0.1)',
             border: '1px solid rgba(0,238,232,0.3)',
             color: 'rgba(94,234,212,0.9)',
-            fontSize: '0.62rem', fontWeight: 700, letterSpacing: '0.14em',
+            fontSize: compact ? '0.56rem' : '0.62rem', fontWeight: 700, letterSpacing: '0.14em',
             whiteSpace: 'nowrap',
           }}
         >
