@@ -33,6 +33,10 @@ const VIEWPORTS = [
   { name: 'android-360x740-portrait', width: 360, height: 740 },
   { name: 'iphone8-667x375-landscape', width: 667, height: 375 },
   { name: 'iphone14-844x390-landscape', width: 844, height: 390 },
+  // The everyday host-view case, not just a stress case: the host's actual
+  // 1440x900 MacBook display, run fullscreen. Any mobile-squeeze tuning has
+  // to leave this one untouched.
+  { name: 'desktop-1440x900', width: 1440, height: 900 },
 ];
 
 const VIEWS = [

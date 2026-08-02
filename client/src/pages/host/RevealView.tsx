@@ -20,15 +20,29 @@ import { EndGameButton } from './dialogs';
 // card's own font/image sizes would just leave it floating in dead space at
 // best, or overlapping the roster below it at worst — hence cardHeight()
 // tracking the exact same tiers passed to the card content components.
+// Deliberately conservative: a maximized browser on an ordinary laptop
+// display (e.g. a 1440x900 MacBook) still reports an innerHeight comfortably
+// above this — browser chrome (tabs/URL bar) rarely eats more than ~100px —
+// so the host's everyday desktop view stays on the untouched "normal" tier.
+// A big roster (7+ players) not fitting even at normal on a tall phone is
+// handled separately by capping the player list's own height (see
+// computeListMaxHeight below) rather than by dragging this threshold up
+// near desktop heights, which would compact the desktop view too.
 const COMPACT_HEIGHT_PX = 760;
-const ULTRA_COMPACT_HEIGHT_PX = 460;
+const ULTRA_COMPACT_HEIGHT_PX = 690;
 
-function useRevealLayout(): CardSqueeze {
-  const measure = (): CardSqueeze => {
+// Carries the raw height alongside the tier flags so the player list (see
+// computeListMaxHeight) can size itself off exactly how much room the rest
+// of the tier's chrome actually leaves, instead of getting its own separate
+// height thresholds that could drift out of sync with the tier's real cost.
+type RevealLayout = CardSqueeze & { windowHeight: number };
+
+function useRevealLayout(): RevealLayout {
+  const measure = (): RevealLayout => {
     const h = typeof window !== 'undefined' ? window.innerHeight : Infinity;
-    return { compact: h < COMPACT_HEIGHT_PX, ultraCompact: h < ULTRA_COMPACT_HEIGHT_PX };
+    return { compact: h < COMPACT_HEIGHT_PX, ultraCompact: h < ULTRA_COMPACT_HEIGHT_PX, windowHeight: h };
   };
-  const [layout, setLayout] = useState<CardSqueeze>(measure);
+  const [layout, setLayout] = useState<RevealLayout>(measure);
   useEffect(() => {
     const check = () => setLayout(measure());
     check();
@@ -43,8 +57,11 @@ function useRevealLayout(): CardSqueeze {
 // artist/year, plus the card's own padding) — recalibrate both together if
 // either drifts.
 function computeCardHeight(hasCover: boolean, squeeze: CardSqueeze): number {
-  if (hasCover) return squeeze.ultraCompact ? 330 : squeeze.compact ? 400 : 480;
-  return squeeze.ultraCompact ? 175 : squeeze.compact ? 205 : 240;
+  // ultraCompact drops the avatar icon and folds title/artist/year onto one
+  // line (see SongInfo/GotItCardContent), so its budget is well below a
+  // straight-line interpolation from compact's.
+  if (hasCover) return squeeze.ultraCompact ? 230 : squeeze.compact ? 400 : 480;
+  return squeeze.ultraCompact ? 115 : squeeze.compact ? 205 : 240;
 }
 
 type GuessCorrectness = 'none' | 'correct' | 'exact';
@@ -276,9 +293,9 @@ function RevealShell({
   cardContent: React.ReactNode;
   isCorrectFor: (player: PlayerInfo) => GuessCorrectness;
   wide?: boolean;
-  squeeze: CardSqueeze;
+  squeeze: RevealLayout;
 }>) {
-  const { compact, ultraCompact } = squeeze;
+  const { compact, ultraCompact, windowHeight } = squeeze;
   const { roundIndex, totalRounds, players, roundDeltas, roundPity, roundPityAmount, removePlayer, endGame, stealResult, party } = game;
   // Every sub-round of the finale duel reports finale:true — the host can't
   // tell from roundIndex/totalRounds alone whether clicking "next" advances
@@ -320,8 +337,21 @@ function RevealShell({
   // than growing the page with every player — Next Round/End game sit right
   // after this box in normal flow, so a big roster only costs this box a
   // small internal scroll instead of pushing them further down the page.
-  // Small rosters never hit the cap, so this is a no-op for them.
-  const listMaxHeight = ultraCompact ? '150px' : compact ? '230px' : '300px';
+  // Small rosters never hit the cap, so this is a no-op for them. Sized off
+  // the tier's own actual leftover room (windowHeight minus everything else
+  // the tier renders), not just a flat per-tier number: a 7-player roster on
+  // a tall phone (844px) still lands in the "normal" tier — full-size card,
+  // gaps, button — where a flat 260px cap alone would overflow the button
+  // below the fold, but shrinking every device's cap down to fit that one
+  // case would needlessly cramp a real desktop window with the same tier.
+  const gapPx = ultraCompact ? 8 : compact ? 12 : 20;
+  const buttonPx = ultraCompact ? 44 : compact ? 54 : 64;
+  const paddingPx = ultraCompact ? 24 : compact ? 32 : 48;
+  const listTierCap = ultraCompact ? 130 : compact ? 200 : 260;
+  // 4 gaps across up to 5 flex children (card, party-extras, list, button,
+  // end-game); ~20px covers end-game's own text + its gap when rendered.
+  const chromeHeight = cardHeight + gapPx * 4 + buttonPx + 20 + paddingPx;
+  const listMaxHeight = `${Math.max(90, Math.min(listTierCap, windowHeight - chromeHeight))}px`;
   return (
     <div className="page-enter relative min-h-screen" style={{ overflowY: 'auto', overscrollBehavior: 'contain' }}>
       <div className={`screen-center-safe relative flex min-h-full flex-col items-center ${gapClass} ${paddingClass}`} style={{ minHeight: '100%' }}>

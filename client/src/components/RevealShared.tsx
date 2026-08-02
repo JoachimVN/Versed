@@ -203,15 +203,20 @@ export function NoOneGotItCardContent({ result, squeeze }: Readonly<{ result: Ro
   const iconSize = ultraCompact ? 36 : compact ? 44 : 52;
   return (
     <div style={{ width: 'min(262px, calc(100vw - 96px))', display: 'flex', flexDirection: 'column', alignItems: 'center', textAlign: 'center' }}>
-      <div style={{
-        width: `${iconSize}px`, height: `${iconSize}px`, borderRadius: '50%',
-        background: 'rgba(255,255,255,0.05)',
-        border: '1px solid rgba(255,255,255,0.09)',
-        display: 'flex', alignItems: 'center', justifyContent: 'center',
-        marginBottom: ultraCompact ? '6px' : compact ? '8px' : '10px',
-      }}>
-        <X style={{ width: `${iconSize * 0.42}px`, height: `${iconSize * 0.42}px`, color: 'rgba(255,255,255,0.45)' }} />
-      </div>
+      {/* Dropped entirely at the tightest squeeze rather than shrunk further:
+          the label text below already says who/what, so the icon is purely
+          decorative once space is this scarce. */}
+      {!ultraCompact && (
+        <div style={{
+          width: `${iconSize}px`, height: `${iconSize}px`, borderRadius: '50%',
+          background: 'rgba(255,255,255,0.05)',
+          border: '1px solid rgba(255,255,255,0.09)',
+          display: 'flex', alignItems: 'center', justifyContent: 'center',
+          marginBottom: compact ? '8px' : '10px',
+        }}>
+          <X style={{ width: `${iconSize * 0.42}px`, height: `${iconSize * 0.42}px`, color: 'rgba(255,255,255,0.45)' }} />
+        </div>
+      )}
       <span style={{
         fontSize: ultraCompact ? '1.05rem' : compact ? '1.2rem' : '1.4rem', fontWeight: 900, letterSpacing: '0.01em',
         background: 'linear-gradient(to bottom left, rgba(210,70,50,0.4) 0%, transparent 52%), linear-gradient(to top right, rgba(255,165,70,0.28) 0%, transparent 52%), #fff',
@@ -238,34 +243,51 @@ function SongInfo({ result, squeeze }: Readonly<{ result: RoundResultEvent; sque
   const coverSize = ultraCompact ? 110 : compact ? 150 : 200;
   const titleFontSize = ultraCompact ? '0.92rem' : compact ? '1.02rem' : '1.1rem';
   const artistFontSize = ultraCompact ? '0.72rem' : compact ? '0.8rem' : '0.875rem';
+  const primary = artistOnly ? result.artist : result.songTitle;
+  const secondary = artistOnly ? result.songTitle : result.artist;
+
+  // Three stacked lines (title, artist, year) is the one layout that keeps
+  // costing a fixed line-height no matter how far the font shrinks — folding
+  // them into one line is worth more room at the tightest squeeze than any
+  // further font reduction would be. Wraps rather than truncates: this text
+  // is the answer to the round, so it can't just get cut off.
+  if (ultraCompact) {
+    return (
+      <>
+        {result.coverUrl && (
+          <img
+            src={result.coverUrl} alt="Album art"
+            style={{ width: `${coverSize}px`, height: `${coverSize}px`, borderRadius: '16px', objectFit: 'cover', marginBottom: '6px', boxShadow: '0 10px 36px rgba(0,0,0,0.65)' }}
+          />
+        )}
+        <span style={{ display: 'inline-block', minWidth: '220px', lineHeight: 1.35 }}>
+          <span style={{ color: 'white', fontWeight: 900, fontSize: titleFontSize }}>{primary}</span>
+          <span style={{ color: 'rgba(255,255,255,0.45)', fontSize: artistFontSize }}>
+            {' · '}{secondary}
+            {result.featuredArtists && <> feat. {formatFeaturedArtists(result.featuredArtists)}</>}
+            {result.year && ` · ${result.year}`}
+          </span>
+        </span>
+      </>
+    );
+  }
+
   return (
     <>
       {result.coverUrl && (
         <img
           src={result.coverUrl} alt="Album art"
-          style={{ width: `${coverSize}px`, height: `${coverSize}px`, borderRadius: '16px', objectFit: 'cover', marginBottom: ultraCompact ? '6px' : compact ? '8px' : '12px', boxShadow: '0 10px 36px rgba(0,0,0,0.65)' }}
+          style={{ width: `${coverSize}px`, height: `${coverSize}px`, borderRadius: '16px', objectFit: 'cover', marginBottom: compact ? '8px' : '12px', boxShadow: '0 10px 36px rgba(0,0,0,0.65)' }}
         />
       )}
-      {artistOnly ? (
-        <>
-          <span style={{ color: 'white', fontWeight: 900, fontSize: titleFontSize, lineHeight: 1.3, display: 'inline-block', minWidth: '220px' }}>
-            {result.artist}
-            {result.featuredArtists && <span style={{ color: 'rgba(255,255,255,0.45)', fontWeight: 400, fontSize: artistFontSize }}> feat. {formatFeaturedArtists(result.featuredArtists)}</span>}
-          </span>
-          <span style={{ color: 'rgba(255,255,255,0.45)', fontSize: artistFontSize, marginTop: '3px', display: 'inline-block', minWidth: '220px' }}>
-            {result.songTitle}
-          </span>
-        </>
-      ) : (
-        <>
-          <span style={{ color: 'white', fontWeight: 900, fontSize: titleFontSize, lineHeight: 1.3, display: 'inline-block', minWidth: '220px' }}>
-            {result.songTitle}
-          </span>
-          <span style={{ color: 'rgba(255,255,255,0.45)', fontSize: artistFontSize, marginTop: '3px', display: 'inline-block', minWidth: '220px' }}>
-            {result.artist}{result.featuredArtists ? <span style={{ color: 'rgba(255,255,255,0.45)' }}> feat. {formatFeaturedArtists(result.featuredArtists)}</span> : null}
-          </span>
-        </>
-      )}
+      <span style={{ color: 'white', fontWeight: 900, fontSize: titleFontSize, lineHeight: 1.3, display: 'inline-block', minWidth: '220px' }}>
+        {primary}
+        {artistOnly && result.featuredArtists && <span style={{ color: 'rgba(255,255,255,0.45)', fontWeight: 400, fontSize: artistFontSize }}> feat. {formatFeaturedArtists(result.featuredArtists)}</span>}
+      </span>
+      <span style={{ color: 'rgba(255,255,255,0.45)', fontSize: artistFontSize, marginTop: '3px', display: 'inline-block', minWidth: '220px' }}>
+        {secondary}
+        {!artistOnly && result.featuredArtists ? <span style={{ color: 'rgba(255,255,255,0.45)' }}> feat. {formatFeaturedArtists(result.featuredArtists)}</span> : null}
+      </span>
       {result.year && (
         <span style={{ color: 'rgba(255,255,255,0.45)', fontSize: '0.75rem', marginTop: '4px', display: 'inline-block' }}>
           {result.year}
@@ -366,14 +388,16 @@ export function GotItCardContent({ result, myName, squeeze }: Readonly<{ result:
 
   return (
     <div style={{ width: 'min(262px, calc(100vw - 96px))', display: 'flex', flexDirection: 'column', alignItems: 'center', textAlign: 'center' }}>
-      <div style={{
-        width: `${iconSize}px`, height: `${iconSize}px`, borderRadius: '50%',
-        background: iconBg, border: `1px solid ${iconBorder}`,
-        display: 'flex', alignItems: 'center', justifyContent: 'center',
-        marginBottom: ultraCompact ? '6px' : compact ? '8px' : '10px',
-      }}>
-        {iconNode}
-      </div>
+      {!ultraCompact && (
+        <div style={{
+          width: `${iconSize}px`, height: `${iconSize}px`, borderRadius: '50%',
+          background: iconBg, border: `1px solid ${iconBorder}`,
+          display: 'flex', alignItems: 'center', justifyContent: 'center',
+          marginBottom: compact ? '8px' : '10px',
+        }}>
+          {iconNode}
+        </div>
+      )}
       <span style={{
         fontSize: ultraCompact ? '1.05rem' : compact ? '1.2rem' : '1.4rem', fontWeight: 900, letterSpacing: '0.01em',
         background: labelGradient,
