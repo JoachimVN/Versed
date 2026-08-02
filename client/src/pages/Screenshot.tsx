@@ -6,6 +6,7 @@ import { LobbyView } from './host/LobbyView';
 import type { HostState } from './host/useHostGame';
 import { WatchingView } from './play/WatchingView';
 import { GuessingView } from './play/GuessingView';
+import { RevealView as PlayRevealView } from './play/RevealView';
 import { WaitingAtmosphere } from './play/WaitingAtmosphere';
 import { WaitingView } from './play/WaitingView';
 import type { PlayState } from './play/usePlayGame';
@@ -315,6 +316,35 @@ const MOCK_PLAY_YEAR_GUESSING: PlayState = {
   },
 };
 
+const MOCK_PLAY_REVEAL: PlayState = {
+  ...MOCK_PLAY,
+  phase: 'reveal',
+  myName: 'Anna',
+  myScore: 4350,
+  myScoreDelta: 1250,
+  myBreakdown: { parts: [{ label: 'Base', amount: 500 }, { label: 'Bid bonus', amount: 600 }, { label: 'Difficulty', amount: 150 }], multiplier: 1, multiplierBonus: 0, pity: 0, total: 1250 },
+  myStreak: 3,
+};
+
+const MOCK_RESULT_NOONE: RoundResultEvent = {
+  ...MOCK_RESULT,
+  correct: false,
+  guesserName: null,
+  points: 0,
+  playerGuesses: [
+    { name: 'Anna', guess: 'not quite it' },
+    { name: 'John', guess: null },
+    { name: 'Olivia', guess: 'Thriller' },
+  ],
+};
+
+const MOCK_PLAY_REVEAL_NOONE: PlayState = {
+  ...MOCK_PLAY,
+  phase: 'reveal',
+  myName: 'Anna',
+  myScoreDelta: 0,
+};
+
 // ─── Entry ────────────────────────────────────────────────────────────────────
 
 // A manual fixture gives sound design a reliable downbeat: the real
@@ -373,6 +403,8 @@ export default function Screenshot() {
     waiting: <><WaitingAtmosphere leaving={false} /><WaitingView game={{ ...MOCK_PLAY, phase: 'waiting', myName: 'Joachim' }} leaveBackground={noop} /></>,
     guessing: <GuessingView game={MOCK_PLAY_GUESSING} />,
     'year-guessing': <GuessingView game={MOCK_PLAY_YEAR_GUESSING} />,
+    'play-reveal': <PlayRevealView game={MOCK_PLAY_REVEAL} result={MOCK_RESULT} />,
+    'play-reveal-noone': <PlayRevealView game={MOCK_PLAY_REVEAL_NOONE} result={MOCK_RESULT_NOONE} />,
     lobby: <LobbyView game={MOCK_HOST_LOBBY} />,
     'party-intro': <RoundIntro party={MOCK_PARTY_STEAL} roundKey={0} dismissible={false} />,
     'final-host': <FinalResultsPreview />,
@@ -387,5 +419,5 @@ export default function Screenshot() {
   };
 
   return screenshots[params.get('v') ?? '']
-    ?? <p className="text-white p-6 font-mono">?v=playing|reveal|year|mystery-reveal|big-points-reveal|watching|guessing|year-guessing|lobby|party-intro|final-host|final-host-classic-only|final-host-race-only|final-host-no-speed|final-host-1|final-host-2|final-host-long|final-player|final-empty</p>;
+    ?? <p className="text-white p-6 font-mono">?v=playing|reveal|year|mystery-reveal|big-points-reveal|watching|guessing|year-guessing|play-reveal|play-reveal-noone|lobby|party-intro|final-host|final-host-classic-only|final-host-race-only|final-host-no-speed|final-host-1|final-host-2|final-host-long|final-player|final-empty</p>;
 }
