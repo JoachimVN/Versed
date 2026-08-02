@@ -171,13 +171,13 @@ export function PillButton({ onClick, label, zIndex }: Readonly<{ onClick: () =>
     <button
       type="button"
       className="liquid-btn glass-tint-purple relative cursor-pointer border-0 bg-transparent p-0"
-      style={{ width: '310px', height: '64px', borderRadius: '100px', background: 'rgba(0,0,0,0.001)', zIndex }}
+      style={{ width: 'min(92vw, 310px)', height: '64px', borderRadius: '100px', background: 'rgba(0,0,0,0.001)', zIndex }}
       onClick={onClick}
     >
       <LiquidGlass style={{ position: 'absolute', top: '50%', left: '50%' }} {...LIQUID_PILL_PROPS}>
         <div style={{ position: 'relative' }}>
           <div style={{ position: 'absolute', inset: '-18px -36px', borderRadius: '100px', pointerEvents: 'none', background: 'rgba(158,18,204,0.12)' }} />
-          <span className="text-white font-bold text-xl" style={{ whiteSpace: 'nowrap', position: 'relative', display: 'inline-block', minWidth: '210px', textAlign: 'center' }}>
+          <span className="text-white font-bold text-xl" style={{ whiteSpace: 'nowrap', position: 'relative', display: 'inline-block', minWidth: 'min(210px, calc(100vw - 120px))', textAlign: 'center' }}>
             {label}
           </span>
         </div>
@@ -189,7 +189,7 @@ export function PillButton({ onClick, label, zIndex }: Readonly<{ onClick: () =>
 export function NoOneGotItCardContent({ result }: Readonly<{ result: RoundResultEvent }>) {
   const artistOnly = result.artistOnly;
   return (
-    <div style={{ width: '262px', display: 'flex', flexDirection: 'column', alignItems: 'center', textAlign: 'center' }}>
+    <div style={{ width: 'min(262px, calc(100vw - 96px))', display: 'flex', flexDirection: 'column', alignItems: 'center', textAlign: 'center' }}>
       <div style={{
         width: '52px', height: '52px', borderRadius: '50%',
         background: 'rgba(255,255,255,0.05)',
@@ -269,7 +269,7 @@ export function FinalRoundAnswerContent({ result, label, muted = false }: Readon
   }
 
   return (
-    <div style={{ width: '262px', display: 'flex', flexDirection: 'column', alignItems: 'center', textAlign: 'center' }}>
+    <div style={{ width: 'min(262px, calc(100vw - 96px))', display: 'flex', flexDirection: 'column', alignItems: 'center', textAlign: 'center' }}>
       <span style={{
         color: 'rgba(255,255,255,0.45)', fontSize: '0.62rem', fontWeight: 800,
         letterSpacing: '0.16em', textTransform: 'uppercase', marginBottom: '10px', display: 'inline-block',
@@ -344,7 +344,7 @@ export function GotItCardContent({ result, myName }: Readonly<{ result: RoundRes
   }
 
   return (
-    <div style={{ width: '262px', display: 'flex', flexDirection: 'column', alignItems: 'center', textAlign: 'center' }}>
+    <div style={{ width: 'min(262px, calc(100vw - 96px))', display: 'flex', flexDirection: 'column', alignItems: 'center', textAlign: 'center' }}>
       <div style={{
         width: '52px', height: '52px', borderRadius: '50%',
         background: iconBg, border: `1px solid ${iconBorder}`,

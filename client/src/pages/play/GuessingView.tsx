@@ -324,7 +324,7 @@ export function GuessingView({ game }: Readonly<{ game: PlayState }>) {
             type="button"
             className="liquid-btn glass-tint-purple relative cursor-pointer border-0 bg-transparent p-0"
             style={{
-              width: '310px', height: '64px', borderRadius: '100px',
+              width: 'min(92vw, 310px)', height: '64px', borderRadius: '100px',
               background: 'rgba(0,0,0,0.001)',
               opacity: canSubmit ? 1 : 0.28,
               cursor: canSubmit ? 'pointer' : 'not-allowed',
@@ -342,7 +342,7 @@ export function GuessingView({ game }: Readonly<{ game: PlayState }>) {
             >
               <div style={{ position: 'relative' }}>
                 <div style={{ position: 'absolute', inset: '-18px -36px', borderRadius: '100px', pointerEvents: 'none', background: 'rgba(158,18,204,0.15)' }} />
-                <span className="text-white font-bold text-xl" style={{ whiteSpace: 'nowrap', position: 'relative', display: 'inline-block', minWidth: '238px', textAlign: 'center' }}>
+                <span className="text-white font-bold text-xl" style={{ whiteSpace: 'nowrap', position: 'relative', display: 'inline-block', minWidth: 'min(238px, calc(100vw - 112px))', textAlign: 'center' }}>
                   Submit
                 </span>
               </div>
@@ -404,13 +404,13 @@ export function PassedView() {
           transform: visible ? 'translateY(0)' : 'translateY(14px)',
         }}
       >
-        <div className="liquid-btn relative" style={{ width: '310px', height: cardHeight }}>
+        <div className="liquid-btn relative" style={{ width: 'min(92vw, 310px)', height: cardHeight }}>
           <LiquidGlass
             style={{ position: 'absolute', top: '50%', left: '50%' }}
             {...LIQUID_CARD_PROPS}
             padding="28px 28px"
           >
-            <div style={{ width: '254px', display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '14px' }}>
+            <div style={{ width: 'min(254px, calc(100vw - 104px))', display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '14px' }}>
               <div style={{ display: 'flex', gap: '6px' }}>
                 {[0, 1, 2].map(i => (
                   <div key={i} style={{

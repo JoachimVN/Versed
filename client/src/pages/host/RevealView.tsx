@@ -287,7 +287,7 @@ function RevealShell({
       <div style={{ position: 'fixed', inset: 0, zIndex: 1, background: 'rgba(5,5,14,0.82)', backdropFilter: 'blur(32px)' }} />
       <p className="text-white/45 text-sm self-start" style={{ position: 'relative', zIndex: 2 }}>{roundIndex + 1} / {totalRounds}</p>
 
-      <div className="liquid-btn relative" style={{ width: wide ? 'min(88vw, 366px)' : '310px', height: `${cardHeight}px`, zIndex: 2 }}>
+      <div className="liquid-btn relative" style={{ width: wide ? 'min(88vw, 366px)' : 'min(92vw, 310px)', height: `${cardHeight}px`, zIndex: 2 }}>
         <LiquidGlass
           style={{ position: 'absolute', top: '50%', left: '50%' }}
           {...LIQUID_CARD_PROPS}
