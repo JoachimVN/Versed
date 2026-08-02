@@ -163,8 +163,10 @@ export function YearSongFooter({ result, compact }: Readonly<{ result: RoundResu
 // with the year and the closest player instead of a got-it/no-one-got-it state.
 export function YearCardContent({ result, muted = false }: Readonly<{ result: RoundResultEvent; muted?: boolean }>) {
   const winner = result.yearResults?.find(r => r.diff !== null);
-  const pluralS = winner?.diff === 1 ? '' : 's';
-  const winnerDetail = winner && (winner.diff === 0 ? ' · exact!' : ` (${winner.diff} year${pluralS} off)`);
+  const bestDiff = winner?.diff ?? null;
+  const winnerNames = bestDiff === null ? [] : (result.yearResults ?? []).filter(r => r.diff === bestDiff).map(r => r.name);
+  const pluralS = bestDiff === 1 ? '' : 's';
+  const winnerDetail = winner && (bestDiff === 0 ? ' · exact!' : ` (${bestDiff} year${pluralS} off)`);
   return (
     <div style={{ width: '262px', display: 'flex', flexDirection: 'column', alignItems: 'center', textAlign: 'center' }}>
       <YearHeading year={result.year ? Math.floor(result.year) : '–'} compact muted={muted} hitTier={pickYearHitTier(result)} />
@@ -176,7 +178,7 @@ export function YearCardContent({ result, muted = false }: Readonly<{ result: Ro
           // simultaneous, unrelated line of text.
           animation: `fadeIn 0.4s ease-out ${(YEAR_LAND_MS + 150) / 1000}s both`,
         }}>
-          {winner.name} was closest{winnerDetail}
+          {winnerNames.join(', ')} {winnerNames.length === 1 ? 'was' : 'were'} closest{winnerDetail}
         </span>
       )}
       <div style={{ width: '100%', height: '1px', background: 'rgba(255,255,255,0.08)', marginBottom: '12px' }} />
@@ -258,9 +260,10 @@ export function YearTimelineContent({ result, showGuessValues = true, muted = fa
   // the year itself to finish its slot-reel reveal before building in,
   // rather than appearing simultaneously and racing it.
   const timelineRevealS = (YEAR_LAND_MS + 200) / 1000;
-  const bestGroupIndex = groups.findIndex(g => bestDiff !== null && g.entries[0].diff === bestDiff);
-  const otherGroups = groups.filter((_, i) => i !== bestGroupIndex);
-  const bestGroup = bestGroupIndex >= 0 ? groups[bestGroupIndex] : null;
+  // Ties land in different groups (grouped by guessed value, not by diff), so
+  // find every group tied for the best diff rather than just the first.
+  const bestGroups = groups.filter(g => bestDiff !== null && g.entries[0].diff === bestDiff);
+  const otherGroups = groups.filter(g => !bestGroups.includes(g));
   const nameLaneByGuess = new Map(groups.map((g, i) => [g.guess, nameLanes[i]]));
 
   // Non-winning guesses cascade in first; the winner then lands last with a
@@ -339,7 +342,7 @@ export function YearTimelineContent({ result, showGuessValues = true, muted = fa
         </div>
 
         {otherGroups.map((group, i) => renderMarker(group, timelineRevealS + i * 0.09, false))}
-        {bestGroup && renderMarker(bestGroup, timelineRevealS + otherGroups.length * 0.09 + 0.25, true)}
+        {bestGroups.map((group, i) => renderMarker(group, timelineRevealS + otherGroups.length * 0.09 + 0.25 + i * 0.09, true))}
       </div>
 
       {passCount > 0 && (
