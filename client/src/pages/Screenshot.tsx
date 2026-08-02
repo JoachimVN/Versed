@@ -201,6 +201,96 @@ const MOCK_HOST_BIGPOINTS_REVEAL: HostState = {
   roundDeltas: { Anna: 3200 },
 };
 
+// ─── Crowd fixtures ────────────────────────────────────────────────────────
+// Stress cases the 3-player fixtures above never exercise: a bigger roster
+// (more leaderboard/guess-list rows) and, for a couple of players, a second
+// guess line (artist guess) that doubles their row height — the actual worst
+// case for a reveal screen's vertical space, not just "more of the same row".
+
+const CROWD_RESULT: RoundResultEvent = {
+  correct: true,
+  guesserName: 'Anna',
+  songTitle: 'Billie Jean',
+  artist: 'Michael Jackson',
+  year: 1983,
+  coverUrl: 'https://i.scdn.co/image/ab67616d0000b27332a7d87248d1b75463483df5',
+  points: 1250,
+  playerGuesses: [
+    { name: 'Anna', guess: 'billie jean' },
+    { name: 'John', guess: null },
+    { name: 'Olivia', guess: 'Beat It' },
+    { name: 'Marcus', guess: 'Thriller', artistGuess: 'Michael Jackson', artistCorrect: true },
+    { name: 'Sofia', guess: null },
+    { name: 'Priya', guess: 'billie gene' },
+    { name: 'Devon', guess: 'Billie Jean', artistGuess: 'MJ', artistCorrect: false },
+  ],
+};
+
+const CROWD_HOST_PLAYERS = [
+  { name: 'Anna', score: 3100, streak: 3 },
+  { name: 'John', score: 2650 },
+  { name: 'Olivia', score: 1850, streak: 1 },
+  { name: 'Marcus', score: 2200, streak: 4 },
+  { name: 'Sofia', score: 1600 },
+  { name: 'Priya', score: 1400, streak: 2 },
+  { name: 'Devon', score: 900 },
+];
+
+const MOCK_HOST_CROWD: HostState = {
+  ...MOCK_HOST,
+  players: CROWD_HOST_PLAYERS,
+};
+
+const MOCK_HOST_REVEAL_CROWD: HostState = {
+  ...MOCK_HOST_CROWD,
+  phase: 'reveal',
+  result: CROWD_RESULT,
+  roundDeltas: { Anna: 1250 },
+};
+
+// Two guesses tied exactly on the actual year (tests the timeline grouping
+// multiple names under one marker) plus a full spread of the rest, so both
+// the name-lane and year-lane packing in YearTimelineContent get exercised.
+const CROWD_RESULT_YEAR: RoundResultEvent = {
+  correct: true,
+  guesserName: null,
+  songTitle: 'Billie Jean',
+  artist: 'Michael Jackson',
+  year: 1983,
+  coverUrl: 'https://i.scdn.co/image/ab67616d0000b27332a7d87248d1b75463483df5',
+  points: 0,
+  party: {
+    format: 'year', target: 'title', event: null, multiplier: 1, winnerOnly: false,
+    intro: { title: 'Guess the Year', tagline: 'Closest answer wins the round' },
+    finale: false, duelists: [], restricted: [],
+  },
+  playerGuesses: [
+    { name: 'Anna', guess: '1984' },
+    { name: 'John', guess: '1979' },
+    { name: 'Olivia', guess: '1983' },
+    { name: 'Marcus', guess: '1985' },
+    { name: 'Sofia', guess: '1990' },
+    { name: 'Priya', guess: '1983' },
+    { name: 'Devon', guess: null },
+  ],
+  yearResults: [
+    { name: 'Olivia', guess: 1983, diff: 0, points: 650, pity: false },
+    { name: 'Priya', guess: 1983, diff: 0, points: 650, pity: false },
+    { name: 'Anna', guess: 1984, diff: 1, points: 480, pity: false },
+    { name: 'Marcus', guess: 1985, diff: 2, points: 350, pity: false },
+    { name: 'John', guess: 1979, diff: 4, points: 210, pity: false },
+    { name: 'Sofia', guess: 1990, diff: 7, points: 80, pity: false },
+    { name: 'Devon', guess: null, diff: null, points: 0, pity: false },
+  ],
+};
+
+const MOCK_HOST_YEAR_REVEAL_CROWD: HostState = {
+  ...MOCK_HOST_CROWD,
+  phase: 'reveal',
+  result: CROWD_RESULT_YEAR,
+  roundDeltas: { Olivia: 650, Priya: 650, Anna: 480, Marcus: 350, John: 210, Sofia: 80 },
+};
+
 const MOCK_LEADERBOARD: LeaderboardEntry[] = [
   { rank: 1, name: 'Anna', score: 5350 },
   { rank: 2, name: 'John', score: 4100 },
@@ -345,6 +435,43 @@ const MOCK_PLAY_REVEAL_NOONE: PlayState = {
   myScoreDelta: 0,
 };
 
+// Every non-zero PointsBreakdownList line at once (base, bid, difficulty,
+// artist bonus, multiplier, pity) stacked on top of the 7-row crowd guess
+// list — the tallest the player reveal card's content can realistically get.
+const MOCK_PLAY_REVEAL_CROWD: PlayState = {
+  ...MOCK_PLAY,
+  phase: 'reveal',
+  myName: 'Anna',
+  myScore: 4350,
+  myScoreDelta: 1250,
+  myBreakdown: {
+    parts: [
+      { label: 'Base', amount: 500 },
+      { label: 'Bid bonus', amount: 400 },
+      { label: 'Difficulty', amount: 150 },
+      { label: 'Artist bonus', amount: 100 },
+    ],
+    multiplier: 2, multiplierBonus: 600, pity: 80, total: 1250,
+  },
+  myStreak: 4,
+};
+
+// Party's "both" target puts two text inputs on screen at once — explicitly
+// called out in GuessingView as the tightest case for a keyboard-shrunk
+// viewport (title + artist input + submit, all above the keyboard).
+const MOCK_PLAY_GUESSING_BOTH: PlayState = {
+  ...MOCK_PLAY,
+  phase: 'guessing',
+  guesserNames: ['Anna'],
+  guessText: 'Bil',
+  artistGuessText: 'Mich',
+  party: {
+    format: 'classic', target: 'both', event: null, multiplier: 1, winnerOnly: false,
+    intro: { title: 'Name It', tagline: 'Title + artist = bonus' },
+    finale: false, duelists: [], restricted: [],
+  },
+};
+
 // ─── Entry ────────────────────────────────────────────────────────────────────
 
 // A manual fixture gives sound design a reliable downbeat: the real
@@ -403,8 +530,12 @@ export default function Screenshot() {
     waiting: <><WaitingAtmosphere leaving={false} /><WaitingView game={{ ...MOCK_PLAY, phase: 'waiting', myName: 'Joachim' }} leaveBackground={noop} /></>,
     guessing: <GuessingView game={MOCK_PLAY_GUESSING} />,
     'year-guessing': <GuessingView game={MOCK_PLAY_YEAR_GUESSING} />,
+    'guessing-both': <GuessingView game={MOCK_PLAY_GUESSING_BOTH} />,
     'play-reveal': <PlayRevealView game={MOCK_PLAY_REVEAL} result={MOCK_RESULT} />,
     'play-reveal-noone': <PlayRevealView game={MOCK_PLAY_REVEAL_NOONE} result={MOCK_RESULT_NOONE} />,
+    'play-reveal-crowd': <PlayRevealView game={MOCK_PLAY_REVEAL_CROWD} result={CROWD_RESULT} />,
+    'reveal-crowd': <RevealView game={MOCK_HOST_REVEAL_CROWD} result={CROWD_RESULT} instant />,
+    'year-crowd': <RevealView game={MOCK_HOST_YEAR_REVEAL_CROWD} result={CROWD_RESULT_YEAR} instant />,
     lobby: <LobbyView game={MOCK_HOST_LOBBY} />,
     'party-intro': <RoundIntro party={MOCK_PARTY_STEAL} roundKey={0} dismissible={false} />,
     'final-host': <FinalResultsPreview />,
@@ -419,5 +550,5 @@ export default function Screenshot() {
   };
 
   return screenshots[params.get('v') ?? '']
-    ?? <p className="text-white p-6 font-mono">?v=playing|reveal|year|mystery-reveal|big-points-reveal|watching|guessing|year-guessing|play-reveal|play-reveal-noone|lobby|party-intro|final-host|final-host-classic-only|final-host-race-only|final-host-no-speed|final-host-1|final-host-2|final-host-long|final-player|final-empty</p>;
+    ?? <p className="text-white p-6 font-mono">?v=playing|reveal|year|mystery-reveal|big-points-reveal|watching|guessing|year-guessing|guessing-both|play-reveal|play-reveal-noone|play-reveal-crowd|reveal-crowd|year-crowd|lobby|party-intro|final-host|final-host-classic-only|final-host-race-only|final-host-no-speed|final-host-1|final-host-2|final-host-long|final-player|final-empty</p>;
 }
