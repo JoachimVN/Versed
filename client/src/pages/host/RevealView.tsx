@@ -277,66 +277,68 @@ function RevealShell({
     : players.slice().sort((a, b) => (b.score ?? 0) - (a.score ?? 0));
   const rowRefs = useRef<Record<string, HTMLButtonElement | null>>({});
   return (
-    <div className={`page-enter relative min-h-screen flex flex-col items-center gap-5 overflow-hidden ${wide ? 'px-2 py-6' : 'p-6'}`}>
-      <img
-        src={`${import.meta.env.BASE_URL}backgrounds/background3-2.png`}
-        alt=""
-        aria-hidden="true"
-        style={{ position: 'fixed', inset: 0, width: '100%', height: '100%', objectFit: 'cover', zIndex: 0, transform: 'rotate(180deg)' }}
-      />
-      <div style={{ position: 'fixed', inset: 0, zIndex: 1, background: 'rgba(5,5,14,0.82)', backdropFilter: 'blur(32px)' }} />
-      <p className="text-white/45 text-sm self-start" style={{ position: 'relative', zIndex: 2 }}>{roundIndex + 1} / {totalRounds}</p>
+    <div className="page-enter relative min-h-screen" style={{ overflowY: 'auto', overscrollBehavior: 'contain' }}>
+      <div className={`screen-center-safe relative flex min-h-full flex-col items-center gap-5 ${wide ? 'px-2 py-6' : 'p-6'}`} style={{ minHeight: '100%' }}>
+        <img
+          src={`${import.meta.env.BASE_URL}backgrounds/background3-2.png`}
+          alt=""
+          aria-hidden="true"
+          style={{ position: 'absolute', inset: 0, width: '100%', height: '100%', objectFit: 'cover', zIndex: 0, transform: 'rotate(180deg)' }}
+        />
+        <div style={{ position: 'absolute', inset: 0, zIndex: 1, background: 'rgba(5,5,14,0.82)', backdropFilter: 'blur(32px)' }} />
+        <p className="text-white/45 text-sm self-start" style={{ position: 'relative', zIndex: 2 }}>{roundIndex + 1} / {totalRounds}</p>
 
-      <div className="liquid-btn relative" style={{ width: wide ? 'min(88vw, 366px)' : 'min(92vw, 310px)', height: `${cardHeight}px`, zIndex: 2 }}>
-        <LiquidGlass
-          style={{ position: 'absolute', top: '50%', left: '50%' }}
-          {...LIQUID_CARD_PROPS}
-          padding={wide ? '18px 18px' : '24px 24px'}
-        >
-          {cardContent}
-        </LiquidGlass>
+        <div className="liquid-btn relative" style={{ width: wide ? 'min(88vw, 366px)' : 'min(92vw, 310px)', height: `${cardHeight}px`, zIndex: 2 }}>
+          <LiquidGlass
+            style={{ position: 'absolute', top: '50%', left: '50%' }}
+            {...LIQUID_CARD_PROPS}
+            padding={wide ? '18px 18px' : '24px 24px'}
+          >
+            {cardContent}
+          </LiquidGlass>
+        </div>
+
+        {!isFinalReveal && (
+          <div style={{ position: 'relative', zIndex: 2 }}>
+            <PartyRevealExtras result={result} stealResult={stealResult} hints={game.hints} />
+          </div>
+        )}
+
+        {!isFinalReveal && (
+          <div style={{ position: 'relative', zIndex: 2, background: 'rgba(255,255,255,0.05)', border: '1px solid rgba(255,255,255,0.08)', borderRadius: '16px', padding: '8px 12px', width: '310px', maxWidth: '92vw' }} className="divide-y divide-white/[0.07]">
+            {sortedPlayers.map((p, i) => (
+              <RevealPlayerRow
+                key={p.name}
+                player={p}
+                entry={result.playerGuesses?.find(g => g.name === p.name)}
+                delta={roundDeltas[p.name] ?? 0}
+                pity={roundPity[p.name] ?? false}
+                pityAmount={roundPityAmount[p.name] ?? 0}
+                delay={baseScoreDelay + i * 80}
+                correct={isCorrectFor(p)}
+                instant={instant}
+                holdReveal={isMystery}
+                removePlayer={removePlayer}
+                registerRow={isStealRound ? (el => { rowRefs.current[p.name] = el; }) : undefined}
+              />
+            ))}
+          </div>
+        )}
+
+        {isStealRound && <StealFlightOverlay stealResult={stealResult} rowRefs={rowRefs} />}
+
+        <PillButton
+          onClick={() => socket.emit('next_round')}
+          label={nextLabel}
+          zIndex={2}
+        />
+
+        {roundIndex + 1 < totalRounds && (
+          <div style={{ position: 'relative', zIndex: 2 }}>
+            <EndGameButton endGame={endGame} />
+          </div>
+        )}
       </div>
-
-      {!isFinalReveal && (
-        <div style={{ position: 'relative', zIndex: 2 }}>
-          <PartyRevealExtras result={result} stealResult={stealResult} hints={game.hints} />
-        </div>
-      )}
-
-      {!isFinalReveal && (
-        <div style={{ position: 'relative', zIndex: 2, background: 'rgba(255,255,255,0.05)', border: '1px solid rgba(255,255,255,0.08)', borderRadius: '16px', padding: '8px 12px', width: '310px', maxWidth: '92vw' }} className="divide-y divide-white/[0.07]">
-          {sortedPlayers.map((p, i) => (
-            <RevealPlayerRow
-              key={p.name}
-              player={p}
-              entry={result.playerGuesses?.find(g => g.name === p.name)}
-              delta={roundDeltas[p.name] ?? 0}
-              pity={roundPity[p.name] ?? false}
-              pityAmount={roundPityAmount[p.name] ?? 0}
-              delay={baseScoreDelay + i * 80}
-              correct={isCorrectFor(p)}
-              instant={instant}
-              holdReveal={isMystery}
-              removePlayer={removePlayer}
-              registerRow={isStealRound ? (el => { rowRefs.current[p.name] = el; }) : undefined}
-            />
-          ))}
-        </div>
-      )}
-
-      {isStealRound && <StealFlightOverlay stealResult={stealResult} rowRefs={rowRefs} />}
-
-      <PillButton
-        onClick={() => socket.emit('next_round')}
-        label={nextLabel}
-        zIndex={2}
-      />
-
-      {roundIndex + 1 < totalRounds && (
-        <div style={{ position: 'relative', zIndex: 2 }}>
-          <EndGameButton endGame={endGame} />
-        </div>
-      )}
     </div>
   );
 }
