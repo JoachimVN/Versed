@@ -412,7 +412,11 @@ export function GuessingView({ game }: Readonly<{ game: PlayState }>) {
           an iOS visual-viewport pan, which would slide the whole screen off
           the bottom of the background. */}
       <div className={`screen-center-safe flex-1 flex flex-col items-center px-5 overflow-y-auto ${ultraCompact ? 'gap-1' : compact ? 'gap-2' : 'gap-5'}`} style={{ minHeight: 0, overscrollBehavior: 'contain' }}>
-        {party && <PartyBadge party={party} compact={ultraCompact} />}
+        {/* compact, not just ultraCompact: at just-compact heights (e.g. a
+            "both" target's two stacked fields on a short phone) the badge's
+            full-size pills wrap onto 2 lines, which was the exact overflow
+            eating into the artist field below — see COMPACT_HEIGHT_PX_BOTH. */}
+        {party && <PartyBadge party={party} compact={compact} />}
         {/* Dropped entirely at the tightest squeeze (landscape + keyboard):
             each field's own placeholder already says what to type, and
             there's no vertical room left to spare once the "both" target's
