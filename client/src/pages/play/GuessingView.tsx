@@ -2,23 +2,50 @@ import { useState, useEffect, useRef } from 'react';
 import LiquidGlass from '../../components/StableLiquidGlass';
 import { useEscapeKey } from '../../hooks/useEscapeKey';
 import { useFocusTrap } from '../../hooks/useFocusTrap';
+import { readKeyboardInset } from '../../hooks/useViewportLayout';
 import { PartyBadge } from '../../components/RoundIntro';
-import { CircularTimer } from '../../components/CircularTimer';
+import { CircularTimer, LinearTimer } from '../../components/CircularTimer';
 import { AudioBars } from '../../components/AudioBars';
 import { LIQUID_CARD_PROPS, LIQUID_PILL_PROPS } from '../../components/liquidGlassPresets';
 import type { Hint } from '../../types';
 import type { PlayState } from './usePlayGame';
 import { resolveTarget } from './guessTarget';
 
+// Below this much room (window height minus whatever an iOS keyboard is
+// covering — Android already bakes its keyboard into window.innerHeight),
+// the full-size header (80px timer dial) and actions (64px Submit + Skip)
+// don't leave enough space for the input area to render without clipping —
+// confirmed by measuring the actual overflow on a short landscape phone.
+// Below it, the screen switches to smaller chrome (LinearTimer, tighter
+// gaps/padding) instead of letting the input area silently eat the deficit.
+const COMPACT_HEIGHT_PX = 480;
+
+function useCompactGuessing(): boolean {
+  const [compact, setCompact] = useState(
+    () => typeof window !== 'undefined' && window.innerHeight - readKeyboardInset() < COMPACT_HEIGHT_PX,
+  );
+  useEffect(() => {
+    const check = () => setCompact(window.innerHeight - readKeyboardInset() < COMPACT_HEIGHT_PX);
+    check();
+    window.addEventListener('resize', check);
+    window.visualViewport?.addEventListener('resize', check);
+    return () => {
+      window.removeEventListener('resize', check);
+      window.visualViewport?.removeEventListener('resize', check);
+    };
+  }, []);
+  return compact;
+}
+
 // Handles both the "listening" sub-phase (watching, imGuessing) and the active
 // guessing phase. Keeping a single component across both states means the input
 // element is never unmounted — focus and text survive the transition, which
 // prevents the mobile keyboard from dismissing mid-song.
-function ListeningHeader({ songPlaying, songTempo, isYear }: Readonly<{ songPlaying: boolean; songTempo: number | null; isYear: boolean }>) {
+function ListeningHeader({ songPlaying, songTempo, isYear, compact }: Readonly<{ songPlaying: boolean; songTempo: number | null; isYear: boolean; compact: boolean }>) {
   const accent = isYear ? 'year' : 'classic';
   return (
-    <div className="flex flex-col items-center gap-2.5 pt-10 pb-4">
-      <AudioBars playing={songPlaying} accent={accent} height={28} bpm={songTempo} />
+    <div className={`flex flex-col items-center gap-2.5 ${compact ? 'pt-3 pb-2' : 'pt-10 pb-4'}`}>
+      <AudioBars playing={songPlaying} accent={accent} height={compact ? 18 : 28} bpm={songTempo} />
       <span style={{ color: 'rgba(255,255,255,0.45)', fontSize: '0.72rem', letterSpacing: '0.08em' }}>
         {songPlaying ? 'Your song is playing…' : 'Get ready…'}
       </span>
@@ -28,19 +55,22 @@ function ListeningHeader({ songPlaying, songTempo, isYear }: Readonly<{ songPlay
 
 // Race mode plays the song throughout the guessing window, so it keeps the
 // waveform going here too; classic has already stopped the song by the time
-// a tier's turn starts, so it stays timer-only.
-function ActiveHeader({ timeLeft, timerTotal, myScore, isRace, isYear, songPlaying, songTempo }: Readonly<{ timeLeft: number; timerTotal: number; myScore: number; isRace: boolean; isYear: boolean; songPlaying: boolean; songTempo: number | null }>) {
+// a tier's turn starts, so it stays timer-only. compact swaps the 80px
+// CircularTimer dial for LinearTimer's thin bar — confirmed by measurement
+// to be the single biggest header cost on a short landscape/keyboard-up
+// screen (see COMPACT_HEIGHT_PX above).
+function ActiveHeader({ timeLeft, timerTotal, myScore, isRace, isYear, songPlaying, songTempo, compact }: Readonly<{ timeLeft: number; timerTotal: number; myScore: number; isRace: boolean; isYear: boolean; songPlaying: boolean; songTempo: number | null; compact: boolean }>) {
   const accent = isYear ? 'year' : 'race';
   return (
-    <div className="flex flex-col items-center gap-2 pt-4 pb-3">
+    <div className={`flex flex-col items-center gap-2 ${compact ? 'pt-2 pb-1' : 'pt-4 pb-3'}`}>
       <div className="flex items-center justify-between w-full px-5">
         <span style={{ color: 'rgba(255,255,255,0.45)', fontSize: '0.85rem', fontWeight: 600 }}>Your turn</span>
         <span style={{ color: 'rgba(255,255,255,0.45)', fontSize: '0.8rem', fontWeight: 500 }}>
           {myScore.toLocaleString()} pts
         </span>
       </div>
-      <CircularTimer timeLeft={timeLeft} total={timerTotal} size={80} />
-      {(isRace || isYear) && (
+      {compact ? <LinearTimer timeLeft={timeLeft} total={timerTotal} /> : <CircularTimer timeLeft={timeLeft} total={timerTotal} size={80} />}
+      {(isRace || isYear) && !compact && (
         <AudioBars playing={songPlaying} accent={accent} height={20} bpm={songTempo} />
       )}
     </div>
@@ -163,6 +193,7 @@ function YearDigitBoxes({ value, focused }: Readonly<{ value: string; focused: b
 
 export function GuessingView({ game }: Readonly<{ game: PlayState }>) {
   const { phase, timeLeft, timerTotal, myScore, guessText, guessInputRef, setGuessText, submitGuess, submitChoice, submitChaosTap, skipGuess, artistOnly, yearOnly, choiceOptions: gameChoiceOptions, songPlaying, songTempo, mode, party, hints, artistGuessText, setArtistGuessText } = game;
+  const compact = useCompactGuessing();
   const isListening = phase === 'watching';
   // Covers both Party's 'choice' format (party.choiceOptions) and the
   // Classic/Race Multiple Choice toggle (game.choiceOptions) — an empty/
@@ -244,8 +275,8 @@ export function GuessingView({ game }: Readonly<{ game: PlayState }>) {
           autoComplete="off" autoCorrect="off" spellCheck={false}
           style={{
             display: 'block', width: '100%', background: 'transparent', border: 'none',
-            color: 'white', fontSize: '1.3rem', fontWeight: 700, textAlign: 'center',
-            padding: '20px 16px', outline: 'none', fontFamily: 'inherit',
+            color: 'white', fontSize: compact ? '1.1rem' : '1.3rem', fontWeight: 700, textAlign: 'center',
+            padding: compact ? '10px 16px' : '20px 16px', outline: 'none', fontFamily: 'inherit',
           }}
           className="placeholder-white/20"
         />
@@ -266,26 +297,37 @@ export function GuessingView({ game }: Readonly<{ game: PlayState }>) {
       {/* Reserving the keyboard's height at the bottom is what keeps Submit and
           Skip tappable: the screen itself never resizes, the column just gets
           shorter, so the header stays put and the input area in the middle
-          takes the squeeze (and scrolls if it runs out of room). */}
-      <div className="relative flex flex-col flex-1 keyboard-shift" style={{ zIndex: 2, minHeight: 0, paddingBottom: 'var(--keyboard-inset, 0px)' }}>
+          takes the squeeze (and scrolls if it runs out of room). overflowY
+          here is the outer escape hatch for the case even that isn't enough
+          (a short landscape phone with the keyboard up): the header and the
+          Submit/Skip buttons are fixed-size, so once the input area has
+          already shrunk to nothing this column would otherwise just overflow
+          past the page's own overflow-hidden and silently clip Submit/Skip
+          instead of them being reachable by scrolling. */}
+      <div className="relative flex flex-col flex-1 keyboard-shift" style={{ zIndex: 2, minHeight: 0, overflowY: 'auto', overscrollBehavior: 'contain', paddingBottom: 'var(--keyboard-inset, 0px)' }}>
 
       {/* Header: waveform while listening, timer + score when active */}
       {isListening
-        ? <ListeningHeader songPlaying={songPlaying} songTempo={songTempo} isYear={isYear} />
-        : <ActiveHeader timeLeft={timeLeft} timerTotal={timerTotal} myScore={myScore} isRace={mode === 'race'} isYear={isYear} songPlaying={songPlaying} songTempo={songTempo} />}
+        ? <ListeningHeader songPlaying={songPlaying} songTempo={songTempo} isYear={isYear} compact={compact} />
+        : <ActiveHeader timeLeft={timeLeft} timerTotal={timerTotal} myScore={myScore} isRace={mode === 'race'} isYear={isYear} songPlaying={songPlaying} songTempo={songTempo} compact={compact} />}
 
       {/* Input area. min-h-0 lets it actually shrink when the keyboard takes
           the bottom of the column, and scrolling is the escape hatch for the
           tightest case (a "both" round on a short phone, where the title and
-          artist fields together outgrow what's left). overscroll-behavior
+          artist fields together outgrow what's left). screen-center-safe
+          (safe center, not plain center) is load-bearing for that case: with
+          plain center, content taller than the shrunk box overflows equally
+          above and below, and the artist field below the fold ends up
+          unreachable by any amount of scrolling — the exact "stranded
+          content" failure that utility exists to prevent. overscroll-behavior
           keeps a drag that reaches the end of it from chaining outwards into
           an iOS visual-viewport pan, which would slide the whole screen off
           the bottom of the background. */}
-      <div className="flex-1 flex flex-col items-center justify-center gap-5 px-5 overflow-y-auto" style={{ minHeight: 0, overscrollBehavior: 'contain' }}>
+      <div className={`screen-center-safe flex-1 flex flex-col items-center px-5 overflow-y-auto ${compact ? 'gap-2' : 'gap-5'}`} style={{ minHeight: 0, overscrollBehavior: 'contain' }}>
         {party && <PartyBadge party={party} />}
         <p style={{
           color: isListening ? 'rgba(255,255,255,0.45)' : 'rgba(255,255,255,0.6)',
-          fontSize: '0.9rem', fontWeight: 600, letterSpacing: '0.03em',
+          fontSize: compact ? '0.78rem' : '0.9rem', fontWeight: 600, letterSpacing: '0.03em',
           transition: 'color 0.5s ease',
         }}>
           {label}
@@ -308,8 +350,8 @@ export function GuessingView({ game }: Readonly<{ game: PlayState }>) {
               autoComplete="off" autoCorrect="off" spellCheck={false}
               style={{
                 display: 'block', width: '100%', background: 'transparent', border: 'none',
-                color: 'white', fontSize: '1.05rem', fontWeight: 600, textAlign: 'center',
-                padding: '14px 16px', outline: 'none', fontFamily: 'inherit',
+                color: 'white', fontSize: compact ? '0.9rem' : '1.05rem', fontWeight: 600, textAlign: 'center',
+                padding: compact ? '8px 14px' : '14px 16px', outline: 'none', fontFamily: 'inherit',
               }}
               className="placeholder-white/20"
             />
@@ -318,13 +360,13 @@ export function GuessingView({ game }: Readonly<{ game: PlayState }>) {
       </div>
 
       {/* Actions */}
-      <div className="px-5 pb-8 flex flex-col items-center gap-4">
+      <div className={`px-5 flex flex-col items-center ${compact ? 'pb-3 gap-2' : 'pb-8 gap-4'}`}>
         {!isChoice && !isChaosHints && (
           <button
             type="button"
             className="liquid-btn glass-tint-purple relative cursor-pointer border-0 bg-transparent p-0"
             style={{
-              width: 'min(92vw, 310px)', height: '64px', borderRadius: '100px',
+              width: 'min(92vw, 310px)', height: compact ? '44px' : '64px', borderRadius: '100px',
               background: 'rgba(0,0,0,0.001)',
               opacity: canSubmit ? 1 : 0.28,
               cursor: canSubmit ? 'pointer' : 'not-allowed',
@@ -339,10 +381,11 @@ export function GuessingView({ game }: Readonly<{ game: PlayState }>) {
             <LiquidGlass
               style={{ position: 'absolute', top: '50%', left: '50%' }}
               {...LIQUID_PILL_PROPS}
+              padding={compact ? '9px 28px' : LIQUID_PILL_PROPS.padding}
             >
               <div style={{ position: 'relative' }}>
                 <div style={{ position: 'absolute', inset: '-18px -36px', borderRadius: '100px', pointerEvents: 'none', background: 'rgba(158,18,204,0.15)' }} />
-                <span className="text-white font-bold text-xl" style={{ whiteSpace: 'nowrap', position: 'relative', display: 'inline-block', minWidth: 'min(238px, calc(100vw - 112px))', textAlign: 'center' }}>
+                <span className={`text-white font-bold ${compact ? 'text-base' : 'text-xl'}`} style={{ whiteSpace: 'nowrap', position: 'relative', display: 'inline-block', minWidth: 'min(238px, calc(100vw - 112px))', textAlign: 'center' }}>
                   Submit
                 </span>
               </div>
@@ -360,9 +403,9 @@ export function GuessingView({ game }: Readonly<{ game: PlayState }>) {
           onMouseDown={e => e.preventDefault()}
           onClick={skipGuess}
           style={{
-            padding: '13px 34px', borderRadius: '100px', fontFamily: 'inherit',
+            padding: compact ? '8px 26px' : '13px 34px', borderRadius: '100px', fontFamily: 'inherit',
             border: `1px solid ${SKIP_IDLE.border}`, background: SKIP_IDLE.background, color: SKIP_IDLE.color,
-            fontSize: '0.92rem', fontWeight: 700, cursor: 'pointer',
+            fontSize: compact ? '0.8rem' : '0.92rem', fontWeight: 700, cursor: 'pointer',
             transition: 'background 0.2s ease, border-color 0.2s ease, color 0.2s ease',
           }}
           onMouseEnter={e => applySkipStyle(e.currentTarget, SKIP_HOVER)}

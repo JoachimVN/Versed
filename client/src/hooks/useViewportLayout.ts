@@ -5,7 +5,7 @@ import { useEffect, useState } from 'react';
 // keyboard. No keyboard is anywhere near this short.
 const KEYBOARD_MIN_HEIGHT = 80;
 
-function readKeyboardInset() {
+export function readKeyboardInset() {
   const vv = window.visualViewport;
   // While pinch-zoomed the visual viewport is smaller for reasons that have
   // nothing to do with a keyboard, so don't read one into it.
