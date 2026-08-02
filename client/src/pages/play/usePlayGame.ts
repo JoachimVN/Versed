@@ -29,6 +29,7 @@ export interface PlayState {
   result: RoundResultEvent | null;
   myScore: number;
   myScoreDelta: number;
+  myRank: { rank: number; total: number } | null;
   myPity: boolean;
   myPityAmount: number;
   myBreakdown: PointsBreakdown | null;
@@ -139,6 +140,11 @@ export function usePlayGame(pinParam?: string): PlayState {
   const [stealResult, setStealResult] = useState<{ thief: string; victim: string; amount: number; skipped?: boolean } | null>(null);
   const [myRacePoints, setMyRacePoints] = useState(0);
   const [myRaceTimeMs, setMyRaceTimeMs] = useState<number | null>(null);
+  // Rebuilt from every score_update (not the separate 'leaderboard' event,
+  // which only fires once the reveal phase ends) so it's fresh the instant
+  // the reveal screen mounts, matching what the host's own sorted standings
+  // show for the same round.
+  const [myRank, setMyRank] = useState<{ rank: number; total: number } | null>(null);
   const [leaderboard, setLeaderboard] = useState<LeaderboardEntry[]>([]);
   const leaderboardRef = useRef<LeaderboardEntry[]>([]);
   const [leaderboardDeltas, setLeaderboardDeltas] = useState<Record<string, number>>({});
@@ -417,6 +423,10 @@ export function usePlayGame(pinParam?: string): PlayState {
         myScoreRef.current = me.score;
         setMyScore(me.score);
         setMyStreak(me.streak);
+        // Ties share a rank (standard competition ranking) rather than
+        // splitting hairs over score-update arrival order.
+        const ahead = players.filter(p => p.score > me.score).length;
+        setMyRank({ rank: ahead + 1, total: players.length });
       }
     });
 
@@ -658,6 +668,7 @@ export function usePlayGame(pinParam?: string): PlayState {
         myScoreRef.current = 0;
         setMyScore(0);
         setMyScoreDelta(0);
+        setMyRank(null);
         setMyPity(false);
         setMyPityAmount(0);
         setMyBreakdown(null);
@@ -695,7 +706,7 @@ export function usePlayGame(pinParam?: string): PlayState {
   return {
     phase, pin, name, myName, error, roundIndex, totalRounds, hints,
     timeLeft, timerTotal, bettingTime, bidIndex, bidOptions, bidScores, myBid, guesserNames, lowestBid,
-    guessText, result, myScore, myScoreDelta, myPity, myPityAmount, myBreakdown, myStreak, mode, artistOnly, yearOnly, choiceOptions, myRacePoints, myRaceTimeMs,
+    guessText, result, myScore, myScoreDelta, myRank, myPity, myPityAmount, myBreakdown, myStreak, mode, artistOnly, yearOnly, choiceOptions, myRacePoints, myRaceTimeMs,
     party, introParty, artistGuessText, stealVictims, stealResult,
     leaderboard, leaderboardDeltas, awards, finalResultsSkipped, songPlaying, songTempo, reconnecting, hostReconnecting, savedSession, guessInputRef,
     cameFromQR, newGamePin, rejoinNewGame,

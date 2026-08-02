@@ -354,6 +354,7 @@ const MOCK_PLAY: PlayState = {
   result: null,
   myScore: 2650,
   myScoreDelta: 0,
+  myRank: null,
   myPity: false,
   myPityAmount: 0,
   myBreakdown: null,
@@ -412,6 +413,7 @@ const MOCK_PLAY_REVEAL: PlayState = {
   myName: 'Anna',
   myScore: 4350,
   myScoreDelta: 1250,
+  myRank: { rank: 1, total: 3 },
   myBreakdown: { parts: [{ label: 'Base', amount: 500 }, { label: 'Bid bonus', amount: 600 }, { label: 'Difficulty', amount: 150 }], multiplier: 1, multiplierBonus: 0, pity: 0, total: 1250 },
   myStreak: 3,
 };
@@ -444,6 +446,7 @@ const MOCK_PLAY_REVEAL_CROWD: PlayState = {
   myName: 'Anna',
   myScore: 4350,
   myScoreDelta: 1250,
+  myRank: { rank: 1, total: 7 },
   myBreakdown: {
     parts: [
       { label: 'Base', amount: 500 },

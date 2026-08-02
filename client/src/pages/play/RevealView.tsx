@@ -49,7 +49,7 @@ function PlayRevealShell({
   scoreExtra?: React.ReactNode;
   wide?: boolean;
 }>) {
-  const { myScore, myScoreDelta, myBreakdown, myStreak, stealResult } = game;
+  const { myScore, myScoreDelta, myBreakdown, myStreak, myRank, stealResult } = game;
   const revealParty = result.party ?? game.party;
   const finaleResolved = revealParty?.duelProgress?.wins.some(w => w.count >= 2) ?? false;
   const isFinalReveal = game.roundIndex + 1 >= game.totalRounds && (!revealParty?.finale || finaleResolved);
@@ -120,6 +120,9 @@ function PlayRevealShell({
             {displayScore.toLocaleString()}
           </p>
           <p className="text-white/45 text-sm">your score</p>
+          {myRank && myRank.total > 1 && (
+            <p className="text-white/35 text-xs font-semibold tabular-nums mt-0.5">#{myRank.rank} of {myRank.total}</p>
+          )}
           {scoreExtra}
           {myStreak >= 2 && (
             <p className="flex items-center justify-center gap-1 text-orange-400 text-xs font-bold mt-1">
