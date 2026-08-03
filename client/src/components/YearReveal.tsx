@@ -3,6 +3,8 @@ import type { RoundResultEvent } from '../types';
 import { REEL_STEPS_MS, REEL_LAND_MS, useRevealReelSound } from '../hooks/useRevealReelSound';
 import type { RevealHitTier } from '../hooks/useRevealReelSound';
 import { runWhenVisible } from '../hooks/runWhenVisible';
+import type { CardSqueeze } from './revealSqueeze';
+import { cardContentWidth } from './revealSqueeze';
 
 // Spot-on year guesses get a beefier hit than the routine reveal — and a
 // second exact guess (rare — two people landing the exact year) bumps it
@@ -46,12 +48,18 @@ function pickYearCandidate(real: number): number {
 // only differ in sizing. `muted` skips the reveal SFX — both host and player
 // devices render this reel, but on the same table/room they'd otherwise both
 // play reveal_rise/reveal_hit at once, so only the host's copy sounds.
-export function YearHeading({ year, compact, muted = false, hitTier = 1 }: Readonly<{ year: number | string; compact: boolean; muted?: boolean; hitTier?: RevealHitTier }>) {
+export function YearHeading({ year, compact, muted = false, hitTier = 1, squeeze }: Readonly<{ year: number | string; compact: boolean; muted?: boolean; hitTier?: RevealHitTier; squeeze?: CardSqueeze }>) {
   const isNumber = typeof year === 'number';
   const [display, setDisplay] = useState<number | string>(year);
   const [tick, setTick] = useState(0);
   const [landed, setLanded] = useState(!isNumber);
   const playReveal = useRevealReelSound();
+  // Squeeze's own compact/ultraCompact tiers (window-height driven) are a
+  // separate axis from this component's `compact` prop (which tier of card
+  // — the no-timeline mini card vs the full timeline — it's rendered on),
+  // so both stack: squeeze shrinks further on top of whatever `compact`
+  // already picked.
+  const { compact: mid = false, ultraCompact: ultra = false } = squeeze ?? {};
 
   useEffect(() => {
     if (!isNumber) { setDisplay(year); setLanded(true); return; }
@@ -111,20 +119,21 @@ export function YearHeading({ year, compact, muted = false, hitTier = 1 }: Reado
       key={landed ? `landed-${year}` : `spin-${tick}`}
       style={{
         display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '2px',
-        marginBottom: compact ? '8px' : '22px',
+        marginBottom: ultra ? '6px' : mid ? '12px' : compact ? '8px' : '22px',
         animation: containerAnimation,
       }}
     >
       <span style={{
-        color: 'rgba(94,234,212,0.9)', fontSize: '0.62rem', fontWeight: 800, letterSpacing: '0.14em', textTransform: 'uppercase',
+        color: 'rgba(94,234,212,0.9)', fontSize: ultra ? '0.56rem' : '0.62rem', fontWeight: 800, letterSpacing: '0.14em', textTransform: 'uppercase',
       }}>
         The year was
       </span>
       <span style={{
-        fontSize: compact ? '2.6rem' : '2.2rem', fontWeight: 900, lineHeight: 1, textAlign: 'center',
+        fontSize: ultra ? (compact ? '1.9rem' : '1.6rem') : mid ? (compact ? '2.3rem' : '2rem') : compact ? '2.6rem' : '2.2rem',
+        fontWeight: 900, lineHeight: 1, textAlign: 'center',
         background: 'linear-gradient(to bottom left, rgba(0,238,232,0.5) 0%, transparent 55%), linear-gradient(to top right, rgba(158,18,204,0.5) 0%, transparent 55%), #fff',
         WebkitBackgroundClip: 'text', WebkitTextFillColor: 'transparent', backgroundClip: 'text',
-        display: 'inline-block', minWidth: compact ? '160px' : '140px',
+        display: 'inline-block', minWidth: ultra ? '110px' : mid ? '130px' : compact ? '160px' : '140px',
         // Decoys move through the reel sharply but briefly and dimly. That
         // makes the resolving state clear without blurring the answer text.
         animation: isNumber && !landed ? 'slotReelTick 0.14s ease-out' : undefined,
@@ -136,43 +145,71 @@ export function YearHeading({ year, compact, muted = false, hitTier = 1 }: Reado
 }
 
 // Cover art + title + artist footer shared by the same two year cards.
-export function YearSongFooter({ result, compact }: Readonly<{ result: RoundResultEvent; compact: boolean }>) {
+export function YearSongFooter({ result, compact, squeeze }: Readonly<{ result: RoundResultEvent; compact: boolean; squeeze?: CardSqueeze }>) {
+  const { compact: mid = false, ultraCompact: ultra = false, landscape = false } = squeeze ?? {};
+  const coverSize = ultra ? 64 : mid ? (compact ? 130 : 110) : compact ? 170 : 140;
+  const titleFontSize = ultra ? '0.85rem' : mid ? (compact ? '0.98rem' : '0.9rem') : compact ? '1.05rem' : '0.95rem';
+  const artistFontSize = ultra ? '0.7rem' : mid ? (compact ? '0.8rem' : '0.76rem') : compact ? '0.85rem' : '0.8rem';
+
+  const textBlock = (
+    <>
+      <span style={{ color: 'white', fontWeight: 900, fontSize: titleFontSize, lineHeight: 1.3, display: 'inline-block', minWidth: ultra ? '0' : '220px' }}>
+        {result.songTitle}
+      </span>
+      <span style={{ color: 'rgba(255,255,255,0.45)', fontSize: artistFontSize, marginTop: '3px', display: 'inline-block', minWidth: ultra ? '0' : '220px' }}>
+        {result.artist}
+      </span>
+    </>
+  );
+
+  // Same idea as SongInfo's landscape branch in RevealShared.tsx: a
+  // landscape phone has width to spare even at the tightest squeeze, so the
+  // cover sits beside the text instead of above it, dropping the cover's own
+  // height out of the vertical stack entirely.
+  if (ultra && landscape && result.coverUrl) {
+    return (
+      <div style={{ display: 'flex', flexDirection: 'row', alignItems: 'center', gap: '10px', width: '100%', textAlign: 'left' }}>
+        <img
+          src={result.coverUrl} alt="Album art"
+          style={{ width: `${coverSize}px`, height: `${coverSize}px`, borderRadius: '12px', objectFit: 'cover', flexShrink: 0, boxShadow: '0 10px 36px rgba(0,0,0,0.65)' }}
+        />
+        <span style={{ flex: 1, minWidth: 0, display: 'flex', flexDirection: 'column', lineHeight: 1.3 }}>{textBlock}</span>
+      </div>
+    );
+  }
+
   return (
     <>
       {result.coverUrl && (
         <img
           src={result.coverUrl} alt="Album art"
           style={{
-            width: compact ? '170px' : '140px', height: compact ? '170px' : '140px',
-            borderRadius: compact ? '16px' : '12px', objectFit: 'cover', marginBottom: '12px',
+            width: `${coverSize}px`, height: `${coverSize}px`,
+            borderRadius: mid || ultra ? '12px' : compact ? '16px' : '12px', objectFit: 'cover', marginBottom: ultra ? '6px' : '12px',
             boxShadow: '0 10px 36px rgba(0,0,0,0.65)',
           }}
         />
       )}
-      <span style={{ color: 'white', fontWeight: 900, fontSize: compact ? '1.05rem' : '0.95rem', lineHeight: 1.3, display: 'inline-block', minWidth: '220px' }}>
-        {result.songTitle}
-      </span>
-      <span style={{ color: 'rgba(255,255,255,0.45)', fontSize: compact ? '0.85rem' : '0.8rem', marginTop: '3px', display: 'inline-block', minWidth: '220px' }}>
-        {result.artist}
-      </span>
+      {textBlock}
     </>
   );
 }
 
 // Party "guess the year" rounds: the answer is a number, so the card leads
 // with the year and the closest player instead of a got-it/no-one-got-it state.
-export function YearCardContent({ result, muted = false }: Readonly<{ result: RoundResultEvent; muted?: boolean }>) {
+export function YearCardContent({ result, muted = false, squeeze }: Readonly<{ result: RoundResultEvent; muted?: boolean; squeeze?: CardSqueeze }>) {
+  const { ultraCompact: ultra = false } = squeeze ?? {};
   const winner = result.yearResults?.find(r => r.diff !== null);
   const bestDiff = winner?.diff ?? null;
   const winnerNames = bestDiff === null ? [] : (result.yearResults ?? []).filter(r => r.diff === bestDiff).map(r => r.name);
   const pluralS = bestDiff === 1 ? '' : 's';
   const winnerDetail = winner && (bestDiff === 0 ? ' · exact!' : ` (${bestDiff} year${pluralS} off)`);
   return (
-    <div style={{ width: '262px', display: 'flex', flexDirection: 'column', alignItems: 'center', textAlign: 'center' }}>
-      <YearHeading year={result.year ? Math.floor(result.year) : '–'} compact muted={muted} hitTier={pickYearHitTier(result)} />
+    <div style={{ width: cardContentWidth(squeeze), display: 'flex', flexDirection: 'column', alignItems: 'center', textAlign: 'center' }}>
+      <YearHeading year={result.year ? Math.floor(result.year) : '–'} compact muted={muted} hitTier={pickYearHitTier(result)} squeeze={squeeze} />
       {winner && (
         <span style={{
-          color: 'rgba(255,255,255,0.5)', fontSize: '0.82rem', marginBottom: '12px', display: 'inline-block', minWidth: '200px',
+          color: 'rgba(255,255,255,0.5)', fontSize: ultra ? '0.72rem' : '0.82rem', marginBottom: ultra ? '8px' : '12px', display: 'inline-block', minWidth: ultra ? '0' : '200px',
           // Waits for the year chip above to finish its own reveal (YearHeading)
           // so "who won" reads as the payoff of that reveal, not a
           // simultaneous, unrelated line of text.
@@ -181,18 +218,80 @@ export function YearCardContent({ result, muted = false }: Readonly<{ result: Ro
           {winnerNames.join(', ')} {winnerNames.length === 1 ? 'was' : 'were'} closest{winnerDetail}
         </span>
       )}
-      <div style={{ width: '100%', height: '1px', background: 'rgba(255,255,255,0.08)', marginBottom: '12px' }} />
-      <YearSongFooter result={result} compact />
+      <div style={{ width: '100%', height: '1px', background: 'rgba(255,255,255,0.08)', marginBottom: ultra ? '8px' : '12px' }} />
+      <YearSongFooter result={result} compact squeeze={squeeze} />
     </div>
   );
 }
 
-export function YearTimelineContent({ result, showGuessValues = true, muted = false }: Readonly<{ result: RoundResultEvent; showGuessValues?: boolean; muted?: boolean }>) {
+// How many extra vertical lanes the timeline's name/year labels need to
+// stack into to avoid overlapping, for this round's actual guesses — the
+// same greedy interval-packing YearTimelineContent uses internally to
+// position its labels (kept in sync manually; the packing math itself is
+// cheap and self-contained enough that duplicating it here beats threading
+// a whole layout object out of the component). host/RevealView.tsx's
+// cardHeight budget (computeYearCardHeight) adds this on top of its base
+// per-tier number — a crowded round with several close, distinct guesses
+// (the "crowd" screenshot fixture: 5+ guesses spanning a handful of years)
+// needs real extra room, and StableLiquidGlass centers its measured content
+// inside our declared box — so underbudgeting doesn't just clip, it pushes
+// the card upward past the box's top edge and into the round counter above.
+export function yearTimelineLaneCounts(result: RoundResultEvent, squeeze?: CardSqueeze): { nameLanes: number; yearLanes: number } {
+  const { ultraCompact: ultra = false, landscape = false } = squeeze ?? {};
+  const year = result.year ? Math.floor(result.year) : null;
+  const guesses = (result.yearResults ?? []).filter(r => r.guess !== null);
+  if (!year || guesses.length === 0) return { nameLanes: 0, yearLanes: 0 };
+
+  const minGuess = Math.min(...guesses.map(g => g.guess!));
+  const maxGuess = Math.max(...guesses.map(g => g.guess!));
+  const min = Math.min(year, minGuess);
+  const max = Math.max(year, maxGuess);
+  const pos = (y: number) => (max === min ? 50 : 11 + ((y - min) / (max - min)) * 78);
+
+  const groups: { guess: number; entries: typeof guesses }[] = [];
+  for (const r of guesses) {
+    const existing = groups.find(g => g.guess === r.guess);
+    if (existing) existing.entries.push(r);
+    else groups.push({ guess: r.guess!, entries: [r] });
+  }
+  groups.sort((a, b) => a.guess - b.guess);
+
+  const timelinePx = ultra && landscape ? 380 : ultra ? 260 : 300;
+  const nameFontPx = ultra ? 8.6 : 9.9;
+  const yearFontPx = ultra ? 8.3 : 9.6;
+  const estimateWidth = (text: string, fontPx: number) => text.length * fontPx * 0.58 + 4;
+  function packLanes(items: { xPct: number; label: string; fontPx: number }[]): number[] {
+    const laneEnds: number[] = [];
+    return items.map(({ xPct, label, fontPx }) => {
+      const xPx = (xPct / 100) * timelinePx;
+      const halfWidth = estimateWidth(label, fontPx) / 2;
+      const left = xPx - halfWidth;
+      const right = xPx + halfWidth;
+      let lane = 0;
+      while (lane < laneEnds.length && left < laneEnds[lane] + 6) lane++;
+      laneEnds[lane] = right;
+      return lane;
+    });
+  }
+  const nameLanes = packLanes(groups.map(g => ({ xPct: pos(g.guess), label: g.entries.map(e => e.name).join(', '), fontPx: nameFontPx })));
+  const nonExactGroups = groups.filter(g => g.guess !== year);
+  const yearLanes = packLanes(nonExactGroups.map(g => ({ xPct: pos(g.guess), label: String(g.guess), fontPx: yearFontPx })));
+  return { nameLanes: Math.max(0, ...nameLanes), yearLanes: Math.max(0, ...yearLanes) };
+}
+
+export function YearTimelineContent({ result, showGuessValues = true, muted = false, squeeze }: Readonly<{ result: RoundResultEvent; showGuessValues?: boolean; muted?: boolean; squeeze?: CardSqueeze }>) {
   if (!result.yearResults) return null;
+  const { ultraCompact: ultra = false, landscape = false } = squeeze ?? {};
 
   const year = result.year ? Math.floor(result.year) : null;
   const guesses = result.yearResults.filter(r => r.guess !== null);
-  if (!year || guesses.length === 0) return <YearCardContent result={result} muted={muted} />;
+  // A landscape phone's short window can't fit the full timeline chart
+  // *and* the roster/next-round button below it, no matter how tightly the
+  // chart itself is budgeted — there just isn't enough combined height (see
+  // computeYearCardHeight in host/RevealView.tsx, which budgets for this
+  // exact fallback rather than the chart). Falls back to the same compact
+  // summary used when there's no guess data to chart at all.
+  if (!year || guesses.length === 0 || (ultra && landscape)) return <YearCardContent result={result} muted={muted} squeeze={squeeze} />;
 
   const minGuess = Math.min(...guesses.map(g => g.guess!));
   const maxGuess = Math.max(...guesses.map(g => g.guess!));
@@ -219,7 +318,12 @@ export function YearTimelineContent({ result, showGuessValues = true, muted = fa
   // (names above, years below) into the fewest vertical lanes needed so no
   // two labels in the same row overlap horizontally — a classic greedy
   // interval-scheduling sweep over items already sorted by x position.
-  const TIMELINE_PX = 300; // approximate rendered width, just for spacing math
+  // Approximate rendered width, just for spacing math — matches the width
+  // this content div actually renders at each squeeze tier (see the `width`
+  // style on the returned div below).
+  const TIMELINE_PX = ultra && landscape ? 380 : ultra ? 260 : 300;
+  const nameFontPx = ultra ? 8.6 : 9.9;
+  const yearFontPx = ultra ? 8.3 : 9.6;
   const estimateWidth = (text: string, fontPx: number) => text.length * fontPx * 0.58 + 4;
   function packLanes(items: { xPct: number; label: string; fontPx: number }[]): number[] {
     const laneEnds: number[] = [];
@@ -234,15 +338,20 @@ export function YearTimelineContent({ result, showGuessValues = true, muted = fa
       return lane;
     });
   }
-  const nameLanes = packLanes(groups.map(g => ({ xPct: pos(g.guess), label: g.entries.map(e => e.name).join(', '), fontPx: 9.9 })));
+  const nameLanes = packLanes(groups.map(g => ({ xPct: pos(g.guess), label: g.entries.map(e => e.name).join(', '), fontPx: nameFontPx })));
   const nonExactGroups = groups.filter(g => g.guess !== year);
   const yearLaneByGuess = new Map<number, number>();
-  packLanes(nonExactGroups.map(g => ({ xPct: pos(g.guess), label: String(g.guess), fontPx: 9.6 }))).forEach((lane, i) => {
+  packLanes(nonExactGroups.map(g => ({ xPct: pos(g.guess), label: String(g.guess), fontPx: yearFontPx }))).forEach((lane, i) => {
     yearLaneByGuess.set(nonExactGroups[i].guess, lane);
   });
   const maxNameLane = Math.max(0, ...nameLanes);
   const maxYearLane = Math.max(0, ...yearLaneByGuess.values());
-  const timelineHeight = 96 + maxNameLane * 13 + maxYearLane * 12;
+  const laneNameH = ultra ? 11 : 13;
+  const laneYearH = ultra ? 10 : 12;
+  // trackTop below is the same tier-driven value used for the track/tick/
+  // marker positions — this baseline (96 vs 70) is what fits everything
+  // (name labels above, tick + year label below) around that shorter track.
+  const timelineHeight = (ultra ? 70 : 96) + maxNameLane * laneNameH + maxYearLane * laneYearH;
 
   // Someone nailed the year exactly — the actual-year tick and its label
   // pick up the same gold as the winning dot, instead of staying teal.
@@ -269,16 +378,25 @@ export function YearTimelineContent({ result, showGuessValues = true, muted = fa
   // Non-winning guesses cascade in first; the winner then lands last with a
   // bigger pop, regardless of its x-position in that cascade — a deliberate
   // "and the winner is…" beat rather than a plain leftmost-to-rightmost reveal.
+  const trackTop = ultra ? 32 : 43;
+  const tickHeight = ultra ? 22 : 30;
+  const nameLaneStep = ultra ? 11 : 13;
+  const yearLaneStep = ultra ? 10 : 12;
+  const dotSize = ultra ? { best: 8, normal: 5 } : { best: 10, normal: 6 };
+  const markerFontSize = ultra ? '0.54rem' : '0.62rem';
+  const markerYearFontSize = ultra ? '0.52rem' : '0.6rem';
+
   function renderMarker(group: typeof groups[number], delayS: number, isBest: boolean) {
     const isExact = group.guess === year;
     const names = group.entries.map(e => e.name).join(', ');
-    const nameOffset = 13 + (nameLaneByGuess.get(group.guess) ?? 0) * 13;
-    const yearOffset = 13 + (yearLaneByGuess.get(group.guess) ?? 0) * 12;
+    const nameOffset = (ultra ? 10 : 13) + (nameLaneByGuess.get(group.guess) ?? 0) * nameLaneStep;
+    const yearOffset = (ultra ? 10 : 13) + (yearLaneByGuess.get(group.guess) ?? 0) * yearLaneStep;
+    const dot = isBest ? dotSize.best : dotSize.normal;
     return (
       <div
         key={group.guess}
         style={{
-          position: 'absolute', left: `${pos(group.guess)}%`, top: '43px',
+          position: 'absolute', left: `${pos(group.guess)}%`, top: `${trackTop}px`,
           transform: 'translate(-50%, -50%)',
           animationName: isBest ? 'winnerMarkerLand' : 'markerCelebrate',
           animationDuration: isBest ? '0.65s' : '0.5s',
@@ -290,14 +408,14 @@ export function YearTimelineContent({ result, showGuessValues = true, muted = fa
         <span style={{
           position: 'absolute', left: '50%', transform: 'translateX(-50%)',
           bottom: `${nameOffset}px`,
-          fontSize: '0.62rem', whiteSpace: 'nowrap',
+          fontSize: markerFontSize, whiteSpace: 'nowrap',
           color: isBest ? winnerColor : 'rgba(255,255,255,0.55)',
           fontWeight: isBest ? 800 : 600,
         }}>
           {names}
         </span>
         <div style={{
-          width: isBest ? '10px' : '6px', height: isBest ? '10px' : '6px', borderRadius: '50%',
+          width: `${dot}px`, height: `${dot}px`, borderRadius: '50%',
           background: isBest ? winnerColor : 'rgba(255,255,255,0.5)',
           border: isBest ? '2px solid rgba(255,255,255,0.5)' : 'none',
           animation: isBest ? `${winnerGlowAnim} 1.8s ease-in-out ${delayS + 0.65}s infinite` : 'none',
@@ -306,7 +424,7 @@ export function YearTimelineContent({ result, showGuessValues = true, muted = fa
           <span style={{
             position: 'absolute', left: '50%', transform: 'translateX(-50%)',
             top: `${yearOffset}px`,
-            fontSize: '0.6rem', whiteSpace: 'nowrap',
+            fontSize: markerYearFontSize, whiteSpace: 'nowrap',
             color: isBest ? winnerColorSoft : 'rgba(255,255,255,0.45)',
             fontWeight: isBest ? 700 : 500,
           }}>
@@ -317,24 +435,26 @@ export function YearTimelineContent({ result, showGuessValues = true, muted = fa
     );
   }
 
+  const timelineWidth = ultra && landscape ? 'min(90vw, 420px)' : ultra ? 'min(88vw, 300px)' : 'min(84vw, 330px)';
+
   return (
-    <div style={{ width: 'min(84vw, 330px)', display: 'flex', flexDirection: 'column', alignItems: 'center', textAlign: 'center' }}>
-      <YearHeading year={year} compact={false} muted={muted} hitTier={pickYearHitTier(result)} />
+    <div style={{ width: timelineWidth, display: 'flex', flexDirection: 'column', alignItems: 'center', textAlign: 'center' }}>
+      <YearHeading year={year} compact={false} muted={muted} hitTier={pickYearHitTier(result)} squeeze={squeeze} />
 
       {/* Timeline */}
-      <div style={{ position: 'relative', width: '100%', height: `${timelineHeight}px`, marginBottom: '8px' }}>
-        <div style={{ position: 'absolute', left: 0, right: 0, top: '43px', height: '3px', background: 'rgba(255,255,255,0.08)', borderRadius: '2px' }} />
+      <div style={{ position: 'relative', width: '100%', height: `${timelineHeight}px`, marginBottom: ultra ? '4px' : '8px' }}>
+        <div style={{ position: 'absolute', left: 0, right: 0, top: `${trackTop}px`, height: '3px', background: 'rgba(255,255,255,0.08)', borderRadius: '2px' }} />
 
         {/* Actual-year tick — fades in once the year number above has landed */}
         <div style={{
-          position: 'absolute', left: `${pos(year)}%`, top: '28px', transform: 'translateX(-50%)',
-          width: '2px', height: '30px', borderRadius: '1px',
+          position: 'absolute', left: `${pos(year)}%`, top: `${trackTop - tickHeight / 2}px`, transform: 'translateX(-50%)',
+          width: '2px', height: `${tickHeight}px`, borderRadius: '1px',
           background: exactMatch ? 'rgba(251,191,36,0.7)' : 'rgba(0,238,232,0.5)',
           animation: `fadeIn 0.4s ease-out ${timelineRevealS}s both`,
         }} />
         <div style={{
-          position: 'absolute', left: `${pos(year)}%`, top: `${66 + maxYearLane * 12}px`, transform: 'translateX(-50%)',
-          fontSize: '0.6rem', fontWeight: 700, whiteSpace: 'nowrap',
+          position: 'absolute', left: `${pos(year)}%`, top: `${trackTop + 23 + maxYearLane * yearLaneStep}px`, transform: 'translateX(-50%)',
+          fontSize: markerYearFontSize, fontWeight: 700, whiteSpace: 'nowrap',
           color: exactMatch ? '#fbbf24' : 'rgba(94,234,212,0.9)',
           animation: `fadeIn 0.4s ease-out ${timelineRevealS}s both`,
         }}>
@@ -346,13 +466,13 @@ export function YearTimelineContent({ result, showGuessValues = true, muted = fa
       </div>
 
       {passCount > 0 && (
-        <span style={{ color: 'rgba(255,255,255,0.45)', fontSize: '0.68rem', marginBottom: '4px' }}>
+        <span style={{ color: 'rgba(255,255,255,0.45)', fontSize: ultra ? '0.6rem' : '0.68rem', marginBottom: ultra ? '2px' : '4px' }}>
           {passCount} didn't guess
         </span>
       )}
 
-      <div style={{ width: '100%', height: '1px', background: 'rgba(255,255,255,0.08)', marginTop: '8px', marginBottom: '12px' }} />
-      <YearSongFooter result={result} compact={false} />
+      <div style={{ width: '100%', height: '1px', background: 'rgba(255,255,255,0.08)', marginTop: ultra ? '4px' : '8px', marginBottom: ultra ? '8px' : '12px' }} />
+      <YearSongFooter result={result} compact={false} squeeze={squeeze} />
     </div>
   );
 }

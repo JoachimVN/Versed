@@ -5,7 +5,7 @@ import { socket } from '../../socket';
 import { useAnimatedScore } from '../../hooks/useAnimatedScore';
 import { BIG_POINTS_THRESHOLD, FinalRoundAnswerContent, NoOneGotItCardContent, GotItCardContent, PillButton } from '../../components/RevealShared';
 import type { CardSqueeze } from '../../components/RevealShared';
-import { YearTimelineContent } from '../../components/YearReveal';
+import { YearTimelineContent, yearTimelineLaneCounts } from '../../components/YearReveal';
 import { PartyRevealExtras, MYSTERY_LANDING_MS } from '../../components/RoundIntro';
 import { LIQUID_CARD_PROPS } from '../../components/liquidGlassPresets';
 import type { PlayerInfo, RoundResultEvent } from '../../types';
@@ -85,10 +85,53 @@ function computeCardHeight(hasCover: boolean, squeeze: CardSqueeze): number {
 // Landscape gets the most: it has width to spare precisely because height
 // is what's scarce there, unlike portrait where both axes are tight.
 function computeCardWidth(squeeze: CardSqueeze, wide: boolean): string {
-  if (wide) return 'min(88vw, 366px)';
+  if (wide) {
+    if (squeeze.ultraCompact && squeeze.landscape) return 'min(94vw, 480px)';
+    if (squeeze.ultraCompact) return 'min(92vw, 340px)';
+    return 'min(88vw, 366px)';
+  }
   if (squeeze.ultraCompact && squeeze.landscape) return 'min(94vw, 450px)';
   if (squeeze.ultraCompact) return 'min(94vw, 340px)';
   return 'min(92vw, 310px)';
+}
+
+// Same idea as computeCardHeight above, but for the year-format cards
+// (YearTimelineContent's timeline, or the compact year-only reveal rendered
+// via FinalRoundAnswerContent) — the slot-reel heading and timeline markers
+// don't cost the same budget as SongInfo's stacked lines, so they get their
+// own tiers rather than reusing computeCardHeight's numbers.
+//
+// `result` is null for the final-round card (FinalRoundAnswerContent's
+// yearOnly branch never renders the chart, just the heading+footer) — that
+// always gets the no-chart tiers below. For the mid-round card, `showsChart`
+// mirrors YearTimelineContent's own fallback condition exactly (no guess
+// data, or the ultraCompact+landscape squeeze that can't fit the chart
+// alongside the roster/button at all — see that component), so this budget
+// always matches whichever content it actually decided to render.
+//
+// StableLiquidGlass measures its own content and centers it inside this
+// declared box — it doesn't clip to a short budget, it grows past the box
+// equally top and bottom. So an undersized budget here doesn't just
+// overflow harmlessly, it pushes the card upward into the round counter
+// above it. The chart's own height varies with how many of a round's
+// guesses land close enough to collide (see yearTimelineLaneCounts), which
+// a single flat number per tier can't account for — hence adding that lane
+// count's real cost on top of the base budget instead of guessing a margin.
+function computeYearCardHeight(hasCover: boolean, result: RoundResultEvent | null, squeeze: CardSqueeze): number {
+  const { ultraCompact: ultra, compact, landscape } = squeeze;
+  const hasGuessData = !!result?.year && (result.yearResults ?? []).some(r => r.guess !== null);
+  const showsChart = hasGuessData && !(ultra && landscape);
+
+  if (showsChart) {
+    const { nameLanes, yearLanes } = yearTimelineLaneCounts(result!, squeeze);
+    const laneExtra = nameLanes * (ultra ? 11 : 13) + yearLanes * (ultra ? 10 : 12);
+    if (ultra) return (hasCover ? 340 : 300) + laneExtra;
+    if (compact) return (hasCover ? 430 : 330) + laneExtra;
+    return (hasCover ? 500 : 380) + laneExtra;
+  }
+  if (ultra) return landscape ? (hasCover ? 190 : 160) : (hasCover ? 260 : 220);
+  if (compact) return hasCover ? 300 : 260;
+  return hasCover ? 360 : 320;
 }
 
 type GuessCorrectness = 'none' | 'correct' | 'exact';
@@ -459,10 +502,9 @@ export function RevealView({ game, result, instant = false }: Readonly<{ game: H
 
   if (isFinalReveal) {
     const isYearReveal = result.party?.format === 'year' || result.yearOnly;
-    // The year-format card isn't squeeze-aware (YearHeading/YearSongFooter
-    // aren't wired up to shrink) — keep its fixed height rather than risk
-    // the card overlapping the roster below it.
-    const finalCardHeight = isYearReveal ? 320 : computeCardHeight(!!result.coverUrl, squeeze);
+    const finalCardHeight = isYearReveal
+      ? computeYearCardHeight(!!result.coverUrl, null, squeeze)
+      : computeCardHeight(!!result.coverUrl, squeeze);
 
     return (
       <RevealShell
@@ -470,23 +512,22 @@ export function RevealView({ game, result, instant = false }: Readonly<{ game: H
         result={result}
         instant={instant}
         cardHeight={finalCardHeight}
-        cardContent={<FinalRoundAnswerContent result={result} label="Final answer" squeeze={isYearReveal ? undefined : squeeze} />}
+        cardContent={<FinalRoundAnswerContent result={result} label="Final answer" squeeze={squeeze} />}
         isCorrectFor={() => 'none'}
         squeeze={squeeze}
       />
     );
   }
 
-  // "Guess the year" rounds (party or the game-wide toggle) have a numeric
-  // answer — dedicated card, not squeeze-aware, so its height stays fixed.
+  // "Guess the year" rounds (party or the game-wide toggle) have a numeric answer.
   if (result.party?.format === 'year' || result.yearOnly) {
     return (
       <RevealShell
         game={game}
         result={result}
         instant={instant}
-        cardHeight={result.coverUrl ? 500 : 380}
-        cardContent={<YearTimelineContent result={result} />}
+        cardHeight={computeYearCardHeight(!!result.coverUrl, result, squeeze)}
+        cardContent={<YearTimelineContent result={result} squeeze={squeeze} />}
         wide
         isCorrectFor={(p) => {
           const bestDiff = result.yearResults?.find(r => r.diff !== null)?.diff ?? null;

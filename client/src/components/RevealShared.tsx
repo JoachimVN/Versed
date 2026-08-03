@@ -3,6 +3,10 @@ import LiquidGlass from './StableLiquidGlass';
 import type { Award, PointsBreakdown, RoundResultEvent } from '../types';
 import { LIQUID_PILL_PROPS } from './liquidGlassPresets';
 import { YearHeading, YearSongFooter } from './YearReveal';
+import type { CardSqueeze } from './revealSqueeze';
+import { cardContentWidth } from './revealSqueeze';
+
+export type { CardSqueeze } from './revealSqueeze';
 
 // A round delta this large only happens with a multiplier event, a big
 // steal, or several bonuses stacking — comfortably above classic's ordinary
@@ -164,35 +168,6 @@ export function AwardsStrip({ awards }: Readonly<{ awards: Award[] }>) {
       {ordered.map((award, i) => <AwardRow key={award.key} award={award} delay={i * 70} />)}
     </section>
   );
-}
-
-// Reveal cards are centered inside a fixed-height box rather than sized to
-// their own content (see RevealShell's `.liquid-btn` wrapper), so a squeeze
-// tier that shrinks a card's content without shrinking its declared height
-// in lockstep would leave the card floating off-center inside dead space —
-// or, shrunk the other way, overlapping the row below it. Every squeeze-aware
-// piece in this file takes the same two flags so callers size the box to
-// match.
-// landscape is optional because most callers of these squeeze-aware pieces
-// (PillButton, the card labels) don't care about it — only SongInfo's
-// tightest layout does, laying the cover art beside the text instead of
-// above it to spend a landscape phone's abundant width instead of its
-// scarce height.
-export type CardSqueeze = { compact: boolean; ultraCompact: boolean; landscape?: boolean };
-
-// The card content column's own width cap, independent of the glass card's
-// outer width (see computeCardWidth in host/RevealView.tsx) — widened at
-// ultraCompact so the combined title/artist/year line (SongInfo) has real
-// room to sit on one or two lines instead of wrapping hard into a narrow
-// 262px column purely because that's normal/compact's aesthetic width, not
-// an actual constraint at this squeeze. Landscape gets the most: its row
-// layout (cover beside text) needs the width most, and it's the one axis
-// landscape actually has to spare.
-function cardContentWidth(squeeze?: CardSqueeze): string {
-  const { ultraCompact = false, landscape = false } = squeeze ?? {};
-  if (ultraCompact && landscape) return 'min(420px, calc(100vw - 48px))';
-  if (ultraCompact) return 'min(300px, calc(100vw - 56px))';
-  return 'min(262px, calc(100vw - 96px))';
 }
 
 export function PillButton({ onClick, label, zIndex, squeeze }: Readonly<{ onClick: () => void; label: string; zIndex?: number; squeeze?: CardSqueeze }>) {
@@ -376,8 +351,8 @@ export function FinalRoundAnswerContent({ result, label, muted = false, squeeze 
       <div style={{ width: '100%', height: '1px', background: 'rgba(255,255,255,0.08)', marginBottom: ultraCompact ? '8px' : compact ? '10px' : '14px' }} />
       {yearOnly ? (
         <>
-          <YearHeading year={result.year ? Math.floor(result.year) : '-'} compact muted={muted} />
-          <YearSongFooter result={result} compact />
+          <YearHeading year={result.year ? Math.floor(result.year) : '-'} compact muted={muted} squeeze={squeeze} />
+          <YearSongFooter result={result} compact squeeze={squeeze} />
         </>
       ) : (
         <>
