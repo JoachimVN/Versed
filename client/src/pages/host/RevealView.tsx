@@ -40,7 +40,8 @@ type RevealLayout = CardSqueeze & { windowHeight: number };
 function useRevealLayout(): RevealLayout {
   const measure = (): RevealLayout => {
     const h = typeof window !== 'undefined' ? window.innerHeight : Infinity;
-    return { compact: h < COMPACT_HEIGHT_PX, ultraCompact: h < ULTRA_COMPACT_HEIGHT_PX, windowHeight: h };
+    const w = typeof window !== 'undefined' ? window.innerWidth : 0;
+    return { compact: h < COMPACT_HEIGHT_PX, ultraCompact: h < ULTRA_COMPACT_HEIGHT_PX, landscape: w > h, windowHeight: h };
   };
   const [layout, setLayout] = useState<RevealLayout>(measure);
   useEffect(() => {
@@ -59,9 +60,35 @@ function useRevealLayout(): RevealLayout {
 function computeCardHeight(hasCover: boolean, squeeze: CardSqueeze): number {
   // ultraCompact drops the avatar icon and folds title/artist/year onto one
   // line (see SongInfo/GotItCardContent), so its budget is well below a
-  // straight-line interpolation from compact's.
-  if (hasCover) return squeeze.ultraCompact ? 230 : squeeze.compact ? 400 : 480;
-  return squeeze.ultraCompact ? 115 : squeeze.compact ? 205 : 240;
+  // straight-line interpolation from compact's. Budgeted for that combined
+  // line wrapping to two — it doesn't always fit on one at the card's
+  // narrowest width (280px viewport, e.g. iOS's "Zoomed" display setting),
+  // and the card is centered inside this fixed-height box rather than sized
+  // to its own content, so under-budgeting here overlaps the card's own
+  // border instead of just wasting space.
+  if (hasCover) {
+    // Landscape's row layout (cover beside the text) caps the row's own
+    // height at the cover art's, since the text column has far more width
+    // to wrap into there than portrait's centered layout does — computeCardWidth's
+    // widened landscape card is what actually keeps that column wide enough
+    // to hold at one line most of the time; this still carries a margin for
+    // when it doesn't.
+    if (squeeze.ultraCompact && squeeze.landscape) return 165;
+    return squeeze.ultraCompact ? 264 : squeeze.compact ? 400 : 480;
+  }
+  return squeeze.ultraCompact ? 149 : squeeze.compact ? 205 : 240;
+}
+
+// The glass card's own outer width — widened at ultraCompact to match
+// cardContentWidth in RevealShared.tsx (the inner content column), since
+// widening one without the other just wastes the extra room on padding.
+// Landscape gets the most: it has width to spare precisely because height
+// is what's scarce there, unlike portrait where both axes are tight.
+function computeCardWidth(squeeze: CardSqueeze, wide: boolean): string {
+  if (wide) return 'min(88vw, 366px)';
+  if (squeeze.ultraCompact && squeeze.landscape) return 'min(94vw, 450px)';
+  if (squeeze.ultraCompact) return 'min(94vw, 340px)';
+  return 'min(92vw, 310px)';
 }
 
 type GuessCorrectness = 'none' | 'correct' | 'exact';
@@ -368,7 +395,7 @@ function RevealShell({
             tier — a real cost on a short screen. */}
         <p className="text-white/45 text-xs" style={{ position: 'absolute', top: '10px', left: '14px', zIndex: 3 }}>{roundIndex + 1} / {totalRounds}</p>
 
-        <div className="liquid-btn relative" style={{ width: wide ? 'min(88vw, 366px)' : 'min(92vw, 310px)', height: `${cardHeight}px`, zIndex: 2 }}>
+        <div className="liquid-btn relative" style={{ width: computeCardWidth(squeeze, wide), height: `${cardHeight}px`, zIndex: 2 }}>
           <LiquidGlass
             style={{ position: 'absolute', top: '50%', left: '50%' }}
             {...LIQUID_CARD_PROPS}

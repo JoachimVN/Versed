@@ -173,7 +173,27 @@ export function AwardsStrip({ awards }: Readonly<{ awards: Award[] }>) {
 // or, shrunk the other way, overlapping the row below it. Every squeeze-aware
 // piece in this file takes the same two flags so callers size the box to
 // match.
-export type CardSqueeze = { compact: boolean; ultraCompact: boolean };
+// landscape is optional because most callers of these squeeze-aware pieces
+// (PillButton, the card labels) don't care about it — only SongInfo's
+// tightest layout does, laying the cover art beside the text instead of
+// above it to spend a landscape phone's abundant width instead of its
+// scarce height.
+export type CardSqueeze = { compact: boolean; ultraCompact: boolean; landscape?: boolean };
+
+// The card content column's own width cap, independent of the glass card's
+// outer width (see computeCardWidth in host/RevealView.tsx) — widened at
+// ultraCompact so the combined title/artist/year line (SongInfo) has real
+// room to sit on one or two lines instead of wrapping hard into a narrow
+// 262px column purely because that's normal/compact's aesthetic width, not
+// an actual constraint at this squeeze. Landscape gets the most: its row
+// layout (cover beside text) needs the width most, and it's the one axis
+// landscape actually has to spare.
+function cardContentWidth(squeeze?: CardSqueeze): string {
+  const { ultraCompact = false, landscape = false } = squeeze ?? {};
+  if (ultraCompact && landscape) return 'min(420px, calc(100vw - 48px))';
+  if (ultraCompact) return 'min(300px, calc(100vw - 56px))';
+  return 'min(262px, calc(100vw - 96px))';
+}
 
 export function PillButton({ onClick, label, zIndex, squeeze }: Readonly<{ onClick: () => void; label: string; zIndex?: number; squeeze?: CardSqueeze }>) {
   const { compact = false, ultraCompact = false } = squeeze ?? {};
@@ -202,7 +222,7 @@ export function NoOneGotItCardContent({ result, squeeze }: Readonly<{ result: Ro
   const artistOnly = result.artistOnly;
   const iconSize = ultraCompact ? 36 : compact ? 44 : 52;
   return (
-    <div style={{ width: 'min(262px, calc(100vw - 96px))', display: 'flex', flexDirection: 'column', alignItems: 'center', textAlign: 'center' }}>
+    <div style={{ width: cardContentWidth(squeeze), display: 'flex', flexDirection: 'column', alignItems: 'center', textAlign: 'center' }}>
       {/* Dropped entirely at the tightest squeeze rather than shrunk further:
           the label text below already says who/what, so the icon is purely
           decorative once space is this scarce. */}
@@ -238,7 +258,7 @@ export function NoOneGotItCardContent({ result, squeeze }: Readonly<{ result: Ro
 }
 
 function SongInfo({ result, squeeze }: Readonly<{ result: RoundResultEvent; squeeze?: CardSqueeze }>) {
-  const { compact = false, ultraCompact = false } = squeeze ?? {};
+  const { compact = false, ultraCompact = false, landscape = false } = squeeze ?? {};
   const artistOnly = result.artistOnly;
   const coverSize = ultraCompact ? 110 : compact ? 150 : 200;
   const titleFontSize = ultraCompact ? '0.92rem' : compact ? '1.02rem' : '1.1rem';
@@ -246,12 +266,48 @@ function SongInfo({ result, squeeze }: Readonly<{ result: RoundResultEvent; sque
   const primary = artistOnly ? result.artist : result.songTitle;
   const secondary = artistOnly ? result.songTitle : result.artist;
 
-  // Three stacked lines (title, artist, year) is the one layout that keeps
-  // costing a fixed line-height no matter how far the font shrinks — folding
-  // them into one line is worth more room at the tightest squeeze than any
-  // further font reduction would be. Wraps rather than truncates: this text
-  // is the answer to the round, so it can't just get cut off.
   if (ultraCompact) {
+    const combinedLineText = (
+      <>
+        <span style={{ color: 'white', fontWeight: 900, fontSize: titleFontSize }}>{primary}</span>
+        <span style={{ color: 'rgba(255,255,255,0.45)', fontSize: artistFontSize }}>
+          {' · '}{secondary}
+          {result.featuredArtists && <> feat. {formatFeaturedArtists(result.featuredArtists)}</>}
+          {result.year && ` · ${result.year}`}
+        </span>
+      </>
+    );
+    // A landscape phone has width to spare even at this squeeze (unlike
+    // portrait, where it's scarce on both axes) — putting the cover beside
+    // the text instead of above it removes the cover's own height from the
+    // vertical stack entirely, rather than just shrinking it further. The
+    // text column gets `flex: 1, minWidth: 0` rather than portrait's fixed
+    // minWidth: a fixed floor here doesn't leave enough of the row for the
+    // cover once the two share width, and a flex row won't wrap a child
+    // that's wider than its share — it just overflows past the card's edge.
+    if (landscape && result.coverUrl) {
+      return (
+        <div style={{ display: 'flex', flexDirection: 'row', alignItems: 'center', gap: '10px', width: '100%', textAlign: 'left' }}>
+          <img
+            src={result.coverUrl} alt="Album art"
+            style={{ width: '64px', height: '64px', borderRadius: '12px', objectFit: 'cover', flexShrink: 0, boxShadow: '0 10px 36px rgba(0,0,0,0.65)' }}
+          />
+          <span style={{ flex: 1, minWidth: 0, lineHeight: 1.35 }}>{combinedLineText}</span>
+        </div>
+      );
+    }
+    // width: 100% rather than a fixed minWidth: a hardcoded floor doesn't
+    // adapt to the card's narrowest real width (280px viewport, e.g. iOS's
+    // "Zoomed" display setting), where it forced this span wider than its
+    // container and bled text past the card's own border instead of
+    // wrapping into it.
+    const combinedLine = <span style={{ display: 'block', width: '100%', lineHeight: 1.35 }}>{combinedLineText}</span>;
+    // Three stacked lines (title, artist, year) is the one layout that keeps
+    // costing a fixed line-height no matter how far the font shrinks —
+    // folding them into one line is worth more room at the tightest squeeze
+    // than any further font reduction would be. Wraps rather than
+    // truncates: this text is the answer to the round, so it can't just get
+    // cut off.
     return (
       <>
         {result.coverUrl && (
@@ -260,14 +316,7 @@ function SongInfo({ result, squeeze }: Readonly<{ result: RoundResultEvent; sque
             style={{ width: `${coverSize}px`, height: `${coverSize}px`, borderRadius: '16px', objectFit: 'cover', marginBottom: '6px', boxShadow: '0 10px 36px rgba(0,0,0,0.65)' }}
           />
         )}
-        <span style={{ display: 'inline-block', minWidth: '220px', lineHeight: 1.35 }}>
-          <span style={{ color: 'white', fontWeight: 900, fontSize: titleFontSize }}>{primary}</span>
-          <span style={{ color: 'rgba(255,255,255,0.45)', fontSize: artistFontSize }}>
-            {' · '}{secondary}
-            {result.featuredArtists && <> feat. {formatFeaturedArtists(result.featuredArtists)}</>}
-            {result.year && ` · ${result.year}`}
-          </span>
-        </span>
+        {combinedLine}
       </>
     );
   }
@@ -309,7 +358,7 @@ export function FinalRoundAnswerContent({ result, label, muted = false, squeeze 
   }
 
   return (
-    <div style={{ width: 'min(262px, calc(100vw - 96px))', display: 'flex', flexDirection: 'column', alignItems: 'center', textAlign: 'center' }}>
+    <div style={{ width: cardContentWidth(squeeze), display: 'flex', flexDirection: 'column', alignItems: 'center', textAlign: 'center' }}>
       <span style={{
         color: 'rgba(255,255,255,0.45)', fontSize: '0.62rem', fontWeight: 800,
         letterSpacing: '0.16em', textTransform: 'uppercase', marginBottom: ultraCompact ? '6px' : compact ? '8px' : '10px', display: 'inline-block',
@@ -387,7 +436,7 @@ export function GotItCardContent({ result, myName, squeeze }: Readonly<{ result:
   }
 
   return (
-    <div style={{ width: 'min(262px, calc(100vw - 96px))', display: 'flex', flexDirection: 'column', alignItems: 'center', textAlign: 'center' }}>
+    <div style={{ width: cardContentWidth(squeeze), display: 'flex', flexDirection: 'column', alignItems: 'center', textAlign: 'center' }}>
       {!ultraCompact && (
         <div style={{
           width: `${iconSize}px`, height: `${iconSize}px`, borderRadius: '50%',
