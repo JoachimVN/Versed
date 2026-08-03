@@ -5,7 +5,10 @@ import { socket } from '../../socket';
 import { useAnimatedScore } from '../../hooks/useAnimatedScore';
 import { BIG_POINTS_THRESHOLD, FinalRoundAnswerContent, NoOneGotItCardContent, GotItCardContent, PillButton } from '../../components/RevealShared';
 import type { CardSqueeze } from '../../components/RevealShared';
-import { YearTimelineContent, yearTimelineLaneCounts } from '../../components/YearReveal';
+import { YearTimelineContent } from '../../components/YearReveal';
+import { computeYearCardHeight } from '../../components/yearCardSqueeze';
+import type { RevealLayout } from '../../components/revealSqueeze';
+import { useRevealLayout, computeCardHeight, computeCardWidth } from '../../components/revealSqueeze';
 import { PartyRevealExtras, MYSTERY_LANDING_MS } from '../../components/RoundIntro';
 import { LIQUID_CARD_PROPS } from '../../components/liquidGlassPresets';
 import type { PlayerInfo, RoundResultEvent } from '../../types';
@@ -14,125 +17,17 @@ import { EndGameButton } from './dialogs';
 
 // This screen (unlike the guessing screen) never has a keyboard to reserve
 // room for — it's host-only, no text input — so the squeeze only has to
-// react to raw window height. The host reveal card is centered inside a
-// fixed-height box rather than sized to its own content (see the `.liquid-btn`
-// wrapper below), so shrinking it without correspondingly shrinking every
-// card's own font/image sizes would just leave it floating in dead space at
-// best, or overlapping the roster below it at worst — hence cardHeight()
-// tracking the exact same tiers passed to the card content components.
-// Deliberately conservative: a maximized browser on an ordinary laptop
-// display (e.g. a 1440x900 MacBook) still reports an innerHeight comfortably
-// above this — browser chrome (tabs/URL bar) rarely eats more than ~100px —
-// so the host's everyday desktop view stays on the untouched "normal" tier.
-// A big roster (7+ players) not fitting even at normal on a tall phone is
-// handled separately by capping the player list's own height (see
-// computeListMaxHeight below) rather than by dragging this threshold up
-// near desktop heights, which would compact the desktop view too.
-const COMPACT_HEIGHT_PX = 760;
-const ULTRA_COMPACT_HEIGHT_PX = 690;
-
-// Carries the raw height alongside the tier flags so the player list (see
-// computeListMaxHeight) can size itself off exactly how much room the rest
-// of the tier's chrome actually leaves, instead of getting its own separate
-// height thresholds that could drift out of sync with the tier's real cost.
-type RevealLayout = CardSqueeze & { windowHeight: number };
-
-function useRevealLayout(): RevealLayout {
-  const measure = (): RevealLayout => {
-    const h = typeof window !== 'undefined' ? window.innerHeight : Infinity;
-    const w = typeof window !== 'undefined' ? window.innerWidth : 0;
-    return { compact: h < COMPACT_HEIGHT_PX, ultraCompact: h < ULTRA_COMPACT_HEIGHT_PX, landscape: w > h, windowHeight: h };
-  };
-  const [layout, setLayout] = useState<RevealLayout>(measure);
-  useEffect(() => {
-    const check = () => setLayout(measure());
-    check();
-    window.addEventListener('resize', check);
-    return () => window.removeEventListener('resize', check);
-  }, []);
-  return layout;
-}
-
-// Mirrors the fixed pixel budget SongInfo/GotItCardContent/etc. actually
-// render at each tier (icon circle + label + divider + cover art + title/
-// artist/year, plus the card's own padding) — recalibrate both together if
-// either drifts.
-function computeCardHeight(hasCover: boolean, squeeze: CardSqueeze): number {
-  // ultraCompact drops the avatar icon and folds title/artist/year onto one
-  // line (see SongInfo/GotItCardContent), so its budget is well below a
-  // straight-line interpolation from compact's. Budgeted for that combined
-  // line wrapping to two — it doesn't always fit on one at the card's
-  // narrowest width (280px viewport, e.g. iOS's "Zoomed" display setting),
-  // and the card is centered inside this fixed-height box rather than sized
-  // to its own content, so under-budgeting here overlaps the card's own
-  // border instead of just wasting space.
-  if (hasCover) {
-    // Landscape's row layout (cover beside the text) caps the row's own
-    // height at the cover art's, since the text column has far more width
-    // to wrap into there than portrait's centered layout does — computeCardWidth's
-    // widened landscape card is what actually keeps that column wide enough
-    // to hold at one line most of the time; this still carries a margin for
-    // when it doesn't.
-    if (squeeze.ultraCompact && squeeze.landscape) return 165;
-    return squeeze.ultraCompact ? 264 : squeeze.compact ? 400 : 480;
-  }
-  return squeeze.ultraCompact ? 149 : squeeze.compact ? 205 : 240;
-}
-
-// The glass card's own outer width — widened at ultraCompact to match
-// cardContentWidth in RevealShared.tsx (the inner content column), since
-// widening one without the other just wastes the extra room on padding.
-// Landscape gets the most: it has width to spare precisely because height
-// is what's scarce there, unlike portrait where both axes are tight.
-function computeCardWidth(squeeze: CardSqueeze, wide: boolean): string {
-  if (wide) {
-    if (squeeze.ultraCompact && squeeze.landscape) return 'min(94vw, 480px)';
-    if (squeeze.ultraCompact) return 'min(92vw, 340px)';
-    return 'min(88vw, 366px)';
-  }
-  if (squeeze.ultraCompact && squeeze.landscape) return 'min(94vw, 450px)';
-  if (squeeze.ultraCompact) return 'min(94vw, 340px)';
-  return 'min(92vw, 310px)';
-}
-
-// Same idea as computeCardHeight above, but for the year-format cards
-// (YearTimelineContent's timeline, or the compact year-only reveal rendered
-// via FinalRoundAnswerContent) — the slot-reel heading and timeline markers
-// don't cost the same budget as SongInfo's stacked lines, so they get their
-// own tiers rather than reusing computeCardHeight's numbers.
-//
-// `result` is null for the final-round card (FinalRoundAnswerContent's
-// yearOnly branch never renders the chart, just the heading+footer) — that
-// always gets the no-chart tiers below. For the mid-round card, `showsChart`
-// mirrors YearTimelineContent's own fallback condition exactly (no guess
-// data, or the ultraCompact+landscape squeeze that can't fit the chart
-// alongside the roster/button at all — see that component), so this budget
-// always matches whichever content it actually decided to render.
-//
-// StableLiquidGlass measures its own content and centers it inside this
-// declared box — it doesn't clip to a short budget, it grows past the box
-// equally top and bottom. So an undersized budget here doesn't just
-// overflow harmlessly, it pushes the card upward into the round counter
-// above it. The chart's own height varies with how many of a round's
-// guesses land close enough to collide (see yearTimelineLaneCounts), which
-// a single flat number per tier can't account for — hence adding that lane
-// count's real cost on top of the base budget instead of guessing a margin.
-function computeYearCardHeight(hasCover: boolean, result: RoundResultEvent | null, squeeze: CardSqueeze): number {
-  const { ultraCompact: ultra, compact, landscape } = squeeze;
-  const hasGuessData = !!result?.year && (result.yearResults ?? []).some(r => r.guess !== null);
-  const showsChart = hasGuessData && !(ultra && landscape);
-
-  if (showsChart) {
-    const { nameLanes, yearLanes } = yearTimelineLaneCounts(result!, squeeze);
-    const laneExtra = nameLanes * (ultra ? 11 : 13) + yearLanes * (ultra ? 10 : 12);
-    if (ultra) return (hasCover ? 340 : 300) + laneExtra;
-    if (compact) return (hasCover ? 430 : 330) + laneExtra;
-    return (hasCover ? 500 : 380) + laneExtra;
-  }
-  if (ultra) return landscape ? (hasCover ? 190 : 160) : (hasCover ? 260 : 220);
-  if (compact) return hasCover ? 300 : 260;
-  return hasCover ? 360 : 320;
-}
+// react to raw window height (see useRevealLayout in revealSqueeze.ts). The
+// host reveal card is centered inside a fixed-height box rather than sized
+// to its own content (see the `.liquid-btn` wrapper below), so shrinking it
+// without correspondingly shrinking every card's own font/image sizes would
+// just leave it floating in dead space at best, or overlapping the roster
+// below it at worst — hence computeCardHeight() tracking the exact same
+// tiers passed to the card content components. A big roster (7+ players) not
+// fitting even at normal on a tall phone is handled separately by capping the
+// player list's own height (see computeListMaxHeight below) rather than by
+// dragging the squeeze thresholds up near desktop heights, which would
+// compact the desktop view too.
 
 type GuessCorrectness = 'none' | 'correct' | 'exact';
 type PlayerGuess = {

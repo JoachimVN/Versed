@@ -3,6 +3,9 @@ import LiquidGlass from '../../components/StableLiquidGlass';
 import { useAnimatedScore } from '../../hooks/useAnimatedScore';
 import { BIG_POINTS_THRESHOLD, FinalRoundAnswerContent, NoOneGotItCardContent, GotItCardContent, PointsBreakdownList, breakdownCompact } from '../../components/RevealShared';
 import { YearTimelineContent } from '../../components/YearReveal';
+import { computeYearCardHeight } from '../../components/yearCardSqueeze';
+import type { RevealLayout } from '../../components/revealSqueeze';
+import { useRevealLayout, computeCardHeight, computeCardWidth } from '../../components/revealSqueeze';
 import { PartyRevealExtras, MYSTERY_LANDING_MS } from '../../components/RoundIntro';
 import { LIQUID_CARD_PROPS } from '../../components/liquidGlassPresets';
 import type { RoundResultEvent } from '../../types';
@@ -33,16 +36,36 @@ function scoreDeltaAnimation(scoreDelta: number): React.CSSProperties | undefine
   return undefined;
 }
 
+// Player-side counterpart of host RevealView.tsx's chromeHeight/listMaxHeight
+// budget: this screen has no roster to cap, but the guesses list below the
+// card is the one element with genuinely unbounded height (up to 7+ players,
+// some with a second artist-guess line — see PlayRevealViewCrowd fixture),
+// while the score box beneath it is the whole point of this screen and can't
+// be allowed to scroll off the bottom to make room. So the guesses list gets
+// capped off the tier's real leftover room instead, leaving the score box
+// its natural size. partyExtrasPx/scoreBoxPx are conservative flat estimates
+// (mirroring host's own "~20px" fudge for its end-game button) rather than
+// measured, since PartyRevealExtras may render nothing at all and the score
+// box's own height varies with the breakdown line count.
+const LIST_TIER_CAP = { normal: 260, compact: 200, ultraCompact: 130 } as const;
+const PARTY_EXTRAS_PX = { normal: 50, compact: 40, ultraCompact: 34 } as const;
+const SCORE_BOX_PX = { normal: 210, compact: 210, ultraCompact: 115 } as const;
+
+function tierKey(squeeze: RevealLayout): keyof typeof LIST_TIER_CAP {
+  return squeeze.ultraCompact ? 'ultraCompact' : squeeze.compact ? 'compact' : 'normal';
+}
+
 // Reveal for "guess the year" rounds: the year card plus everyone's distances.
 // Shared shell for the three reveal-screen variants (year / no-one-got-it /
 // got-it): page background, liquid card, party extras, a guesses list, and
 // the player's score box. Only the card content, guesses list, and an
 // optional extra line under the score differ between them.
 function PlayRevealShell({
-  game, result, cardHeight, cardContent, guessesList, scoreExtra, wide = false,
+  game, result, squeeze, cardHeight, cardContent, guessesList, scoreExtra, wide = false,
 }: Readonly<{
   game: PlayState;
   result: RoundResultEvent;
+  squeeze: RevealLayout;
   cardHeight: number;
   cardContent: React.ReactNode;
   guessesList: React.ReactNode;
@@ -50,6 +73,8 @@ function PlayRevealShell({
   wide?: boolean;
 }>) {
   const { myScore, myScoreDelta, myBreakdown, myStreak, myRank, stealResult } = game;
+  const { compact, ultraCompact, windowHeight } = squeeze;
+  const tier = tierKey(squeeze);
   const revealParty = result.party ?? game.party;
   const finaleResolved = revealParty?.duelProgress?.wins.some(w => w.count >= 2) ?? false;
   const isFinalReveal = game.roundIndex + 1 >= game.totalRounds && (!revealParty?.finale || finaleResolved);
@@ -70,9 +95,20 @@ function PlayRevealShell({
   // same delay elapses — without it they render at mount, before the host's
   // reel has even landed, and give away the multiplier's size in advance.
   const { displayScore, deltaFading, revealed } = useAnimatedScore(myScore, myScoreDelta, mysteryScoreDelay, false, isMystery);
+  const gapClass = ultraCompact ? 'gap-2' : compact ? 'gap-3' : 'gap-5';
+  const paddingClass = wide ? (ultraCompact ? 'px-2 py-3' : compact ? 'px-2 py-4' : 'px-2 py-6') : (ultraCompact ? 'p-3' : compact ? 'p-4' : 'p-6');
+  const gapPx = ultraCompact ? 8 : compact ? 12 : 20;
+  const paddingPx = ultraCompact ? 24 : compact ? 32 : 48;
+  // 3 gaps covers the worst case (card, party extras, list, score box) even
+  // when party extras don't render — a slightly under-used gap budget just
+  // leaves the list a touch shorter than its true max, never causes overflow.
+  const chromeHeight = cardHeight + gapPx * 3 + paddingPx + PARTY_EXTRAS_PX[tier] + SCORE_BOX_PX[tier];
+  const listMaxHeight = `${Math.max(80, Math.min(LIST_TIER_CAP[tier], windowHeight - chromeHeight))}px`;
+  const scoreBoxPadding = ultraCompact ? '10px 20px' : compact ? '12px 24px' : '16px 32px';
+  const scoreTextClass = ultraCompact ? 'text-xl' : compact ? 'text-2xl' : 'text-3xl';
   return (
     <div className="page-enter relative min-h-screen" style={{ overflowY: 'auto', overscrollBehavior: 'contain' }}>
-      <div className={`screen-center-safe relative flex min-h-full flex-col items-center gap-5 ${wide ? 'px-2 py-6' : 'p-6'}`} style={{ minHeight: '100%' }}>
+      <div className={`screen-center-safe relative flex min-h-full flex-col items-center ${gapClass} ${paddingClass}`} style={{ minHeight: '100%' }}>
         <img
           src={`${import.meta.env.BASE_URL}backgrounds/background3-2.png`}
           alt=""
@@ -83,12 +119,12 @@ function PlayRevealShell({
           style={{ position: 'absolute', inset: 0, width: '100%', height: '100%', objectFit: 'cover', zIndex: 0 }}
         />
         <div style={{ position: 'absolute', inset: 0, zIndex: 1, background: 'rgba(5,5,14,0.82)', backdropFilter: 'blur(28px)' }} />
-        <div className="relative flex flex-col items-center gap-5 w-full" style={{ zIndex: 2 }}>
-        <div className="liquid-btn relative" style={{ width: wide ? 'min(88vw, 366px)' : 'min(92vw, 310px)', height: `${cardHeight}px` }}>
+        <div className={`relative flex flex-col items-center ${gapClass} w-full`} style={{ zIndex: 2 }}>
+        <div className="liquid-btn relative" style={{ width: computeCardWidth(squeeze, wide), height: `${cardHeight}px` }}>
           <LiquidGlass
             style={{ position: 'absolute', top: '50%', left: '50%' }}
             {...LIQUID_CARD_PROPS}
-            padding={wide ? '18px 18px' : '24px 24px'}
+            padding={wide ? '18px 18px' : (ultraCompact ? '16px 16px' : compact ? '20px 20px' : '24px 24px')}
           >
             {cardContent}
           </LiquidGlass>
@@ -96,9 +132,13 @@ function PlayRevealShell({
 
         {!isFinalReveal && <PartyRevealExtras result={result} stealResult={stealResult} hints={game.hints} hideMysteryChip />}
 
-        {guessesList}
+        {guessesList && (
+          <div style={{ maxHeight: listMaxHeight, overflowY: 'auto', overscrollBehavior: 'contain', width: '100%', display: 'flex', justifyContent: 'center' }}>
+            {guessesList}
+          </div>
+        )}
 
-        <div style={{ background: 'rgba(255,255,255,0.05)', border: '1px solid rgba(255,255,255,0.08)', borderRadius: '16px', padding: '16px 32px', textAlign: 'center' }}>
+        <div style={{ background: 'rgba(255,255,255,0.05)', border: '1px solid rgba(255,255,255,0.08)', borderRadius: '16px', padding: scoreBoxPadding, textAlign: 'center' }}>
           {myScoreDelta !== 0 && revealed && (
             <p
               className={`font-bold tabular-nums flex items-center justify-center gap-1 ${scoreDeltaClass(myScoreDelta)}`}
@@ -107,21 +147,40 @@ function PlayRevealShell({
               {myScoreDelta < 0 ? `-${Math.abs(myScoreDelta).toLocaleString()} pts` : `+${myScoreDelta.toLocaleString()} pts`}
             </p>
           )}
-          {myScoreDelta > 0 && revealed && myBreakdown && <PointsBreakdownList breakdown={myBreakdown} hideMultiplier={isMystery} />}
+          {myScoreDelta > 0 && revealed && myBreakdown && (
+            // ultraCompact swaps the stacked per-line breakdown for the same
+            // "·"-joined single line the year-format guesses list already
+            // uses (breakdownCompact) — at the tightest squeeze, 3-4 lines of
+            // margin-bearing text costs more room than this screen can spare
+            // (see PlayRevealView's landscape phone fixtures), and one line
+            // still shows exactly where the points came from.
+            ultraCompact
+              ? <p className="text-white/40 text-[0.66rem] tabular-nums mt-0.5">{breakdownCompact(myBreakdown, isMystery)}</p>
+              : <PointsBreakdownList breakdown={myBreakdown} hideMultiplier={isMystery} />
+          )}
           <p
             // Remounts once when deltaFading flips true (the count-up landing
             // on its final value), replaying the one-shot flash below — the
             // moment a huge round's total actually arrives gets its own
             // payoff instead of just quietly stopping.
             key={Math.abs(myScoreDelta) >= BIG_POINTS_THRESHOLD && deltaFading ? 'landed' : 'counting'}
-            className="text-3xl font-black text-white mt-1"
+            className={`${scoreTextClass} font-black text-white mt-1`}
             style={Math.abs(myScoreDelta) >= BIG_POINTS_THRESHOLD && deltaFading ? { animation: 'scoreLandFlash 0.7s ease-out' } : undefined}
           >
             {displayScore.toLocaleString()}
           </p>
-          <p className="text-white/45 text-sm">your score</p>
-          {myRank && myRank.total > 1 && (
-            <p className="text-white/35 text-xs font-semibold tabular-nums mt-0.5">#{myRank.rank} of {myRank.total}</p>
+          {/* ultraCompact folds the rank into the same line as the "your
+              score" label instead of its own line — one less line-height +
+              margin at the squeeze that needs it most. */}
+          {ultraCompact && myRank && myRank.total > 1 ? (
+            <p className="text-white/45 text-xs">your score · #{myRank.rank} of {myRank.total}</p>
+          ) : (
+            <>
+              <p className="text-white/45 text-sm">your score</p>
+              {myRank && myRank.total > 1 && (
+                <p className="text-white/35 text-xs font-semibold tabular-nums mt-0.5">#{myRank.rank} of {myRank.total}</p>
+              )}
+            </>
           )}
           {scoreExtra}
           {myStreak >= 2 && (
@@ -138,6 +197,7 @@ function PlayRevealShell({
 
 export function YearRevealView({ game, result }: Readonly<{ game: PlayState; result: RoundResultEvent }>) {
   const { myName } = game;
+  const squeeze = useRevealLayout();
   const finaleResolved = result.party?.duelProgress?.wins.some(w => w.count >= 2) ?? false;
   const isFinalReveal = game.roundIndex + 1 >= game.totalRounds && (!result.party?.finale || finaleResolved);
   const finalLabel = game.myScoreDelta > 0 ? 'You scored' : 'Not quite';
@@ -146,9 +206,10 @@ export function YearRevealView({ game, result }: Readonly<{ game: PlayState; res
       <PlayRevealShell
         game={game}
         result={result}
+        squeeze={squeeze}
         wide
-        cardHeight={result.coverUrl ? 500 : 320}
-        cardContent={<FinalRoundAnswerContent result={result} label={finalLabel} muted />}
+        cardHeight={computeYearCardHeight(!!result.coverUrl, null, squeeze)}
+        cardContent={<FinalRoundAnswerContent result={result} label={finalLabel} muted squeeze={squeeze} />}
         guessesList={null}
       />
     );
@@ -178,9 +239,10 @@ export function YearRevealView({ game, result }: Readonly<{ game: PlayState; res
     <PlayRevealShell
       game={game}
       result={result}
+      squeeze={squeeze}
       wide
-      cardHeight={result.coverUrl ? 500 : 380}
-      cardContent={<YearTimelineContent result={result} muted />}
+      cardHeight={computeYearCardHeight(!!result.coverUrl, result, squeeze)}
+      cardContent={<YearTimelineContent result={result} muted squeeze={squeeze} />}
       guessesList={guessesList}
     />
   );
@@ -188,19 +250,22 @@ export function YearRevealView({ game, result }: Readonly<{ game: PlayState; res
 
 export function RevealView({ game, result }: Readonly<{ game: PlayState; result: RoundResultEvent }>) {
   const { myName, myRaceTimeMs } = game;
+  const squeeze = useRevealLayout();
   const isRace = result.mode === 'race';
   const iGotItInRace = isRace && !!result.correctGuessers?.includes(myName);
   const finaleResolved = result.party?.duelProgress?.wins.some(w => w.count >= 2) ?? false;
   const isFinalReveal = game.roundIndex + 1 >= game.totalRounds && (!result.party?.finale || finaleResolved);
   const finalLabel = game.myScoreDelta > 0 ? 'You scored' : 'Not quite';
+  const cardHeight = computeCardHeight(!!result.coverUrl, squeeze);
 
   if (isFinalReveal) {
     return (
       <PlayRevealShell
         game={game}
         result={result}
-        cardHeight={result.coverUrl ? 480 : 240}
-        cardContent={<FinalRoundAnswerContent result={result} label={finalLabel} muted />}
+        squeeze={squeeze}
+        cardHeight={cardHeight}
+        cardContent={<FinalRoundAnswerContent result={result} label={finalLabel} muted squeeze={squeeze} />}
         guessesList={null}
         scoreExtra={iGotItInRace && myRaceTimeMs != null && (
           <p className="text-green-400 text-xs font-semibold mt-1">
@@ -238,8 +303,9 @@ export function RevealView({ game, result }: Readonly<{ game: PlayState; result:
       <PlayRevealShell
         game={game}
         result={result}
-        cardHeight={result.coverUrl ? 480 : 240}
-        cardContent={<NoOneGotItCardContent result={result} />}
+        squeeze={squeeze}
+        cardHeight={cardHeight}
+        cardContent={<NoOneGotItCardContent result={result} squeeze={squeeze} />}
         guessesList={guessesList}
       />
     );
@@ -276,8 +342,9 @@ export function RevealView({ game, result }: Readonly<{ game: PlayState; result:
     <PlayRevealShell
       game={game}
       result={result}
-      cardHeight={result.coverUrl ? 480 : 240}
-      cardContent={<GotItCardContent result={result} myName={myName} />}
+      squeeze={squeeze}
+      cardHeight={cardHeight}
+      cardContent={<GotItCardContent result={result} myName={myName} squeeze={squeeze} />}
       guessesList={guessesList}
       scoreExtra={iGotItInRace && myRaceTimeMs != null && (
         <p className="text-green-400 text-xs font-semibold mt-1">
