@@ -45,6 +45,9 @@ export function JoinView({ game }: Readonly<{ game: PlayState }>) {
   }, [cameFromQR, error]);
   const showPinField = !cameFromQR || pinRevealed;
   const canJoin = canJoinGame(showPinField, pin, name);
+  const controlWidth = 'min(310px, calc(100vw - 48px))';
+  const fieldWidth = 'min(262px, calc(100vw - 96px))';
+  const joinPadding = '18px min(96px, calc((100vw - 156px) / 2))';
   // LiquidGlass only measures its own size once on mount (and on window
   // resize) — it has no ResizeObserver, so it never notices the card growing
   // as the PIN field appears. Re-firing its resize listener lets it
@@ -135,7 +138,7 @@ export function JoinView({ game }: Readonly<{ game: PlayState }>) {
             type="button"
             onClick={rejoinSaved}
             className="liquid-btn glass-tint-purple relative cursor-pointer border-0 bg-transparent p-0"
-            style={{ width: '310px', height: '70px', borderRadius: '100px', background: 'rgba(0,0,0,0.001)' }}
+            style={{ width: controlWidth, height: '70px', borderRadius: '100px', background: 'rgba(0,0,0,0.001)' }}
           >
             <LiquidGlass
               style={{ position: 'absolute', top: '50%', left: '50%' }}
@@ -144,7 +147,7 @@ export function JoinView({ game }: Readonly<{ game: PlayState }>) {
             >
               <div style={{ position: 'relative' }}>
                 <div style={{ position: 'absolute', inset: '-13px -48px', borderRadius: '100px', pointerEvents: 'none', background: 'rgba(158,18,204,0.05)' }} />
-                <div style={{ position: 'relative', textAlign: 'center', whiteSpace: 'nowrap', minWidth: '214px' }}>
+                <div style={{ position: 'relative', textAlign: 'center', whiteSpace: 'nowrap', minWidth: 'min(214px, calc(100vw - 144px))' }}>
                   <p style={{ color: 'rgba(255,255,255,0.45)', fontSize: '0.6rem', letterSpacing: '0.18em', textTransform: 'uppercase', lineHeight: 1, marginBottom: '5px' }}>
                     Rejoin as · {savedSession.pin}
                   </p>
@@ -158,13 +161,13 @@ export function JoinView({ game }: Readonly<{ game: PlayState }>) {
       )}
 
       {/* Input card: LiquidGlass */}
-      <div className="liquid-btn relative" style={{ width: '310px', height: showPinField ? '165px' : '115px', transition: 'height 0.3s ease' }}>
+      <div className="liquid-btn relative" style={{ width: controlWidth, height: showPinField ? '165px' : '115px', transition: 'height 0.3s ease' }}>
         <LiquidGlass
           style={{ position: 'absolute', top: '50%', left: '50%' }}
           {...LIQUID_CARD_PROPS}
           padding="20px 24px"
         >
-          <div style={{ width: '262px', textAlign: 'center' }}>
+          <div style={{ width: fieldWidth, textAlign: 'center' }}>
             {showPinField && (
               <>
                 {/* PIN */}
@@ -227,7 +230,7 @@ export function JoinView({ game }: Readonly<{ game: PlayState }>) {
             className="text-sm text-center"
             aria-live="assertive"
             style={{
-              width: '310px',
+              width: controlWidth,
               paddingTop: '2px',
               opacity: error ? 1 : 0,
               transition: 'opacity 0.2s ease',
@@ -242,7 +245,7 @@ export function JoinView({ game }: Readonly<{ game: PlayState }>) {
         type="button"
         className="liquid-btn glass-tint-teal relative border-0 bg-transparent p-0"
         style={{
-          width: '310px',
+          width: controlWidth,
           height: '64px',
           borderRadius: '100px',
           background: 'rgba(0,0,0,0.001)',
@@ -267,7 +270,7 @@ export function JoinView({ game }: Readonly<{ game: PlayState }>) {
             transition: 'filter 0.25s ease',
           }}
           {...LIQUID_PILL_PROPS}
-          padding="18px 96px"
+          padding={joinPadding}
         >
           <div style={{ position: 'relative' }}>
             <div style={{ position: 'absolute', inset: '-18px -96px', borderRadius: '100px', pointerEvents: 'none', background: 'rgba(0,166,163,0.088)' }} />

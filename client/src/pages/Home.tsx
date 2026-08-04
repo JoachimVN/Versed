@@ -15,6 +15,11 @@ export default function Home() {
   // page class made Home switch to .page-enter when the logo flight ended,
   // which started a fresh 12px slide after the overlay had already landed.
   const arrivedViaMorph = useRef(morphing).current;
+  // Keep the glass controls within the page padding at the viewport-check
+  // stress width while preserving their 310px desktop/mobile size elsewhere.
+  const buttonWidth = 'min(310px, 100%)';
+  const buttonPadding = '18px min(96px, calc((100vw - 156px) / 2))';
+  const compactGap = 'min(40px, max(16px, calc((100vh - 327px) / 3)))';
 
   // Mirrors JoinView's arrival handling: only hands off to the overlay if a
   // morph is already in flight (i.e. we arrived via Play's back button) —
@@ -47,7 +52,7 @@ export default function Home() {
   return (
     <div
       className={`relative min-h-screen flex flex-col items-center justify-center gap-10 p-6 ${pageAnimClass}`}
-      style={{ zIndex: 1, pointerEvents: leaving ? 'none' : undefined }}
+      style={{ zIndex: 1, gap: compactGap, pointerEvents: leaving ? 'none' : undefined }}
     >
       <div className="flex flex-col items-center gap-3">
         <img
@@ -58,16 +63,16 @@ export default function Home() {
           width={2560}
           height={1000}
           className="versed-logo w-auto drop-shadow-[0_18px_22px_rgba(0,0,0,0.55)]"
-          style={{ maxHeight: '225px', maxWidth: '100%', marginBottom: '50px', opacity: (leaving || morphing) ? 0 : 1, willChange: 'opacity' }}
+          style={{ maxHeight: 'min(225px, calc(100vh - 255px))', maxWidth: '100%', marginBottom: 'min(50px, max(0px, calc(100vh - 375px)))', opacity: (leaving || morphing) ? 0 : 1, willChange: 'opacity' }}
         />
         <p className="text-white/60 text-lg tracking-wide"></p>
       </div>
 
-      <div className="flex flex-col items-center gap-8">
+      <div className="flex flex-col items-center gap-8" style={{ gap: `min(32px, ${compactGap})` }}>
         <button
           type="button"
           className="liquid-btn glass-tint-teal relative cursor-pointer border-0 bg-transparent p-0"
-          style={{ width: '310px', height: '64px', borderRadius: '100px', background: 'rgba(0,0,0,0.001)' }}
+          style={{ width: buttonWidth, height: '64px', borderRadius: '100px', background: 'rgba(0,0,0,0.001)' }}
           onMouseEnter={() => setHovered('join')}
           onMouseLeave={() => setHovered(null)}
           onClick={goToJoin}
@@ -84,7 +89,7 @@ export default function Home() {
             aberrationIntensity={2}
             elasticity={0.12}
             cornerRadius={100}
-            padding="18px 96px"
+            padding={buttonPadding}
           >
             <div style={{ position: 'relative' }}>
               <div style={{ position: 'absolute', inset: '-18px -96px', borderRadius: '100px', pointerEvents: 'none', background: 'rgba(0,166,163,0.088)' }} />
@@ -96,7 +101,7 @@ export default function Home() {
         <button
           type="button"
           className="liquid-btn glass-tint-purple relative cursor-pointer border-0 bg-transparent p-0"
-          style={{ width: '310px', height: '64px', borderRadius: '100px', background: 'rgba(0,0,0,0.001)' }}
+          style={{ width: buttonWidth, height: '64px', borderRadius: '100px', background: 'rgba(0,0,0,0.001)' }}
           onMouseEnter={() => setHovered('host')}
           onMouseLeave={() => setHovered(null)}
           onClick={() => (globalThis.location.href = `${BACKEND_URL}/api/auth/spotify`)}
@@ -113,7 +118,7 @@ export default function Home() {
             aberrationIntensity={2}
             elasticity={0.12}
             cornerRadius={100}
-            padding="18px 96px"
+            padding={buttonPadding}
           >
             <div style={{ position: 'relative' }}>
               <div style={{ position: 'absolute', inset: '-18px -96px', borderRadius: '100px', pointerEvents: 'none', background: 'rgba(158,18,204,0.088)' }} />

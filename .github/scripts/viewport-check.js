@@ -91,6 +91,7 @@ const VIEWPORTS = [
 ];
 
 const VIEWS = [
+  { id: 'home', group: 'shared', v: 'home', name: 'Home' },
   { id: 'host-lobby', group: 'host', v: 'lobby', name: 'LobbyView' },
   { id: 'host-playing', group: 'host', v: 'playing', name: 'PlayingView' },
   { id: 'host-reveal', group: 'host', v: 'reveal', name: 'RevealView' },
@@ -106,6 +107,9 @@ const VIEWS = [
   { id: 'host-final-results-long-names', group: 'host', v: 'final-host-long', name: 'FinalResultsLongNamesView' },
   { id: 'host-final-results-empty', group: 'host', v: 'final-empty', name: 'FinalResultsEmptyView' },
   { id: 'player-waiting', group: 'player', v: 'waiting', name: 'WaitingView' },
+  { id: 'player-join', group: 'player', v: 'join', name: 'JoinView' },
+  { id: 'player-join-link', group: 'player', v: 'join-link', name: 'JoinViewLink' },
+  { id: 'player-join-rejoin', group: 'player', v: 'join-rejoin', name: 'JoinViewRejoin' },
   { id: 'player-watching', group: 'player', v: 'watching', name: 'WatchingView' },
   { id: 'player-guessing', group: 'player', v: 'guessing', name: 'GuessingView' },
   { id: 'player-year-guessing', group: 'player', v: 'year-guessing', name: 'YearGuessingView' },
@@ -162,7 +166,8 @@ async function findOverflow(page) {
       // bleed past their own box) are allowed to clip at the edge — that's
       // cosmetic, not a "user can't reach this" bug, and this codebase uses
       // that exact bleed pattern on every pill button.
-      if (getComputedStyle(el).pointerEvents === 'none') continue;
+      const style = getComputedStyle(el);
+      if (style.pointerEvents === 'none' || style.visibility === 'hidden' || Number(style.opacity) === 0) continue;
 
       let overflow;
       if (getComputedStyle(el).position === 'fixed') {
