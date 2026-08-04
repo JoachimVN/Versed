@@ -318,7 +318,7 @@ function RevealShell({
   const chromeHeight = cardHeight + gapPx * 4 + buttonPx + 20 + paddingPx;
   const listMaxHeight = `${Math.max(90, Math.min(listTierCap, windowHeight - chromeHeight))}px`;
   return (
-    <div className="page-enter relative min-h-screen" style={{ overflowY: 'auto', overscrollBehavior: 'contain' }}>
+    <div className="page-enter relative min-h-screen reveal-screen-height" style={{ overflowY: 'auto', overscrollBehavior: 'contain' }}>
       <div className={`screen-center-safe relative flex min-h-full flex-col items-center ${gapClass} ${paddingClass}`} style={{ minHeight: '100%' }}>
         <img
           src={`${import.meta.env.BASE_URL}backgrounds/background3-2.png`}

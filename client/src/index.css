@@ -105,6 +105,24 @@ select:focus-visible,
   min-height: calc(var(--app-height, 100vh) - env(safe-area-inset-top, 0px) - env(safe-area-inset-bottom, 0px));
 }
 
+/* The reveal screens (host + player) paint their own full-bleed background
+   image inside a .min-h-screen wrapper, unlike most screens which just sit
+   on top of the app shell's own persistent background. --app-height tracks
+   window.innerHeight, which — like the raw 100% this file already swapped
+   out for html/body above — can under-report the true visible viewport on
+   iOS when the browser's translucent bottom bar is showing, since it
+   reflects the small viewport rather than the large one. That left a gap
+   between where this background image stopped and the real screen bottom,
+   exposing the app shell's flat fill color underneath it. Floors min-height
+   at the same 100lvh the shell itself uses instead, growing past
+   .min-h-screen's own height when the two disagree — safe here because
+   these screens have no text input to protect from a keyboard (the reason
+   .min-h-screen exists) and the wrapper still scrolls internally besides. */
+.reveal-screen-height {
+  min-height: 100vh;
+  min-height: 100lvh;
+}
+
 /* Opt-in easing for the one thing that does move when a keyboard opens: the
    bottom padding a screen adds to lift its controls clear of it. iOS reports
    the keyboard height in one jump on older versions and continuously on
@@ -1187,4 +1205,25 @@ select:focus-visible,
 .volume-slider:active::-webkit-slider-thumb,
 .volume-slider:active::-moz-range-thumb {
   transform: scale(1.15);
+}
+
+/* Short-landscape phones (e.g. a phone rotated during final results) leave
+   very little vertical room once the personal-hero card and footer are
+   accounted for -- the standings/awards panel below is a real scroll region,
+   but showing only a sliver of it before the fold makes that non-obvious.
+   Shrinking the hero's own padding/gap and dropping its redundant award
+   sub-line (already repeated in the full awards list below) reclaims real
+   rows of standings without touching the panel's own scroll behavior. */
+@media (max-height: 430px) {
+  .final-results-player-shell {
+    padding: 12px 24px;
+    gap: 10px;
+  }
+  .personal-hero-card {
+    padding: 10px 14px;
+    gap: 10px;
+  }
+  .personal-hero-award-row {
+    display: none;
+  }
 }

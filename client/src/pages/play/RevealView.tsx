@@ -56,16 +56,26 @@ function scoreDeltaAnimation(scoreDelta: number): React.CSSProperties | undefine
 // entry count. PARTY_EXTRAS_PX is only charged (and only one extra gap
 // reserved) when PartyRevealExtras will actually render something — mirror
 // its own render gate here rather than always paying for a row that's null
-// most rounds. LIST_MIN_PX is deliberately smaller than a comfortable list —
-// on the tightest phones (short-landscape, or a portrait phone stacked with
-// a maxed-out breakdown) even a bare-minimum list still needs shrinking
-// further than a "still usable" floor would allow, because the score box
-// must win that tradeoff every time.
+// most rounds. LIST_MIN_PX is tiered (unlike the rest of this file's tier
+// dictionaries it used to be a single flat number) because it's charged on
+// top of a budget that's already near its tightest at ultraCompact — the
+// same floor that shows a comfortable handful of rows at normal squeeze
+// would eat disproportionately more of a landscape phone's scarce height.
+// STREAK_LINE_PX plugs a gap the budget used to miss entirely: the "N in a
+// row" line only renders when myStreak >= 2, so a fixture without a streak
+// never exposed that the score box's real rendered height ran past
+// SCORE_BOX_BASE_PX whenever it did render — invisible at the old LIST_MIN_PX
+// of 24 (the overflow was a sliver), but raising the list's floor to
+// actually show multiple rows made that pre-existing gap large enough to
+// push the streak line below the fold. Charged unconditionally by tier
+// (myStreak's own >= 2 gate below decides whether it's paid at all) since
+// the line's markup doesn't change shape across tiers.
 const LIST_TIER_CAP = { normal: 260, compact: 200, ultraCompact: 130 } as const;
-const LIST_MIN_PX = 24;
+const LIST_MIN_PX = { normal: 64, compact: 60, ultraCompact: 44 } as const;
 const PARTY_EXTRAS_PX = { normal: 50, compact: 40, ultraCompact: 34 } as const;
 const SCORE_BOX_BASE_PX = { normal: 175, compact: 152, ultraCompact: 135 } as const;
 const BREAKDOWN_LINE_PX = 17;
+const STREAK_LINE_PX = 20;
 
 function tierKey(squeeze: RevealLayout): keyof typeof LIST_TIER_CAP {
   return squeeze.ultraCompact ? 'ultraCompact' : squeeze.compact ? 'compact' : 'normal';
@@ -126,14 +136,15 @@ function PlayRevealShell({
     || (!stealResult && result.stealPending)
   );
   const breakdownLineCount = myScoreDelta > 0 && myBreakdown ? breakdownLines(myBreakdown, isMystery).length : 0;
-  const scoreBoxPx = SCORE_BOX_BASE_PX[tier] + (ultraCompact ? 0 : breakdownLineCount * BREAKDOWN_LINE_PX);
+  const scoreBoxPx = SCORE_BOX_BASE_PX[tier] + (ultraCompact ? 0 : breakdownLineCount * BREAKDOWN_LINE_PX)
+    + (myStreak >= 2 ? STREAK_LINE_PX : 0);
   const chromeHeight = cardHeight + gapPx * (willShowPartyExtras ? 3 : 2) + paddingPx
     + (willShowPartyExtras ? PARTY_EXTRAS_PX[tier] : 0) + scoreBoxPx;
-  const listMaxHeight = `${Math.max(LIST_MIN_PX, Math.min(LIST_TIER_CAP[tier], windowHeight - chromeHeight))}px`;
+  const listMaxHeight = `${Math.max(LIST_MIN_PX[tier], Math.min(LIST_TIER_CAP[tier], windowHeight - chromeHeight))}px`;
   const scoreBoxPadding = ultraCompact ? '10px 20px' : compact ? '12px 24px' : '16px 32px';
   const scoreTextClass = ultraCompact ? 'text-xl' : compact ? 'text-2xl' : 'text-3xl';
   return (
-    <div className="page-enter relative min-h-screen" style={{ overflowY: 'auto', overscrollBehavior: 'contain' }}>
+    <div className="page-enter relative min-h-screen reveal-screen-height" style={{ overflowY: 'auto', overscrollBehavior: 'contain' }}>
       <div className={`screen-center-safe relative flex min-h-full flex-col items-center ${gapClass} ${paddingClass}`} style={{ minHeight: '100%' }}>
         <img
           src={`${import.meta.env.BASE_URL}backgrounds/background3-2.png`}
