@@ -1,4 +1,4 @@
-import { Check, Target, Trophy, X, Zap, Timer, TrendingUp, Swords } from 'lucide-react';
+import { Target, Trophy, Zap, Timer, TrendingUp, Swords } from 'lucide-react';
 import LiquidGlass from './StableLiquidGlass';
 import type { Award, PointsBreakdown, RoundResultEvent } from '../types';
 import { LIQUID_PILL_PROPS } from './liquidGlassPresets';
@@ -195,23 +195,8 @@ export function PillButton({ onClick, label, zIndex, squeeze }: Readonly<{ onCli
 export function NoOneGotItCardContent({ result, squeeze }: Readonly<{ result: RoundResultEvent; squeeze?: CardSqueeze }>) {
   const { compact = false, ultraCompact = false } = squeeze ?? {};
   const artistOnly = result.artistOnly;
-  const iconSize = ultraCompact ? 36 : compact ? 44 : 52;
   return (
     <div style={{ width: cardContentWidth(squeeze), display: 'flex', flexDirection: 'column', alignItems: 'center', textAlign: 'center' }}>
-      {/* Dropped entirely at the tightest squeeze rather than shrunk further:
-          the label text below already says who/what, so the icon is purely
-          decorative once space is this scarce. */}
-      {!ultraCompact && (
-        <div style={{
-          width: `${iconSize}px`, height: `${iconSize}px`, borderRadius: '50%',
-          background: 'rgba(255,255,255,0.05)',
-          border: '1px solid rgba(255,255,255,0.09)',
-          display: 'flex', alignItems: 'center', justifyContent: 'center',
-          marginBottom: compact ? '8px' : '10px',
-        }}>
-          <X style={{ width: `${iconSize * 0.42}px`, height: `${iconSize * 0.42}px`, color: 'rgba(255,255,255,0.45)' }} />
-        </div>
-      )}
       <span style={{
         fontSize: ultraCompact ? '1.05rem' : compact ? '1.2rem' : '1.4rem', fontWeight: 900, letterSpacing: '0.01em',
         background: 'linear-gradient(to bottom left, rgba(210,70,50,0.4) 0%, transparent 52%), linear-gradient(to top right, rgba(255,165,70,0.28) 0%, transparent 52%), #fff',
@@ -371,57 +356,29 @@ export function FinalRoundAnswerContent({ result, label, muted = false, squeeze 
 
 export function GotItCardContent({ result, myName, squeeze }: Readonly<{ result: RoundResultEvent; myName?: string; squeeze?: CardSqueeze }>) {
   const { compact = false, ultraCompact = false } = squeeze ?? {};
-  const iconSize = ultraCompact ? 36 : compact ? 44 : 52;
-  const iconGlyphSize = `${Math.round(iconSize * 0.46)}px`;
   const artistOnly = result.artistOnly;
   const isRace = result.mode === 'race';
   const iWon = isRace
     ? (myName != null && !!result.correctGuessers?.includes(myName))
     : (result.correct && myName != null && result.guesserName === myName);
 
-  let iconNode: React.ReactNode;
-  let iconBg: string;
-  let iconBorder: string;
   let labelText: string;
   let labelGradient: string;
 
   if (iWon) {
-    iconNode = <Trophy style={{ width: iconGlyphSize, height: iconGlyphSize, color: '#fbbf24' }} />;
-    iconBg = 'rgba(245,158,11,0.16)';
-    iconBorder = 'rgba(245,158,11,0.32)';
     labelText = 'You got it!';
     labelGradient = 'linear-gradient(to bottom left, rgba(30,200,90,0.5) 0%, transparent 52%), linear-gradient(to top right, rgba(250,185,40,0.4) 0%, transparent 52%), #fff';
   } else if (isRace) {
     const count = result.correctGuessers?.length ?? 0;
-    iconNode = <Check style={{ width: iconGlyphSize, height: iconGlyphSize, color: 'rgba(255,255,255,0.5)' }} />;
-    iconBg = 'rgba(255,255,255,0.07)';
-    iconBorder = 'rgba(255,255,255,0.12)';
     labelText = count === 1 ? `${result.correctGuessers![0]} got it` : `${count} players got it`;
     labelGradient = 'linear-gradient(to bottom left, rgba(158,18,204,0.4) 0%, transparent 52%), linear-gradient(to top right, rgba(0,238,232,0.3) 0%, transparent 52%), #fff';
   } else {
-    // String indexing grabs a single UTF-16 code unit, which mangles emoji
-    // (most are surrogate pairs) — iterate by code point instead so a name
-    // like "🐈maka" gets the full cat, not half of one.
-    const initial = Array.from(result.guesserName ?? '')[0]?.toUpperCase() ?? '?';
-    iconNode = <span style={{ fontSize: ultraCompact ? '0.95rem' : compact ? '1.1rem' : '1.25rem', fontWeight: 900, color: 'rgba(255,255,255,0.7)' }}>{initial}</span>;
-    iconBg = 'rgba(255,255,255,0.07)';
-    iconBorder = 'rgba(255,255,255,0.12)';
     labelText = `${result.guesserName} got it`;
     labelGradient = 'linear-gradient(to bottom left, rgba(158,18,204,0.4) 0%, transparent 52%), linear-gradient(to top right, rgba(0,238,232,0.3) 0%, transparent 52%), #fff';
   }
 
   return (
     <div style={{ width: cardContentWidth(squeeze), display: 'flex', flexDirection: 'column', alignItems: 'center', textAlign: 'center' }}>
-      {!ultraCompact && (
-        <div style={{
-          width: `${iconSize}px`, height: `${iconSize}px`, borderRadius: '50%',
-          background: iconBg, border: `1px solid ${iconBorder}`,
-          display: 'flex', alignItems: 'center', justifyContent: 'center',
-          marginBottom: compact ? '8px' : '10px',
-        }}>
-          {iconNode}
-        </div>
-      )}
       <span style={{
         fontSize: ultraCompact ? '1.05rem' : compact ? '1.2rem' : '1.4rem', fontWeight: 900, letterSpacing: '0.01em',
         background: labelGradient,

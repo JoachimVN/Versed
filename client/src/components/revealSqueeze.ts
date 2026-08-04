@@ -77,14 +77,19 @@ export function useRevealLayout(): RevealLayout {
 // would leave the card floating off-center inside dead space — or, shrunk the
 // other way, overlapping whatever renders below it.
 export function computeCardHeight(hasCover: boolean, squeeze: CardSqueeze): number {
-  // ultraCompact drops the avatar icon and folds title/artist/year onto one
-  // line (see SongInfo/GotItCardContent), so its budget is well below a
-  // straight-line interpolation from compact's. Budgeted for that combined
-  // line wrapping to two — it doesn't always fit on one at the card's
-  // narrowest width (280px viewport, e.g. iOS's "Zoomed" display setting),
-  // and the card is centered inside this fixed-height box rather than sized
-  // to its own content, so under-budgeting here overlaps the card's own
-  // border instead of just wasting space.
+  // ultraCompact folds title/artist/year onto one line (see SongInfo), so
+  // its budget is well below a straight-line interpolation from compact's.
+  // Budgeted for that combined line wrapping to two — it doesn't always fit
+  // on one at the card's narrowest width (280px viewport, e.g. iOS's
+  // "Zoomed" display setting), and the card is centered inside this
+  // fixed-height box rather than sized to its own content, so
+  // under-budgeting here overlaps the card's own border instead of just
+  // wasting space. normal/compact no longer carry a leading icon-circle row
+  // (GotItCardContent/NoOneGotItCardContent dropped it — the label text
+  // right below already said the same thing), which is what these two
+  // tiers' numbers are lighter than a straight normal/compact split would
+  // suggest; ultraCompact never rendered that row so its own numbers are
+  // unchanged.
   if (hasCover) {
     // Landscape's row layout (cover beside the text) caps the row's own
     // height at the cover art's, since the text column has far more width
@@ -93,9 +98,9 @@ export function computeCardHeight(hasCover: boolean, squeeze: CardSqueeze): numb
     // to hold at one line most of the time; this still carries a margin for
     // when it doesn't.
     if (squeeze.ultraCompact && squeeze.landscape) return 165;
-    return squeeze.ultraCompact ? 264 : squeeze.compact ? 400 : 480;
+    return squeeze.ultraCompact ? 264 : squeeze.compact ? 348 : 418;
   }
-  return squeeze.ultraCompact ? 149 : squeeze.compact ? 205 : 240;
+  return squeeze.ultraCompact ? 149 : squeeze.compact ? 153 : 178;
 }
 
 // The glass card's own outer width — widened at ultraCompact to match
