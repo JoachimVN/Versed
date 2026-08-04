@@ -6,8 +6,8 @@ import LiquidGlass from './StableLiquidGlass';
 import { LIQUID_CARD_PROPS } from './liquidGlassPresets';
 import { CONFETTI_COLORS, GOLD_CONFETTI_COLORS } from './ConfettiBackground';
 import {
-  AWARD_ROW_H, BackgroundLayer, HOLD_CHAMPION, HUE_BRONZE, HUE_SETTLED, ResultRow, SETTLE_DURATION_MS, STANDINGS_ROW_H,
-  estimatePanelHeight, findAward, getCeremonyDuration,
+  BackgroundLayer, HOLD_CHAMPION, HUE_BRONZE, HUE_SETTLED, ResultRow, SETTLE_DURATION_MS, STANDINGS_ROW_H,
+  estimateAwardsHeight, estimatePanelHeight, findAward, getCeremonyDuration,
 } from './FinalResults';
 import type { Award, LeaderboardEntry } from '../types';
 
@@ -19,7 +19,7 @@ function PersonalHero({ entry, awards, reducedMotion }: Readonly<{ entry: Leader
 
   return (
     <div
-      className="flex flex-wrap items-center gap-4 p-4 rounded-2xl"
+      className="personal-hero-card flex flex-wrap items-center gap-4 p-4 rounded-2xl"
       style={{ border: '1px solid rgba(94,234,212,0.32)', background: 'linear-gradient(135deg, rgba(94,234,212,0.14), rgba(158,18,204,0.10))' }}
     >
       <span className="font-black" style={{ fontFamily: "'Montserrat', sans-serif", fontSize: '1.7rem', color: '#5eead4', flexShrink: 0 }}>
@@ -36,7 +36,7 @@ function PersonalHero({ entry, awards, reducedMotion }: Readonly<{ entry: Leader
         </span>
       </div>
       {award && (
-        <div className="flex items-center gap-2 w-full" style={{ marginTop: '2px', paddingTop: '8px', borderTop: '1px solid rgba(255,255,255,0.08)' }}>
+        <div className="personal-hero-award-row flex items-center gap-2 w-full" style={{ marginTop: '2px', paddingTop: '8px', borderTop: '1px solid rgba(255,255,255,0.08)' }}>
           <span style={{ width: '5px', height: '5px', borderRadius: '50%', background: '#c9899a', flexShrink: 0 }} />
           <span className="text-sm" style={{ color: 'rgba(255,255,255,0.7)', fontWeight: 700 }}>
             {AWARD_LABELS[award.key]} · {award.detail}
@@ -154,13 +154,17 @@ export function FinalResultsPlayerView({ leaderboard, awards, myName, background
 
   const settled = phase === 'settled';
   const myEntry = leaderboard.find(e => e.name === myName);
+  // gapPx matches the 18px flex gap on the content wrapper below, and the
+  // divider gets its own 1px section so its two surrounding gaps aren't
+  // dropped -- both real DOM sections, not decoration.
   const panelHeight = estimatePanelHeight([
     leaderboard.length * STANDINGS_ROW_H,
-    awards.length > 0 ? awards.length * AWARD_ROW_H : 0,
-  ]);
+    awards.length > 0 ? 1 : 0,
+    estimateAwardsHeight(awards),
+  ], 18);
 
   return (
-    <div className="relative min-h-screen flex flex-col p-6 gap-4">
+    <div className="final-results-player-shell relative h-[100lvh] flex flex-col p-6 gap-4">
       <BackgroundLayer
         backgroundSrc={backgroundSrc}
         showConfetti={!reducedMotion && settled}
@@ -168,6 +172,7 @@ export function FinalResultsPlayerView({ leaderboard, awards, myName, background
         confettiColors={confettiCalm ? CONFETTI_COLORS : GOLD_CONFETTI_COLORS}
         confettiSpeedMultiplier={confettiCalm ? 1 : 3}
         hueDeg={settled ? HUE_SETTLED : HUE_BRONZE}
+        overlayAlpha={0.9}
       />
 
       {!settled && (
@@ -185,7 +190,7 @@ export function FinalResultsPlayerView({ leaderboard, awards, myName, background
         <div className="relative z-10 flex flex-col flex-1 min-h-0 gap-4 page-enter-fade">
           {myEntry && <PersonalHero entry={myEntry} awards={awards} reducedMotion={reducedMotion} />}
           <div className="flex-1 min-h-0 overflow-y-auto flex">
-            <div className="liquid-btn glass-tint-blue relative" style={{ width: 'min(94vw, 520px)', height: `${panelHeight}px`, margin: 'auto' }}>
+            <div className="liquid-btn glass-tint-blue relative" style={{ width: '100%', maxWidth: '520px', height: `${panelHeight}px`, margin: 'auto' }}>
               <LiquidGlass
                 style={{ position: 'absolute', top: '50%', left: '50%' }}
                 {...LIQUID_CARD_PROPS}
@@ -193,7 +198,15 @@ export function FinalResultsPlayerView({ leaderboard, awards, myName, background
                 cornerRadius={26}
                 padding="24px 22px 18px"
               >
-                <div style={{ width: 'min(88vw, 472px)', display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '18px' }}>
+                {/* liquid-glass-react's .glass is inline-flex and shrink-wraps to
+                    exactly this width, so it has to be expressed in the same
+                    units as the real available space -- not vw alone, which
+                    ignores both this page's own p-6 (48px) and the card's own
+                    24/22/18 padding (44px), and previously let the glass render
+                    wider than its own placement box on any phone-width screen
+                    (silently clipped by the scroll container, most visibly
+                    eating the "you" row's left accent bar). */}
+                <div style={{ width: 'min(calc(100vw - 92px), 476px)', display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '18px' }}>
                   <div className="standings-list" style={{ width: '100%' }}>
                     {leaderboard.map((e, i) => <ResultRow key={e.name} entry={e} isMe={e.name === myName} delay={i * 60} />)}
                   </div>

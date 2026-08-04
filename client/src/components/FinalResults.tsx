@@ -486,13 +486,28 @@ const PANEL_PAD_V = 40;
 const PANEL_TITLE_H = 26;
 const PANEL_PODIUM_H = 178;
 const PANEL_SECTION_GAP = 16;
-export const STANDINGS_ROW_H = 30;
-export const AWARD_ROW_H = 54;
+export const STANDINGS_ROW_H = 38;
+export const AWARD_ROW_H = 54; // icon-only rows (Most Correct, Biggest Swing) -- no cover art, no wrap risk
+// Cover-art rows (Fastest Classic/Race Guess) carry a two-line quote, and the
+// finale banner carries its own padding/margin -- both run taller than a
+// plain row, and on phone-width screens (where .award-row-quote wraps
+// instead of ellipsis-ing) taller still. These are sized off the tallest
+// real measurement across the narrow viewports this panel actually ships at.
+const AWARD_ROW_H_ART = 76;
+const AWARD_ROW_H_FINALE = 80;
 
-export function estimatePanelHeight(sectionHeights: number[]): number {
+export function estimatePanelHeight(sectionHeights: number[], gapPx: number = PANEL_SECTION_GAP): number {
   const present = sectionHeights.filter(h => h > 0);
-  const gaps = Math.max(0, present.length - 1) * PANEL_SECTION_GAP;
+  const gaps = Math.max(0, present.length - 1) * gapPx;
   return PANEL_PAD_V + present.reduce((a, b) => a + b, 0) + gaps;
+}
+
+export function estimateAwardsHeight(awards: Award[]): number {
+  return awards.reduce((sum, award) => {
+    if (award.key === 'finaleWinner') return sum + AWARD_ROW_H_FINALE;
+    if (award.highlights?.[0]?.coverUrl) return sum + AWARD_ROW_H_ART;
+    return sum + AWARD_ROW_H;
+  }, 0);
 }
 
 // Rank badge for a plain list row: ranks 1-3 get a small tinted numeral
@@ -725,7 +740,7 @@ export function FinalResultsView({ leaderboard, awards, backgroundSrc, footer, o
     PANEL_TITLE_H,
     PANEL_PODIUM_H,
     rest.length > 0 ? rest.length * STANDINGS_ROW_H : 0,
-    awards.length > 0 ? awards.length * AWARD_ROW_H : 0,
+    estimateAwardsHeight(awards),
   ]);
 
   return (
@@ -808,7 +823,7 @@ export function FinalResultsView({ leaderboard, awards, backgroundSrc, footer, o
             className="relative z-10 flex-1 min-h-0 overflow-y-auto flex"
             style={{ animation: 'settledIn 0.5s cubic-bezier(0.16,1,0.3,1) 0.1s both' }}
           >
-            <div className="liquid-btn glass-tint-blue relative" style={{ width: 'min(94vw, 720px)', height: `${panelHeight}px`, margin: 'auto' }}>
+            <div className="liquid-btn glass-tint-blue relative" style={{ width: '100%', maxWidth: '720px', height: `${panelHeight}px`, margin: 'auto' }}>
               <LiquidGlass
                 style={{ position: 'absolute', top: '50%', left: '50%' }}
                 {...LIQUID_CARD_PROPS}
@@ -816,7 +831,13 @@ export function FinalResultsView({ leaderboard, awards, backgroundSrc, footer, o
                 cornerRadius={28}
                 padding="22px 24px 18px"
               >
-                <div style={{ width: 'min(88vw, 656px)', display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '16px' }}>
+                {/* Same fix as FinalResultsPlayer.tsx: .glass is inline-flex and
+                    shrink-wraps to exactly this width, so it must be expressed
+                    against the real available space (this page's own p-6 =
+                    48px, plus the card's own 22/24/18 padding = 48px) rather
+                    than vw alone, which let the glass render wider than its
+                    placement box and get silently clipped below ~800px wide. */}
+                <div style={{ width: 'min(calc(100vw - 96px), 672px)', display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '16px' }}>
                   <h2 className="recap-title">Final Results</h2>
                   <PodiumRow podium={podium} />
                   {rest.length > 0 && (
