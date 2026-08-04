@@ -84,6 +84,10 @@ const VIEWPORTS = [
   // 1440x900 MacBook display, run fullscreen. Any mobile-squeeze tuning has
   // to leave this one untouched.
   { name: 'desktop-1440x900', width: 1440, height: 900 },
+  // A larger external monitor (1440p/QHD) — catches content stretching
+  // full-bleed at a size wider than the MacBook display above, without
+  // going all the way to 4K.
+  { name: 'desktop-2560x1440', width: 2560, height: 1440 },
 ];
 
 const VIEWS = [
