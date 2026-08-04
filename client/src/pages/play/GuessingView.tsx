@@ -140,7 +140,7 @@ function guessInputBoxStyle(isListening: boolean, focused: boolean, tightGlow: b
   if (focused) {
     return {
       border: '1px solid rgba(158,18,204,0.7)', background: 'rgba(158,18,204,0.1)',
-      boxShadow: tightGlow ? '0 0 10px rgba(0,238,232,0.18), 0 0 8px rgba(158,18,204,0.22)' : '0 0 28px rgba(0,238,232,0.18), 0 0 20px rgba(158,18,204,0.22)',
+      boxShadow: tightGlow ? '0 0 10px rgba(158,18,204,0.28)' : '0 0 28px rgba(158,18,204,0.28)',
     };
   }
   return {
@@ -274,6 +274,20 @@ export function GuessingView({ game }: Readonly<{ game: PlayState }>) {
   const canSubmit = isYear ? guessText.trim().length === 4 : guessText.trim().length > 0;
   const [inputFocused, setInputFocused] = useState(false);
   const inputBoxStyle = guessInputBoxStyle(isListening, inputFocused, ultraCompact);
+
+  // Keep the keyboard ready as soon as a free-text turn starts, including
+  // Race rounds that enter guessing directly. If the player focused either
+  // field while listening, keep that deliberate focus instead.
+  useEffect(() => {
+    if (phase !== 'guessing' || isChoice || isChaosHints) return;
+    const timeout = window.setTimeout(() => {
+      const active = document.activeElement;
+      const alreadyTyping = active instanceof HTMLInputElement || active instanceof HTMLTextAreaElement;
+      if (!alreadyTyping) guessInputRef.current?.focus();
+    }, 100);
+    return () => window.clearTimeout(timeout);
+  }, [guessInputRef, isChaosHints, isChoice, phase]);
+
   let label = {
     title: 'Name the song',
     artist: 'Name the artist',
