@@ -3,6 +3,7 @@ import { useNavigate } from 'react-router';
 import { BRAND_LOGO_SRC, showBrandLogoFallback } from '../branding';
 import LiquidGlass from '../components/StableLiquidGlass';
 import { useLogoMorph } from '../contexts/LogoMorph';
+import { HostScaleShell } from '../hooks/useHostScale';
 import { APP_NAME, BACKEND_URL } from '../config';
 
 export default function Home() {
@@ -50,83 +51,97 @@ export default function Home() {
   else if (arrivedViaMorph) pageAnimClass = 'page-enter-morph';
 
   return (
-    <div
-      className={`relative min-h-screen flex flex-col items-center justify-center gap-10 p-6 ${pageAnimClass}`}
-      style={{ zIndex: 1, gap: compactGap, pointerEvents: leaving ? 'none' : undefined }}
-    >
-      <div className="flex flex-col items-center gap-3">
-        <img
-          ref={logoRef}
-          src={BRAND_LOGO_SRC}
-          alt={APP_NAME}
-          onError={showBrandLogoFallback}
-          width={2560}
-          height={1000}
-          className="versed-logo w-auto drop-shadow-[0_18px_22px_rgba(0,0,0,0.55)]"
-          style={{ maxHeight: 'min(225px, calc(100vh - 255px))', maxWidth: '100%', marginBottom: 'min(50px, max(0px, calc(100vh - 375px)))', opacity: (leaving || morphing) ? 0 : 1, willChange: 'opacity' }}
-        />
-        <p className="text-white/60 text-lg tracking-wide"></p>
-      </div>
+    // Reuses the host scale shell (see useHostScale.tsx) rather than the
+    // player one: Home is the landing page before a role is even picked, and
+    // like Host's fixed-px cards, its logo/buttons were sized against the
+    // 1440x900 baseline and never grew on a bigger display. Safe for phones
+    // either way — scale is clamped to 1 at/below baseline.
+    //
+    // min-h-screen has to live on a div *nested inside* HostScaleShell, not
+    // on the shell element itself: the compensating rule in index.css is
+    // `.host-scale-shell .min-h-screen` (a descendant selector), so a single
+    // element carrying both classes never matches it and falls through to
+    // the un-compensated height — same raw-px-inside-a-zoomed-box overflow
+    // that rule exists to prevent everywhere else.
+    <HostScaleShell className="relative">
+      <div
+        className={`min-h-screen flex flex-col items-center justify-center gap-10 p-6 ${pageAnimClass}`}
+        style={{ zIndex: 1, gap: compactGap, pointerEvents: leaving ? 'none' : undefined }}
+      >
+        <div className="flex flex-col items-center gap-3">
+          <img
+            ref={logoRef}
+            src={BRAND_LOGO_SRC}
+            alt={APP_NAME}
+            onError={showBrandLogoFallback}
+            width={2560}
+            height={1000}
+            className="versed-logo w-auto drop-shadow-[0_18px_22px_rgba(0,0,0,0.55)]"
+            style={{ maxHeight: 'min(225px, calc(100vh - 255px))', maxWidth: '100%', marginBottom: 'min(50px, max(0px, calc(100vh - 375px)))', opacity: (leaving || morphing) ? 0 : 1, willChange: 'opacity' }}
+          />
+          <p className="text-white/60 text-lg tracking-wide"></p>
+        </div>
 
-      <div className="flex flex-col items-center gap-8" style={{ gap: `min(32px, ${compactGap})` }}>
-        <button
-          type="button"
-          className="liquid-btn glass-tint-teal relative cursor-pointer border-0 bg-transparent p-0"
-          style={{ width: buttonWidth, height: '64px', borderRadius: '100px', background: 'rgba(0,0,0,0.001)' }}
-          onMouseEnter={() => setHovered('join')}
-          onMouseLeave={() => setHovered(null)}
-          onClick={goToJoin}
-        >
-          <LiquidGlass
-            style={{
-              position: 'absolute', top: '50%', left: '50%',
-              filter: hovered === 'join' ? 'drop-shadow(0 0 10px rgba(0,166,163,0.65))' : 'drop-shadow(0 0 0px rgba(0,166,163,0))',
-              transition: 'filter 0.25s ease',
-            }}
-            displacementScale={64}
-            blurAmount={0.05}
-            saturation={130}
-            aberrationIntensity={2}
-            elasticity={0.12}
-            cornerRadius={100}
-            padding={buttonPadding}
+        <div className="flex flex-col items-center gap-8" style={{ gap: `min(32px, ${compactGap})` }}>
+          <button
+            type="button"
+            className="liquid-btn glass-tint-teal relative cursor-pointer border-0 bg-transparent p-0"
+            style={{ width: buttonWidth, height: '64px', borderRadius: '100px', background: 'rgba(0,0,0,0.001)' }}
+            onMouseEnter={() => setHovered('join')}
+            onMouseLeave={() => setHovered(null)}
+            onClick={goToJoin}
           >
-            <div style={{ position: 'relative' }}>
-              <div style={{ position: 'absolute', inset: '-18px -96px', borderRadius: '100px', pointerEvents: 'none', background: 'rgba(0,166,163,0.088)' }} />
-              <span className="text-white font-bold text-xl" style={{ whiteSpace: 'nowrap', position: 'relative' }}>Join a game</span>
-            </div>
-          </LiquidGlass>
-        </button>
+            <LiquidGlass
+              style={{
+                position: 'absolute', top: '50%', left: '50%',
+                filter: hovered === 'join' ? 'drop-shadow(0 0 10px rgba(0,166,163,0.65))' : 'drop-shadow(0 0 0px rgba(0,166,163,0))',
+                transition: 'filter 0.25s ease',
+              }}
+              displacementScale={64}
+              blurAmount={0.05}
+              saturation={130}
+              aberrationIntensity={2}
+              elasticity={0.12}
+              cornerRadius={100}
+              padding={buttonPadding}
+            >
+              <div style={{ position: 'relative' }}>
+                <div style={{ position: 'absolute', inset: '-18px -96px', borderRadius: '100px', pointerEvents: 'none', background: 'rgba(0,166,163,0.088)' }} />
+                <span className="text-white font-bold text-xl" style={{ whiteSpace: 'nowrap', position: 'relative' }}>Join a game</span>
+              </div>
+            </LiquidGlass>
+          </button>
 
-        <button
-          type="button"
-          className="liquid-btn glass-tint-purple relative cursor-pointer border-0 bg-transparent p-0"
-          style={{ width: buttonWidth, height: '64px', borderRadius: '100px', background: 'rgba(0,0,0,0.001)' }}
-          onMouseEnter={() => setHovered('host')}
-          onMouseLeave={() => setHovered(null)}
-          onClick={() => (globalThis.location.href = `${BACKEND_URL}/api/auth/spotify`)}
-        >
-          <LiquidGlass
-            style={{
-              position: 'absolute', top: '50%', left: '50%',
-              filter: hovered === 'host' ? 'drop-shadow(0 0 10px rgba(158,18,204,0.65))' : 'drop-shadow(0 0 0px rgba(158,18,204,0))',
-              transition: 'filter 0.25s ease',
-            }}
-            displacementScale={64}
-            blurAmount={0.05}
-            saturation={130}
-            aberrationIntensity={2}
-            elasticity={0.12}
-            cornerRadius={100}
-            padding={buttonPadding}
+          <button
+            type="button"
+            className="liquid-btn glass-tint-purple relative cursor-pointer border-0 bg-transparent p-0"
+            style={{ width: buttonWidth, height: '64px', borderRadius: '100px', background: 'rgba(0,0,0,0.001)' }}
+            onMouseEnter={() => setHovered('host')}
+            onMouseLeave={() => setHovered(null)}
+            onClick={() => (globalThis.location.href = `${BACKEND_URL}/api/auth/spotify`)}
           >
-            <div style={{ position: 'relative' }}>
-              <div style={{ position: 'absolute', inset: '-18px -96px', borderRadius: '100px', pointerEvents: 'none', background: 'rgba(158,18,204,0.088)' }} />
-              <span className="text-white font-bold text-xl" style={{ whiteSpace: 'nowrap', position: 'relative' }}>Host a game</span>
-            </div>
-          </LiquidGlass>
-        </button>
+            <LiquidGlass
+              style={{
+                position: 'absolute', top: '50%', left: '50%',
+                filter: hovered === 'host' ? 'drop-shadow(0 0 10px rgba(158,18,204,0.65))' : 'drop-shadow(0 0 0px rgba(158,18,204,0))',
+                transition: 'filter 0.25s ease',
+              }}
+              displacementScale={64}
+              blurAmount={0.05}
+              saturation={130}
+              aberrationIntensity={2}
+              elasticity={0.12}
+              cornerRadius={100}
+              padding={buttonPadding}
+            >
+              <div style={{ position: 'relative' }}>
+                <div style={{ position: 'absolute', inset: '-18px -96px', borderRadius: '100px', pointerEvents: 'none', background: 'rgba(158,18,204,0.088)' }} />
+                <span className="text-white font-bold text-xl" style={{ whiteSpace: 'nowrap', position: 'relative' }}>Host a game</span>
+              </div>
+            </LiquidGlass>
+          </button>
+        </div>
       </div>
-    </div>
+    </HostScaleShell>
   );
 }

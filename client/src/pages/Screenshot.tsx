@@ -569,7 +569,12 @@ export default function Screenshot() {
     'reveal-crowd': <HostScaleShell><RevealView game={MOCK_HOST_REVEAL_CROWD} result={CROWD_RESULT} instant /></HostScaleShell>,
     'year-crowd': <HostScaleShell><RevealView game={MOCK_HOST_YEAR_REVEAL_CROWD} result={CROWD_RESULT_YEAR} instant /></HostScaleShell>,
     lobby: <HostScaleShell><LobbyView game={MOCK_HOST_LOBBY} /></HostScaleShell>,
-    'party-intro': <RoundIntro party={MOCK_PARTY_STEAL} roundKey={0} dismissible={false} />,
+    // RoundIntro is `position: fixed`, so it stays anchored to the true
+    // viewport under either shell (see useHostScale.tsx's containing-block
+    // comment) while still inheriting the zoom scale for its own type size —
+    // wrapped here so the viewport-check script actually exercises that,
+    // same reason the host/player-group fixtures below are wrapped.
+    'party-intro': <HostScaleShell><RoundIntro party={MOCK_PARTY_STEAL} roundKey={0} dismissible={false} /></HostScaleShell>,
     'final-host': <FinalResultsPreview />,
     'final-host-classic-only': <HostScaleShell><FinalResultsView leaderboard={MOCK_LEADERBOARD} awards={MOCK_AWARDS.filter(a => a.key !== 'fastestGuess' && a.key !== 'finaleWinner')} backgroundSrc={`${import.meta.env.BASE_URL}backgrounds/background7.png`} footer={<PillButton onClick={noop} label="New Game" />} /></HostScaleShell>,
     'final-host-race-only': <HostScaleShell><FinalResultsView leaderboard={MOCK_LEADERBOARD} awards={MOCK_AWARDS.filter(a => a.key !== 'fastestClassicGuess' && a.key !== 'finaleWinner')} backgroundSrc={`${import.meta.env.BASE_URL}backgrounds/background7.png`} footer={<PillButton onClick={noop} label="New Game" />} /></HostScaleShell>,
