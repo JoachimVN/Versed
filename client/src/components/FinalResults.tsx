@@ -319,14 +319,14 @@ export function BackgroundLayer({ backgroundSrc, showConfetti, confettiEntrance 
 
   useEffect(() => {
     setLayers(prev => {
-      if (prev[prev.length - 1].hue === hueDeg) return prev;
+      if (prev.at(-1)!.hue === hueDeg) return prev;
       idRef.current += 1;
       return [...prev, { id: idRef.current, hue: hueDeg }];
     });
   }, [hueDeg]);
 
   useEffect(() => {
-    const newest = layers[layers.length - 1];
+    const newest = layers.at(-1)!;
     if (newest.id === topId) return;
     const raf = requestAnimationFrame(() => setTopId(newest.id));
     return () => cancelAnimationFrame(raf);
@@ -347,7 +347,7 @@ export function BackgroundLayer({ backgroundSrc, showConfetti, confettiEntrance 
           }}
           onTransitionEnd={() => {
             if (layer.id !== topId) return;
-            setLayers(prev => (prev.length > 1 ? [prev[prev.length - 1]] : prev));
+            setLayers(prev => (prev.length > 1 ? [prev.at(-1)!] : prev));
           }}
         />
       ))}
