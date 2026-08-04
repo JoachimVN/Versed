@@ -136,42 +136,81 @@ select:focus-visible,
   display: none !important;
 }
 
-/* LiquidGlass draws its own white edge-highlight ring as two spans (4th/5th
-   children) layered on top of everything, including our tint overlay inside
-   children — so the ring stays plain white no matter how the overlay is
-   styled from underneath. Only overriding box-shadow (not background or
-   mix-blend-mode) tints the ring while leaving the library's own animated,
-   cursor-tracking sheen (driven by its internal mouseOffset state) intact.
-   Shared across every "wide pill" glass CTA (Home, Play join, Host lobby
-   start buttons) so they all pick up the same treatment per accent color. */
-.glass-tint-teal > .liquid-glass-stabilizer > :nth-child(4),
-.glass-tint-teal > .liquid-glass-stabilizer > :nth-child(5) {
+/* LiquidGlass's white edge-highlight ring is two SEPARATE sibling spans
+   (4th/5th children) next to the actual glass body, each carrying its own
+   copy of the same elastic hover/press transform, freshly re-set on every
+   render. Chrome keeps sibling elements sharing one transform in lockstep;
+   Safari doesn't reliably restart a transition that's reassigned via
+   inline style in the same paint as the transform it's meant to ease, so
+   the ring visibly snaps straight to its end position while the glass body
+   — which never carries a transform of its own, it just rides along inside
+   its ancestor's — stays perfectly smooth. (Confirmed: even forcing the
+   transition via a stylesheet !important rule didn't fix it — the restart
+   itself is the problem, not which rule declares it.)
+   A true CSS descendant can't desync from its own ancestor's transform, so
+   the ring is drawn as `.glass`'s own ::after instead: same box-shadow
+   trick the tint overrides below already relied on, just anchored to an
+   element that is structurally guaranteed to stay glued to the glass body.
+   The mask + padding + content-box/exclude combo below is the exact
+   border-only-ring technique the library's own spans used. The gradient's
+   angle still tracks the cursor, same `135 + mouseOffset.x * 1.2` formula
+   as the library's own spans used, but reads it off --liquid-glass-sheen-x
+   (set directly via style.setProperty in StableLiquidGlass, not React
+   state/render) instead of driving it through a per-render inline style —
+   deliberately outside the mechanism that caused the transform desync above,
+   so this can't reintroduce it. The outer (non-inset) shadow component the
+   original spans had is dropped: `.glass` clips its own descendants'
+   overflow, so a non-inset shadow on this ::after would just get clipped
+   away — `.glass`'s own ambient box-shadow (set by the library, unaffected
+   since it's that element's own paint, not a clipped descendant's) already
+   covers that ambient glow. */
+.liquid-glass-stabilizer > :nth-child(4),
+.liquid-glass-stabilizer > :nth-child(5) {
+  display: none !important;
+}
+.liquid-glass-stabilizer .glass::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  border-radius: inherit;
+  box-sizing: border-box;
+  padding: 1.5px;
+  pointer-events: none;
+  transition: background 0.15s ease-out;
+  background: linear-gradient(calc(135deg + var(--liquid-glass-sheen-x, 0) * 1.2deg),
+    rgba(255,255,255,0) 0%,
+    rgba(255,255,255,0.22) 33%,
+    rgba(255,255,255,0.5) 66%,
+    rgba(255,255,255,0) 100%);
+  -webkit-mask: linear-gradient(#000 0 0) content-box, linear-gradient(#000 0 0);
+  -webkit-mask-composite: xor;
+  mask-composite: exclude;
+  box-shadow: 0 0 0 0.5px rgba(255,255,255,0.5) inset, 0 1px 3px rgba(255,255,255,0.25) inset;
+}
+
+/* Per-accent tint for the ::after ring above. Shared across every "wide
+   pill" glass CTA (Home, Play join, Host lobby start buttons) so they all
+   pick up the same treatment per accent color. */
+.glass-tint-teal .glass::after {
   box-shadow: 0 0 0 1px rgba(0,166,163,0.35) inset, 0 1px 4px rgba(0,0,0,0.35) !important;
 }
-.glass-tint-purple > .liquid-glass-stabilizer > :nth-child(4),
-.glass-tint-purple > .liquid-glass-stabilizer > :nth-child(5) {
+.glass-tint-purple .glass::after {
   box-shadow: 0 0 0 1px rgba(158,18,204,0.35) inset, 0 1px 4px rgba(0,0,0,0.35) !important;
 }
-.glass-tint-orange > .liquid-glass-stabilizer > :nth-child(4),
-.glass-tint-orange > .liquid-glass-stabilizer > :nth-child(5) {
+.glass-tint-orange .glass::after {
   box-shadow: 0 0 0 1px rgba(220,80,10,0.35) inset, 0 1px 4px rgba(0,0,0,0.35) !important;
 }
-.glass-tint-cyan > .liquid-glass-stabilizer > :nth-child(4),
-.glass-tint-cyan > .liquid-glass-stabilizer > :nth-child(5) {
+.glass-tint-cyan .glass::after {
   box-shadow: 0 0 0 1px rgba(0,238,232,0.35) inset, 0 1px 4px rgba(0,0,0,0.35) !important;
 }
-.glass-tint-blue > .liquid-glass-stabilizer > :nth-child(4),
-.glass-tint-blue > .liquid-glass-stabilizer > :nth-child(5) {
+.glass-tint-blue .glass::after {
   box-shadow: 0 0 0 1px rgba(59,130,246,0.18) inset, 0 1px 4px rgba(0,0,0,0.35) !important;
 }
 
 /* Volume control's edge ring at half strength — opacity (not just the
-   box-shadow tint above) so the library's own white cursor-tracking sheen on
-   these same spans dims along with it. Without this the sheen stayed at full
-   brightness and the ring still read as a hard white edge. It's small
-   always-on chrome, not a CTA, so the edge should recede. */
-.volume-control-glass > .liquid-glass-stabilizer > :nth-child(4),
-.volume-control-glass > .liquid-glass-stabilizer > :nth-child(5) {
+   box-shadow tint above) so it recedes as a whole rather than just reading
+   as a thinner hard edge. It's small always-on chrome, not a CTA. */
+.volume-control-glass .glass::after {
   box-shadow: 0 0 0 1px rgba(158,18,204,0.35) inset, 0 1px 4px rgba(0,0,0,0.35) !important;
   opacity: 0.5 !important;
 }

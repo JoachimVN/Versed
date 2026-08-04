@@ -71,6 +71,32 @@ export default function StableLiquidGlass(props: Readonly<LiquidGlassProps>) {
     };
   }, []);
 
+  // The library's own edge-highlight ring tracked the cursor via a
+  // `background: linear-gradient(...)` angle driven by its internal
+  // mouseOffset state -- lost when CSS replaced those separately-animated
+  // spans with `.glass::after` (see index.css) to fix a Safari transform
+  // desync. Recreate just the cursor-tracking part here, independently: a
+  // CSS var updated directly via style.setProperty (no React state/render
+  // involved, so this can't reintroduce the same class of bug) that
+  // index.css's ::after gradient reads to rotate its angle toward the
+  // cursor, matching the library's own `135 + mouseOffset.x * 1.2` formula.
+  useEffect(() => {
+    const parent = wrapperRef.current?.parentElement;
+    if (!parent) return;
+    const handleMouseMove = (e: MouseEvent) => {
+      const rect = parent.getBoundingClientRect();
+      const offsetX = ((e.clientX - (rect.left + rect.width / 2)) / rect.width) * 100;
+      parent.style.setProperty('--liquid-glass-sheen-x', offsetX.toFixed(2));
+    };
+    const resetSheen = () => parent.style.setProperty('--liquid-glass-sheen-x', '0');
+    parent.addEventListener('mousemove', handleMouseMove);
+    parent.addEventListener('mouseleave', resetSheen);
+    return () => {
+      parent.removeEventListener('mousemove', handleMouseMove);
+      parent.removeEventListener('mouseleave', resetSheen);
+    };
+  }, []);
+
   return (
     <div ref={wrapperRef} className="liquid-glass-stabilizer" data-ready={ready ? 'true' : 'false'}>
       <LibraryLiquidGlass {...props} />
