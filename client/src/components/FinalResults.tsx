@@ -796,7 +796,7 @@ export function FinalResultsView({ leaderboard, awards, backgroundSrc, footer, o
   }, [panelHeight]);
 
   return (
-    <div className="relative h-[100lvh] flex flex-col p-6 gap-4">
+    <div className="relative h-[100lvh] final-results-panel-height flex flex-col p-6 gap-4">
       <BackgroundLayer
         backgroundSrc={backgroundSrc}
         showConfetti={showConfetti}

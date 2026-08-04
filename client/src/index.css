@@ -126,9 +126,66 @@ select:focus-visible,
 .host-scale-shell {
   zoom: var(--host-scale, 1);
 }
-.host-scale-shell .min-h-screen {
+/* :not(.reveal-screen-height) matters on the player version of this rule
+   below (this host one only inherits the same selector for consistency —
+   host is desktop-only, so .reveal-screen-height's iOS floor never actually
+   fires here): a plain `.host-scale-shell .min-h-screen` would out-specify
+   .reveal-screen-height's own `min-height: 100lvh` floor (two classes beat
+   one, regardless of source order) instead of just losing to it by the
+   normal cascade like the un-scaled rule does. */
+.host-scale-shell .min-h-screen:not(.reveal-screen-height) {
   height: calc(var(--host-app-height, 100vh) - env(safe-area-inset-top, 0px) - env(safe-area-inset-bottom, 0px));
   min-height: calc(var(--host-app-height, 100vh) - env(safe-area-inset-top, 0px) - env(safe-area-inset-bottom, 0px));
+}
+/* For the combo element, leaving min-height at a bare uncompensated 100lvh
+   (first attempt at this) re-broke the very overflow this file is fixing:
+   100lvh resolves against the *true* viewport (like all viewport units,
+   unaffected by an ancestor's zoom) but the resulting box still gets
+   *painted* zoom-scaled like everything else here, so a min-height taller
+   than the compensated `height` below wins the cascade and then renders at
+   true-height * scale. Dividing 100lvh by scale here cancels that out the
+   same way --host-app-height does for height, while still correctly
+   flooring at the true device height (not just window.innerHeight) when
+   scale is 1 — i.e. on host this branch is dead code (desktop-only), but it
+   matches the player version below property for property on purpose. */
+.host-scale-shell .min-h-screen.reveal-screen-height {
+  height: calc(var(--host-app-height, 100vh) - env(safe-area-inset-top, 0px) - env(safe-area-inset-bottom, 0px));
+  min-height: calc(100vh / var(--host-scale, 1));
+  min-height: calc(100lvh / var(--host-scale, 1));
+}
+
+/* FinalResultsView's settled panel sizes itself with raw `h-[100lvh]`
+   (Tailwind arbitrary value) instead of .min-h-screen, for the same iOS
+   reason as .reveal-screen-height above. Viewport units read the true,
+   unzoomed viewport when computing their own value, but the resulting box is
+   then painted like any other box in the zoomed subtree — so 100lvh's true
+   1440px becomes 1440 * scale on screen. --host-app-height is already
+   pre-divided for exactly this. */
+.host-scale-shell .final-results-panel-height {
+  height: var(--host-app-height, 100lvh);
+}
+
+/* Player's equivalent of everything above — see usePlayerScale.tsx. Unlike
+   host, .reveal-screen-height's iOS floor is live here (players are on real
+   phones), so the :not()/height-only split isn't just future-proofing. */
+.player-scale-shell {
+  zoom: var(--player-scale, 1);
+}
+.player-scale-shell .min-h-screen:not(.reveal-screen-height) {
+  height: calc(var(--player-app-height, 100vh) - env(safe-area-inset-top, 0px) - env(safe-area-inset-bottom, 0px));
+  min-height: calc(var(--player-app-height, 100vh) - env(safe-area-inset-top, 0px) - env(safe-area-inset-bottom, 0px));
+}
+/* See the host version of this rule above for why min-height is a divided
+   100lvh rather than left alone — here it's not dead code: this is the real
+   iOS floor, still correctly preserved at scale:1 (real phones never scale
+   past 1, so this divides by exactly 1). */
+.player-scale-shell .min-h-screen.reveal-screen-height {
+  height: calc(var(--player-app-height, 100vh) - env(safe-area-inset-top, 0px) - env(safe-area-inset-bottom, 0px));
+  min-height: calc(100vh / var(--player-scale, 1));
+  min-height: calc(100lvh / var(--player-scale, 1));
+}
+.player-scale-shell .final-results-player-shell {
+  height: var(--player-app-height, 100lvh);
 }
 
 /* The reveal screens (host + player) paint their own full-bleed background

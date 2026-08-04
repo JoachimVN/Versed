@@ -16,6 +16,7 @@ import { FinalResultsPlayerView } from '../components/FinalResultsPlayer';
 import { PillButton } from '../components/RevealShared';
 import { useFinalResultsRevealSound } from '../hooks/useFinalResultsRevealSound';
 import { HostScaleShell } from '../hooks/useHostScale';
+import { PlayerScaleShell } from '../hooks/usePlayerScale';
 import type { RoundResultEvent, LeaderboardEntry, PartyInfo, Award } from '../types';
 import Home from './Home';
 import { JoinView } from './play/JoinView';
@@ -549,22 +550,22 @@ export default function Screenshot() {
   const [params] = useSearchParams();
   const screenshots: Record<string, ReactNode> = {
     home: <Home />,
-    join: <JoinView game={MOCK_PLAY_JOIN} />,
-    'join-link': <JoinView game={MOCK_PLAY_JOIN_LINK} />,
-    'join-rejoin': <JoinView game={MOCK_PLAY_JOIN_REJOIN} />,
+    join: <PlayerScaleShell><JoinView game={MOCK_PLAY_JOIN} /></PlayerScaleShell>,
+    'join-link': <PlayerScaleShell><JoinView game={MOCK_PLAY_JOIN_LINK} /></PlayerScaleShell>,
+    'join-rejoin': <PlayerScaleShell><JoinView game={MOCK_PLAY_JOIN_REJOIN} /></PlayerScaleShell>,
     playing: <HostScaleShell><PlayingView game={MOCK_HOST} /></HostScaleShell>,
     reveal: <HostScaleShell><RevealView game={MOCK_HOST_REVEAL} result={MOCK_RESULT} instant /></HostScaleShell>,
     year: <HostScaleShell><RevealView game={MOCK_HOST_YEAR_REVEAL} result={MOCK_RESULT_YEAR} instant /></HostScaleShell>,
     'mystery-reveal': <HostScaleShell><RevealView game={MOCK_HOST_MYSTERY_REVEAL} result={MOCK_RESULT_MYSTERY} /></HostScaleShell>,
     'big-points-reveal': <HostScaleShell><RevealView game={MOCK_HOST_BIGPOINTS_REVEAL} result={MOCK_RESULT} /></HostScaleShell>,
-    watching: <WatchingView game={MOCK_PLAY} />,
-    waiting: <><WaitingAtmosphere leaving={false} /><WaitingView game={{ ...MOCK_PLAY, phase: 'waiting', myName: 'Joachim' }} leaveBackground={noop} /></>,
-    guessing: <GuessingView game={MOCK_PLAY_GUESSING} />,
-    'year-guessing': <GuessingView game={MOCK_PLAY_YEAR_GUESSING} />,
-    'guessing-both': <GuessingView game={MOCK_PLAY_GUESSING_BOTH} />,
-    'play-reveal': <PlayRevealView game={MOCK_PLAY_REVEAL} result={MOCK_RESULT} />,
-    'play-reveal-noone': <PlayRevealView game={MOCK_PLAY_REVEAL_NOONE} result={MOCK_RESULT_NOONE} />,
-    'play-reveal-crowd': <PlayRevealView game={MOCK_PLAY_REVEAL_CROWD} result={CROWD_RESULT} />,
+    watching: <PlayerScaleShell><WatchingView game={MOCK_PLAY} /></PlayerScaleShell>,
+    waiting: <PlayerScaleShell><WaitingAtmosphere leaving={false} /><WaitingView game={{ ...MOCK_PLAY, phase: 'waiting', myName: 'Joachim' }} leaveBackground={noop} /></PlayerScaleShell>,
+    guessing: <PlayerScaleShell><GuessingView game={MOCK_PLAY_GUESSING} /></PlayerScaleShell>,
+    'year-guessing': <PlayerScaleShell><GuessingView game={MOCK_PLAY_YEAR_GUESSING} /></PlayerScaleShell>,
+    'guessing-both': <PlayerScaleShell><GuessingView game={MOCK_PLAY_GUESSING_BOTH} /></PlayerScaleShell>,
+    'play-reveal': <PlayerScaleShell><PlayRevealView game={MOCK_PLAY_REVEAL} result={MOCK_RESULT} /></PlayerScaleShell>,
+    'play-reveal-noone': <PlayerScaleShell><PlayRevealView game={MOCK_PLAY_REVEAL_NOONE} result={MOCK_RESULT_NOONE} /></PlayerScaleShell>,
+    'play-reveal-crowd': <PlayerScaleShell><PlayRevealView game={MOCK_PLAY_REVEAL_CROWD} result={CROWD_RESULT} /></PlayerScaleShell>,
     'reveal-crowd': <HostScaleShell><RevealView game={MOCK_HOST_REVEAL_CROWD} result={CROWD_RESULT} instant /></HostScaleShell>,
     'year-crowd': <HostScaleShell><RevealView game={MOCK_HOST_YEAR_REVEAL_CROWD} result={CROWD_RESULT_YEAR} instant /></HostScaleShell>,
     lobby: <HostScaleShell><LobbyView game={MOCK_HOST_LOBBY} /></HostScaleShell>,
@@ -576,7 +577,7 @@ export default function Screenshot() {
     'final-host-1': <FinalResultsPreview leaderboard={MOCK_LEADERBOARD.slice(0, 1)} awards={[]} />,
     'final-host-2': <FinalResultsPreview leaderboard={MOCK_LEADERBOARD.slice(0, 2)} awards={[]} />,
     'final-host-long': <HostScaleShell><FinalResultsView leaderboard={MOCK_LEADERBOARD_LONG} awards={MOCK_AWARDS} backgroundSrc={`${import.meta.env.BASE_URL}backgrounds/background7.png`} footer={<PillButton onClick={noop} label="New Game" />} /></HostScaleShell>,
-    'final-player': <FinalResultsPlayerView leaderboard={MOCK_LEADERBOARD} awards={MOCK_AWARDS} myName="John" backgroundSrc={`${import.meta.env.BASE_URL}backgrounds/background7.png`} footer={<PillButton onClick={noop} label="Leave" />} />,
+    'final-player': <PlayerScaleShell><FinalResultsPlayerView leaderboard={MOCK_LEADERBOARD} awards={MOCK_AWARDS} myName="John" backgroundSrc={`${import.meta.env.BASE_URL}backgrounds/background7.png`} footer={<PillButton onClick={noop} label="Leave" />} /></PlayerScaleShell>,
     'final-empty': <HostScaleShell><FinalResultsView leaderboard={[]} awards={[]} backgroundSrc={`${import.meta.env.BASE_URL}backgrounds/background7.png`} footer={<PillButton onClick={noop} label="New Game" />} /></HostScaleShell>,
   };
 
