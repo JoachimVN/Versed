@@ -153,5 +153,25 @@ export function useKeyboardOpen() {
     };
   }, []);
 
+  // Blocks the drag iOS lets you do to pan the visual viewport around while
+  // a keyboard is up — a native gesture that ignores every CSS overflow
+  // setting on the page (see useVisualViewportAnchor above), so the only way
+  // to stop it is to catch the touchmove that drives it. Every layout in the
+  // app is built to already fit above the keyboard without it (that's what
+  // --keyboard-inset is for), so there's nothing this gesture reveals on
+  // purpose — only ever a background layer sliding out of sync with content
+  // that isn't meant to move at all. Exempts the focused field itself so
+  // iOS's native caret-drag/text-selection gesture inside it still works.
+  useEffect(() => {
+    if (!open) return;
+    const block = (e: TouchEvent) => {
+      const el = document.activeElement;
+      if (el instanceof HTMLElement && el.contains(e.target as Node)) return;
+      e.preventDefault();
+    };
+    document.addEventListener('touchmove', block, { passive: false });
+    return () => document.removeEventListener('touchmove', block);
+  }, [open]);
+
   return open;
 }

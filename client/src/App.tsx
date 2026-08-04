@@ -43,8 +43,8 @@ function RouteTracker() {
 
 export default function App() {
   useViewportLayout();
-  const backgroundRef = useRef<HTMLDivElement>(null);
-  useVisualViewportAnchor(backgroundRef);
+  const shellRef = useRef<HTMLDivElement>(null);
+  useVisualViewportAnchor(shellRef);
 
   // Warm the Play chunk right after first paint: the Home -> Play logo morph
   // must not stall on a chunk fetch when someone joins via PIN/QR.
@@ -58,20 +58,27 @@ export default function App() {
           overlay logo survives the Home -> Play unmount/mount swap and can
           animate across it. */}
       <LogoMorphProvider>
-      {/* Background layers: absolutely positioned against #root (sized from
-          real document height, see index.css) rather than fixed against the
-          viewport — position: fixed elements get visually clipped to the
-          shrunk visual viewport by iOS Safari when the keyboard opens on a
-          non-scrolling page like ours, which cut this off at the keyboard's
-          edge instead of extending behind it. Absolute positioning isn't
-          subject to that quirk.
-          The flip side is that they don't follow iOS when it pans the visual
-          viewport with a keyboard up, while the fixed content shell below
-          does — so they're grouped under one wrapper that useVisualViewportAnchor
-          keeps aligned with it. Grouping also matters for the backdrop-filter
-          layers inside: they must stay in the same stacking context as the
-          confetti they blur. */}
-      <div ref={backgroundRef} className="absolute inset-0" style={{ zIndex: 0, willChange: 'transform' }}>
+      {/* Everything — background layers and the routed content — lives under
+          one absolutely-positioned shell (against #root, sized from real
+          document height, see index.css) instead of viewport-fixed:
+          position: fixed elements get visually clipped to the shrunk visual
+          viewport by iOS Safari when the keyboard opens on a non-scrolling
+          page like ours, which cut backgrounds off at the keyboard's edge
+          instead of extending behind it. Absolute positioning isn't subject
+          to that quirk, but it also isn't auto-repositioned by iOS when it
+          pans the visual viewport with a keyboard up — so the whole shell is
+          one element that useVisualViewportAnchor moves as a unit.
+          This used to be two separately-positioned layers (background
+          absolute + content fixed, trusting iOS to pan the fixed one to
+          match the JS-driven absolute one) and they drifted apart on current
+          iOS: the content stayed put while the background slid, tearing a
+          hard edge that exposed raw confetti below the content on any
+          screen with a keyboard-triggered pan (Join's PIN field, Guessing's
+          text field, ...). One shell means one transform, so there's nothing
+          left to desync. Grouping also matters for the backdrop-filter
+          layers inside the background: they must stay in the same stacking
+          context as the confetti they blur. */}
+      <div ref={shellRef} className="absolute inset-0" style={{ willChange: 'transform' }}>
       <div className="absolute inset-0" style={{ background: '#080812', zIndex: 0 }} />
       <div
         className="waiting-background"
@@ -136,22 +143,23 @@ export default function App() {
           }}
         />
       </div>
-      </div>
-      {/* Content layer: the app shell. Its height (--app-height) is constant
-          across a keyboard opening and closing — screens get clear of the
-          keyboard themselves via --keyboard-inset (see useViewportLayout), so
-          nothing here rescales. Offset below the status bar/notch via
+      {/* Routed content. Its height (--app-height) is constant across a
+          keyboard opening and closing — screens get clear of the keyboard
+          themselves via --keyboard-inset (see useViewportLayout), so nothing
+          here rescales. Offset below the status bar/notch via
           safe-area-inset-top — with viewport-fit=cover (see index.html) the
-          background above is allowed
-          to paint full-bleed under the notch and home indicator, but this
-          layer (and everything in it: back buttons, nav, etc.) should stay
-          clear of them, so it starts below the inset instead of at the true
-          top. This div's own height stays the full --app-height (it's just a
-          transparent positioning wrapper), but page roots use .min-h-screen,
-          which subtracts both the top offset consumed here and the bottom
-          inset, so they land flush with the safe area instead of
-          overshooting past it. */}
-      <div style={{ position: 'fixed', top: 'env(safe-area-inset-top, 0px)', left: 0, right: 0, height: 'var(--app-height, 100vh)', zIndex: 2 }}>
+          background above is allowed to paint full-bleed under the notch and
+          home indicator, but this layer (and everything in it: back buttons,
+          nav, etc.) should stay clear of them, so it starts below the inset
+          instead of at the true top. This div's own height stays the full
+          --app-height (it's just a transparent positioning wrapper), but page
+          roots use .min-h-screen, which subtracts both the top offset
+          consumed here and the bottom inset, so they land flush with the
+          safe area instead of overshooting past it. Absolute (not fixed) and
+          nested inside the same shellRef as the background above — see the
+          shell comment for why they have to move as one unit rather than two
+          independently-tracked layers. */}
+      <div style={{ position: 'absolute', top: 'env(safe-area-inset-top, 0px)', left: 0, right: 0, height: 'var(--app-height, 100vh)', zIndex: 2 }}>
         <RouteTracker />
         {/* Fallback is null: the app background above keeps painting while a
             route chunk loads, which reads as a beat of quiet, not a spinner. */}
@@ -164,6 +172,7 @@ export default function App() {
             <Route path="/screenshot" element={<Screenshot />} />
           </Routes>
         </Suspense>
+      </div>
       </div>
       </LogoMorphProvider>
     </BrowserRouter>

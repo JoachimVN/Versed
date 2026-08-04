@@ -9,11 +9,11 @@ import type { PlayState } from './usePlayGame';
 import { useMorphBack, useWaitingTransitionMorph, pageTransitionClass } from './morph';
 
 // Collapses an element to nothing while the keyboard is up, keeping it
-// mounted (the logo is a LogoMorph anchor, and both of these wrap a
-// LiquidGlass that only measures itself on mount/resize — unmounting either
-// would cost more than it saves). maxHeight is generous enough not to clip
-// anything at rest; it only has to be a finite number for the transition to
-// have something to animate between.
+// mounted (the savedSession card wraps a LiquidGlass that only measures
+// itself on mount/resize — unmounting it would cost more than it saves).
+// maxHeight is generous enough not to clip anything at rest; it only has to
+// be a finite number for the transition to have something to animate
+// between.
 function collapsedWhenTyping(typing: boolean): React.CSSProperties {
   return {
     maxHeight: typing ? 0 : '180px',
@@ -28,6 +28,7 @@ function canJoinGame(showPinField: boolean, pin: string, name: string): boolean 
   const hasName = name.trim().length > 0;
   return !showPinField || (pin.length === 3 && hasName);
 }
+
 
 export function JoinView({ game }: Readonly<{ game: PlayState }>) {
   const { pin, name, error, savedSession, cameFromQR, setPin, setName, join, rejoinSaved } = game;
@@ -109,7 +110,12 @@ export function JoinView({ game }: Readonly<{ game: PlayState }>) {
         }}
       >
 
-      <div style={collapsedWhenTyping(keyboardOpen)}>
+      {/* display: none, not collapsedWhenTyping's maxHeight collapse: even
+          with the transition stripped out, animating the box through
+          intermediate sizes let the logo render underneath the card for a
+          frame. display: none pulls it out of layout in one step — there's
+          no size for it to pass through. */}
+      <div style={{ display: keyboardOpen ? 'none' : undefined }}>
         <img
           ref={logoRef}
           src={`${import.meta.env.BASE_URL}branding/logo.png`}

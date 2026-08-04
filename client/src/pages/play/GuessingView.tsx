@@ -2,7 +2,7 @@ import { useState, useEffect, useRef } from 'react';
 import LiquidGlass from '../../components/StableLiquidGlass';
 import { useEscapeKey } from '../../hooks/useEscapeKey';
 import { useFocusTrap } from '../../hooks/useFocusTrap';
-import { readKeyboardInset } from '../../hooks/useViewportLayout';
+import { readKeyboardInset, useKeyboardOpen } from '../../hooks/useViewportLayout';
 import { PartyBadge } from '../../components/RoundIntro';
 import { CircularTimer, LinearTimer } from '../../components/CircularTimer';
 import { AudioBars } from '../../components/AudioBars';
@@ -31,7 +31,7 @@ const COMPACT_HEIGHT_PX_BOTH = 540;
 // side by side instead of stacked.
 const ULTRA_COMPACT_HEIGHT_PX = 260;
 
-function useGuessingLayout(bothTarget: boolean): { compact: boolean; ultraCompact: boolean; landscape: boolean } {
+function useGuessingLayout(bothTarget: boolean, keyboardOpen: boolean): { compact: boolean; ultraCompact: boolean; landscape: boolean } {
   const threshold = bothTarget ? COMPACT_HEIGHT_PX_BOTH : COMPACT_HEIGHT_PX;
   const measure = () => {
     const h = typeof window !== 'undefined' ? window.innerHeight - readKeyboardInset() : Infinity;
@@ -50,7 +50,17 @@ function useGuessingLayout(bothTarget: boolean): { compact: boolean; ultraCompac
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [threshold]);
-  return layout;
+  // keyboardOpen (from the caller's useKeyboardOpen()) fires synchronously on
+  // focus; the visualViewport resize above only fires once the keyboard
+  // finishes animating in, ~250-300ms later. Without this, the field is
+  // still measured at its full-size position for that whole window — which
+  // is exactly when iOS Safari decides whether the focused input needs
+  // auto-scrolling clear of the keyboard, so it was deciding against the
+  // stale, uncompacted layout and over-panning. Forcing compact the instant
+  // focus lands (before the real measurement exists) keeps the field inside
+  // the safe area from the first frame, so Safari never has a reason to pan
+  // in the first place.
+  return { compact: layout.compact || keyboardOpen, ultraCompact: layout.ultraCompact, landscape: layout.landscape };
 }
 
 // Handles both the "listening" sub-phase (watching, imGuessing) and the active
@@ -259,7 +269,8 @@ export function GuessingView({ game }: Readonly<{ game: PlayState }>) {
   const target = resolveTarget(party, artistOnly, yearOnly);
   const isYear = target === 'year';
   const isBoth = target === 'both';
-  const { compact, ultraCompact, landscape } = useGuessingLayout(isBoth);
+  const keyboardOpen = useKeyboardOpen();
+  const { compact, ultraCompact, landscape } = useGuessingLayout(isBoth, keyboardOpen);
   const canSubmit = isYear ? guessText.trim().length === 4 : guessText.trim().length > 0;
   const [inputFocused, setInputFocused] = useState(false);
   const inputBoxStyle = guessInputBoxStyle(isListening, inputFocused, ultraCompact);
@@ -333,7 +344,11 @@ export function GuessingView({ game }: Readonly<{ game: PlayState }>) {
           autoComplete="off" autoCorrect="off" spellCheck={false}
           style={{
             display: 'block', width: '100%', background: 'transparent', border: 'none',
-            color: 'white', fontSize: ultraCompact ? '0.95rem' : compact ? '1.1rem' : '1.3rem', fontWeight: 700, textAlign: 'center',
+            // 16px floor at every tier: below that, focusing the input makes
+            // iOS Safari zoom the whole page in to make the text legible,
+            // which is what "switching fields rescales like zooming in" was
+            // — ultraCompact's old 0.95rem (15.2px) tripped it.
+            color: 'white', fontSize: ultraCompact ? '1rem' : compact ? '1.1rem' : '1.3rem', fontWeight: 700, textAlign: 'center',
             padding: ultraCompact ? '6px 10px' : compact ? '10px 16px' : '20px 16px', outline: 'none', fontFamily: 'inherit',
           }}
           className="placeholder-white/20"
@@ -360,7 +375,9 @@ export function GuessingView({ game }: Readonly<{ game: PlayState }>) {
         autoComplete="off" autoCorrect="off" spellCheck={false}
         style={{
           display: 'block', width: '100%', background: 'transparent', border: 'none',
-          color: 'white', fontSize: ultraCompact ? '0.8rem' : compact ? '0.9rem' : '1.05rem', fontWeight: 600, textAlign: 'center',
+          // Same 16px zoom floor as the title field above — ultraCompact and
+          // compact were both under it (12.8px / 14.4px).
+          color: 'white', fontSize: '1rem', fontWeight: 600, textAlign: 'center',
           padding: ultraCompact ? '5px 8px' : compact ? '8px 14px' : '14px 16px', outline: 'none', fontFamily: 'inherit',
         }}
         className="placeholder-white/20"
@@ -385,14 +402,17 @@ export function GuessingView({ game }: Readonly<{ game: PlayState }>) {
       {/* Reserving the keyboard's height at the bottom is what keeps Submit and
           Skip tappable: the screen itself never resizes, the column just gets
           shorter, so the header stays put and the input area in the middle
-          takes the squeeze (and scrolls if it runs out of room). overflowY
-          here is the outer escape hatch for the case even that isn't enough
-          (a short landscape phone with the keyboard up): the header and the
-          Submit/Skip buttons are fixed-size, so once the input area has
-          already shrunk to nothing this column would otherwise just overflow
-          past the page's own overflow-hidden and silently clip Submit/Skip
-          instead of them being reachable by scrolling. */}
-      <div className="relative flex flex-col flex-1 keyboard-shift" style={{ zIndex: 2, minHeight: 0, overflowY: 'auto', overscrollBehavior: 'contain', paddingBottom: 'var(--keyboard-inset, 0px)' }}>
+          takes the squeeze. overflowY is forced hidden while the keyboard is
+          up: a real scroll container nested under this fixed-position app
+          shell is what iOS Safari latches onto to "helpfully" scroll the
+          focused input into view — and it badly overshoots, panning the
+          whole shell clean off-screen (see GuessingView's useKeyboardOpen
+          comment / JoinView, which hit this first). With nothing to scroll
+          to, Safari never triggers that pan; compact/ultraCompact are relied
+          on to fit the content instead. Scrolling comes back once the
+          keyboard closes, as the escape hatch for content that still
+          overflows at rest. */}
+      <div className="relative flex flex-col flex-1 keyboard-shift" style={{ zIndex: 2, minHeight: 0, overflowY: keyboardOpen ? 'hidden' : 'auto', overscrollBehavior: 'contain', paddingBottom: 'var(--keyboard-inset, 0px)' }}>
 
       {/* Header: waveform while listening, timer + score when active */}
       {isListening
@@ -400,18 +420,19 @@ export function GuessingView({ game }: Readonly<{ game: PlayState }>) {
         : <ActiveHeader timeLeft={timeLeft} timerTotal={timerTotal} myScore={myScore} isRace={mode === 'race'} isYear={isYear} songPlaying={songPlaying} songTempo={songTempo} compact={compact} ultraCompact={ultraCompact} landscape={landscape} />}
 
       {/* Input area. min-h-0 lets it actually shrink when the keyboard takes
-          the bottom of the column, and scrolling is the escape hatch for the
-          tightest case (a "both" round on a short phone, where the title and
-          artist fields together outgrow what's left). screen-center-safe
-          (safe center, not plain center) is load-bearing for that case: with
-          plain center, content taller than the shrunk box overflows equally
-          above and below, and the artist field below the fold ends up
-          unreachable by any amount of scrolling — the exact "stranded
-          content" failure that utility exists to prevent. overscroll-behavior
-          keeps a drag that reaches the end of it from chaining outwards into
-          an iOS visual-viewport pan, which would slide the whole screen off
-          the bottom of the background. */}
-      <div className={`screen-center-safe flex-1 flex flex-col items-center px-5 overflow-y-auto ${ultraCompact ? 'gap-1' : compact ? 'gap-2' : 'gap-5'}`} style={{ minHeight: 0, overscrollBehavior: 'contain' }}>
+          the bottom of the column. Scrolling is only enabled once the
+          keyboard is closed again — while it's up, overflowY is forced
+          hidden (see the wrapper above) so compact/ultraCompact alone have to
+          make everything fit, including the tightest case (a "both" round on
+          a short phone, where the title and artist fields together outgrow
+          what's left). screen-center-safe (safe center, not plain center) is
+          load-bearing for that case: with plain center, content taller than
+          the box overflows equally above and below, stranding the artist
+          field below the fold. overscroll-behavior keeps a drag that reaches
+          the end of the closed-keyboard scroll from chaining outwards into an
+          iOS visual-viewport pan, which would slide the whole screen off the
+          bottom of the background. */}
+      <div className={`screen-center-safe flex-1 flex flex-col items-center px-5 ${ultraCompact ? 'gap-1' : compact ? 'gap-2' : 'gap-5'}`} style={{ minHeight: 0, overflowY: keyboardOpen ? 'hidden' : 'auto', overscrollBehavior: 'contain' }}>
         {/* compact, not just ultraCompact: at just-compact heights (e.g. a
             "both" target's two stacked fields on a short phone) the badge's
             full-size pills wrap onto 2 lines, which was the exact overflow
