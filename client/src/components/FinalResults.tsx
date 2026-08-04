@@ -1,5 +1,5 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import type { ReactNode } from 'react';
+import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
+import type { CSSProperties, ReactNode } from 'react';
 import LiquidGlass from './StableLiquidGlass';
 import { useAnimatedScore } from '../hooks/useAnimatedScore';
 import { CONFETTI_COLORS, ConfettiBackground, GOLD_CONFETTI_COLORS } from './ConfettiBackground';
@@ -742,6 +742,44 @@ export function FinalResultsView({ leaderboard, awards, backgroundSrc, footer, o
     rest.length > 0 ? rest.length * STANDINGS_ROW_H : 0,
     estimateAwardsHeight(awards),
   ]);
+  const recapPanelRef = useRef<HTMLDivElement>(null);
+  const [recapPanelHeight, setRecapPanelHeight] = useState(panelHeight);
+
+  // Liquid Glass sizes itself from its real children, including text that
+  // wraps at narrow widths. The frame used to rely only on the estimate above;
+  // when the real surface was taller, its centered top fell outside the
+  // scrollport and clipped the title/rim on short portrait screens. Let the
+  // measured surface raise the frame to its actual height instead.
+  useLayoutEffect(() => {
+    setRecapPanelHeight(panelHeight);
+    const frame = recapPanelRef.current;
+    if (!frame) return;
+
+    let animationFrame = 0;
+    const syncHeight = () => {
+      const glass = frame.querySelector<HTMLElement>('.glass');
+      if (!glass) return;
+      const measuredHeight = Math.ceil(glass.getBoundingClientRect().height);
+      setRecapPanelHeight(Math.max(panelHeight, measuredHeight));
+    };
+    const scheduleSync = () => {
+      cancelAnimationFrame(animationFrame);
+      animationFrame = requestAnimationFrame(syncHeight);
+    };
+
+    // StableLiquidGlass finishes its own measurement after mount and whenever
+    // the wrapped award copy changes width, so observe rather than assuming a
+    // single first-paint measurement is enough.
+    const glass = frame.querySelector<HTMLElement>('.glass');
+    if (!glass) return;
+    const observer = new ResizeObserver(scheduleSync);
+    observer.observe(glass);
+    scheduleSync();
+    return () => {
+      cancelAnimationFrame(animationFrame);
+      observer.disconnect();
+    };
+  }, [panelHeight]);
 
   return (
     <div className="relative h-[100lvh] flex flex-col p-6 gap-4">
@@ -820,10 +858,14 @@ export function FinalResultsView({ leaderboard, awards, backgroundSrc, footer, o
       {settled && (
         <div className="relative z-10 flex flex-col flex-1 min-h-0 gap-4">
           <div
-            className="relative z-10 flex-1 min-h-0 overflow-y-auto flex"
+            className="final-results-recap-scroll relative z-10 flex-1 min-h-0 overflow-y-auto flex"
             style={{ animation: 'settledIn 0.5s cubic-bezier(0.16,1,0.3,1) 0.1s both' }}
           >
-            <div className="liquid-btn glass-tint-blue relative" style={{ width: '100%', maxWidth: '720px', height: `${panelHeight}px`, margin: 'auto' }}>
+            <div
+              ref={recapPanelRef}
+              className="final-results-recap-panel liquid-btn glass-tint-blue relative"
+              style={{ width: '100%', maxWidth: '720px', height: `${recapPanelHeight}px` } as CSSProperties}
+            >
               <LiquidGlass
                 style={{ position: 'absolute', top: '50%', left: '50%' }}
                 {...LIQUID_CARD_PROPS}
