@@ -117,7 +117,7 @@ export default function App() {
             transition: 'opacity var(--ambient-surface-duration, 500ms) ease',
           }}
         >
-          <ConfettiBackground visualScale={hostAmbientScale} />
+          <ConfettiBackground />
         </div>
         <div
           className="absolute inset-0 pointer-events-none"
