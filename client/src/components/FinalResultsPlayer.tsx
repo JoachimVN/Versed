@@ -87,8 +87,33 @@ export function FinalResultsPlayerView({ leaderboard, awards, myName, background
     lastSignatureRef.current = leaderboardSignature;
     setPhase('hold');
     const podiumCount = Math.min(3, leaderboardSignature.split('|').length);
-    const timer = setTimeout(() => setPhase('settled'), getCeremonyDuration(podiumCount));
-    return () => clearTimeout(timer);
+    // This screen's own text tells the player to look away at the host's
+    // board, so the tab backgrounding mid-countdown is the normal case here,
+    // not an edge case -- and a backgrounded tab throttles or fully freezes
+    // setTimeout. A plain setTimeout can therefore land arbitrarily late (or
+    // never) while hidden. Tracking a real deadline and re-checking it on
+    // every visibility change means coming back to the tab always settles
+    // immediately once the deadline has actually passed, regardless of
+    // whether the tab was hidden at the start, hidden partway through, or
+    // never hidden at all.
+    const deadline = Date.now() + getCeremonyDuration(podiumCount);
+    let timer: ReturnType<typeof setTimeout> | undefined;
+    const settleIfDue = () => { if (Date.now() >= deadline) setPhase('settled'); };
+    const armTimer = () => {
+      if (timer) clearTimeout(timer);
+      timer = setTimeout(settleIfDue, Math.max(0, deadline - Date.now()));
+    };
+    const onVisible = () => {
+      if (document.hidden) return;
+      settleIfDue();
+      armTimer();
+    };
+    armTimer();
+    document.addEventListener('visibilitychange', onVisible);
+    return () => {
+      if (timer) clearTimeout(timer);
+      document.removeEventListener('visibilitychange', onVisible);
+    };
     // Keying off the content signature (not the `leaderboard` array reference) is
     // deliberate: a reconnect resync resends an equal-content but new-reference
     // array, which would otherwise cancel this timer without rescheduling it,
