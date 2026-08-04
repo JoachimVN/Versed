@@ -720,7 +720,21 @@ export function FinalResultsView({ leaderboard, awards, backgroundSrc, footer, o
     return (
       <div className="relative min-h-screen flex flex-col items-center justify-center p-6 gap-6">
         <BackgroundLayer backgroundSrc={backgroundSrc} showConfetti={false} />
-        <p className="text-white/60 text-lg relative z-10">No scores yet.</p>
+        {/* A bare <p> here used to float with nothing anchoring it — barely
+            noticeable at the 1440x900 baseline, but on a larger host display
+            (see useHostScale) it read as broken/blank rather than "no scores
+            yet". Same LIQUID_CARD_PROPS card the settled branch below uses,
+            not nested with footer -- footer is always its own sibling pill
+            (see the settled branch), never wrapped inside another card. */}
+        <div className="liquid-btn relative z-10" style={{ width: 'min(92vw, 310px)', height: '100px' }}>
+          <LiquidGlass
+            style={{ position: 'absolute', top: '50%', left: '50%' }}
+            {...LIQUID_CARD_PROPS}
+            padding="20px 28px"
+          >
+            <p className="text-white/60 text-lg" style={{ textAlign: 'center', whiteSpace: 'nowrap' }}>No scores yet.</p>
+          </LiquidGlass>
+        </div>
         <div className="relative z-10">{footer}</div>
       </div>
     );

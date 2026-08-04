@@ -1,7 +1,8 @@
-import { lazy, Suspense, useEffect, useRef } from 'react';
+import { lazy, Suspense, useEffect, useRef, useState } from 'react';
 import { BrowserRouter, Routes, Route, useLocation } from 'react-router';
 import { ConfettiBackground, setConfettiSpeedTarget } from './components/ConfettiBackground';
 import { useViewportLayout, useVisualViewportAnchor } from './hooks/useViewportLayout';
+import { HOST_SCALE_CHANGE_EVENT } from './hooks/useHostScale';
 import { LogoMorphProvider } from './contexts/LogoMorph';
 import Home from './pages/Home';
 
@@ -44,7 +45,14 @@ function RouteTracker() {
 export default function App() {
   useViewportLayout();
   const shellRef = useRef<HTMLDivElement>(null);
+  const [hostAmbientScale, setHostAmbientScale] = useState(1);
   useVisualViewportAnchor(shellRef);
+
+  useEffect(() => {
+    const onHostScaleChange = (event: Event) => setHostAmbientScale((event as CustomEvent<number>).detail);
+    window.addEventListener(HOST_SCALE_CHANGE_EVENT, onHostScaleChange);
+    return () => window.removeEventListener(HOST_SCALE_CHANGE_EVENT, onHostScaleChange);
+  }, []);
 
   // Warm the Play chunk right after first paint: the Home -> Play logo morph
   // must not stall on a chunk fetch when someone joins via PIN/QR.
@@ -109,7 +117,7 @@ export default function App() {
             transition: 'opacity var(--ambient-surface-duration, 500ms) ease',
           }}
         >
-          <ConfettiBackground />
+          <ConfettiBackground visualScale={hostAmbientScale} />
         </div>
         <div
           className="absolute inset-0 pointer-events-none"
@@ -117,8 +125,8 @@ export default function App() {
             zIndex: 3,
             opacity: 'var(--confetti-treatment-opacity, 0)',
             background: 'rgba(5,5,14,0.35)',
-            backdropFilter: 'blur(5px)',
-            WebkitBackdropFilter: 'blur(5px)',
+            backdropFilter: `blur(${5 * hostAmbientScale}px)`,
+            WebkitBackdropFilter: `blur(${5 * hostAmbientScale}px)`,
             transition: 'opacity var(--ambient-surface-duration, 500ms) ease',
           }}
         />

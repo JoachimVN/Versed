@@ -105,6 +105,32 @@ select:focus-visible,
   min-height: calc(var(--app-height, 100vh) - env(safe-area-inset-top, 0px) - env(safe-area-inset-bottom, 0px));
 }
 
+/* Host only (see useHostScale.tsx) — scales the whole host screen up on
+   displays larger than its 1440x900 baseline, since it gets cast to a
+   TV/monitor and read from across a room. `zoom`, not `transform: scale`:
+   zoom doesn't create a new containing block, so `position: fixed` overlays
+   throughout host (RoundIntro, dialogs, the reconnecting toast) stay
+   anchored to the real viewport instead of the scaled box.
+
+   .min-h-screen above builds every host page's height from --app-height, a
+   raw window.innerHeight px number (see useViewportLayout's syncHeight).
+   Inside a zoomed subtree a raw px value doesn't auto-adjust, so left alone
+   every host page would render --app-height * scale tall — overflowing the
+   real viewport by exactly the zoom factor. useHostScale publishes
+   --host-app-height, the same number pre-divided by scale in JS, and this
+   override makes .min-h-screen build from that instead everywhere inside a
+   host-scale-shell, cancelling zoom's multiplication back out to the true
+   height. (Not done by redeclaring --app-height itself here: a custom
+   property that references itself is a cycle even when the intent is "use
+   the inherited value", and computes to invalid — see useHostScale.tsx.) */
+.host-scale-shell {
+  zoom: var(--host-scale, 1);
+}
+.host-scale-shell .min-h-screen {
+  height: calc(var(--host-app-height, 100vh) - env(safe-area-inset-top, 0px) - env(safe-area-inset-bottom, 0px));
+  min-height: calc(var(--host-app-height, 100vh) - env(safe-area-inset-top, 0px) - env(safe-area-inset-bottom, 0px));
+}
+
 /* The reveal screens (host + player) paint their own full-bleed background
    image inside a .min-h-screen wrapper, unlike most screens which just sit
    on top of the app shell's own persistent background. --app-height tracks

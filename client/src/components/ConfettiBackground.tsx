@@ -39,16 +39,16 @@ function mixHexColors(from: string, to: string, progress: number): string {
   return `rgb(${mix(16)}, ${mix(8)}, ${mix(0)})`;
 }
 
-function makeParticle(W: number, H: number, scattered = false, rand: () => number = Math.random, colors: readonly string[] = CONFETTI_COLORS): Particle {
+function makeParticle(W: number, H: number, scattered = false, rand: () => number = Math.random, colors: readonly string[] = CONFETTI_COLORS, visualScale = 1): Particle {
   const circle = rand() > 0.72;
   const alpha = 0.55 + rand() * 0.45;
   return {
     x: rand() * W,
     y: scattered ? rand() * H : -30 - rand() * 80,
-    vx: (rand() - 0.5) * 0.5,
-    vy: 0.4 + rand() * 0.6,
-    w: circle ? 6 + rand() * 8 : 10 + rand() * 16,
-    h: circle ? 6 + rand() * 8 : 4 + rand() * 7,
+    vx: (rand() - 0.5) * 0.5 * visualScale,
+    vy: (0.4 + rand() * 0.6) * visualScale,
+    w: (circle ? 6 + rand() * 8 : 10 + rand() * 16) * visualScale,
+    h: (circle ? 6 + rand() * 8 : 4 + rand() * 7) * visualScale,
     rot: rand() * Math.PI * 2,
     rotV: (rand() - 0.5) * 0.025,
     color: colors[Math.floor(rand() * colors.length)],
@@ -85,12 +85,14 @@ export function restoreConfettiField() {
   _restoreFieldVersion++;
 }
 
-export function ConfettiBackground({ burst = false, persistAfterBurst = false, speedMultiplier = 1, colors = CONFETTI_COLORS }: Readonly<{ burst?: boolean; persistAfterBurst?: boolean; speedMultiplier?: number; colors?: readonly string[] }>) {
+export function ConfettiBackground({ burst = false, persistAfterBurst = false, speedMultiplier = 1, colors = CONFETTI_COLORS, visualScale = 1 }: Readonly<{ burst?: boolean; persistAfterBurst?: boolean; speedMultiplier?: number; colors?: readonly string[]; visualScale?: number }>) {
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const speedMultiplierRef = useRef(speedMultiplier);
   const colorsRef = useRef(colors);
+  const visualScaleRef = useRef(visualScale);
   speedMultiplierRef.current = speedMultiplier;
   colorsRef.current = colors;
+  visualScaleRef.current = visualScale;
 
   useEffect(() => {
     const canvas = canvasRef.current;
@@ -118,7 +120,8 @@ export function ConfettiBackground({ burst = false, persistAfterBurst = false, s
 
     const reduced = globalThis.matchMedia('(prefers-reduced-motion: reduce)').matches;
     const rand = reduced ? seededRand(0x5eed42) : Math.random;
-    const particles: Particle[] = Array.from({ length: COUNT }, () => makeParticle(W, H, true, rand, colors));
+    let appliedVisualScale = visualScale;
+    const particles: Particle[] = Array.from({ length: COUNT }, () => makeParticle(W, H, true, rand, colors, appliedVisualScale));
     let appliedColors = colors;
     let colorTransitionStart: number | null = null;
     let colorTransitionProgress = 1;
@@ -133,6 +136,21 @@ export function ConfettiBackground({ burst = false, persistAfterBurst = false, s
       }
       colorTransitionStart = now;
       colorTransitionProgress = 0;
+    };
+
+    // Keep the full viewport as the particle field, then scale each particle
+    // and its motion. Scaling the canvas box itself would crop its edges.
+    const syncVisualScale = () => {
+      const nextScale = visualScaleRef.current;
+      if (nextScale === appliedVisualScale) return;
+      const factor = nextScale / appliedVisualScale;
+      for (const particle of particles) {
+        particle.vx *= factor;
+        particle.vy *= factor;
+        particle.w *= factor;
+        particle.h *= factor;
+      }
+      appliedVisualScale = nextScale;
     };
 
     const render = () => {
@@ -210,7 +228,7 @@ export function ConfettiBackground({ burst = false, persistAfterBurst = false, s
         p.y += p.vy * dt * _currentSpeed;
         p.rot += p.rotV * dt * _currentSpeed;
         if (p.y > H + 30 && !burst && _respawning) {
-          Object.assign(p, makeParticle(W, H, false, Math.random, colorsRef.current));
+          Object.assign(p, makeParticle(W, H, false, Math.random, colorsRef.current, appliedVisualScale));
         }
       }
     };
@@ -219,7 +237,7 @@ export function ConfettiBackground({ burst = false, persistAfterBurst = false, s
       if (restoreFieldVersion === _restoreFieldVersion) return;
       restoreFieldVersion = _restoreFieldVersion;
       for (const p of particles) {
-        if (p.y > H + 30) Object.assign(p, makeParticle(W, H, true, Math.random, colorsRef.current));
+        if (p.y > H + 30) Object.assign(p, makeParticle(W, H, true, Math.random, colorsRef.current, appliedVisualScale));
       }
     };
 
@@ -233,6 +251,7 @@ export function ConfettiBackground({ burst = false, persistAfterBurst = false, s
 
       restoreDrainedParticles();
       syncColors(now);
+      syncVisualScale();
       if (colorTransitionStart !== null) {
         colorTransitionProgress = Math.min(1, (now - colorTransitionStart) / COLOR_TRANSITION_MS);
         if (colorTransitionProgress === 1) {

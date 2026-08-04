@@ -11,6 +11,7 @@ import type { RevealLayout } from '../../components/revealSqueeze';
 import { useRevealLayout, computeCardHeight, computeCardWidth } from '../../components/revealSqueeze';
 import { PartyRevealExtras, MYSTERY_LANDING_MS } from '../../components/RoundIntro';
 import { LIQUID_CARD_PROPS } from '../../components/liquidGlassPresets';
+import { useHostScaleValue } from '../../hooks/useHostScale';
 import type { PlayerInfo, RoundResultEvent } from '../../types';
 import type { HostState } from './useHostGame';
 import { EndGameButton } from './dialogs';
@@ -209,6 +210,12 @@ function StealFlightOverlay({ stealResult, rowRefs }: Readonly<{
 }>) {
   const [flight, setFlight] = useState<{ key: string; left: number; top: number; dx: number; dy: number; amount: number } | null>(null);
   const firedForRef = useRef<string | null>(null);
+  // getBoundingClientRect() returns real, already-zoomed screen coordinates.
+  // This overlay renders inside the same host-scale-shell it measures, so
+  // writing those numbers straight back as inline px (below) would let
+  // `zoom` multiply them a second time, launching the badge from/to the
+  // wrong spot. Dividing by the live scale here cancels that out.
+  const hostScale = useHostScaleValue();
 
   useEffect(() => {
     if (!stealResult || stealResult.skipped) return;
@@ -223,10 +230,17 @@ function StealFlightOverlay({ stealResult, rowRefs }: Readonly<{
     const tRect = thiefEl.getBoundingClientRect();
     const from = { x: vRect.left + vRect.width / 2, y: vRect.top + vRect.height / 2 };
     const to = { x: tRect.left + tRect.width / 2, y: tRect.top + tRect.height / 2 };
-    setFlight({ key: token, left: from.x, top: from.y, dx: to.x - from.x, dy: to.y - from.y, amount: stealResult.amount });
+    setFlight({
+      key: token,
+      left: from.x / hostScale,
+      top: from.y / hostScale,
+      dx: (to.x - from.x) / hostScale,
+      dy: (to.y - from.y) / hostScale,
+      amount: stealResult.amount,
+    });
     const t = setTimeout(() => setFlight(null), 950);
     return () => clearTimeout(t);
-  }, [stealResult, rowRefs]);
+  }, [stealResult, rowRefs, hostScale]);
 
   if (!flight) return null;
   return (

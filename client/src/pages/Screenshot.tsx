@@ -15,7 +15,10 @@ import { FinalResultsView } from '../components/FinalResults';
 import { FinalResultsPlayerView } from '../components/FinalResultsPlayer';
 import { PillButton } from '../components/RevealShared';
 import { useFinalResultsRevealSound } from '../hooks/useFinalResultsRevealSound';
+import { HostScaleShell } from '../hooks/useHostScale';
 import type { RoundResultEvent, LeaderboardEntry, PartyInfo, Award } from '../types';
+import Home from './Home';
+import { JoinView } from './play/JoinView';
 
 // ─── Fixture data ─────────────────────────────────────────────────────────────
 
@@ -475,6 +478,25 @@ const MOCK_PLAY_GUESSING_BOTH: PlayState = {
   },
 };
 
+// Join-state fixtures exercise each shape of the entry screen: a normal PIN
+// entry, a direct invite where the PIN is already encoded in the URL, and a
+// returning player who can rejoin their saved session.
+const MOCK_PLAY_JOIN: PlayState = {
+  ...MOCK_PLAY,
+  phase: 'join',
+};
+
+const MOCK_PLAY_JOIN_LINK: PlayState = {
+  ...MOCK_PLAY_JOIN,
+  pin: '123',
+  cameFromQR: true,
+};
+
+const MOCK_PLAY_JOIN_REJOIN: PlayState = {
+  ...MOCK_PLAY_JOIN,
+  savedSession: { pin: '123', name: 'Anna' },
+};
+
 // ─── Entry ────────────────────────────────────────────────────────────────────
 
 // A manual fixture gives sound design a reliable downbeat: the real
@@ -490,12 +512,14 @@ function FinalResultsPreview({ leaderboard = MOCK_LEADERBOARD, awards = MOCK_AWA
 
   if (started) {
     return (
-      <FinalResultsView
-        leaderboard={leaderboard}
-        awards={awards}
-        backgroundSrc={backgroundSrc}
-        footer={<PillButton onClick={noop} label="New Game" />}
-      />
+      <HostScaleShell>
+        <FinalResultsView
+          leaderboard={leaderboard}
+          awards={awards}
+          backgroundSrc={backgroundSrc}
+          footer={<PillButton onClick={noop} label="New Game" />}
+        />
+      </HostScaleShell>
     );
   }
 
@@ -524,11 +548,15 @@ function FinalResultsPreview({ leaderboard = MOCK_LEADERBOARD, awards = MOCK_AWA
 export default function Screenshot() {
   const [params] = useSearchParams();
   const screenshots: Record<string, ReactNode> = {
-    playing: <PlayingView game={MOCK_HOST} />,
-    reveal: <RevealView game={MOCK_HOST_REVEAL} result={MOCK_RESULT} instant />,
-    year: <RevealView game={MOCK_HOST_YEAR_REVEAL} result={MOCK_RESULT_YEAR} instant />,
-    'mystery-reveal': <RevealView game={MOCK_HOST_MYSTERY_REVEAL} result={MOCK_RESULT_MYSTERY} />,
-    'big-points-reveal': <RevealView game={MOCK_HOST_BIGPOINTS_REVEAL} result={MOCK_RESULT} />,
+    home: <Home />,
+    join: <JoinView game={MOCK_PLAY_JOIN} />,
+    'join-link': <JoinView game={MOCK_PLAY_JOIN_LINK} />,
+    'join-rejoin': <JoinView game={MOCK_PLAY_JOIN_REJOIN} />,
+    playing: <HostScaleShell><PlayingView game={MOCK_HOST} /></HostScaleShell>,
+    reveal: <HostScaleShell><RevealView game={MOCK_HOST_REVEAL} result={MOCK_RESULT} instant /></HostScaleShell>,
+    year: <HostScaleShell><RevealView game={MOCK_HOST_YEAR_REVEAL} result={MOCK_RESULT_YEAR} instant /></HostScaleShell>,
+    'mystery-reveal': <HostScaleShell><RevealView game={MOCK_HOST_MYSTERY_REVEAL} result={MOCK_RESULT_MYSTERY} /></HostScaleShell>,
+    'big-points-reveal': <HostScaleShell><RevealView game={MOCK_HOST_BIGPOINTS_REVEAL} result={MOCK_RESULT} /></HostScaleShell>,
     watching: <WatchingView game={MOCK_PLAY} />,
     waiting: <><WaitingAtmosphere leaving={false} /><WaitingView game={{ ...MOCK_PLAY, phase: 'waiting', myName: 'Joachim' }} leaveBackground={noop} /></>,
     guessing: <GuessingView game={MOCK_PLAY_GUESSING} />,
@@ -537,21 +565,21 @@ export default function Screenshot() {
     'play-reveal': <PlayRevealView game={MOCK_PLAY_REVEAL} result={MOCK_RESULT} />,
     'play-reveal-noone': <PlayRevealView game={MOCK_PLAY_REVEAL_NOONE} result={MOCK_RESULT_NOONE} />,
     'play-reveal-crowd': <PlayRevealView game={MOCK_PLAY_REVEAL_CROWD} result={CROWD_RESULT} />,
-    'reveal-crowd': <RevealView game={MOCK_HOST_REVEAL_CROWD} result={CROWD_RESULT} instant />,
-    'year-crowd': <RevealView game={MOCK_HOST_YEAR_REVEAL_CROWD} result={CROWD_RESULT_YEAR} instant />,
-    lobby: <LobbyView game={MOCK_HOST_LOBBY} />,
+    'reveal-crowd': <HostScaleShell><RevealView game={MOCK_HOST_REVEAL_CROWD} result={CROWD_RESULT} instant /></HostScaleShell>,
+    'year-crowd': <HostScaleShell><RevealView game={MOCK_HOST_YEAR_REVEAL_CROWD} result={CROWD_RESULT_YEAR} instant /></HostScaleShell>,
+    lobby: <HostScaleShell><LobbyView game={MOCK_HOST_LOBBY} /></HostScaleShell>,
     'party-intro': <RoundIntro party={MOCK_PARTY_STEAL} roundKey={0} dismissible={false} />,
     'final-host': <FinalResultsPreview />,
-    'final-host-classic-only': <FinalResultsView leaderboard={MOCK_LEADERBOARD} awards={MOCK_AWARDS.filter(a => a.key !== 'fastestGuess' && a.key !== 'finaleWinner')} backgroundSrc={`${import.meta.env.BASE_URL}backgrounds/background7.png`} footer={<PillButton onClick={noop} label="New Game" />} />,
-    'final-host-race-only': <FinalResultsView leaderboard={MOCK_LEADERBOARD} awards={MOCK_AWARDS.filter(a => a.key !== 'fastestClassicGuess' && a.key !== 'finaleWinner')} backgroundSrc={`${import.meta.env.BASE_URL}backgrounds/background7.png`} footer={<PillButton onClick={noop} label="New Game" />} />,
-    'final-host-no-speed': <FinalResultsView leaderboard={MOCK_LEADERBOARD} awards={MOCK_AWARDS.filter(a => a.key !== 'fastestClassicGuess' && a.key !== 'fastestGuess' && a.key !== 'finaleWinner')} backgroundSrc={`${import.meta.env.BASE_URL}backgrounds/background7.png`} footer={<PillButton onClick={noop} label="New Game" />} />,
+    'final-host-classic-only': <HostScaleShell><FinalResultsView leaderboard={MOCK_LEADERBOARD} awards={MOCK_AWARDS.filter(a => a.key !== 'fastestGuess' && a.key !== 'finaleWinner')} backgroundSrc={`${import.meta.env.BASE_URL}backgrounds/background7.png`} footer={<PillButton onClick={noop} label="New Game" />} /></HostScaleShell>,
+    'final-host-race-only': <HostScaleShell><FinalResultsView leaderboard={MOCK_LEADERBOARD} awards={MOCK_AWARDS.filter(a => a.key !== 'fastestClassicGuess' && a.key !== 'finaleWinner')} backgroundSrc={`${import.meta.env.BASE_URL}backgrounds/background7.png`} footer={<PillButton onClick={noop} label="New Game" />} /></HostScaleShell>,
+    'final-host-no-speed': <HostScaleShell><FinalResultsView leaderboard={MOCK_LEADERBOARD} awards={MOCK_AWARDS.filter(a => a.key !== 'fastestClassicGuess' && a.key !== 'fastestGuess' && a.key !== 'finaleWinner')} backgroundSrc={`${import.meta.env.BASE_URL}backgrounds/background7.png`} footer={<PillButton onClick={noop} label="New Game" />} /></HostScaleShell>,
     'final-host-1': <FinalResultsPreview leaderboard={MOCK_LEADERBOARD.slice(0, 1)} awards={[]} />,
     'final-host-2': <FinalResultsPreview leaderboard={MOCK_LEADERBOARD.slice(0, 2)} awards={[]} />,
-    'final-host-long': <FinalResultsView leaderboard={MOCK_LEADERBOARD_LONG} awards={MOCK_AWARDS} backgroundSrc={`${import.meta.env.BASE_URL}backgrounds/background7.png`} footer={<PillButton onClick={noop} label="New Game" />} />,
+    'final-host-long': <HostScaleShell><FinalResultsView leaderboard={MOCK_LEADERBOARD_LONG} awards={MOCK_AWARDS} backgroundSrc={`${import.meta.env.BASE_URL}backgrounds/background7.png`} footer={<PillButton onClick={noop} label="New Game" />} /></HostScaleShell>,
     'final-player': <FinalResultsPlayerView leaderboard={MOCK_LEADERBOARD} awards={MOCK_AWARDS} myName="John" backgroundSrc={`${import.meta.env.BASE_URL}backgrounds/background7.png`} footer={<PillButton onClick={noop} label="Leave" />} />,
-    'final-empty': <FinalResultsView leaderboard={[]} awards={[]} backgroundSrc={`${import.meta.env.BASE_URL}backgrounds/background7.png`} footer={<PillButton onClick={noop} label="New Game" />} />,
+    'final-empty': <HostScaleShell><FinalResultsView leaderboard={[]} awards={[]} backgroundSrc={`${import.meta.env.BASE_URL}backgrounds/background7.png`} footer={<PillButton onClick={noop} label="New Game" />} /></HostScaleShell>,
   };
 
   return screenshots[params.get('v') ?? '']
-    ?? <p className="text-white p-6 font-mono">?v=playing|reveal|year|mystery-reveal|big-points-reveal|watching|guessing|year-guessing|guessing-both|play-reveal|play-reveal-noone|play-reveal-crowd|reveal-crowd|year-crowd|lobby|party-intro|final-host|final-host-classic-only|final-host-race-only|final-host-no-speed|final-host-1|final-host-2|final-host-long|final-player|final-empty</p>;
+    ?? <p className="text-white p-6 font-mono">?v=home|join|join-link|join-rejoin|playing|reveal|year|mystery-reveal|big-points-reveal|watching|guessing|year-guessing|guessing-both|play-reveal|play-reveal-noone|play-reveal-crowd|reveal-crowd|year-crowd|lobby|party-intro|final-host|final-host-classic-only|final-host-race-only|final-host-no-speed|final-host-1|final-host-2|final-host-long|final-player|final-empty</p>;
 }

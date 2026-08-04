@@ -6,6 +6,7 @@ import { useLogoMorph } from '../contexts/LogoMorph';
 import { useEscapeKey } from '../hooks/useEscapeKey';
 import { useFocusTrap } from '../hooks/useFocusTrap';
 import { useWakeLock } from '../hooks/useWakeLock';
+import { HostScaleShell } from '../hooks/useHostScale';
 import { RoundIntro } from '../components/RoundIntro';
 import { LIQUID_CARD_PROPS } from '../components/liquidGlassPresets';
 import { commonPhaseAnnouncement } from '../utils/phaseAnnouncement';
@@ -83,7 +84,7 @@ export default function Host() {
   useFocusTrap(gameExpiredRef, gameExpired);
 
   return (
-    <div className={`relative ${leaving ? 'page-exit' : 'page-enter'}`} style={{ pointerEvents: leaving ? 'none' : undefined }}>
+    <HostScaleShell className={`relative ${leaving ? 'page-exit' : 'page-enter'}`} style={{ pointerEvents: leaving ? 'none' : undefined }}>
       <div aria-live="polite" className="sr-only">{phaseAnnouncement(phase, result)}</div>
       <RoundIntro party={game.party} roundKey={game.roundIndex} />
       {phase === 'connect' && <ConnectView game={game} />}
@@ -147,6 +148,6 @@ export default function Host() {
           </p>
         </div>
       )}
-    </div>
+    </HostScaleShell>
   );
 }
