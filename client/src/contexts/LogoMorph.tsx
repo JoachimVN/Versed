@@ -1,4 +1,5 @@
 import { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState } from 'react';
+import { BRAND_LOGO_SRC, showBrandLogoFallback } from '../branding';
 
 interface Rect {
   top: number;
@@ -129,11 +130,13 @@ export function LogoMorphProvider({ children }: Readonly<{ children: React.React
       {children}
       {rect && (
         <img
-          src={`${import.meta.env.BASE_URL}branding/logo.png`}
+          src={BRAND_LOGO_SRC}
           alt=""
           aria-hidden="true"
+          onError={showBrandLogoFallback}
           width={2560}
           height={1000}
+          className="versed-logo"
           style={{
             position: 'fixed',
             top: rect.top,

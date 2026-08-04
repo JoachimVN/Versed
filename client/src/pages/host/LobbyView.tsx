@@ -1,5 +1,6 @@
 import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { Disc3, Settings, Flame, Coins, PartyPopper, Volume2, VolumeX } from 'lucide-react';
+import { BRAND_LOGO_SRC, showBrandLogoFallback } from '../../branding';
 import LiquidGlass from '../../components/StableLiquidGlass';
 import { useLogoMorph } from '../../contexts/LogoMorph';
 import { MIN_PLAYLIST_TRACKS } from '../../hooks/usePlaylistPicker';
@@ -321,11 +322,12 @@ export function LobbyView({
       >
         <img
           ref={logoRef}
-          src={`${import.meta.env.BASE_URL}branding/logo.png`}
+          src={BRAND_LOGO_SRC}
           alt={APP_NAME}
+          onError={showBrandLogoFallback}
           width={2560}
           height={1000}
-          className="lobby-logo w-auto drop-shadow-[0_18px_22px_rgba(0,0,0,0.55)]"
+          className="versed-logo lobby-logo w-auto drop-shadow-[0_18px_22px_rgba(0,0,0,0.55)]"
           style={{ maxHeight: '192px', maxWidth: '100%', opacity: morphing ? 0 : 1, willChange: 'opacity' }}
         />
         <span className="text-white/45 text-sm flex items-center gap-2">

@@ -1,6 +1,7 @@
 import { useState, useEffect, useCallback, useLayoutEffect, useRef } from 'react';
 import type { CSSProperties } from 'react';
 import { Pencil } from 'lucide-react';
+import { BRAND_LOGO_SRC, showBrandLogoFallback } from '../../branding';
 import LiquidGlass from '../../components/StableLiquidGlass';
 import { useLogoMorph } from '../../contexts/LogoMorph';
 import { BackButton } from '../../components/BackButton';
@@ -95,11 +96,12 @@ export function WaitingView({
         <BackButton beforeNavigate={goBack} />
         <img
           ref={logoRef}
-          src={`${import.meta.env.BASE_URL}branding/logo.png`}
+          src={BRAND_LOGO_SRC}
           alt={APP_NAME}
+          onError={showBrandLogoFallback}
           width={2560}
           height={1000}
-          className="w-auto drop-shadow-[0_18px_22px_rgba(0,0,0,0.55)]"
+          className="versed-logo w-auto drop-shadow-[0_18px_22px_rgba(0,0,0,0.55)]"
           style={{ maxHeight: '140px', maxWidth: '100%', opacity: (morphing || leaving) ? 0 : 1, willChange: 'opacity' }}
         />
 

@@ -33,6 +33,17 @@ body {
   -webkit-user-select: none;
 }
 
+/* Chrome on iPhone uses WebKit, not Chromium. WebKit can occasionally drop a
+   transparent raster image from its composited layer when a CSS filter is
+   applied, which made the shared brand mark disappear while every other part
+   of the page remained visible. The shadow is decorative, so keep the logo
+   unfiltered on iPhone-class WebKit rather than risking the logo itself. */
+@supports (-webkit-touch-callout: none) {
+  .versed-logo {
+    filter: none !important;
+  }
+}
+
 ::selection {
   background: rgba(255, 255, 255, 0.18);
 }

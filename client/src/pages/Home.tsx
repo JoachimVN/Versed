@@ -1,5 +1,6 @@
 import { useLayoutEffect, useRef, useState } from 'react';
 import { useNavigate } from 'react-router';
+import { BRAND_LOGO_SRC, showBrandLogoFallback } from '../branding';
 import LiquidGlass from '../components/StableLiquidGlass';
 import { useLogoMorph } from '../contexts/LogoMorph';
 import { APP_NAME, BACKEND_URL } from '../config';
@@ -51,11 +52,12 @@ export default function Home() {
       <div className="flex flex-col items-center gap-3">
         <img
           ref={logoRef}
-          src={`${import.meta.env.BASE_URL}branding/logo.png`}
+          src={BRAND_LOGO_SRC}
           alt={APP_NAME}
+          onError={showBrandLogoFallback}
           width={2560}
           height={1000}
-          className="w-auto drop-shadow-[0_18px_22px_rgba(0,0,0,0.55)]"
+          className="versed-logo w-auto drop-shadow-[0_18px_22px_rgba(0,0,0,0.55)]"
           style={{ maxHeight: '225px', maxWidth: '100%', marginBottom: '50px', opacity: (leaving || morphing) ? 0 : 1, willChange: 'opacity' }}
         />
         <p className="text-white/60 text-lg tracking-wide"></p>
