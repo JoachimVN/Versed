@@ -86,10 +86,10 @@ export function WaitingView({
   else if (arrivedViaMorph) contentTransitionClass = 'page-enter-morph';
 
   return (
-    <div className="relative min-h-screen overflow-hidden">
+    <div className="relative min-h-screen overflow-x-hidden overflow-y-auto overscroll-contain">
       {/* Content */}
       <div
-        className={`relative flex flex-col items-center justify-center min-h-screen gap-8 p-6 ${contentTransitionClass}`}
+        className={`relative flex flex-col items-center justify-center screen-center-safe min-h-screen gap-8 p-6 ${contentTransitionClass}`}
         style={{ zIndex: 3, pointerEvents: backgroundLeaving ? 'none' : undefined }}
       >
         <BackButton beforeNavigate={goBack} />

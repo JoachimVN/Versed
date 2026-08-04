@@ -96,7 +96,7 @@ export function PlayingView({ game }: Readonly<{ game: HostState }>) {
     : `${answeredCount} / ${players.length} answered`;
   const accent = roundAccent(isRace, isYear);
   return (
-    <div className="relative min-h-screen flex flex-col items-center justify-center p-6 gap-5 text-center overflow-hidden">
+    <div className="relative min-h-screen screen-center-safe flex flex-col items-center justify-center p-6 gap-5 text-center overflow-x-hidden overflow-y-auto overscroll-contain">
       <img src={`${import.meta.env.BASE_URL}backgrounds/background4.svg`} alt="" aria-hidden="true" style={{ position: 'fixed', inset: 0, width: '100%', height: '100%', objectFit: 'cover', zIndex: 0 }} />
       <div style={{ position: 'fixed', inset: 0, zIndex: 1, background: 'rgba(5,5,14,0.82)', backdropFilter: 'blur(36px)' }} />
       <div className="flex flex-col items-center gap-5 text-center w-full" style={{ position: 'relative', zIndex: 2 }}>

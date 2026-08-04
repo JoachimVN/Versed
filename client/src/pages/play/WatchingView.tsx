@@ -19,7 +19,7 @@ export function WatchingView({ game }: Readonly<{ game: PlayState }>) {
   const watchAccent = isYear ? 'year' : nonYearAccent;
 
   return (
-    <div className="relative min-h-screen overflow-hidden">
+    <div className="relative min-h-screen overflow-x-hidden overflow-y-auto overscroll-contain">
       {/* Background */}
       <img
         src={`${import.meta.env.BASE_URL}backgrounds/background4.svg`}
@@ -57,9 +57,9 @@ export function WatchingView({ game }: Readonly<{ game: PlayState }>) {
               aberrationIntensity={1.5}
               elasticity={0.08}
               cornerRadius={28}
-              padding="80px 24px"
+              padding="min(80px, 9vh) min(24px, 6vw)"
             >
-              <div style={{ width: '298px', display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '44px' }}>
+              <div style={{ width: 'min(298px, 78vw)', display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '44px' }}>
 
                 <AudioBars playing={songPlaying} accent={watchAccent} height={56} bpm={songTempo} />
 

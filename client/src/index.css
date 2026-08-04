@@ -118,6 +118,248 @@ select:focus-visible,
   justify-content: safe center;
 }
 
+/* The host lobby must remain a complete board at every supported viewport.
+   These are deliberate compact compositions, not scroll fallbacks: players
+   need the invite, mode, roster, and Start control visible at once. */
+@media (max-width: 480px) {
+  .lobby-header {
+    gap: 0.25rem;
+    padding: 0.875rem 1.5rem 0.375rem;
+  }
+
+  .lobby-logo {
+    max-height: 110px !important;
+  }
+
+  .lobby-content {
+    justify-content: space-between;
+    gap: 0;
+    padding: 0 1.5rem 1rem;
+  }
+
+  .lobby-join-card {
+    padding: 0.75rem !important;
+  }
+
+  .lobby-join-card-layout {
+    gap: 0.75rem;
+  }
+
+  .join-card-qr {
+    padding: 0.5rem !important;
+    align-self: center;
+  }
+
+  .join-card-code {
+    width: 112px;
+    height: 112px;
+  }
+
+  .join-card-url {
+    font-size: 0.75rem !important;
+    line-height: 1.2;
+    overflow-wrap: anywhere;
+  }
+
+  .lobby-mode-toggle {
+    padding: 3px !important;
+  }
+
+  .lobby-mode-option {
+    padding-top: 0.45rem !important;
+    padding-bottom: 0.45rem !important;
+    font-size: 0.8125rem !important;
+  }
+
+  .lobby-player-list {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+  }
+
+  .lobby-player-count {
+    margin-bottom: 0 !important;
+    flex-shrink: 0;
+  }
+
+  .lobby-player-chips {
+    gap: 0.4rem !important;
+  }
+
+  .lobby-player-chip {
+    padding: 0.25rem 0.55rem !important;
+    font-size: 0.8125rem !important;
+  }
+
+  .lobby-start-button {
+    margin-top: 0 !important;
+    height: 52px !important;
+  }
+
+  .lobby-start-label {
+    font-size: 1rem !important;
+  }
+
+  /* The full slider would sit across the Start button on a phone. Keep the
+     mute action available beside Settings and leave room for the CTA. */
+  .volume-control-glass {
+    top: 20px;
+    right: 120px;
+    bottom: auto;
+    width: 44px !important;
+  }
+
+  .volume-control-glass .volume-slider {
+    display: none;
+  }
+}
+
+@media (max-width: 350px) {
+  .lobby-header {
+    padding-inline: 1rem;
+  }
+
+  .lobby-logo {
+    max-height: 90px !important;
+  }
+
+  .lobby-content {
+    padding-inline: 1rem;
+  }
+
+  .join-card-code {
+    width: 88px;
+    height: 88px;
+  }
+
+  .lobby-join-card-layout {
+    flex-direction: column;
+    gap: 0.4rem;
+  }
+
+  .join-card-qr {
+    align-self: center;
+  }
+
+  .lobby-start-button {
+    height: 48px !important;
+  }
+}
+
+@media (max-width: 299px) {
+  .lobby-logo {
+    max-height: 78px !important;
+  }
+
+  .join-card-code {
+    width: 72px;
+    height: 72px;
+  }
+}
+
+@media (max-height: 450px) and (orientation: landscape) {
+  .lobby-header {
+    gap: 0.2rem;
+    padding: 0.625rem 1.5rem 0.25rem;
+  }
+
+  .lobby-logo {
+    max-height: 74px !important;
+  }
+
+  .lobby-header > span {
+    font-size: 0.75rem;
+  }
+
+  .lobby-content {
+    justify-content: space-between;
+    gap: 0;
+    padding: 0 1.5rem 0.625rem;
+  }
+
+  .lobby-join-card {
+    max-width: 480px;
+    padding: 0.5rem 0.75rem !important;
+  }
+
+  .lobby-join-card-layout {
+    gap: 0.75rem;
+  }
+
+  .lobby-join-card-layout > div:first-child {
+    gap: 0.25rem !important;
+  }
+
+  .join-card-qr {
+    padding: 0.375rem !important;
+  }
+
+  .join-card-code {
+    width: 88px;
+    height: 88px;
+  }
+
+  .join-card-url {
+    font-size: 0.75rem !important;
+  }
+
+  .join-card-pin {
+    font-size: 2.8rem !important;
+  }
+
+  .lobby-mode-toggle {
+    max-width: 480px;
+    padding: 3px !important;
+  }
+
+  .lobby-mode-option {
+    padding-top: 0.35rem !important;
+    padding-bottom: 0.35rem !important;
+  }
+
+  .lobby-player-list {
+    display: flex;
+    align-items: center;
+    max-width: 480px;
+    gap: 0.5rem;
+  }
+
+  .lobby-player-count {
+    margin-bottom: 0 !important;
+    flex-shrink: 0;
+  }
+
+  .lobby-player-chips {
+    gap: 0.4rem !important;
+  }
+
+  .lobby-player-chip {
+    padding: 0.2rem 0.5rem !important;
+    font-size: 0.75rem !important;
+  }
+
+  .lobby-start-button {
+    width: min(280px, 100%) !important;
+    height: 40px !important;
+    margin-top: 0 !important;
+  }
+
+  .lobby-start-label {
+    font-size: 0.95rem !important;
+  }
+
+  .volume-control-glass {
+    top: 12px;
+    right: 120px;
+    bottom: auto;
+    width: 44px !important;
+  }
+
+  .volume-control-glass .volume-slider {
+    display: none;
+  }
+}
+
 /* liquid-glass-react initializes at a hard-coded 270x69, then measures its
    content after the first paint and transitions every property for 200ms.
    StableLiquidGlass hides that incorrect first geometry until the measured

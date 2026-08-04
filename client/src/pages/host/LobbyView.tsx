@@ -63,7 +63,7 @@ function ModeToggle({ mode, setMode }: Readonly<{ mode: Mode; setMode: (m: Mode)
   const active = MODE_STYLE[mode];
   return (
     <div
-      className="w-full max-w-md relative flex rounded-2xl"
+      className="lobby-mode-toggle w-full max-w-md relative flex rounded-2xl"
       style={{ background: 'rgba(255,255,255,0.05)', border: '1px solid rgba(255,255,255,0.08)', padding: '4px' }}
     >
       <div
@@ -84,7 +84,7 @@ function ModeToggle({ mode, setMode }: Readonly<{ mode: Mode; setMode: (m: Mode)
           type="button"
           onClick={() => setMode(key)}
           tabIndex={0}
-          className="relative flex-1 py-2.5 rounded-xl text-sm font-semibold z-10 transition-colors duration-200 flex items-center justify-center gap-1.5"
+          className="lobby-mode-option relative flex-1 py-2.5 rounded-xl text-sm font-semibold z-10 transition-colors duration-200 flex items-center justify-center gap-1.5"
           style={{ color: mode === key ? MODE_STYLE[key].text : 'rgba(255,255,255,0.45)', background: 'transparent', border: 'none', cursor: 'pointer' }}
         >
           <Icon className="w-3.5 h-3.5 transition-colors duration-200" style={{ color: mode === key ? MODE_STYLE[key].icon : 'rgba(255,255,255,0.45)' }} />
@@ -110,9 +110,9 @@ function StartButton({ players, mode, startGame, disabled: extraDisabled }: Read
     <button
       type="button"
       tabIndex={0}
-      className={`liquid-btn ${tintClass} relative cursor-pointer border-0 bg-transparent p-0 mt-auto`}
+      className={`lobby-start-button liquid-btn ${tintClass} relative cursor-pointer border-0 bg-transparent p-0`}
       style={{
-        width: '310px', height: '64px', borderRadius: '100px',
+        width: 'min(310px, 100%)', height: '64px', borderRadius: '100px',
         background: 'rgba(0,0,0,0.001)',
         opacity: disabled ? 0.3 : 1,
         cursor: disabled ? 'not-allowed' : 'pointer',
@@ -122,13 +122,14 @@ function StartButton({ players, mode, startGame, disabled: extraDisabled }: Read
       onMouseLeave={() => setHovered(false)}
       onClick={() => !disabled && startGame()}
     >
-      <LiquidGlass
-        style={{
-          position: 'absolute', top: '50%', left: '50%',
-          filter: hovered && !disabled ? hoverShadow : 'drop-shadow(0 0 0px rgba(0,0,0,0))',
-          transition: 'filter 0.25s ease',
-        }}
-        {...LIQUID_PILL_PROPS}
+        <LiquidGlass
+          style={{
+            position: 'absolute', top: '50%', left: '50%',
+            filter: hovered && !disabled ? hoverShadow : 'drop-shadow(0 0 0px rgba(0,0,0,0))',
+            transition: 'filter 0.25s ease',
+          }}
+          {...LIQUID_PILL_PROPS}
+          padding="18px min(36px, 7vw)"
       >
         <div style={{ position: 'relative' }}>
           <div style={{
@@ -136,7 +137,7 @@ function StartButton({ players, mode, startGame, disabled: extraDisabled }: Read
             background: { classic: 'rgba(158,18,204,0.12)', race: 'rgba(220,80,10,0.12)', party: 'rgba(0,238,232,0.1)' }[mode],
             transition: 'background 0.25s ease',
           }} />
-          <span className="text-white font-bold text-xl" style={{ whiteSpace: 'nowrap', position: 'relative', display: 'inline-block', minWidth: '210px', textAlign: 'center' }}>
+          <span className="lobby-start-label text-white font-bold text-xl" style={{ whiteSpace: 'nowrap', position: 'relative', display: 'inline-block', textAlign: 'center' }}>
             {{ classic: 'Start Classic Game', race: 'Start Race Game', party: 'Start Party Game' }[mode]}
           </span>
         </div>
@@ -168,15 +169,16 @@ function VolumeControl({ volume, setVolume, toggleMute }: Readonly<{
           // itself — instead of the flat panel tint this control used to have.
           filter: hovered ? 'drop-shadow(0 0 10px rgba(192,132,252,0.4))' : 'drop-shadow(0 0 0px rgba(192,132,252,0))',
           transition: 'filter 0.25s ease',
-        }}
-        {...LIQUID_CONTROL_PROPS}
-      >
+          }}
+          {...LIQUID_CONTROL_PROPS}
+          padding="8px 8px"
+        >
         <div style={{ position: 'relative' }}>
           {/* Tint overlay, same as every other glass control: negative insets
-              matching LIQUID_CONTROL_PROPS' padding stretch it back over the
+              matching the local padding stretch it back over the
               full pill, since it's a child of the padded content box. */}
           <div style={{
-            position: 'absolute', inset: '-8px -16px', borderRadius: '100px', pointerEvents: 'none',
+            position: 'absolute', inset: '-8px', borderRadius: '100px', pointerEvents: 'none',
             background: 'rgba(158,18,204,0.05)',
           }} />
           <div style={{ position: 'relative', display: 'flex', alignItems: 'center', gap: '8px', height: '28px' }}>
@@ -305,7 +307,7 @@ export function LobbyView({
   }
 
   return (
-    <div className="min-h-screen relative flex flex-col overflow-hidden">
+    <div className="lobby-view min-h-screen relative flex flex-col overflow-hidden">
       <BackButton zIndex={10} beforeNavigate={beforeGoHome ?? fadeOut} />
       <SettingsButton settingsOpen={settingsOpen} toggleSettings={toggleSettings} />
       <VolumeControl volume={volume} setVolume={setVolume} toggleMute={toggleMute} />
@@ -314,7 +316,7 @@ export function LobbyView({
       {playlistPickerOpen && <PlaylistPickerDialog game={game} />}
 
       <div
-        className="flex flex-col items-center gap-6 p-6 transition-transform duration-500 ease-out"
+        className="lobby-header flex shrink-0 flex-col items-center gap-6 p-6 transition-transform duration-500 ease-out"
         style={{ transform: pin ? 'translateY(0)' : 'translateY(30vh)' }}
       >
         <img
@@ -323,7 +325,7 @@ export function LobbyView({
           alt={APP_NAME}
           width={2560}
           height={1000}
-          className="w-auto drop-shadow-[0_18px_22px_rgba(0,0,0,0.55)]"
+          className="lobby-logo w-auto drop-shadow-[0_18px_22px_rgba(0,0,0,0.55)]"
           style={{ maxHeight: '192px', maxWidth: '100%', opacity: morphing ? 0 : 1, willChange: 'opacity' }}
         />
         <span className="text-white/45 text-sm flex items-center gap-2">
@@ -337,19 +339,19 @@ export function LobbyView({
       </div>
 
       {pin ? (
-        <div className={`flex-1 flex flex-col items-center gap-5 px-6 pb-6 transition-all duration-500 ${lobbyVisible ? 'opacity-100 translate-y-0' : 'opacity-0 translate-y-6'}`}>
+        <div className={`lobby-content flex flex-1 min-h-0 flex-col items-center gap-5 px-6 pb-6 transition-all duration-500 ${lobbyVisible ? 'opacity-100 translate-y-0' : 'opacity-0 translate-y-6'}`}>
           <JoinCard pin={game.pin} copied={game.copied} copyInvite={game.copyInvite} />
           <ModeToggle mode={mode} setMode={setMode} />
-          <div className="w-full max-w-md">
-            <p className="text-white/45 text-sm mb-2">{players.length} player{players.length === 1 ? '' : 's'}</p>
-            <div className="flex flex-wrap gap-2">
+          <div className="lobby-player-list w-full max-w-md">
+            <p className="lobby-player-count text-white/45 text-sm mb-2">{players.length} player{players.length === 1 ? '' : 's'}</p>
+            <div className="lobby-player-chips flex flex-wrap gap-2">
               {players.map(p => (
                 <button
                   key={p.name}
                   type="button"
                   onClick={() => removePlayer(p.name)}
                   tabIndex={0}
-                  className="relative group px-3 py-1.5 rounded-full bg-white/10 text-white text-sm font-semibold"
+                  className="lobby-player-chip relative group px-3 py-1.5 rounded-full bg-white/10 text-white text-sm font-semibold"
                   aria-label={`Remove ${p.name}`}
                 >
                   {p.name}
