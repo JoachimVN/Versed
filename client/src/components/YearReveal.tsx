@@ -195,9 +195,12 @@ export function YearSongFooter({ result, compact, squeeze }: Readonly<{ result: 
   );
 }
 
-// Party "guess the year" rounds: the answer is a number, so the card leads
-// with the year and the closest player instead of a got-it/no-one-got-it state.
-export function YearCardContent({ result, muted = false, squeeze }: Readonly<{ result: RoundResultEvent; muted?: boolean; squeeze?: CardSqueeze }>) {
+// Winner line + divider + song footer for the compact "guess the year" card
+// — everything below YearHeading. Split out so YearTimelineContent can render
+// this behind the same YearHeading instance it already mounted for the full
+// timeline, instead of swapping in a whole separate YearCardContent element
+// (see the comment on isCompactFallback there for why that swap matters).
+function YearCardBody({ result, squeeze }: Readonly<{ result: RoundResultEvent; squeeze?: CardSqueeze }>) {
   const { ultraCompact: ultra = false } = squeeze ?? {};
   const winner = result.yearResults?.find(r => r.diff !== null);
   const bestDiff = winner?.diff ?? null;
@@ -205,8 +208,7 @@ export function YearCardContent({ result, muted = false, squeeze }: Readonly<{ r
   const pluralS = bestDiff === 1 ? '' : 's';
   const winnerDetail = winner && (bestDiff === 0 ? ' · exact!' : ` (${bestDiff} year${pluralS} off)`);
   return (
-    <div style={{ width: cardContentWidth(squeeze), display: 'flex', flexDirection: 'column', alignItems: 'center', textAlign: 'center' }}>
-      <YearHeading year={result.year ? Math.floor(result.year) : '–'} compact muted={muted} hitTier={pickYearHitTier(result)} squeeze={squeeze} />
+    <>
       {winner && (
         <span style={{
           color: 'rgba(255,255,255,0.5)', fontSize: ultra ? '0.72rem' : '0.82rem', marginBottom: ultra ? '8px' : '12px', display: 'inline-block', minWidth: ultra ? '0' : '200px',
@@ -220,6 +222,17 @@ export function YearCardContent({ result, muted = false, squeeze }: Readonly<{ r
       )}
       <div style={{ width: '100%', height: '1px', background: 'rgba(255,255,255,0.08)', marginBottom: ultra ? '8px' : '12px' }} />
       <YearSongFooter result={result} compact squeeze={squeeze} />
+    </>
+  );
+}
+
+// Party "guess the year" rounds: the answer is a number, so the card leads
+// with the year and the closest player instead of a got-it/no-one-got-it state.
+export function YearCardContent({ result, muted = false, squeeze }: Readonly<{ result: RoundResultEvent; muted?: boolean; squeeze?: CardSqueeze }>) {
+  return (
+    <div style={{ width: cardContentWidth(squeeze), display: 'flex', flexDirection: 'column', alignItems: 'center', textAlign: 'center' }}>
+      <YearHeading year={result.year ? Math.floor(result.year) : '–'} compact muted={muted} hitTier={pickYearHitTier(result)} squeeze={squeeze} />
+      <YearCardBody result={result} squeeze={squeeze} />
     </div>
   );
 }
@@ -291,7 +304,31 @@ export function YearTimelineContent({ result, showGuessValues = true, muted = fa
   // computeYearCardHeight in host/RevealView.tsx, which budgets for this
   // exact fallback rather than the chart). Falls back to the same compact
   // summary used when there's no guess data to chart at all.
-  if (!year || guesses.length === 0 || (ultra && landscape)) return <YearCardContent result={result} muted={muted} squeeze={squeeze} />;
+  //
+  // Rendered as YearHeading's own `compact` prop, with YearHeading kept as
+  // this div's first child in both branches below — rather than returning a
+  // separate <YearCardContent> element, which is a different component type
+  // at the same tree position. A resize that crosses the ultraCompact+
+  // landscape threshold mid-round (e.g. rotating a phone) flips this same
+  // way; swapping component types there would unmount/remount YearHeading
+  // and replay its slot-reel + SFX for a round the player already saw land.
+  const heading = (
+    <YearHeading
+      year={year ?? '–'}
+      compact={!year || guesses.length === 0 || (ultra && landscape)}
+      muted={muted}
+      hitTier={pickYearHitTier(result)}
+      squeeze={squeeze}
+    />
+  );
+  if (!year || guesses.length === 0 || (ultra && landscape)) {
+    return (
+      <div style={{ width: cardContentWidth(squeeze), display: 'flex', flexDirection: 'column', alignItems: 'center', textAlign: 'center' }}>
+        {heading}
+        <YearCardBody result={result} squeeze={squeeze} />
+      </div>
+    );
+  }
 
   const minGuess = Math.min(...guesses.map(g => g.guess!));
   const maxGuess = Math.max(...guesses.map(g => g.guess!));
@@ -439,7 +476,7 @@ export function YearTimelineContent({ result, showGuessValues = true, muted = fa
 
   return (
     <div style={{ width: timelineWidth, display: 'flex', flexDirection: 'column', alignItems: 'center', textAlign: 'center' }}>
-      <YearHeading year={year} compact={false} muted={muted} hitTier={pickYearHitTier(result)} squeeze={squeeze} />
+      {heading}
 
       {/* Timeline */}
       <div style={{ position: 'relative', width: '100%', height: `${timelineHeight}px`, marginBottom: ultra ? '4px' : '8px' }}>
