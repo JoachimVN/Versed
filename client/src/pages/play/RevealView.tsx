@@ -1,7 +1,7 @@
 import { Flame } from 'lucide-react';
 import LiquidGlass from '../../components/StableLiquidGlass';
 import { useAnimatedScore } from '../../hooks/useAnimatedScore';
-import { BIG_POINTS_THRESHOLD, FinalRoundAnswerContent, NoOneGotItCardContent, GotItCardContent, PointsBreakdownList, breakdownCompact } from '../../components/RevealShared';
+import { BIG_POINTS_THRESHOLD, FinalRoundAnswerContent, NoOneGotItCardContent, GotItCardContent, PointsBreakdownList, breakdownCompact, breakdownLines } from '../../components/RevealShared';
 import { YearTimelineContent } from '../../components/YearReveal';
 import { computeYearCardHeight } from '../../components/yearCardSqueeze';
 import type { RevealLayout } from '../../components/revealSqueeze';
@@ -43,13 +43,29 @@ function scoreDeltaAnimation(scoreDelta: number): React.CSSProperties | undefine
 // while the score box beneath it is the whole point of this screen and can't
 // be allowed to scroll off the bottom to make room. So the guesses list gets
 // capped off the tier's real leftover room instead, leaving the score box
-// its natural size. partyExtrasPx/scoreBoxPx are conservative flat estimates
-// (mirroring host's own "~20px" fudge for its end-game button) rather than
-// measured, since PartyRevealExtras may render nothing at all and the score
-// box's own height varies with the breakdown line count.
+// its natural size.
+//
+// SCORE_BOX_BASE_PX + breakdownLineCount*BREAKDOWN_LINE_PX replaced a single
+// flat SCORE_BOX_PX estimate that under-budgeted whenever a round's
+// breakdown grew past ~3 lines (mystery multiplier + artist bonus + pity all
+// stacking — see PlayRevealViewCrowd's fixture) — on compact/normal tiers
+// that panel renders one stacked line per breakdownLines() entry, so the
+// budget has to scale with it instead of assuming a fixed height. ultraCompact
+// folds the whole breakdown into one breakdownCompact() line (see below) that
+// widens instead of wrapping, so its base already covers that regardless of
+// entry count. PARTY_EXTRAS_PX is only charged (and only one extra gap
+// reserved) when PartyRevealExtras will actually render something — mirror
+// its own render gate here rather than always paying for a row that's null
+// most rounds. LIST_MIN_PX is deliberately smaller than a comfortable list —
+// on the tightest phones (short-landscape, or a portrait phone stacked with
+// a maxed-out breakdown) even a bare-minimum list still needs shrinking
+// further than a "still usable" floor would allow, because the score box
+// must win that tradeoff every time.
 const LIST_TIER_CAP = { normal: 260, compact: 200, ultraCompact: 130 } as const;
+const LIST_MIN_PX = 24;
 const PARTY_EXTRAS_PX = { normal: 50, compact: 40, ultraCompact: 34 } as const;
-const SCORE_BOX_PX = { normal: 210, compact: 210, ultraCompact: 115 } as const;
+const SCORE_BOX_BASE_PX = { normal: 175, compact: 152, ultraCompact: 135 } as const;
+const BREAKDOWN_LINE_PX = 17;
 
 function tierKey(squeeze: RevealLayout): keyof typeof LIST_TIER_CAP {
   return squeeze.ultraCompact ? 'ultraCompact' : squeeze.compact ? 'compact' : 'normal';
@@ -99,11 +115,21 @@ function PlayRevealShell({
   const paddingClass = wide ? (ultraCompact ? 'px-2 py-3' : compact ? 'px-2 py-4' : 'px-2 py-6') : (ultraCompact ? 'p-3' : compact ? 'p-4' : 'p-6');
   const gapPx = ultraCompact ? 8 : compact ? 12 : 20;
   const paddingPx = ultraCompact ? 24 : compact ? 32 : 48;
-  // 3 gaps covers the worst case (card, party extras, list, score box) even
-  // when party extras don't render — a slightly under-used gap budget just
-  // leaves the list a touch shorter than its true max, never causes overflow.
-  const chromeHeight = cardHeight + gapPx * 3 + paddingPx + PARTY_EXTRAS_PX[tier] + SCORE_BOX_PX[tier];
-  const listMaxHeight = `${Math.max(80, Math.min(LIST_TIER_CAP[tier], windowHeight - chromeHeight))}px`;
+  // Mirrors PartyRevealExtras' own render gate (mysteryMultiplier is always
+  // null here — hideMysteryChip is passed below — so that half of its gate
+  // never applies on the player screen) so the budget only reserves a row +
+  // gap for it when it's actually going to render one.
+  const willShowPartyExtras = !!(
+    revealParty?.event === 'double'
+    || (revealParty?.event === 'chaoshints' && result.chaosFakeIndex != null)
+    || stealResult
+    || (!stealResult && result.stealPending)
+  );
+  const breakdownLineCount = myScoreDelta > 0 && myBreakdown ? breakdownLines(myBreakdown, isMystery).length : 0;
+  const scoreBoxPx = SCORE_BOX_BASE_PX[tier] + (ultraCompact ? 0 : breakdownLineCount * BREAKDOWN_LINE_PX);
+  const chromeHeight = cardHeight + gapPx * (willShowPartyExtras ? 3 : 2) + paddingPx
+    + (willShowPartyExtras ? PARTY_EXTRAS_PX[tier] : 0) + scoreBoxPx;
+  const listMaxHeight = `${Math.max(LIST_MIN_PX, Math.min(LIST_TIER_CAP[tier], windowHeight - chromeHeight))}px`;
   const scoreBoxPadding = ultraCompact ? '10px 20px' : compact ? '12px 24px' : '16px 32px';
   const scoreTextClass = ultraCompact ? 'text-xl' : compact ? 'text-2xl' : 'text-3xl';
   return (
