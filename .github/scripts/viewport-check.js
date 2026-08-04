@@ -4,18 +4,65 @@
 // shows as a scrollbar, it just clips silently). Not part of CI; run locally
 // after a layout/scaling change:
 //
-//   cd client && npx vite build --base=/
+//   npm exec -w client vite -- build --base=/
 //   npx serve@14 client/dist -p 4321 -s &
-//   node .github/scripts/viewport-check.js
+//   node .github/scripts/viewport-check.js --views host-reveal,player-guessing --viewports iphone14-390x844-portrait
 //
-// Screenshots land in .github/scripts/viewport-check-out/ (gitignored) for a
-// visual look; the console summary is the pass/fail signal.
+// Screenshots land in .github/scripts/viewport-check-out/<group>/<screen>/
+// (gitignored) for a visual look; the console summary is the pass/fail signal.
+// Run with --help for the full filtering reference, or --list to see the
+// available screen and viewport names without launching a browser.
 import fs from 'node:fs';
+import path from 'node:path';
 import { chromium } from 'playwright';
 import { prepPage } from './screenshot-utils.js';
 
 const BASE = 'http://localhost:4321';
 const OUT = '.github/scripts/viewport-check-out';
+
+function parseCommaList(value) {
+  return value.split(',').map(item => item.trim()).filter(Boolean);
+}
+
+function parseArgs(args) {
+  const options = { views: [], groups: [], viewports: [], keyboard: 'all', list: false, help: false };
+  for (let index = 0; index < args.length; index += 1) {
+    const arg = args[index];
+    const value = args[index + 1];
+    if (arg === '--help' || arg === '-h') options.help = true;
+    else if (arg === '--list') options.list = true;
+    else if (arg === '--views' || arg === '--groups' || arg === '--viewports' || arg === '--keyboard') {
+      if (!value || value.startsWith('--')) throw new Error(`${arg} needs a value.`);
+      const key = arg.slice(2);
+      options[key] = key === 'keyboard' ? value : parseCommaList(value);
+      index += 1;
+    } else {
+      throw new Error(`Unknown option: ${arg}`);
+    }
+  }
+
+  if (!['all', 'only', 'skip'].includes(options.keyboard)) {
+    throw new Error('--keyboard must be one of: all, only, skip.');
+  }
+  return options;
+}
+
+function printHelp() {
+  console.log(`Usage: node .github/scripts/viewport-check.js [options]
+
+Options:
+  --views <name,...>       Capture only named screens (screen id, fixture id, or display name).
+  --groups <name,...>      Capture only screen groups: host, player, shared.
+  --viewports <name,...>   Capture only named device viewports.
+  --keyboard <mode>        all (default), only, or skip keyboard-shrunken captures.
+  --list                   List selectable screens and viewports, then exit.
+  --help, -h               Show this help.
+
+Examples:
+  node .github/scripts/viewport-check.js --views host-reveal --viewports iphone14-390x844-portrait
+  node .github/scripts/viewport-check.js --groups player --keyboard only
+  node .github/scripts/viewport-check.js --views final-host,final-player --viewports desktop-1440x900`);
+}
 
 // Real, currently-relevant device sizes rather than round numbers: the
 // smallest phone still worth supporting (SE-class), two common modern phone
@@ -40,18 +87,30 @@ const VIEWPORTS = [
 ];
 
 const VIEWS = [
-  { v: 'guessing', name: 'GuessingView' },
-  { v: 'year-guessing', name: 'YearGuessingView' },
-  { v: 'play-reveal', name: 'PlayRevealView' },
-  { v: 'play-reveal-noone', name: 'PlayRevealViewNoOne' },
-  { v: 'reveal', name: 'HostRevealView' },
-  { v: 'year', name: 'HostYearReveal' },
+  { id: 'host-lobby', group: 'host', v: 'lobby', name: 'LobbyView' },
+  { id: 'host-playing', group: 'host', v: 'playing', name: 'PlayingView' },
+  { id: 'host-reveal', group: 'host', v: 'reveal', name: 'RevealView' },
+  { id: 'host-year-reveal', group: 'host', v: 'year', name: 'YearRevealView' },
+  { id: 'host-mystery-reveal', group: 'host', v: 'mystery-reveal', name: 'MysteryRevealView' },
+  { id: 'host-big-points-reveal', group: 'host', v: 'big-points-reveal', name: 'BigPointsRevealView' },
   // Heavier rosters (7 players, some with a second guess line) than the
   // 3-player fixtures above ever exercise — the actual worst case for a
   // reveal screen's vertical space, not just "more of the same row".
-  { v: 'play-reveal-crowd', name: 'PlayRevealViewCrowd' },
-  { v: 'reveal-crowd', name: 'HostRevealViewCrowd' },
-  { v: 'year-crowd', name: 'HostYearRevealCrowd' },
+  { id: 'host-reveal-crowd', group: 'host', v: 'reveal-crowd', name: 'RevealViewCrowd' },
+  { id: 'host-year-reveal-crowd', group: 'host', v: 'year-crowd', name: 'YearRevealViewCrowd' },
+  { id: 'host-final-results', group: 'host', v: 'final-host', name: 'FinalResultsView', click: 'button:has-text("final reveal")', waitFor: '.standings-list' },
+  { id: 'host-final-results-long-names', group: 'host', v: 'final-host-long', name: 'FinalResultsLongNamesView' },
+  { id: 'host-final-results-empty', group: 'host', v: 'final-empty', name: 'FinalResultsEmptyView' },
+  { id: 'player-waiting', group: 'player', v: 'waiting', name: 'WaitingView' },
+  { id: 'player-watching', group: 'player', v: 'watching', name: 'WatchingView' },
+  { id: 'player-guessing', group: 'player', v: 'guessing', name: 'GuessingView' },
+  { id: 'player-year-guessing', group: 'player', v: 'year-guessing', name: 'YearGuessingView' },
+  { id: 'player-guessing-both', group: 'player', v: 'guessing-both', name: 'GuessingBothView' },
+  { id: 'player-reveal', group: 'player', v: 'play-reveal', name: 'RevealView' },
+  { id: 'player-reveal-no-one', group: 'player', v: 'play-reveal-noone', name: 'RevealViewNoOne' },
+  { id: 'player-reveal-crowd', group: 'player', v: 'play-reveal-crowd', name: 'RevealViewCrowd' },
+  { id: 'player-final-results', group: 'player', v: 'final-player', name: 'FinalResultsView' },
+  { id: 'shared-party-intro', group: 'shared', v: 'party-intro', name: 'PartyIntroView' },
 ];
 
 // Text-input screens get a second pass with the on-screen keyboard "open" —
@@ -59,11 +118,7 @@ const VIEWS = [
 // target) is the tightest case per GuessingView's own comments, so it only
 // needs the keyboard-open pass, not a first plain one already covered by the
 // others.
-const KEYBOARD_VIEWS = [
-  { v: 'guessing', name: 'GuessingView' },
-  { v: 'year-guessing', name: 'YearGuessingView' },
-  { v: 'guessing-both', name: 'GuessingViewBoth' },
-];
+const KEYBOARD_VIEW_IDS = new Set(['player-guessing', 'player-year-guessing', 'player-guessing-both']);
 
 // Scans every element for a bounding box that extends past its nearest
 // clipping ancestor (the nearest overflow:hidden container going up to
@@ -146,49 +201,121 @@ function keyboardShrunkHeight(vp) {
   return Math.max(120, Math.round(vp.height * (1 - ratio)));
 }
 
+function matchesView(view, requestedViews, requestedGroups) {
+  const matchesName = requestedViews.length === 0
+    || requestedViews.some(name => [view.id, view.v, view.name].includes(name));
+  const matchesGroup = requestedGroups.length === 0 || requestedGroups.includes(view.group);
+  return matchesName && matchesGroup;
+}
+
+function listChoices() {
+  console.log('Screens:');
+  for (const view of VIEWS) {
+    const keyboard = KEYBOARD_VIEW_IDS.has(view.id) ? ' (keyboard)' : '';
+    console.log(`  ${view.id.padEnd(31)} ${view.group.padEnd(7)} fixture: ${view.v}${keyboard}`);
+  }
+  console.log('\nViewports:');
+  for (const viewport of VIEWPORTS) console.log(`  ${viewport.name}`);
+}
+
+function assertKnownFilters(options) {
+  const validViews = new Set(VIEWS.flatMap(view => [view.id, view.v, view.name]));
+  const validGroups = new Set(VIEWS.map(view => view.group));
+  const validViewports = new Set(VIEWPORTS.map(viewport => viewport.name));
+  const unknownViews = options.views.filter(view => !validViews.has(view));
+  const unknownGroups = options.groups.filter(group => !validGroups.has(group));
+  const unknownViewports = options.viewports.filter(viewport => !validViewports.has(viewport));
+  if (unknownViews.length || unknownGroups.length || unknownViewports.length) {
+    const messages = [
+      unknownViews.length && `unknown screens: ${unknownViews.join(', ')}`,
+      unknownGroups.length && `unknown groups: ${unknownGroups.join(', ')}`,
+      unknownViewports.length && `unknown viewports: ${unknownViewports.join(', ')}`,
+    ].filter(Boolean);
+    throw new Error(`${messages.join('; ')}. Run with --list to see valid names.`);
+  }
+}
+
 async function runCheck(browser, vp, view, height, outSuffix, focusInput) {
   const page = await browser.newPage();
   await prepPage(page);
   await page.setViewportSize({ width: vp.width, height });
   await page.goto(`${BASE}/screenshot?v=${view.v}`);
   await page.waitForTimeout(500);
+  if (view.click) await page.locator(view.click).click();
+  if (view.waitFor) {
+    await page.locator(view.waitFor).waitFor();
+    await page.waitForTimeout(300);
+  }
   if (focusInput) {
     await page.locator('input').first().focus();
     await page.waitForTimeout(300);
   }
   const offenders = await findOverflow(page);
-  await page.screenshot({ path: `${OUT}/${view.name}__${vp.name}${outSuffix}.png` });
+  const outPath = path.join(OUT, view.group, view.id, `${vp.name}${outSuffix}.png`);
+  fs.mkdirSync(path.dirname(outPath), { recursive: true });
+  await page.screenshot({ path: outPath });
   await page.close();
-  return offenders;
+  return { offenders, outPath };
+}
+
+let options;
+try {
+  options = parseArgs(process.argv.slice(2));
+  if (options.help) {
+    printHelp();
+    process.exit(0);
+  }
+  assertKnownFilters(options);
+  if (options.list) {
+    listChoices();
+    process.exit(0);
+  }
+} catch (error) {
+  console.error(error.message);
+  console.error('Run with --help for usage.');
+  process.exit(1);
+}
+
+const selectedViews = VIEWS.filter(view => matchesView(view, options.views, options.groups));
+const selectedViewports = VIEWPORTS.filter(viewport => options.viewports.length === 0 || options.viewports.includes(viewport.name));
+const selectedKeyboardViews = selectedViews.filter(view => KEYBOARD_VIEW_IDS.has(view.id));
+
+if (selectedViews.length === 0 || selectedViewports.length === 0 || (options.keyboard === 'only' && selectedKeyboardViews.length === 0)) {
+  console.error('No captures matched the supplied filters. Run with --list to see valid combinations.');
+  process.exit(1);
 }
 
 const failures = [];
 try {
   const browser = await chromium.launch({ channel: 'chrome' });
-  for (const vp of VIEWPORTS) {
-    for (const view of VIEWS) {
-      const offenders = await runCheck(browser, vp, view, vp.height, '', false);
-      if (offenders.length > 0) {
-        failures.push({ view: view.name, viewport: vp.name, offenders });
-        console.log(`✗ ${view.name} @ ${vp.name}: ${offenders.map(o => `<${o.tag}.${o.cls}> +${o.overflowPx}px`).join(', ')}`);
-      } else {
-        console.log(`✓ ${view.name} @ ${vp.name}`);
+  for (const vp of selectedViewports) {
+    if (options.keyboard !== 'only') {
+      for (const view of selectedViews) {
+        const { offenders } = await runCheck(browser, vp, view, vp.height, '', false);
+        if (offenders.length > 0) {
+          failures.push({ view: view.id, viewport: vp.name, offenders });
+          console.log(`✗ ${view.id} @ ${vp.name}: ${offenders.map(o => `<${o.tag}.${o.cls}> +${o.overflowPx}px`).join(', ')}`);
+        } else {
+          console.log(`✓ ${view.id} @ ${vp.name}`);
+        }
       }
     }
-    for (const view of KEYBOARD_VIEWS) {
-      const label = `${view.name} @ ${vp.name} (keyboard open)`;
-      const offenders = await runCheck(browser, vp, view, keyboardShrunkHeight(vp), '__keyboard', true);
-      if (offenders.length > 0) {
-        failures.push({ view: view.name, viewport: `${vp.name} (keyboard open)`, offenders });
-        console.log(`✗ ${label}: ${offenders.map(o => `<${o.tag}.${o.cls}> +${o.overflowPx}px`).join(', ')}`);
-      } else {
-        console.log(`✓ ${label}`);
+    if (options.keyboard !== 'skip') {
+      for (const view of selectedKeyboardViews) {
+        const label = `${view.id} @ ${vp.name} (keyboard open)`;
+        const { offenders } = await runCheck(browser, vp, view, keyboardShrunkHeight(vp), '__keyboard', true);
+        if (offenders.length > 0) {
+          failures.push({ view: view.id, viewport: `${vp.name} (keyboard open)`, offenders });
+          console.log(`✗ ${label}: ${offenders.map(o => `<${o.tag}.${o.cls}> +${o.overflowPx}px`).join(', ')}`);
+        } else {
+          console.log(`✓ ${label}`);
+        }
       }
     }
   }
   await browser.close();
-} catch (e) {
-  console.error(e);
+} catch (error) {
+  console.error(error);
   process.exit(1);
 }
 
