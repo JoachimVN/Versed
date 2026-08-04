@@ -90,13 +90,19 @@ export function introFor(
 
 // ─── Recipe draws ────────────────────────────────────────────────────────────
 
-// 'title' always stays in the pool unconditionally — it's the baseline
-// guess target, available no matter which round types the host disables —
-// so this never needs an empty-pool fallback the way pickPartyEvent's
-// genuinely-can-empty pool does.
+// Title is the baseline target whenever the host has selected a format, or
+// has not selected a target variant at all. When the only choices are target
+// variants such as Double Duty, though, honour that narrow selection instead
+// of silently mixing plain title rounds back in.
 function pickPartyTarget(game: Game, format: PartyFormat): PartyTarget {
   if (format === 'year') return 'year';
-  const pool: [PartyTarget, number][] = [['title', 60]];
+  const hasFormat = game.enabledRoundTypes.has('classic')
+    || game.enabledRoundTypes.has('race')
+    || game.enabledRoundTypes.has('choice')
+    || game.enabledRoundTypes.has('year');
+  const hasTargetVariant = game.enabledRoundTypes.has('artist') || game.enabledRoundTypes.has('both');
+  const pool: [PartyTarget, number][] = [];
+  if (hasFormat || !hasTargetVariant) pool.push(['title', 60]);
   if (game.enabledRoundTypes.has('artist')) pool.push(['artist', 25]);
   if (format === 'choice' && game.enabledRoundTypes.has('year')) pool.push(['year', 15]);
   // Double Duty has no slot in a tap-to-answer UI, so it can't combine with
@@ -191,16 +197,16 @@ function pickWarmupFormat(game: Game): PartyFormat {
 
 function buildWarmupConfig(game: Game, plain: PlainPartyConfig): PartyConfig {
   const warmupFormat = pickWarmupFormat(game);
-  const warmupTagline: Record<PartyFormat, string> = {
-    classic: 'A classic round to get going',
-    race: 'A race round to get going',
-    year: 'Guess the year to get going',
-    choice: 'A multiple-choice round to get going',
-  };
+  const target = pickPartyTarget(game, warmupFormat);
+  // The warm-up is still gentler than a normal Party intro, but it must name
+  // the recipe that will actually be played. Otherwise a Double Duty warm-up
+  // is announced as a plain Classic/Race round and surprises everyone once it
+  // starts.
+  const resolvedIntro = introFor(warmupFormat, target, null);
   return {
-    ...plain, format: warmupFormat, target: warmupFormat === 'year' ? 'year' : 'title',
+    ...plain, format: warmupFormat, target,
     event: null, multiplier: 1, winnerOnly: false,
-    intro: { title: 'Warm-Up', tagline: warmupTagline[warmupFormat] },
+    intro: { title: `Warm-Up · ${resolvedIntro.title}`, tagline: resolvedIntro.tagline },
   };
 }
 
