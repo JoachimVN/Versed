@@ -245,7 +245,11 @@ function assertKnownFilters(options) {
 }
 
 async function runCheck(browser, vp, view, height, outSuffix, focusInput) {
-  const page = await browser.newPage();
+  // deviceScaleFactor 2 matches a real Retina Mac; at the Playwright default
+  // of 1, canvas-drawn confetti renders with hard blocky edges instead of the
+  // soft anti-aliased look it has on the actual dev machine (see
+  // screenshots.js for the same fix).
+  const page = await browser.newPage({ deviceScaleFactor: 2 });
   await prepPage(page);
   await page.setViewportSize({ width: vp.width, height });
   await page.goto(`${BASE}/screenshot?v=${view.v}`);
