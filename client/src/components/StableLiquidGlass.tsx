@@ -45,13 +45,28 @@ export default function StableLiquidGlass(props: Readonly<LiquidGlassProps>) {
     const parent = wrapperRef.current?.parentElement;
     if (!parent) return;
     let frame = 0;
+    let trailingTimeout = 0;
+    const dispatchResize = () => window.dispatchEvent(new Event('resize'));
     const observer = new ResizeObserver(() => {
       cancelAnimationFrame(frame);
-      frame = requestAnimationFrame(() => window.dispatchEvent(new Event('resize')));
+      clearTimeout(trailingTimeout);
+      frame = requestAnimationFrame(() => {
+        dispatchResize();
+        // liquid-glass-react hardcodes a 200ms CSS transition on its own glass
+        // container (baseStyle.transition, unconditional) but only snapshots
+        // its overlay layers' size via getBoundingClientRect() at the moment
+        // this resize event fires. If our container's own resize settles
+        // before that internal transition finishes, the snapshot lands
+        // mid-transition and the overlay is stuck there for good — nothing
+        // else re-triggers a re-measure. Re-dispatch once more after that
+        // window has definitely closed to catch the true final size.
+        trailingTimeout = window.setTimeout(dispatchResize, 250);
+      });
     });
     observer.observe(parent);
     return () => {
       cancelAnimationFrame(frame);
+      clearTimeout(trailingTimeout);
       observer.disconnect();
     };
   }, []);
