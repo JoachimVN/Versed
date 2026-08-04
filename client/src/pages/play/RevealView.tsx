@@ -351,9 +351,7 @@ export function RevealView({ game, result }: Readonly<{ game: PlayState; result:
           return (
             <div key={g.name} className="flex flex-col gap-0.5">
               <div className="flex justify-between items-start gap-2">
-                <span className="text-white/45 text-xs min-w-0 truncate">
-                  {g.name}{g.name === myName && <span className="text-white/30"> (you)</span>}
-                </span>
+                <span className="text-white/45 text-xs min-w-0 truncate">{g.name}</span>
                 <span className="text-xs text-right min-w-0 break-words italic text-white/28" style={{ overflowWrap: 'anywhere' }}>
                   {g.guess === null ? 'skipped' : `"${g.guess}${ellipsis}"`}
                 </span>
@@ -389,9 +387,7 @@ export function RevealView({ game, result }: Readonly<{ game: PlayState; result:
         return (
           <div key={g.name} className="flex flex-col gap-0.5">
             <div className="flex justify-between items-start gap-2">
-              <span className={`text-xs min-w-0 truncate ${correct ? 'text-white font-semibold' : 'text-white/45'}`}>
-                {g.name}{g.name === myName && <span className={correct ? 'text-white/50' : 'text-white/30'}> (you)</span>}
-              </span>
+              <span className={`text-xs min-w-0 truncate ${correct ? 'text-white font-semibold' : 'text-white/45'}`}>{g.name}</span>
               <span className={`text-xs text-right min-w-0 break-words ${guessClass}`} style={{ overflowWrap: 'anywhere' }}>
                 {g.guess === null ? 'skipped' : `"${g.guess}${ellipsis}"`}
                 {correct && g.timeMs != null && (
