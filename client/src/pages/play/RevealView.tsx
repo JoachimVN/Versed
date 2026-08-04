@@ -1,3 +1,4 @@
+import { useRef } from 'react';
 import { Flame } from 'lucide-react';
 import LiquidGlass from '../../components/StableLiquidGlass';
 import { useAnimatedScore } from '../../hooks/useAnimatedScore';
@@ -8,8 +9,18 @@ import type { RevealLayout } from '../../components/revealSqueeze';
 import { useRevealLayout, computeCardHeight, computeCardWidth } from '../../components/revealSqueeze';
 import { PartyRevealExtras, MYSTERY_LANDING_MS } from '../../components/RoundIntro';
 import { LIQUID_CARD_PROPS } from '../../components/liquidGlassPresets';
-import type { RoundResultEvent } from '../../types';
+import type { LeaderboardEntry, RoundResultEvent } from '../../types';
 import type { PlayState } from './usePlayGame';
+
+type PlayerGuess = NonNullable<RoundResultEvent['playerGuesses']>[number];
+
+// Mirrors host RevealView's sortedPlayers: highest total score first, so the
+// crowd list reads as the same leaderboard order the host shows instead of
+// whatever order players happened to join in.
+function sortGuessesByScore(guesses: PlayerGuess[], leaderboard: LeaderboardEntry[]): PlayerGuess[] {
+  const scoreOf = (name: string) => leaderboard.find(e => e.name === name)?.score ?? 0;
+  return guesses.slice().sort((a, b) => scoreOf(b.name) - scoreOf(a.name));
+}
 
 function guessTextClass(guess: string | null, correct: boolean): string {
   if (guess === null) return 'text-white/28 italic';
@@ -286,7 +297,7 @@ export function YearRevealView({ game, result }: Readonly<{ game: PlayState; res
 }
 
 export function RevealView({ game, result }: Readonly<{ game: PlayState; result: RoundResultEvent }>) {
-  const { myName, myRaceTimeMs } = game;
+  const { myName, myRaceTimeMs, leaderboard } = game;
   const squeeze = useRevealLayout();
   const isRace = result.mode === 'race';
   const iGotItInRace = isRace && !!result.correctGuessers?.includes(myName);
@@ -294,6 +305,25 @@ export function RevealView({ game, result }: Readonly<{ game: PlayState; result:
   const isFinalReveal = game.roundIndex + 1 >= game.totalRounds && (!result.party?.finale || finaleResolved);
   const finalLabel = game.myScoreDelta > 0 ? 'You scored' : 'Not quite';
   const cardHeight = computeCardHeight(!!result.coverUrl, squeeze);
+
+  // Mirrors host RevealView's frozenOrderRef: a steal round's flight
+  // animation needs the rows to hold still through the reveal, so the crowd
+  // list can't re-sort live off score_update the way every other round type
+  // does — freeze it as of this round's first render instead.
+  const revealParty = result.party ?? game.party;
+  const isStealRound = revealParty?.event === 'steal';
+  const frozenGuessOrderRef = useRef<string[] | null>(null);
+  if (!isStealRound) frozenGuessOrderRef.current = null;
+  else if (!frozenGuessOrderRef.current && result.playerGuesses) {
+    frozenGuessOrderRef.current = sortGuessesByScore(result.playerGuesses, leaderboard).map(g => g.name);
+  }
+  function sortedGuesses(guesses: PlayerGuess[]): PlayerGuess[] {
+    if (isStealRound && frozenGuessOrderRef.current) {
+      const order = frozenGuessOrderRef.current;
+      return order.map(name => guesses.find(g => g.name === name)).filter((g): g is PlayerGuess => !!g);
+    }
+    return sortGuessesByScore(guesses, leaderboard);
+  }
 
   if (isFinalReveal) {
     return (
@@ -316,12 +346,14 @@ export function RevealView({ game, result }: Readonly<{ game: PlayState; result:
   if (!result.correct) {
     const guessesList = result.playerGuesses && result.playerGuesses.length > 0 && (
       <div style={{ background: 'rgba(255,255,255,0.05)', border: '1px solid rgba(255,255,255,0.08)', borderRadius: '16px', padding: '8px 12px', width: '310px', maxWidth: '92vw' }} className="space-y-1">
-        {result.playerGuesses.map(g => {
+        {sortedGuesses(result.playerGuesses).map(g => {
           const ellipsis = g.live ? '…' : '';
           return (
             <div key={g.name} className="flex flex-col gap-0.5">
               <div className="flex justify-between items-start gap-2">
-                <span className="text-white/45 text-xs min-w-0 truncate">{g.name}</span>
+                <span className="text-white/45 text-xs min-w-0 truncate">
+                  {g.name}{g.name === myName && <span className="text-white/30"> (you)</span>}
+                </span>
                 <span className="text-xs text-right min-w-0 break-words italic text-white/28" style={{ overflowWrap: 'anywhere' }}>
                   {g.guess === null ? 'skipped' : `"${g.guess}${ellipsis}"`}
                 </span>
@@ -350,14 +382,16 @@ export function RevealView({ game, result }: Readonly<{ game: PlayState; result:
 
   const guessesList = result.playerGuesses && result.playerGuesses.length > 0 && (
     <div style={{ background: 'rgba(255,255,255,0.05)', border: '1px solid rgba(255,255,255,0.08)', borderRadius: '16px', padding: '8px 12px', width: '310px', maxWidth: '92vw' }} className="space-y-1">
-      {result.playerGuesses.map(g => {
+      {sortedGuesses(result.playerGuesses).map(g => {
         const correct = isRace ? !!result.correctGuessers?.includes(g.name) : (g.name === result.guesserName);
         const guessClass = guessTextClass(g.guess, correct);
         const ellipsis = g.live ? '…' : '';
         return (
           <div key={g.name} className="flex flex-col gap-0.5">
             <div className="flex justify-between items-start gap-2">
-              <span className={`text-xs min-w-0 truncate ${correct ? 'text-white font-semibold' : 'text-white/45'}`}>{g.name}</span>
+              <span className={`text-xs min-w-0 truncate ${correct ? 'text-white font-semibold' : 'text-white/45'}`}>
+                {g.name}{g.name === myName && <span className={correct ? 'text-white/50' : 'text-white/30'}> (you)</span>}
+              </span>
               <span className={`text-xs text-right min-w-0 break-words ${guessClass}`} style={{ overflowWrap: 'anywhere' }}>
                 {g.guess === null ? 'skipped' : `"${g.guess}${ellipsis}"`}
                 {correct && g.timeMs != null && (
