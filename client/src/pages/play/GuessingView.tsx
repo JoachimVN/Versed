@@ -154,7 +154,7 @@ function guessInputBoxStyle(isListening: boolean, focused: boolean, tightGlow: b
 function ChoiceButtons({ options, onPick, disabled }: Readonly<{ options: string[]; onPick: (option: string) => void; disabled?: boolean }>) {
   const style = guessInputBoxStyle(false, false, false);
   return (
-    <div className="w-full grid grid-cols-2 gap-3" style={{ flexShrink: 0 }}>
+    <div className="w-full grid grid-cols-2 gap-3" style={{ flexShrink: 0, maxWidth: 'min(92vw, 420px)' }}>
       {options.map(option => (
         <button
           key={option}
@@ -183,7 +183,7 @@ function ChoiceButtons({ options, onPick, disabled }: Readonly<{ options: string
 function ChaosHintButtons({ hints, onPick, disabled }: Readonly<{ hints: Hint[]; onPick: (index: number) => void; disabled?: boolean }>) {
   const style = guessInputBoxStyle(false, false, false);
   return (
-    <div className="w-full grid grid-cols-2 gap-2.5" style={{ flexShrink: 0 }}>
+    <div className="w-full grid grid-cols-2 gap-2.5" style={{ flexShrink: 0, maxWidth: 'min(92vw, 420px)' }}>
       {hints.map((h, i) => (
         <button
           key={h.label}
@@ -340,7 +340,7 @@ export function GuessingView({ game }: Readonly<{ game: PlayState }>) {
   } else {
     guessControl = (
       <div style={{
-        width: '100%', borderRadius: '16px', overflow: 'hidden', flexShrink: 0,
+        width: '100%', maxWidth: 'min(92vw, 420px)', borderRadius: '16px', overflow: 'hidden', flexShrink: 0,
         border: inputBoxStyle.border,
         background: inputBoxStyle.background,
         boxShadow: inputBoxStyle.boxShadow,
@@ -376,7 +376,7 @@ export function GuessingView({ game }: Readonly<{ game: PlayState }>) {
   // vertical room to spare (see below).
   const artistInputEl = isBoth ? (
     <div style={{
-      width: '100%', borderRadius: '14px', overflow: 'hidden', flexShrink: 0,
+      width: '100%', maxWidth: 'min(92vw, 420px)', borderRadius: '14px', overflow: 'hidden', flexShrink: 0,
       border: '1px solid rgba(0,238,232,0.25)',
       background: 'rgba(0,238,232,0.05)',
     }}>
@@ -467,7 +467,7 @@ export function GuessingView({ game }: Readonly<{ game: PlayState }>) {
         )}
 
         {sideBySideFields ? (
-          <div style={{ display: 'flex', gap: '8px', width: '100%' }}>
+          <div style={{ display: 'flex', gap: '8px', width: '100%', maxWidth: 'min(92vw, 420px)' }}>
             <div style={{ flex: 1, minWidth: 0 }}>{guessControl}</div>
             <div style={{ flex: 1, minWidth: 0 }}>{artistInputEl}</div>
           </div>
