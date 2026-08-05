@@ -109,7 +109,7 @@ function ActiveHeader({ timeLeft, timerTotal, myScore, isRace, isYear, songPlayi
   // scrolled up under the badge chip when the guess field grabbed focus).
   if (ultraCompact && landscape) {
     return (
-      <div className="flex items-center justify-between w-full gap-2 px-4 pt-1 pb-0">
+      <div className="flex items-center justify-between w-full gap-2 px-4 pt-2 pb-0">
         <span style={{ color: 'rgba(255,255,255,0.45)', fontSize: '0.62rem', fontWeight: 600, whiteSpace: 'nowrap' }}>Your turn</span>
         <LinearTimer timeLeft={timeLeft} total={timerTotal} />
         <span style={{ color: 'rgba(255,255,255,0.45)', fontSize: '0.6rem', fontWeight: 500, whiteSpace: 'nowrap' }}>
@@ -119,7 +119,7 @@ function ActiveHeader({ timeLeft, timerTotal, myScore, isRace, isYear, songPlayi
     );
   }
   return (
-    <div className={`flex flex-col items-center ${squeezeValue(squeezeTier, 'gap-1 pt-1 pb-0', 'gap-2 pt-2 pb-1', 'gap-2 pt-4 pb-3')} `}>
+    <div className={`flex flex-col items-center ${squeezeValue(squeezeTier, 'gap-1 pt-3 pb-0', 'gap-2 pt-4 pb-1', 'gap-2 pt-6 pb-3')} `}>
       <div className="flex items-center justify-between w-full px-5">
         <span style={{ color: 'rgba(255,255,255,0.45)', fontSize: ultraCompact ? '0.68rem' : '0.85rem', fontWeight: 600 }}>Your turn</span>
         <span style={{ color: 'rgba(255,255,255,0.45)', fontSize: ultraCompact ? '0.64rem' : '0.8rem', fontWeight: 500 }}>
