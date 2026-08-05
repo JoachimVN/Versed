@@ -30,6 +30,30 @@ function canJoinGame(showPinField: boolean, pin: string, name: string): boolean 
   return !showPinField || (pin.length === 3 && hasName);
 }
 
+// Below this viewport height the default spacing pushes the Join button
+// (and, with a saved session, the whole rejoin card above it) past the
+// bottom edge. The screen must never rely on scrolling to reveal it, so
+// these squeeze the logo/gaps/pill heights down instead — mirrors the
+// compact/ultraCompact tiers in GuessingView.tsx.
+const COMPACT_HEIGHT_PX = 700;
+const ULTRA_COMPACT_HEIGHT_PX = 450;
+
+function useJoinLayout(): { compact: boolean; ultraCompact: boolean } {
+  const [layout, setLayout] = useState(() => {
+    const h = typeof window !== 'undefined' ? window.innerHeight : Infinity;
+    return { compact: h < COMPACT_HEIGHT_PX, ultraCompact: h < ULTRA_COMPACT_HEIGHT_PX };
+  });
+  useEffect(() => {
+    const sync = () => {
+      const h = window.innerHeight;
+      setLayout({ compact: h < COMPACT_HEIGHT_PX, ultraCompact: h < ULTRA_COMPACT_HEIGHT_PX });
+    };
+    window.addEventListener('resize', sync);
+    return () => window.removeEventListener('resize', sync);
+  }, []);
+  return layout;
+}
+
 
 export function JoinView({ game }: Readonly<{ game: PlayState }>) {
   const { pin, name, error, savedSession, cameFromQR, setPin, setName, join, rejoinSaved } = game;
@@ -47,7 +71,6 @@ export function JoinView({ game }: Readonly<{ game: PlayState }>) {
   const canJoin = canJoinGame(showPinField, pin, name);
   const controlWidth = 'min(310px, calc(100vw - 48px))';
   const fieldWidth = 'min(262px, calc(100vw - 96px))';
-  const joinPadding = '18px min(96px, calc((100vw - 156px) / 2))';
   // LiquidGlass only measures its own size once on mount (and on window
   // resize) — it has no ResizeObserver, so it never notices the card growing
   // as the PIN field appears. Re-firing its resize listener lets it
@@ -56,6 +79,16 @@ export function JoinView({ game }: Readonly<{ game: PlayState }>) {
     globalThis.dispatchEvent(new Event('resize'));
   }, [showPinField]);
   const keyboardOpen = useKeyboardOpen();
+  const { compact, ultraCompact } = useJoinLayout();
+  // The pill's rendered height comes from this padding plus its text's line
+  // height — not from the button wrapper's own `height` below, which is
+  // absolutely-positioned inside and merely reserves layout space. Shrinking
+  // the wrapper without shrinking this padding leaves the glass poking past
+  // its clipping ancestor (the wrapper's own overflow: hidden / the savedSession
+  // block's collapsedWhenTyping), which is what actually cut the button off.
+  const joinPaddingV = ultraCompact ? 10 : compact ? 14 : 18;
+  const joinPadding = `${joinPaddingV}px min(96px, calc((100vw - 156px) / 2))`;
+  const savedPillPaddingV = ultraCompact ? 7 : compact ? 10 : 13;
   const [leaving, setLeaving] = useState(false);
   const logoRef = useRef<HTMLImageElement>(null);
   const { beginMorph, provideTarget, morphing, dismissMorph, reducedMotion } = useLogoMorph();
@@ -109,7 +142,8 @@ export function JoinView({ game }: Readonly<{ game: PlayState }>) {
         style={{
           minHeight: 'calc(100% - var(--keyboard-inset, 0px))',
           height: 'calc(100% - var(--keyboard-inset, 0px))',
-          gap: keyboardOpen ? '20px' : '40px',
+          gap: keyboardOpen ? '20px' : ultraCompact ? '10px' : compact ? '16px' : '40px',
+          padding: ultraCompact ? '16px' : undefined,
           transition: 'gap 0.28s ease, height 0.22s ease-out, min-height 0.22s ease-out',
         }}
       >
@@ -119,7 +153,7 @@ export function JoinView({ game }: Readonly<{ game: PlayState }>) {
           intermediate sizes let the logo render underneath the card for a
           frame. display: none pulls it out of layout in one step — there's
           no size for it to pass through. */}
-      <div className="join-screen-logo" style={{ display: keyboardOpen ? 'none' : undefined }}>
+      <div className="join-screen-logo" style={{ display: (keyboardOpen || ultraCompact) ? 'none' : undefined }}>
         <img
           ref={logoRef}
           src={BRAND_LOGO_SRC}
@@ -128,25 +162,25 @@ export function JoinView({ game }: Readonly<{ game: PlayState }>) {
           width={2560}
           height={1000}
           className="versed-logo w-auto drop-shadow-[0_18px_22px_rgba(0,0,0,0.55)]"
-          style={{ maxHeight: '128px', maxWidth: '100%', opacity: (morphing || leaving) ? 0 : 1, willChange: 'opacity' }}
+          style={{ maxHeight: compact ? '90px' : '128px', maxWidth: '100%', opacity: (morphing || leaving) ? 0 : 1, willChange: 'opacity' }}
         />
       </div>
 
       {savedSession && (
-        <div className="flex flex-col items-center gap-3" style={{ ...collapsedWhenTyping(keyboardOpen), flexShrink: 0 }}>
+        <div className="flex flex-col items-center" style={{ ...collapsedWhenTyping(keyboardOpen), gap: ultraCompact ? '6px' : compact ? '8px' : '12px', flexShrink: 0 }}>
           <button
             type="button"
             onClick={rejoinSaved}
             className="liquid-btn glass-tint-purple relative cursor-pointer border-0 bg-transparent p-0"
-            style={{ width: controlWidth, height: '70px', borderRadius: '100px', background: 'rgba(0,0,0,0.001)' }}
+            style={{ width: controlWidth, height: ultraCompact ? '54px' : compact ? '60px' : '70px', borderRadius: '100px', background: 'rgba(0,0,0,0.001)' }}
           >
             <LiquidGlass
               style={{ position: 'absolute', top: '50%', left: '50%' }}
               {...LIQUID_PILL_PROPS}
-              padding="13px 48px"
+              padding={`${savedPillPaddingV}px 48px`}
             >
               <div style={{ position: 'relative' }}>
-                <div style={{ position: 'absolute', inset: '-13px -48px', borderRadius: '100px', pointerEvents: 'none', background: 'rgba(158,18,204,0.05)' }} />
+                <div style={{ position: 'absolute', inset: `-${savedPillPaddingV}px -48px`, borderRadius: '100px', pointerEvents: 'none', background: 'rgba(158,18,204,0.05)' }} />
                 <div style={{ position: 'relative', textAlign: 'center', whiteSpace: 'nowrap', minWidth: 'min(214px, calc(100vw - 144px))' }}>
                   <p style={{ color: 'rgba(255,255,255,0.45)', fontSize: '0.6rem', letterSpacing: '0.18em', textTransform: 'uppercase', lineHeight: 1, marginBottom: '5px' }}>
                     Rejoin as · {savedSession.pin}
@@ -246,7 +280,7 @@ export function JoinView({ game }: Readonly<{ game: PlayState }>) {
         className="liquid-btn glass-tint-teal relative border-0 bg-transparent p-0"
         style={{
           width: controlWidth,
-          height: '64px',
+          height: ultraCompact ? '52px' : compact ? '58px' : '64px',
           borderRadius: '100px',
           background: 'rgba(0,0,0,0.001)',
           opacity: canJoin ? 1 : 0.3,
