@@ -3,6 +3,7 @@ import { Flame } from 'lucide-react';
 import LiquidGlass from '../../components/StableLiquidGlass';
 import { PartyBadge } from '../../components/RoundIntro';
 import { AudioBars } from '../../components/AudioBars';
+import { useRevealLayout } from '../../components/revealSqueeze';
 import type { PartyInfo } from '../../types';
 import type { PlayState } from './usePlayGame';
 import { resolveTarget, TargetChip } from './guessTarget';
@@ -18,6 +19,24 @@ export function WatchingView({ game }: Readonly<{ game: PlayState }>) {
   const nonYearAccent = isRace ? 'race' : 'classic';
   const watchAccent = isYear ? 'year' : nonYearAccent;
 
+  // On short viewports the card's fixed `min(75vh, 620px)` reservation plus
+  // the header/gaps/score card easily add up to more than the viewport has
+  // (e.g. a landscape phone at 375px tall), pushing the score card off the
+  // bottom of the screen with no way to see it before the round starts. The
+  // wrapper's declared height only ever sets the box the glass card is
+  // centered inside — never the card's own size — so shrinking it costs
+  // nothing on tall screens (see RevealView's identical squeeze pattern).
+  const { compact, ultraCompact } = useRevealLayout();
+  const outerGapClass = ultraCompact ? 'gap-1' : compact ? 'gap-4' : 'gap-6';
+  const outerPaddingClass = ultraCompact ? 'px-4 py-2' : compact ? 'px-5 py-5' : 'px-5 py-8';
+  const headerGapClass = ultraCompact ? 'gap-1' : 'gap-2';
+  const cardHeight = ultraCompact ? '175px' : compact ? '300px' : 'min(75vh, 620px)';
+  const cardGap = ultraCompact ? '14px' : compact ? '26px' : '44px';
+  const cardPadY = ultraCompact ? 'min(14px, 3vh)' : compact ? 'min(40px, 6vh)' : 'min(80px, 9vh)';
+  const barsHeight = ultraCompact ? 26 : compact ? 40 : 56;
+  const scorePadding = ultraCompact ? '6px 20px' : compact ? '10px 26px' : '10px 30px';
+  const scoreTextClass = ultraCompact ? 'text-lg' : compact ? 'text-xl' : 'text-2xl';
+
   return (
     <div className="relative min-h-screen overflow-x-hidden overflow-y-auto overscroll-contain">
       {/* Background */}
@@ -31,7 +50,7 @@ export function WatchingView({ game }: Readonly<{ game: PlayState }>) {
 
       {/* Content */}
       <div
-        className="relative flex flex-col items-center min-h-screen gap-6 px-5 py-8"
+        className={`relative flex flex-col items-center min-h-screen ${outerGapClass} ${outerPaddingClass}`}
         style={{
           zIndex: 2,
           transition: 'opacity 0.4s ease, transform 0.4s ease',
@@ -39,7 +58,7 @@ export function WatchingView({ game }: Readonly<{ game: PlayState }>) {
           transform: visible ? 'translateY(0)' : 'translateY(14px)',
         }}
       >
-        <div className="flex flex-col items-center gap-2">
+        <div className={`flex flex-col items-center ${headerGapClass}`}>
           <p style={{ color: 'rgba(255,255,255,0.45)', fontSize: '0.85rem' }}>
             Round {roundIndex + 1}<span style={{ color: 'rgba(255,255,255,0.45)' }}>/{totalRounds}</span>
           </p>
@@ -48,7 +67,7 @@ export function WatchingView({ game }: Readonly<{ game: PlayState }>) {
         </div>
 
         <div className="flex-1 flex items-center justify-center w-full">
-          <div className="liquid-btn relative" style={{ width: 'min(90vw, 360px)', height: 'min(75vh, 620px)' }}>
+          <div className="liquid-btn relative" style={{ width: 'min(90vw, 360px)', height: cardHeight }}>
             <LiquidGlass
               style={{ position: 'absolute', top: '50%', left: '50%' }}
               displacementScale={58}
@@ -57,22 +76,25 @@ export function WatchingView({ game }: Readonly<{ game: PlayState }>) {
               aberrationIntensity={1.5}
               elasticity={0.08}
               cornerRadius={28}
-              padding="min(80px, 9vh) min(24px, 6vw)"
+              padding={`${cardPadY} min(24px, 6vw)`}
             >
-              <div style={{ width: 'min(298px, 78vw)', display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '44px' }}>
+              <div style={{ width: 'min(298px, 78vw)', display: 'flex', flexDirection: 'column', alignItems: 'center', gap: cardGap }}>
 
-                <AudioBars playing={songPlaying} accent={watchAccent} height={56} bpm={songTempo} />
+                <AudioBars playing={songPlaying} accent={watchAccent} height={barsHeight} bpm={songTempo} />
 
                 <div style={{ width: '100%', height: '1px', background: 'rgba(255,255,255,0.07)' }} />
 
-                <GetReadyBody isDuel={isDuel} isUnderdog={isUnderdog} isRace={isRace} party={party} lowestBid={lowestBid} guesserNames={guesserNames} songPlaying={songPlaying} />
+                <GetReadyBody
+                  isDuel={isDuel} isUnderdog={isUnderdog} isRace={isRace} party={party} lowestBid={lowestBid}
+                  guesserNames={guesserNames} songPlaying={songPlaying} compact={compact} ultraCompact={ultraCompact}
+                />
               </div>
             </LiquidGlass>
           </div>
         </div>
 
-        <div style={{ background: 'rgba(255,255,255,0.05)', border: '1px solid rgba(255,255,255,0.08)', borderRadius: '16px', padding: '10px 30px', textAlign: 'center' }}>
-          <p className="text-white font-black text-2xl tabular-nums">{myScore.toLocaleString()}</p>
+        <div style={{ background: 'rgba(255,255,255,0.05)', border: '1px solid rgba(255,255,255,0.08)', borderRadius: '16px', padding: scorePadding, textAlign: 'center' }}>
+          <p className={`text-white font-black tabular-nums ${scoreTextClass}`}>{myScore.toLocaleString()}</p>
           <p className="text-white/45 text-xs">your score</p>
           {myStreak >= 2 && (
             <p className="flex items-center justify-center gap-1 text-orange-400 text-xs font-bold mt-1">
@@ -85,24 +107,32 @@ export function WatchingView({ game }: Readonly<{ game: PlayState }>) {
   );
 }
 
-function GetReadyBody({ isDuel, isUnderdog, isRace, party, lowestBid, guesserNames, songPlaying }: Readonly<{
+function GetReadyBody({ isDuel, isUnderdog, isRace, party, lowestBid, guesserNames, songPlaying, ultraCompact }: Readonly<{
   isDuel: boolean; isUnderdog: boolean; isRace: boolean; party: PartyInfo | null; lowestBid: number; guesserNames: string[]; songPlaying: boolean;
+  compact: boolean; ultraCompact: boolean;
 }>) {
   const duelWins = party?.duelProgress?.wins;
   const duelScoreLine = duelWins?.length === 2
     ? `${duelWins[0].name} ${duelWins[0].count} – ${duelWins[1].count} ${duelWins[1].name}`
     : null;
+  // A landscape phone (the tightest squeeze) leaves the card only ~100px for
+  // this whole block — shrink the gap and headline font so a long duel/race
+  // name still lands well inside that budget instead of pushing the score
+  // card off the bottom of the screen (see WatchingView's cardHeight tiers).
+  const bodyGap = ultraCompact ? '6px' : '10px';
+  const headlineSize = ultraCompact ? '1.15rem' : '1.65rem';
+  const headlineLineHeight = ultraCompact ? 1.2 : 1.3;
   // Race/year sub-rounds keep the existing "everyone races" duel framing —
   // the classic sub-round (game 1) falls through to the normal bid-based
   // display below instead, just with the duel score appended, since bidding
   // still applies there.
   if (isDuel && isRace) {
     return (
-      <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '10px' }}>
+      <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: bodyGap }}>
         <span style={{ color: 'rgba(255,255,255,0.45)', fontSize: '0.65rem', letterSpacing: '0.2em', textTransform: 'uppercase' }}>
           The finale
         </span>
-        <span style={{ display: 'inline-block', minWidth: '220px', color: 'white', fontWeight: 900, fontSize: '1.65rem', lineHeight: 1.3, textAlign: 'center' }}>
+        <span style={{ display: 'inline-block', minWidth: '220px', color: 'white', fontWeight: 900, fontSize: headlineSize, lineHeight: headlineLineHeight, textAlign: 'center' }}>
           {party!.duelists.join(' vs ')}
         </span>
         <span style={{ display: 'inline-block', minWidth: '170px', color: 'rgba(255,255,255,0.45)', fontSize: '0.88rem', textAlign: 'center' }}>
@@ -113,11 +143,11 @@ function GetReadyBody({ isDuel, isUnderdog, isRace, party, lowestBid, guesserNam
   }
   if (isUnderdog) {
     return (
-      <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '10px' }}>
+      <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: bodyGap }}>
         <span style={{ color: 'rgba(255,255,255,0.45)', fontSize: '0.65rem', letterSpacing: '0.2em', textTransform: 'uppercase' }}>
           Underdog Boost
         </span>
-        <span style={{ display: 'inline-block', minWidth: '220px', color: 'white', fontWeight: 900, fontSize: '1.65rem', lineHeight: 1.3, textAlign: 'center' }}>
+        <span style={{ display: 'inline-block', minWidth: '220px', color: 'white', fontWeight: 900, fontSize: headlineSize, lineHeight: headlineLineHeight, textAlign: 'center' }}>
           {party!.restricted.join(' & ')}
         </span>
         <span style={{ display: 'inline-block', minWidth: '170px', color: 'rgba(255,255,255,0.45)', fontSize: '0.88rem', textAlign: 'center' }}>
@@ -128,24 +158,24 @@ function GetReadyBody({ isDuel, isUnderdog, isRace, party, lowestBid, guesserNam
   }
   if (isRace) {
     return (
-      <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '10px' }}>
+      <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: bodyGap }}>
         <span style={{ color: 'rgba(255,255,255,0.45)', fontSize: '0.65rem', letterSpacing: '0.2em', textTransform: 'uppercase' }}>
           Get ready
         </span>
-        <span style={{ display: 'inline-block', minWidth: '220px', color: 'white', fontWeight: 900, fontSize: '1.65rem', lineHeight: 1.3, textAlign: 'center' }}>
+        <span style={{ display: 'inline-block', minWidth: '220px', color: 'white', fontWeight: 900, fontSize: headlineSize, lineHeight: headlineLineHeight, textAlign: 'center' }}>
           Everyone guesses at once
         </span>
       </div>
     );
   }
   return (
-    <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '10px' }}>
+    <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: bodyGap }}>
       <span style={{ color: 'rgba(255,255,255,0.45)', fontSize: '0.65rem', letterSpacing: '0.2em', textTransform: 'uppercase' }}>
         {songPlaying ? 'Listen closely' : 'Get ready'}
       </span>
       <span style={{
         display: 'inline-block', minWidth: '220px', textAlign: 'center',
-        fontWeight: 900, fontSize: '1.75rem', lineHeight: 1.25,
+        fontWeight: 900, fontSize: ultraCompact ? '1.2rem' : '1.75rem', lineHeight: 1.25,
         background: 'linear-gradient(to bottom left, rgba(0,238,232,0.4) 0%, transparent 55%), linear-gradient(to top right, rgba(158,18,204,0.5) 0%, transparent 55%), #fff',
         WebkitBackgroundClip: 'text', WebkitTextFillColor: 'transparent', backgroundClip: 'text',
       }}>
