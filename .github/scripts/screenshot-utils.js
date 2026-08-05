@@ -16,6 +16,15 @@ async function prepPage(page) {
             animation-delay: 0s !important;
             transition-duration: 0s !important;
             transition-delay: 0s !important;
+        }
+        /* liquid-glass-react measures and transitions its internal surface
+           on mount. Freezing that transition leaves Chromium with the
+           library's black shadow geometry, producing a false inset rim in
+           host-card screenshots. Let only those internal layers settle. */
+        .liquid-glass-stabilizer > *,
+        .liquid-glass-stabilizer .glass {
+            transition-duration: 0.2s !important;
+            transition-delay: 0s !important;
         }`;
         const inject = () => {
             const style = document.createElement('style');
