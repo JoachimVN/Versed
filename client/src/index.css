@@ -901,6 +901,18 @@ select:focus-visible,
   gap: 8px;
 }
 
+/* The champion's name renders bigger than 2nd/3rd's (see PodiumSpot in
+   FinalResults.tsx) but used to share the same equal-thirds column, so on
+   narrow cards it was the first (often only) one to ellipsis. Giving it a
+   larger share -- taken from the other two, which read fine narrower since
+   their names are smaller -- keeps the row's total width unchanged. */
+.podium-spot-champion {
+  flex: 1.2;
+}
+.podium-spot:not(.podium-spot-champion) {
+  flex: 0.9;
+}
+
 .podium-riser {
   width: 100%;
   border-radius: 14px 14px 6px 6px;
