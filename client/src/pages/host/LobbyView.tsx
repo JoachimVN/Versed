@@ -25,7 +25,7 @@ function SettingsButton({ settingsOpen, toggleSettings }: Readonly<{ settingsOpe
       onMouseEnter={() => setHovered(true)}
       onMouseLeave={() => setHovered(false)}
       className="liquid-btn glass-tint-purple settings-control-glass absolute top-5 right-5 z-10"
-      style={{ width: '112px', height: '44px' }}
+      style={{ width: '112px', height: '36px' }}
     >
       <LiquidGlass
         style={{
@@ -34,7 +34,7 @@ function SettingsButton({ settingsOpen, toggleSettings }: Readonly<{ settingsOpe
           transition: 'filter 0.25s ease',
         }}
         {...LIQUID_CONTROL_PROPS}
-        padding="8px 16px 8px 12px"
+        padding="4px 16px 4px 12px"
       >
         <div style={{ position: 'relative' }}>
           <div style={{
