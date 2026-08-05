@@ -106,7 +106,7 @@ const VIEWS = [
   { id: 'host-final-results', group: 'host', v: 'final-host', name: 'FinalResultsView', click: 'button:has-text("final reveal")', waitFor: '.standings-list' },
   { id: 'host-final-results-long-names', group: 'host', v: 'final-host-long', name: 'FinalResultsLongNamesView' },
   { id: 'host-final-results-empty', group: 'host', v: 'final-empty', name: 'FinalResultsEmptyView' },
-  { id: 'player-waiting', group: 'player', v: 'waiting', name: 'WaitingView' },
+  { id: 'player-waiting', group: 'player', v: 'waiting', name: 'WaitingView', waitFor: '.waiting-record' },
   { id: 'player-join', group: 'player', v: 'join', name: 'JoinView' },
   { id: 'player-join-link', group: 'player', v: 'join-link', name: 'JoinViewLink' },
   { id: 'player-join-rejoin', group: 'player', v: 'join-rejoin', name: 'JoinViewRejoin' },
@@ -168,6 +168,15 @@ async function findOverflow(page) {
       // that exact bleed pattern on every pill button.
       const style = getComputedStyle(el);
       if (style.pointerEvents === 'none' || style.visibility === 'hidden' || Number(style.opacity) === 0) continue;
+      // aria-hidden="true" is liquid-glass-react's own internal filter SVG
+      // (StableLiquidGlass.tsx): it measures its container's post-zoom
+      // getBoundingClientRect() and writes that back as the SVG's inline
+      // pixel width/height, but the SVG is still nested inside the
+      // useHostScale/usePlayerScale `zoom` ancestor, so the browser applies
+      // that zoom a second time on top of the already-zoomed measurement —
+      // an oversized decorative box that's always correctly clipped by its
+      // real container and never actually painted past it.
+      if (el.tagName.toLowerCase() === 'svg' && el.getAttribute('aria-hidden') === 'true') continue;
 
       let overflow;
       if (getComputedStyle(el).position === 'fixed') {
