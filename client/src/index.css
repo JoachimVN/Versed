@@ -651,6 +651,12 @@ select:focus-visible,
   box-shadow: 0px 12px 40px rgba(0, 0, 0, 0.125) !important;
 }
 
+/* The library's broad card shadow becomes an opaque black inset rim on the
+   large host game surfaces. Their glass edge is sufficient separation. */
+.host-game-card .glass {
+  box-shadow: none !important;
+}
+
 /* Thin, on-brand scrollbar for every scroll container (playlist picker grid,
    leaderboard, etc.) instead of the OS default. Firefox reads the two
    scrollbar-* properties on the `*` reset above; everything else reads the

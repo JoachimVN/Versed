@@ -356,7 +356,7 @@ function RevealShell({
             tier — a real cost on a short screen. */}
         <p className="text-white/45 text-xs" style={{ position: 'absolute', top: '10px', left: '14px', zIndex: 3 }}>{roundIndex + 1} / {totalRounds}</p>
 
-        <div className="liquid-btn relative" style={{ width: computeCardWidth(squeeze, wide), height: `${cardHeight}px`, zIndex: 2 }}>
+        <div className="liquid-btn host-game-card relative" style={{ width: computeCardWidth(squeeze, wide), height: `${cardHeight}px`, zIndex: 2 }}>
           <LiquidGlass
             style={{ position: 'absolute', top: '50%', left: '50%' }}
             {...LIQUID_CARD_PROPS}

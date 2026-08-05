@@ -104,7 +104,7 @@ export function PlayingView({ game }: Readonly<{ game: HostState }>) {
         <PartyBadge party={party} />
         <RaceHintBar hints={hints} />
 
-        <div className="liquid-btn relative" style={{ width: 'min(77vw, 527px)', height: countdown === null ? '340px' : '306px' }}>
+        <div className="liquid-btn host-game-card relative" style={{ width: 'min(77vw, 527px)', height: countdown === null ? '340px' : '306px' }}>
           <LiquidGlass
             style={{ position: 'absolute', top: '50%', left: '50%' }}
             {...LIQUID_CARD_PROPS}
