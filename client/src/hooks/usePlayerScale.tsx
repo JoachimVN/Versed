@@ -72,7 +72,7 @@ export function PlayerScaleShell({ children, className, style }: Readonly<{ chil
   const scale = usePlayerScale(ref);
   return (
     <PlayerScaleContext.Provider value={scale}>
-      <div ref={ref} className={`player-scale-shell${className ? ` ${className}` : ''}`} style={style}>
+      <div ref={ref} className={['player-scale-shell', className].filter(Boolean).join(' ')} style={style}>
         {children}
       </div>
     </PlayerScaleContext.Provider>

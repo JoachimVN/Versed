@@ -4,7 +4,7 @@ import type { Award, PointsBreakdown, RoundResultEvent } from '../types';
 import { LIQUID_PILL_PROPS } from './liquidGlassPresets';
 import { YearHeading, YearSongFooter } from './YearReveal';
 import type { CardSqueeze } from './revealSqueeze';
-import { cardContentWidth } from './revealSqueeze';
+import { cardContentWidth, squeezeValue } from './revealSqueeze';
 
 export type { CardSqueeze } from './revealSqueeze';
 
@@ -172,7 +172,10 @@ export function AwardsStrip({ awards }: Readonly<{ awards: Award[] }>) {
 
 export function PillButton({ onClick, label, zIndex, squeeze }: Readonly<{ onClick: () => void; label: string; zIndex?: number; squeeze?: CardSqueeze }>) {
   const { compact = false, ultraCompact = false } = squeeze ?? {};
-  const height = ultraCompact ? '44px' : compact ? '54px' : '64px';
+  const squeezeTier = { compact, ultraCompact };
+  const height = squeezeValue(squeezeTier, '44px', '54px', '64px');
+  const padding = squeezeValue(squeezeTier, '10px 28px', '14px 32px', LIQUID_PILL_PROPS.padding);
+  const textClass = squeezeValue(squeezeTier, 'text-base', 'text-lg', 'text-xl');
   return (
     <button
       type="button"
@@ -180,10 +183,10 @@ export function PillButton({ onClick, label, zIndex, squeeze }: Readonly<{ onCli
       style={{ width: 'min(92vw, 310px)', height, borderRadius: '100px', background: 'rgba(0,0,0,0.001)', zIndex }}
       onClick={onClick}
     >
-      <LiquidGlass style={{ position: 'absolute', top: '50%', left: '50%' }} {...LIQUID_PILL_PROPS} padding={ultraCompact ? '10px 28px' : compact ? '14px 32px' : LIQUID_PILL_PROPS.padding}>
+      <LiquidGlass style={{ position: 'absolute', top: '50%', left: '50%' }} {...LIQUID_PILL_PROPS} padding={padding}>
         <div style={{ position: 'relative' }}>
           <div style={{ position: 'absolute', inset: '-18px -36px', borderRadius: '100px', pointerEvents: 'none', background: 'rgba(158,18,204,0.12)' }} />
-          <span className={`text-white font-bold ${ultraCompact ? 'text-base' : compact ? 'text-lg' : 'text-xl'}`} style={{ whiteSpace: 'nowrap', position: 'relative', display: 'inline-block', minWidth: 'min(210px, calc(100vw - 120px))', textAlign: 'center' }}>
+          <span className={`text-white font-bold ${textClass}`} style={{ whiteSpace: 'nowrap', position: 'relative', display: 'inline-block', minWidth: 'min(210px, calc(100vw - 120px))', textAlign: 'center' }}>
             {label}
           </span>
         </div>
@@ -194,21 +197,25 @@ export function PillButton({ onClick, label, zIndex, squeeze }: Readonly<{ onCli
 
 export function NoOneGotItCardContent({ result, squeeze }: Readonly<{ result: RoundResultEvent; squeeze?: CardSqueeze }>) {
   const { compact = false, ultraCompact = false } = squeeze ?? {};
+  const squeezeTier = { compact, ultraCompact };
+  const titleSize = squeezeValue(squeezeTier, '1.05rem', '1.2rem', '1.4rem');
+  const contentMargin = squeezeValue(squeezeTier, '8px', '10px', '14px');
+  const labelMargin = squeezeValue(squeezeTier, '6px', '8px', '10px');
   const artistOnly = result.artistOnly;
   return (
     <div style={{ width: cardContentWidth(squeeze), display: 'flex', flexDirection: 'column', alignItems: 'center', textAlign: 'center' }}>
       <span style={{
-        fontSize: ultraCompact ? '1.05rem' : compact ? '1.2rem' : '1.4rem', fontWeight: 900, letterSpacing: '0.01em',
+        fontSize: titleSize, fontWeight: 900, letterSpacing: '0.01em',
         background: 'linear-gradient(to bottom left, rgba(210,70,50,0.4) 0%, transparent 52%), linear-gradient(to top right, rgba(255,165,70,0.28) 0%, transparent 52%), #fff',
         WebkitBackgroundClip: 'text', WebkitTextFillColor: 'transparent', backgroundClip: 'text',
-        marginBottom: ultraCompact ? '8px' : compact ? '10px' : '14px', display: 'inline-block', minWidth: '200px',
+        marginBottom: contentMargin, display: 'inline-block', minWidth: '200px',
       }}>
         No one got it
       </span>
-      <div style={{ width: '100%', height: '1px', background: 'rgba(255,255,255,0.08)', marginBottom: ultraCompact ? '8px' : compact ? '10px' : '14px' }} />
+      <div style={{ width: '100%', height: '1px', background: 'rgba(255,255,255,0.08)', marginBottom: contentMargin }} />
       <span style={{
         color: 'rgba(255,255,255,0.45)', fontSize: '0.6rem', letterSpacing: '0.18em', textTransform: 'uppercase',
-        marginBottom: ultraCompact ? '6px' : compact ? '8px' : '10px', display: 'inline-block',
+        marginBottom: labelMargin, display: 'inline-block',
       }}>
         {artistOnly ? 'The artist was' : 'The song was'}
       </span>
@@ -219,10 +226,11 @@ export function NoOneGotItCardContent({ result, squeeze }: Readonly<{ result: Ro
 
 function SongInfo({ result, squeeze }: Readonly<{ result: RoundResultEvent; squeeze?: CardSqueeze }>) {
   const { compact = false, ultraCompact = false, landscape = false } = squeeze ?? {};
+  const squeezeTier = { compact, ultraCompact };
   const artistOnly = result.artistOnly;
-  const coverSize = ultraCompact ? 110 : compact ? 150 : 200;
-  const titleFontSize = ultraCompact ? '0.92rem' : compact ? '1.02rem' : '1.1rem';
-  const artistFontSize = ultraCompact ? '0.72rem' : compact ? '0.8rem' : '0.875rem';
+  const coverSize = squeezeValue(squeezeTier, 110, 150, 200);
+  const titleFontSize = squeezeValue(squeezeTier, '0.92rem', '1.02rem', '1.1rem');
+  const artistFontSize = squeezeValue(squeezeTier, '0.72rem', '0.8rem', '0.875rem');
   const primary = artistOnly ? result.artist : result.songTitle;
   const secondary = artistOnly ? result.songTitle : result.artist;
 
@@ -308,6 +316,10 @@ function SongInfo({ result, squeeze }: Readonly<{ result: RoundResultEvent; sque
 
 export function FinalRoundAnswerContent({ result, label, muted = false, squeeze }: Readonly<{ result: RoundResultEvent; label: string; muted?: boolean; squeeze?: CardSqueeze }>) {
   const { compact = false, ultraCompact = false } = squeeze ?? {};
+  const squeezeTier = { compact, ultraCompact };
+  const labelMargin = squeezeValue(squeezeTier, '6px', '8px', '10px');
+  const headingSize = squeezeValue(squeezeTier, '1rem', '1.15rem', '1.35rem');
+  const contentMargin = squeezeValue(squeezeTier, '8px', '10px', '14px');
   const artistOnly = result.artistOnly;
   const yearOnly = result.yearOnly || result.party?.format === 'year';
   let answerTypeLabel = 'The song was';
@@ -321,19 +333,19 @@ export function FinalRoundAnswerContent({ result, label, muted = false, squeeze 
     <div style={{ width: cardContentWidth(squeeze), display: 'flex', flexDirection: 'column', alignItems: 'center', textAlign: 'center' }}>
       <span style={{
         color: 'rgba(255,255,255,0.45)', fontSize: '0.62rem', fontWeight: 800,
-        letterSpacing: '0.16em', textTransform: 'uppercase', marginBottom: ultraCompact ? '6px' : compact ? '8px' : '10px', display: 'inline-block',
+        letterSpacing: '0.16em', textTransform: 'uppercase', marginBottom: labelMargin, display: 'inline-block',
       }}>
         Final round
       </span>
       <span style={{
-        fontSize: ultraCompact ? '1rem' : compact ? '1.15rem' : '1.35rem', fontWeight: 900, letterSpacing: '0.01em',
+        fontSize: headingSize, fontWeight: 900, letterSpacing: '0.01em',
         background: 'linear-gradient(to bottom left, rgba(158,18,204,0.45) 0%, transparent 52%), linear-gradient(to top right, rgba(0,238,232,0.34) 0%, transparent 52%), #fff',
         WebkitBackgroundClip: 'text', WebkitTextFillColor: 'transparent', backgroundClip: 'text',
-        marginBottom: ultraCompact ? '8px' : compact ? '10px' : '14px', display: 'inline-block', minWidth: '200px',
+        marginBottom: contentMargin, display: 'inline-block', minWidth: '200px',
       }}>
         {label}
       </span>
-      <div style={{ width: '100%', height: '1px', background: 'rgba(255,255,255,0.08)', marginBottom: ultraCompact ? '8px' : compact ? '10px' : '14px' }} />
+      <div style={{ width: '100%', height: '1px', background: 'rgba(255,255,255,0.08)', marginBottom: contentMargin }} />
       {yearOnly ? (
         <>
           <YearHeading year={result.year ? Math.floor(result.year) : '-'} compact muted={muted} squeeze={squeeze} />
@@ -343,7 +355,7 @@ export function FinalRoundAnswerContent({ result, label, muted = false, squeeze 
         <>
           <span style={{
             color: 'rgba(255,255,255,0.45)', fontSize: '0.6rem', letterSpacing: '0.18em', textTransform: 'uppercase',
-            marginBottom: ultraCompact ? '6px' : compact ? '8px' : '10px', display: 'inline-block',
+            marginBottom: labelMargin, display: 'inline-block',
           }}>
             {answerTypeLabel}
           </span>
@@ -356,6 +368,10 @@ export function FinalRoundAnswerContent({ result, label, muted = false, squeeze 
 
 export function GotItCardContent({ result, myName, squeeze }: Readonly<{ result: RoundResultEvent; myName?: string; squeeze?: CardSqueeze }>) {
   const { compact = false, ultraCompact = false } = squeeze ?? {};
+  const squeezeTier = { compact, ultraCompact };
+  const titleSize = squeezeValue(squeezeTier, '1.05rem', '1.2rem', '1.4rem');
+  const contentMargin = squeezeValue(squeezeTier, '8px', '10px', '14px');
+  const labelMargin = squeezeValue(squeezeTier, '6px', '8px', '10px');
   const artistOnly = result.artistOnly;
   const isRace = result.mode === 'race';
   const iWon = isRace
@@ -380,17 +396,17 @@ export function GotItCardContent({ result, myName, squeeze }: Readonly<{ result:
   return (
     <div style={{ width: cardContentWidth(squeeze), display: 'flex', flexDirection: 'column', alignItems: 'center', textAlign: 'center' }}>
       <span style={{
-        fontSize: ultraCompact ? '1.05rem' : compact ? '1.2rem' : '1.4rem', fontWeight: 900, letterSpacing: '0.01em',
+        fontSize: titleSize, fontWeight: 900, letterSpacing: '0.01em',
         background: labelGradient,
         WebkitBackgroundClip: 'text', WebkitTextFillColor: 'transparent', backgroundClip: 'text',
-        marginBottom: ultraCompact ? '8px' : compact ? '10px' : '14px', display: 'inline-block', minWidth: '200px',
+        marginBottom: contentMargin, display: 'inline-block', minWidth: '200px',
       }}>
         {labelText}
       </span>
-      <div style={{ width: '100%', height: '1px', background: 'rgba(255,255,255,0.08)', marginBottom: ultraCompact ? '8px' : compact ? '10px' : '14px' }} />
+      <div style={{ width: '100%', height: '1px', background: 'rgba(255,255,255,0.08)', marginBottom: contentMargin }} />
       <span style={{
         color: 'rgba(255,255,255,0.45)', fontSize: '0.6rem', letterSpacing: '0.18em', textTransform: 'uppercase',
-        marginBottom: ultraCompact ? '6px' : compact ? '8px' : '10px', display: 'inline-block',
+        marginBottom: labelMargin, display: 'inline-block',
       }}>
         {artistOnly ? 'The artist was' : 'The song was'}
       </span>

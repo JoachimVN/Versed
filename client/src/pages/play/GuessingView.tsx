@@ -10,6 +10,7 @@ import { LIQUID_CARD_PROPS, LIQUID_PILL_PROPS } from '../../components/liquidGla
 import type { Hint } from '../../types';
 import type { PlayState } from './usePlayGame';
 import { resolveTarget } from './guessTarget';
+import { squeezeValue } from '../../components/revealSqueeze';
 
 // Below this much room (window height minus whatever an iOS keyboard is
 // covering — Android already bakes its keyboard into window.innerHeight),
@@ -87,6 +88,7 @@ function ListeningHeader({ songPlaying, songTempo, isYear, compact }: Readonly<{
 // screen (see COMPACT_HEIGHT_PX above).
 function ActiveHeader({ timeLeft, timerTotal, myScore, isRace, isYear, songPlaying, songTempo, compact, ultraCompact, landscape }: Readonly<{ timeLeft: number; timerTotal: number; myScore: number; isRace: boolean; isYear: boolean; songPlaying: boolean; songTempo: number | null; compact: boolean; ultraCompact: boolean; landscape: boolean }>) {
   const accent = isYear ? 'year' : 'race';
+  const squeezeTier = { compact, ultraCompact };
   // At the tightest squeeze (ultraCompact), a landscape phone has width to
   // spare even though it has no height to spare — folding "Your turn"/pts
   // into the same row as the timer bar removes a whole row's height, which
@@ -105,7 +107,7 @@ function ActiveHeader({ timeLeft, timerTotal, myScore, isRace, isYear, songPlayi
     );
   }
   return (
-    <div className={`flex flex-col items-center ${ultraCompact ? 'gap-1 pt-1 pb-0' : compact ? 'gap-2 pt-2 pb-1' : 'gap-2 pt-4 pb-3'}`}>
+    <div className={`flex flex-col items-center ${squeezeValue(squeezeTier, 'gap-1 pt-1 pb-0', 'gap-2 pt-2 pb-1', 'gap-2 pt-4 pb-3')} `}>
       <div className="flex items-center justify-between w-full px-5">
         <span style={{ color: 'rgba(255,255,255,0.45)', fontSize: ultraCompact ? '0.68rem' : '0.85rem', fontWeight: 600 }}>Your turn</span>
         <span style={{ color: 'rgba(255,255,255,0.45)', fontSize: ultraCompact ? '0.64rem' : '0.8rem', fontWeight: 500 }}>
@@ -246,7 +248,9 @@ function YearDigitBox({ digit, active, size }: Readonly<{ digit: string; active:
 // mapped over an index.
 function YearDigitBoxes({ value, focused, size }: Readonly<{ value: string; focused: boolean; size: DigitBoxSize }>) {
   const activeIndex = Math.min(value.length, 3);
-  const gap = size === 'ultra' ? '6px' : size === 'compact' ? '8px' : '10px';
+  let gap = '10px';
+  if (size === 'ultra') gap = '6px';
+  else if (size === 'compact') gap = '8px';
   return (
     <div style={{ display: 'flex', gap, justifyContent: 'center', pointerEvents: 'none' }}>
       <YearDigitBox digit={value[0] ?? ''} active={focused && activeIndex === 0} size={size} />
@@ -271,6 +275,7 @@ export function GuessingView({ game }: Readonly<{ game: PlayState }>) {
   const isBoth = target === 'both';
   const keyboardOpen = useKeyboardOpen();
   const { compact, ultraCompact, landscape } = useGuessingLayout(isBoth, keyboardOpen);
+  const squeezeTier = { compact, ultraCompact };
   const canSubmit = isYear ? guessText.trim().length === 4 : guessText.trim().length > 0;
   const [inputFocused, setInputFocused] = useState(false);
   const inputBoxStyle = guessInputBoxStyle(isListening, inputFocused, ultraCompact);
@@ -315,7 +320,7 @@ export function GuessingView({ game }: Readonly<{ game: PlayState }>) {
   } else if (isChoice) {
     guessControl = <ChoiceButtons options={options} onPick={submitChoice} />;
   } else if (isYear) {
-    const digitBoxSize: DigitBoxSize = ultraCompact ? 'ultra' : compact ? 'compact' : 'normal';
+    const digitBoxSize: DigitBoxSize = squeezeValue(squeezeTier, 'ultra', 'compact', 'normal');
     guessControl = (
       <div style={{ position: 'relative', flexShrink: 0 }}>
         <YearDigitBoxes value={guessText} focused={inputFocused} size={digitBoxSize} />
@@ -362,8 +367,8 @@ export function GuessingView({ game }: Readonly<{ game: PlayState }>) {
             // iOS Safari zoom the whole page in to make the text legible,
             // which is what "switching fields rescales like zooming in" was
             // — ultraCompact's old 0.95rem (15.2px) tripped it.
-            color: 'white', fontSize: ultraCompact ? '1rem' : compact ? '1.1rem' : '1.3rem', fontWeight: 700, textAlign: 'center',
-            padding: ultraCompact ? '6px 10px' : compact ? '10px 16px' : '20px 16px', outline: 'none', fontFamily: 'inherit',
+            color: 'white', fontSize: squeezeValue(squeezeTier, '1rem', '1.1rem', '1.3rem'), fontWeight: 700, textAlign: 'center',
+            padding: squeezeValue(squeezeTier, '6px 10px', '10px 16px', '20px 16px'), outline: 'none', fontFamily: 'inherit',
           }}
           className="placeholder-white/20"
         />
@@ -392,7 +397,7 @@ export function GuessingView({ game }: Readonly<{ game: PlayState }>) {
           // Same 16px zoom floor as the title field above — ultraCompact and
           // compact were both under it (12.8px / 14.4px).
           color: 'white', fontSize: '1rem', fontWeight: 600, textAlign: 'center',
-          padding: ultraCompact ? '5px 8px' : compact ? '8px 14px' : '14px 16px', outline: 'none', fontFamily: 'inherit',
+          padding: squeezeValue(squeezeTier, '5px 8px', '8px 14px', '14px 16px'), outline: 'none', fontFamily: 'inherit',
         }}
         className="placeholder-white/20"
       />
@@ -446,7 +451,7 @@ export function GuessingView({ game }: Readonly<{ game: PlayState }>) {
           the end of the closed-keyboard scroll from chaining outwards into an
           iOS visual-viewport pan, which would slide the whole screen off the
           bottom of the background. */}
-      <div className={`screen-center-safe flex-1 flex flex-col items-center px-5 ${ultraCompact ? 'gap-1' : compact ? 'gap-2' : 'gap-5'}`} style={{ minHeight: 0, overflowY: keyboardOpen ? 'hidden' : 'auto', overscrollBehavior: 'contain' }}>
+      <div className={`screen-center-safe flex-1 flex flex-col items-center px-5 ${squeezeValue(squeezeTier, 'gap-1', 'gap-2', 'gap-5')}`} style={{ minHeight: 0, overflowY: keyboardOpen ? 'hidden' : 'auto', overscrollBehavior: 'contain' }}>
         {/* compact, not just ultraCompact: at just-compact heights (e.g. a
             "both" target's two stacked fields on a short phone) the badge's
             full-size pills wrap onto 2 lines, which was the exact overflow
@@ -480,13 +485,13 @@ export function GuessingView({ game }: Readonly<{ game: PlayState }>) {
       </div>
 
       {/* Actions */}
-      <div className={`px-5 flex flex-col items-center ${ultraCompact ? 'pb-1 gap-1' : compact ? 'pb-3 gap-2' : 'pb-8 gap-4'}`}>
+      <div className={`px-5 flex flex-col items-center ${squeezeValue(squeezeTier, 'pb-1 gap-1', 'pb-3 gap-2', 'pb-8 gap-4')}`}>
         {!isChoice && !isChaosHints && (
           <button
             type="button"
             className="liquid-btn glass-tint-purple relative cursor-pointer border-0 bg-transparent p-0"
             style={{
-              width: 'min(92vw, 310px)', height: ultraCompact ? '36px' : compact ? '44px' : '64px', borderRadius: '100px',
+              width: 'min(92vw, 310px)', height: squeezeValue(squeezeTier, '36px', '44px', '64px'), borderRadius: '100px',
               background: 'rgba(0,0,0,0.001)',
               opacity: canSubmit ? 1 : 0.28,
               cursor: canSubmit ? 'pointer' : 'not-allowed',
@@ -501,11 +506,11 @@ export function GuessingView({ game }: Readonly<{ game: PlayState }>) {
             <LiquidGlass
               style={{ position: 'absolute', top: '50%', left: '50%' }}
               {...LIQUID_PILL_PROPS}
-              padding={ultraCompact ? '6px 20px' : compact ? '9px 28px' : LIQUID_PILL_PROPS.padding}
+              padding={squeezeValue(squeezeTier, '6px 20px', '9px 28px', LIQUID_PILL_PROPS.padding)}
             >
               <div style={{ position: 'relative' }}>
                 <div style={{ position: 'absolute', inset: '-18px -36px', borderRadius: '100px', pointerEvents: 'none', background: 'rgba(158,18,204,0.15)' }} />
-                <span className={`text-white font-bold ${ultraCompact ? 'text-sm' : compact ? 'text-base' : 'text-xl'}`} style={{ whiteSpace: 'nowrap', position: 'relative', display: 'inline-block', minWidth: 'min(238px, calc(100vw - 112px))', textAlign: 'center' }}>
+                <span className={`text-white font-bold ${squeezeValue(squeezeTier, 'text-sm', 'text-base', 'text-xl')}`} style={{ whiteSpace: 'nowrap', position: 'relative', display: 'inline-block', minWidth: 'min(238px, calc(100vw - 112px))', textAlign: 'center' }}>
                   Submit
                 </span>
               </div>
@@ -523,9 +528,9 @@ export function GuessingView({ game }: Readonly<{ game: PlayState }>) {
           onMouseDown={e => e.preventDefault()}
           onClick={skipGuess}
           style={{
-            padding: ultraCompact ? '5px 18px' : compact ? '8px 26px' : '13px 34px', borderRadius: '100px', fontFamily: 'inherit',
+            padding: squeezeValue(squeezeTier, '5px 18px', '8px 26px', '13px 34px'), borderRadius: '100px', fontFamily: 'inherit',
             border: `1px solid ${SKIP_IDLE.border}`, background: SKIP_IDLE.background, color: SKIP_IDLE.color,
-            fontSize: ultraCompact ? '0.72rem' : compact ? '0.8rem' : '0.92rem', fontWeight: 700, cursor: 'pointer',
+            fontSize: squeezeValue(squeezeTier, '0.72rem', '0.8rem', '0.92rem'), fontWeight: 700, cursor: 'pointer',
             transition: 'background 0.2s ease, border-color 0.2s ease, color 0.2s ease',
           }}
           onMouseEnter={e => applySkipStyle(e.currentTarget, SKIP_HOVER)}

@@ -8,7 +8,7 @@ import type { CardSqueeze } from '../../components/RevealShared';
 import { YearTimelineContent } from '../../components/YearReveal';
 import { computeYearCardHeight } from '../../components/yearCardSqueeze';
 import type { RevealLayout } from '../../components/revealSqueeze';
-import { useRevealLayout, computeCardHeight, computeCardWidth } from '../../components/revealSqueeze';
+import { useRevealLayout, computeCardHeight, computeCardWidth, squeezeValue } from '../../components/revealSqueeze';
 import { PartyRevealExtras, MYSTERY_LANDING_MS } from '../../components/RoundIntro';
 import { LIQUID_CARD_PROPS } from '../../components/liquidGlassPresets';
 import { useHostScaleValue } from '../../hooks/useHostScale';
@@ -76,6 +76,16 @@ function deltaText(displayDelta: number, delta: number, pity: boolean, pityAmoun
   const pityText = pity ? ` (+${pityAmount.toLocaleString()} pity)` : '';
   const points = displayDelta > 0 ? displayDelta.toLocaleString() : '';
   return `+${points}${pityText}`;
+}
+
+function revealShellPadding(wide: boolean, squeeze: RevealLayout): string {
+  if (wide) return squeezeValue(squeeze, 'px-2 py-3', 'px-2 py-4', 'px-2 py-6');
+  return squeezeValue(squeeze, 'p-3', 'p-4', 'p-6');
+}
+
+function revealCardPadding(wide: boolean, squeeze: RevealLayout): string {
+  if (wide) return '18px 18px';
+  return squeezeValue(squeeze, '16px 16px', '20px 20px', '24px 24px');
 }
 
 function UnsubmittedPlayerRow({
@@ -274,7 +284,7 @@ function RevealShell({
   wide?: boolean;
   squeeze: RevealLayout;
 }>) {
-  const { compact, ultraCompact, windowHeight } = squeeze;
+  const { windowHeight } = squeeze;
   const { roundIndex, totalRounds, players, roundDeltas, roundPity, roundPityAmount, removePlayer, endGame, stealResult, party } = game;
   // Every sub-round of the finale duel reports finale:true — the host can't
   // tell from roundIndex/totalRounds alone whether clicking "next" advances
@@ -310,8 +320,8 @@ function RevealShell({
     ? frozenOrderRef.current.map(name => players.find(p => p.name === name)).filter((p): p is PlayerInfo => !!p)
     : players.slice().sort((a, b) => (b.score ?? 0) - (a.score ?? 0));
   const rowRefs = useRef<Record<string, HTMLButtonElement | null>>({});
-  const gapClass = ultraCompact ? 'gap-2' : compact ? 'gap-3' : 'gap-5';
-  const paddingClass = wide ? (ultraCompact ? 'px-2 py-3' : compact ? 'px-2 py-4' : 'px-2 py-6') : (ultraCompact ? 'p-3' : compact ? 'p-4' : 'p-6');
+  const gapClass = squeezeValue(squeeze, 'gap-2', 'gap-3', 'gap-5');
+  const paddingClass = revealShellPadding(wide, squeeze);
   // Caps the roster to roughly 5 rows visible at once (Kahoot-style) rather
   // than growing the page with every player — Next Round/End game sit right
   // after this box in normal flow, so a big roster only costs this box a
@@ -323,10 +333,10 @@ function RevealShell({
   // gaps, button — where a flat 260px cap alone would overflow the button
   // below the fold, but shrinking every device's cap down to fit that one
   // case would needlessly cramp a real desktop window with the same tier.
-  const gapPx = ultraCompact ? 8 : compact ? 12 : 20;
-  const buttonPx = ultraCompact ? 44 : compact ? 54 : 64;
-  const paddingPx = ultraCompact ? 24 : compact ? 32 : 48;
-  const listTierCap = ultraCompact ? 130 : compact ? 200 : 260;
+  const gapPx = squeezeValue(squeeze, 8, 12, 20);
+  const buttonPx = squeezeValue(squeeze, 44, 54, 64);
+  const paddingPx = squeezeValue(squeeze, 24, 32, 48);
+  const listTierCap = squeezeValue(squeeze, 130, 200, 260);
   // 4 gaps across up to 5 flex children (card, party-extras, list, button,
   // end-game); ~20px covers end-game's own text + its gap when rendered.
   const chromeHeight = cardHeight + gapPx * 4 + buttonPx + 20 + paddingPx;
@@ -351,7 +361,7 @@ function RevealShell({
           <LiquidGlass
             style={{ position: 'absolute', top: '50%', left: '50%' }}
             {...LIQUID_CARD_PROPS}
-            padding={wide ? '18px 18px' : (ultraCompact ? '16px 16px' : compact ? '20px 20px' : '24px 24px')}
+            padding={revealCardPadding(wide, squeeze)}
           >
             {cardContent}
           </LiquidGlass>

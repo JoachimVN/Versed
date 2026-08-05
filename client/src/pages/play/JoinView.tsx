@@ -30,6 +30,12 @@ function canJoinGame(showPinField: boolean, pin: string, name: string): boolean 
   return !showPinField || (pin.length === 3 && hasName);
 }
 
+function compactValue<T>(ultraCompact: boolean, compact: boolean, ultraValue: T, compactValue: T, regularValue: T): T {
+  if (ultraCompact) return ultraValue;
+  if (compact) return compactValue;
+  return regularValue;
+}
+
 // Below this viewport height the default spacing pushes the Join button
 // (and, with a saved session, the whole rejoin card above it) past the
 // bottom edge. The screen must never rely on scrolling to reveal it, so
@@ -86,9 +92,14 @@ export function JoinView({ game }: Readonly<{ game: PlayState }>) {
   // the wrapper without shrinking this padding leaves the glass poking past
   // its clipping ancestor (the wrapper's own overflow: hidden / the savedSession
   // block's collapsedWhenTyping), which is what actually cut the button off.
-  const joinPaddingV = ultraCompact ? 10 : compact ? 14 : 18;
+  const joinPaddingV = compactValue(ultraCompact, compact, 10, 14, 18);
+  const savedPillPaddingV = compactValue(ultraCompact, compact, 7, 10, 13);
+  const layoutGap = keyboardOpen ? '20px' : compactValue(ultraCompact, compact, '10px', '16px', '40px');
+  const logoDisplay = keyboardOpen || ultraCompact ? 'none' : undefined;
+  const rejoinGap = compactValue(ultraCompact, compact, '6px', '8px', '12px');
+  const rejoinHeight = compactValue(ultraCompact, compact, '54px', '60px', '70px');
+  const joinHeight = compactValue(ultraCompact, compact, '52px', '58px', '64px');
   const joinPadding = `${joinPaddingV}px min(96px, calc((100vw - 156px) / 2))`;
-  const savedPillPaddingV = ultraCompact ? 7 : compact ? 10 : 13;
   const [leaving, setLeaving] = useState(false);
   const logoRef = useRef<HTMLImageElement>(null);
   const { beginMorph, provideTarget, morphing, dismissMorph, reducedMotion } = useLogoMorph();
@@ -142,7 +153,7 @@ export function JoinView({ game }: Readonly<{ game: PlayState }>) {
         style={{
           minHeight: 'calc(100% - var(--keyboard-inset, 0px))',
           height: 'calc(100% - var(--keyboard-inset, 0px))',
-          gap: keyboardOpen ? '20px' : ultraCompact ? '10px' : compact ? '16px' : '40px',
+          gap: layoutGap,
           padding: ultraCompact ? '16px' : undefined,
           transition: 'gap 0.28s ease, height 0.22s ease-out, min-height 0.22s ease-out',
         }}
@@ -153,7 +164,7 @@ export function JoinView({ game }: Readonly<{ game: PlayState }>) {
           intermediate sizes let the logo render underneath the card for a
           frame. display: none pulls it out of layout in one step — there's
           no size for it to pass through. */}
-      <div className="join-screen-logo" style={{ display: (keyboardOpen || ultraCompact) ? 'none' : undefined }}>
+      <div className="join-screen-logo" style={{ display: logoDisplay }}>
         <img
           ref={logoRef}
           src={BRAND_LOGO_SRC}
@@ -167,12 +178,12 @@ export function JoinView({ game }: Readonly<{ game: PlayState }>) {
       </div>
 
       {savedSession && (
-        <div className="flex flex-col items-center" style={{ ...collapsedWhenTyping(keyboardOpen), gap: ultraCompact ? '6px' : compact ? '8px' : '12px', flexShrink: 0 }}>
+        <div className="flex flex-col items-center" style={{ ...collapsedWhenTyping(keyboardOpen), gap: rejoinGap, flexShrink: 0 }}>
           <button
             type="button"
             onClick={rejoinSaved}
             className="liquid-btn glass-tint-purple relative cursor-pointer border-0 bg-transparent p-0"
-            style={{ width: controlWidth, height: ultraCompact ? '54px' : compact ? '60px' : '70px', borderRadius: '100px', background: 'rgba(0,0,0,0.001)' }}
+            style={{ width: controlWidth, height: rejoinHeight, borderRadius: '100px', background: 'rgba(0,0,0,0.001)' }}
           >
             <LiquidGlass
               style={{ position: 'absolute', top: '50%', left: '50%' }}
@@ -280,7 +291,7 @@ export function JoinView({ game }: Readonly<{ game: PlayState }>) {
         className="liquid-btn glass-tint-teal relative border-0 bg-transparent p-0"
         style={{
           width: controlWidth,
-          height: ultraCompact ? '52px' : compact ? '58px' : '64px',
+          height: joinHeight,
           borderRadius: '100px',
           background: 'rgba(0,0,0,0.001)',
           opacity: canJoin ? 1 : 0.3,

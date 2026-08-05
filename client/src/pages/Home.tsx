@@ -6,6 +6,51 @@ import { useLogoMorph } from '../contexts/LogoMorph';
 import { HostScaleShell } from '../hooks/useHostScale';
 import { APP_NAME, BACKEND_URL } from '../config';
 
+function HomeAction({ label, accent, hovered, onHover, onClick, buttonWidth, buttonPadding }: Readonly<{
+  label: string;
+  accent: 'teal' | 'purple';
+  hovered: boolean;
+  onHover: (hovered: boolean) => void;
+  onClick: () => void;
+  buttonWidth: string;
+  buttonPadding: string;
+}>) {
+  const glow = accent === 'teal' ? 'rgba(0,166,163,0.65)' : 'rgba(158,18,204,0.65)';
+  const tint = accent === 'teal' ? 'rgba(0,166,163,0.088)' : 'rgba(158,18,204,0.088)';
+  let buttonClass = 'liquid-btn glass-tint-purple relative cursor-pointer border-0 bg-transparent p-0';
+  if (accent === 'teal') buttonClass = 'liquid-btn glass-tint-teal relative cursor-pointer border-0 bg-transparent p-0';
+  return (
+    <button
+      type="button"
+      className={buttonClass}
+      style={{ width: buttonWidth, height: '64px', borderRadius: '100px', background: 'rgba(0,0,0,0.001)' }}
+      onMouseEnter={() => onHover(true)}
+      onMouseLeave={() => onHover(false)}
+      onClick={onClick}
+    >
+      <LiquidGlass
+        style={{
+          position: 'absolute', top: '50%', left: '50%',
+          filter: hovered ? `drop-shadow(0 0 10px ${glow})` : `drop-shadow(0 0 0px ${glow.replace('0.65', '0')})`,
+          transition: 'filter 0.25s ease',
+        }}
+        displacementScale={64}
+        blurAmount={0.05}
+        saturation={130}
+        aberrationIntensity={2}
+        elasticity={0.12}
+        cornerRadius={100}
+        padding={buttonPadding}
+      >
+        <div style={{ position: 'relative' }}>
+          <div style={{ position: 'absolute', inset: '-18px -96px', borderRadius: '100px', pointerEvents: 'none', background: tint }} />
+          <span className="text-white font-bold text-xl" style={{ whiteSpace: 'nowrap', position: 'relative' }}>{label}</span>
+        </div>
+      </LiquidGlass>
+    </button>
+  );
+}
+
 export default function Home() {
   const navigate = useNavigate();
   const [hovered, setHovered] = useState<'host' | 'join' | null>(null);
@@ -83,63 +128,8 @@ export default function Home() {
         </div>
 
         <div className="flex flex-col items-center gap-8" style={{ gap: `min(32px, ${compactGap})` }}>
-          <button
-            type="button"
-            className="liquid-btn glass-tint-teal relative cursor-pointer border-0 bg-transparent p-0"
-            style={{ width: buttonWidth, height: '64px', borderRadius: '100px', background: 'rgba(0,0,0,0.001)' }}
-            onMouseEnter={() => setHovered('join')}
-            onMouseLeave={() => setHovered(null)}
-            onClick={goToJoin}
-          >
-            <LiquidGlass
-              style={{
-                position: 'absolute', top: '50%', left: '50%',
-                filter: hovered === 'join' ? 'drop-shadow(0 0 10px rgba(0,166,163,0.65))' : 'drop-shadow(0 0 0px rgba(0,166,163,0))',
-                transition: 'filter 0.25s ease',
-              }}
-              displacementScale={64}
-              blurAmount={0.05}
-              saturation={130}
-              aberrationIntensity={2}
-              elasticity={0.12}
-              cornerRadius={100}
-              padding={buttonPadding}
-            >
-              <div style={{ position: 'relative' }}>
-                <div style={{ position: 'absolute', inset: '-18px -96px', borderRadius: '100px', pointerEvents: 'none', background: 'rgba(0,166,163,0.088)' }} />
-                <span className="text-white font-bold text-xl" style={{ whiteSpace: 'nowrap', position: 'relative' }}>Join a game</span>
-              </div>
-            </LiquidGlass>
-          </button>
-
-          <button
-            type="button"
-            className="liquid-btn glass-tint-purple relative cursor-pointer border-0 bg-transparent p-0"
-            style={{ width: buttonWidth, height: '64px', borderRadius: '100px', background: 'rgba(0,0,0,0.001)' }}
-            onMouseEnter={() => setHovered('host')}
-            onMouseLeave={() => setHovered(null)}
-            onClick={() => (globalThis.location.href = `${BACKEND_URL}/api/auth/spotify`)}
-          >
-            <LiquidGlass
-              style={{
-                position: 'absolute', top: '50%', left: '50%',
-                filter: hovered === 'host' ? 'drop-shadow(0 0 10px rgba(158,18,204,0.65))' : 'drop-shadow(0 0 0px rgba(158,18,204,0))',
-                transition: 'filter 0.25s ease',
-              }}
-              displacementScale={64}
-              blurAmount={0.05}
-              saturation={130}
-              aberrationIntensity={2}
-              elasticity={0.12}
-              cornerRadius={100}
-              padding={buttonPadding}
-            >
-              <div style={{ position: 'relative' }}>
-                <div style={{ position: 'absolute', inset: '-18px -96px', borderRadius: '100px', pointerEvents: 'none', background: 'rgba(158,18,204,0.088)' }} />
-                <span className="text-white font-bold text-xl" style={{ whiteSpace: 'nowrap', position: 'relative' }}>Host a game</span>
-              </div>
-            </LiquidGlass>
-          </button>
+          <HomeAction label="Join a game" accent="teal" hovered={hovered === 'join'} onHover={isHovered => setHovered(isHovered ? 'join' : null)} onClick={goToJoin} buttonWidth={buttonWidth} buttonPadding={buttonPadding} />
+          <HomeAction label="Host a game" accent="purple" hovered={hovered === 'host'} onHover={isHovered => setHovered(isHovered ? 'host' : null)} onClick={() => { globalThis.location.href = `${BACKEND_URL}/api/auth/spotify`; }} buttonWidth={buttonWidth} buttonPadding={buttonPadding} />
         </div>
       </div>
     </HostScaleShell>

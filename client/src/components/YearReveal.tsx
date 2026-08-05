@@ -6,6 +6,47 @@ import { runWhenVisible } from '../hooks/runWhenVisible';
 import type { CardSqueeze } from './revealSqueeze';
 import { cardContentWidth } from './revealSqueeze';
 
+function squeezeValueWithMid<T>(ultra: boolean, mid: boolean, compact: boolean, ultraValue: T, midCompactValue: T, midValue: T, compactValue: T, regularValue: T): T {
+  if (ultra) return ultraValue;
+  if (mid && compact) return midCompactValue;
+  if (mid) return midValue;
+  if (compact) return compactValue;
+  return regularValue;
+}
+
+function timelinePixelWidth(ultra: boolean, landscape: boolean): number {
+  if (ultra && landscape) return 380;
+  return ultra ? 260 : 300;
+}
+
+function timelineDisplayWidth(ultra: boolean, landscape: boolean): string {
+  if (ultra && landscape) return 'min(90vw, 420px)';
+  if (ultra) return 'min(88vw, 300px)';
+  return 'min(84vw, 330px)';
+}
+
+function coverBorderRadius(mid: boolean, ultra: boolean, compact: boolean): string {
+  if (mid || ultra) return '12px';
+  if (compact) return '16px';
+  return '12px';
+}
+
+type TimelineLabel = { xPct: number; label: string; fontPx: number };
+
+function packTimelineLanes(items: TimelineLabel[], timelinePx: number): number[] {
+  const laneEnds: number[] = [];
+  return items.map(({ xPct, label, fontPx }) => {
+    const xPx = (xPct / 100) * timelinePx;
+    const halfWidth = (label.length * fontPx * 0.58 + 4) / 2;
+    const left = xPx - halfWidth;
+    const right = xPx + halfWidth;
+    let lane = 0;
+    while (lane < laneEnds.length && left < laneEnds[lane] + 6) lane++;
+    laneEnds[lane] = right;
+    return lane;
+  });
+}
+
 // Spot-on year guesses get a beefier hit than the routine reveal — and a
 // second exact guess (rare — two people landing the exact year) bumps it
 // again, same "rarer roll, bigger sting" idea as the mystery multiplier tiers.
@@ -60,6 +101,9 @@ export function YearHeading({ year, compact, muted = false, hitTier = 1, squeeze
   // so both stack: squeeze shrinks further on top of whatever `compact`
   // already picked.
   const { compact: mid = false, ultraCompact: ultra = false } = squeeze ?? {};
+  const headingMargin = squeezeValueWithMid(ultra, mid, compact, '6px', '12px', '12px', '8px', '22px');
+  const headingFontSize = squeezeValueWithMid(ultra, mid, compact, compact ? '1.9rem' : '1.6rem', '2.3rem', '2rem', '2.6rem', '2.2rem');
+  const headingMinWidth = squeezeValueWithMid(ultra, mid, compact, '110px', '130px', '130px', '160px', '140px');
 
   useEffect(() => {
     if (!isNumber) { setDisplay(year); setLanded(true); return; }
@@ -119,7 +163,7 @@ export function YearHeading({ year, compact, muted = false, hitTier = 1, squeeze
       key={landed ? `landed-${year}` : `spin-${tick}`}
       style={{
         display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '2px',
-        marginBottom: ultra ? '6px' : mid ? '12px' : compact ? '8px' : '22px',
+        marginBottom: headingMargin,
         animation: containerAnimation,
       }}
     >
@@ -129,11 +173,11 @@ export function YearHeading({ year, compact, muted = false, hitTier = 1, squeeze
         The year was
       </span>
       <span style={{
-        fontSize: ultra ? (compact ? '1.9rem' : '1.6rem') : mid ? (compact ? '2.3rem' : '2rem') : compact ? '2.6rem' : '2.2rem',
+        fontSize: headingFontSize,
         fontWeight: 900, lineHeight: 1, textAlign: 'center',
         background: 'linear-gradient(to bottom left, rgba(0,238,232,0.5) 0%, transparent 55%), linear-gradient(to top right, rgba(158,18,204,0.5) 0%, transparent 55%), #fff',
         WebkitBackgroundClip: 'text', WebkitTextFillColor: 'transparent', backgroundClip: 'text',
-        display: 'inline-block', minWidth: ultra ? '110px' : mid ? '130px' : compact ? '160px' : '140px',
+        display: 'inline-block', minWidth: headingMinWidth,
         // Decoys move through the reel sharply but briefly and dimly. That
         // makes the resolving state clear without blurring the answer text.
         animation: isNumber && !landed ? 'slotReelTick 0.14s ease-out' : undefined,
@@ -147,9 +191,9 @@ export function YearHeading({ year, compact, muted = false, hitTier = 1, squeeze
 // Cover art + title + artist footer shared by the same two year cards.
 export function YearSongFooter({ result, compact, squeeze }: Readonly<{ result: RoundResultEvent; compact: boolean; squeeze?: CardSqueeze }>) {
   const { compact: mid = false, ultraCompact: ultra = false, landscape = false } = squeeze ?? {};
-  const coverSize = ultra ? 64 : mid ? (compact ? 130 : 110) : compact ? 170 : 140;
-  const titleFontSize = ultra ? '0.85rem' : mid ? (compact ? '0.98rem' : '0.9rem') : compact ? '1.05rem' : '0.95rem';
-  const artistFontSize = ultra ? '0.7rem' : mid ? (compact ? '0.8rem' : '0.76rem') : compact ? '0.85rem' : '0.8rem';
+  const coverSize = squeezeValueWithMid(ultra, mid, compact, 64, 130, 110, 170, 140);
+  const titleFontSize = squeezeValueWithMid(ultra, mid, compact, '0.85rem', '0.98rem', '0.9rem', '1.05rem', '0.95rem');
+  const artistFontSize = squeezeValueWithMid(ultra, mid, compact, '0.7rem', '0.8rem', '0.76rem', '0.85rem', '0.8rem');
 
   const textBlock = (
     <>
@@ -185,7 +229,7 @@ export function YearSongFooter({ result, compact, squeeze }: Readonly<{ result: 
           src={result.coverUrl} alt="Album art"
           style={{
             width: `${coverSize}px`, height: `${coverSize}px`,
-            borderRadius: mid || ultra ? '12px' : compact ? '16px' : '12px', objectFit: 'cover', marginBottom: ultra ? '6px' : '12px',
+            borderRadius: coverBorderRadius(mid, ultra, compact), objectFit: 'cover', marginBottom: ultra ? '6px' : '12px',
             boxShadow: '0 10px 36px rgba(0,0,0,0.65)',
           }}
         />
@@ -269,26 +313,12 @@ export function yearTimelineLaneCounts(result: RoundResultEvent, squeeze?: CardS
   }
   groups.sort((a, b) => a.guess - b.guess);
 
-  const timelinePx = ultra && landscape ? 380 : ultra ? 260 : 300;
+  const timelinePx = timelinePixelWidth(ultra, landscape);
   const nameFontPx = ultra ? 8.6 : 9.9;
   const yearFontPx = ultra ? 8.3 : 9.6;
-  const estimateWidth = (text: string, fontPx: number) => text.length * fontPx * 0.58 + 4;
-  function packLanes(items: { xPct: number; label: string; fontPx: number }[]): number[] {
-    const laneEnds: number[] = [];
-    return items.map(({ xPct, label, fontPx }) => {
-      const xPx = (xPct / 100) * timelinePx;
-      const halfWidth = estimateWidth(label, fontPx) / 2;
-      const left = xPx - halfWidth;
-      const right = xPx + halfWidth;
-      let lane = 0;
-      while (lane < laneEnds.length && left < laneEnds[lane] + 6) lane++;
-      laneEnds[lane] = right;
-      return lane;
-    });
-  }
-  const nameLanes = packLanes(groups.map(g => ({ xPct: pos(g.guess), label: g.entries.map(e => e.name).join(', '), fontPx: nameFontPx })));
+  const nameLanes = packTimelineLanes(groups.map(g => ({ xPct: pos(g.guess), label: g.entries.map(e => e.name).join(', '), fontPx: nameFontPx })), timelinePx);
   const nonExactGroups = groups.filter(g => g.guess !== year);
-  const yearLanes = packLanes(nonExactGroups.map(g => ({ xPct: pos(g.guess), label: String(g.guess), fontPx: yearFontPx })));
+  const yearLanes = packTimelineLanes(nonExactGroups.map(g => ({ xPct: pos(g.guess), label: String(g.guess), fontPx: yearFontPx })), timelinePx);
   return { nameLanes: Math.max(0, ...nameLanes), yearLanes: Math.max(0, ...yearLanes) };
 }
 
@@ -358,27 +388,13 @@ export function YearTimelineContent({ result, showGuessValues = true, muted = fa
   // Approximate rendered width, just for spacing math — matches the width
   // this content div actually renders at each squeeze tier (see the `width`
   // style on the returned div below).
-  const TIMELINE_PX = ultra && landscape ? 380 : ultra ? 260 : 300;
+  const TIMELINE_PX = timelinePixelWidth(ultra, landscape);
   const nameFontPx = ultra ? 8.6 : 9.9;
   const yearFontPx = ultra ? 8.3 : 9.6;
-  const estimateWidth = (text: string, fontPx: number) => text.length * fontPx * 0.58 + 4;
-  function packLanes(items: { xPct: number; label: string; fontPx: number }[]): number[] {
-    const laneEnds: number[] = [];
-    return items.map(({ xPct, label, fontPx }) => {
-      const xPx = (xPct / 100) * TIMELINE_PX;
-      const halfWidth = estimateWidth(label, fontPx) / 2;
-      const left = xPx - halfWidth;
-      const right = xPx + halfWidth;
-      let lane = 0;
-      while (lane < laneEnds.length && left < laneEnds[lane] + 6) lane++;
-      laneEnds[lane] = right;
-      return lane;
-    });
-  }
-  const nameLanes = packLanes(groups.map(g => ({ xPct: pos(g.guess), label: g.entries.map(e => e.name).join(', '), fontPx: nameFontPx })));
+  const nameLanes = packTimelineLanes(groups.map(g => ({ xPct: pos(g.guess), label: g.entries.map(e => e.name).join(', '), fontPx: nameFontPx })), TIMELINE_PX);
   const nonExactGroups = groups.filter(g => g.guess !== year);
   const yearLaneByGuess = new Map<number, number>();
-  packLanes(nonExactGroups.map(g => ({ xPct: pos(g.guess), label: String(g.guess), fontPx: yearFontPx }))).forEach((lane, i) => {
+  packTimelineLanes(nonExactGroups.map(g => ({ xPct: pos(g.guess), label: String(g.guess), fontPx: yearFontPx })), TIMELINE_PX).forEach((lane, i) => {
     yearLaneByGuess.set(nonExactGroups[i].guess, lane);
   });
   const maxNameLane = Math.max(0, ...nameLanes);
@@ -472,7 +488,7 @@ export function YearTimelineContent({ result, showGuessValues = true, muted = fa
     );
   }
 
-  const timelineWidth = ultra && landscape ? 'min(90vw, 420px)' : ultra ? 'min(88vw, 300px)' : 'min(84vw, 330px)';
+  const timelineWidth = timelineDisplayWidth(ultra, landscape);
 
   return (
     <div style={{ width: timelineWidth, display: 'flex', flexDirection: 'column', alignItems: 'center', textAlign: 'center' }}>

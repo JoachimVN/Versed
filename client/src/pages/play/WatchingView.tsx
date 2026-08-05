@@ -27,15 +27,20 @@ export function WatchingView({ game }: Readonly<{ game: PlayState }>) {
   // centered inside — never the card's own size — so shrinking it costs
   // nothing on tall screens (see RevealView's identical squeeze pattern).
   const { compact, ultraCompact } = useRevealLayout();
-  const outerGapClass = ultraCompact ? 'gap-1' : compact ? 'gap-4' : 'gap-6';
-  const outerPaddingClass = ultraCompact ? 'px-4 py-2' : compact ? 'px-5 py-5' : 'px-5 py-8';
+  const compactValue = <T,>(ultraValue: T, compactValue: T, regularValue: T): T => {
+    if (ultraCompact) return ultraValue;
+    if (compact) return compactValue;
+    return regularValue;
+  };
+  const outerGapClass = compactValue('gap-1', 'gap-4', 'gap-6');
+  const outerPaddingClass = compactValue('px-4 py-2', 'px-5 py-5', 'px-5 py-8');
   const headerGapClass = ultraCompact ? 'gap-1' : 'gap-2';
-  const cardHeight = ultraCompact ? '175px' : compact ? '300px' : 'min(75vh, 620px)';
-  const cardGap = ultraCompact ? '14px' : compact ? '26px' : '44px';
-  const cardPadY = ultraCompact ? 'min(14px, 3vh)' : compact ? 'min(40px, 6vh)' : 'min(80px, 9vh)';
-  const barsHeight = ultraCompact ? 26 : compact ? 40 : 56;
-  const scorePadding = ultraCompact ? '6px 20px' : compact ? '10px 26px' : '10px 30px';
-  const scoreTextClass = ultraCompact ? 'text-lg' : compact ? 'text-xl' : 'text-2xl';
+  const cardHeight = compactValue('175px', '300px', 'min(75vh, 620px)');
+  const cardGap = compactValue('14px', '26px', '44px');
+  const cardPadY = compactValue('min(14px, 3vh)', 'min(40px, 6vh)', 'min(80px, 9vh)');
+  const barsHeight = compactValue(26, 40, 56);
+  const scorePadding = compactValue('6px 20px', '10px 26px', '10px 30px');
+  const scoreTextClass = compactValue('text-lg', 'text-xl', 'text-2xl');
 
   return (
     <div className="relative min-h-screen overflow-x-hidden overflow-y-auto overscroll-contain">
@@ -107,6 +112,10 @@ export function WatchingView({ game }: Readonly<{ game: PlayState }>) {
   );
 }
 
+function ReadyBody({ children, bodyGap }: Readonly<{ children: React.ReactNode; bodyGap: string }>) {
+  return <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: bodyGap }}>{children}</div>;
+}
+
 function GetReadyBody({ isDuel, isUnderdog, isRace, party, lowestBid, guesserNames, songPlaying, ultraCompact }: Readonly<{
   isDuel: boolean; isUnderdog: boolean; isRace: boolean; party: PartyInfo | null; lowestBid: number; guesserNames: string[]; songPlaying: boolean;
   compact: boolean; ultraCompact: boolean;
@@ -128,7 +137,7 @@ function GetReadyBody({ isDuel, isUnderdog, isRace, party, lowestBid, guesserNam
   // still applies there.
   if (isDuel && isRace) {
     return (
-      <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: bodyGap }}>
+      <ReadyBody bodyGap={bodyGap}>
         <span style={{ color: 'rgba(255,255,255,0.45)', fontSize: '0.65rem', letterSpacing: '0.2em', textTransform: 'uppercase' }}>
           The finale
         </span>
@@ -138,12 +147,12 @@ function GetReadyBody({ isDuel, isUnderdog, isRace, party, lowestBid, guesserNam
         <span style={{ display: 'inline-block', minWidth: '170px', color: 'rgba(255,255,255,0.45)', fontSize: '0.88rem', textAlign: 'center' }}>
           {duelScoreLine ?? 'First correct wins'}
         </span>
-      </div>
+      </ReadyBody>
     );
   }
   if (isUnderdog) {
     return (
-      <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: bodyGap }}>
+      <ReadyBody bodyGap={bodyGap}>
         <span style={{ color: 'rgba(255,255,255,0.45)', fontSize: '0.65rem', letterSpacing: '0.2em', textTransform: 'uppercase' }}>
           Underdog Boost
         </span>
@@ -153,23 +162,23 @@ function GetReadyBody({ isDuel, isUnderdog, isRace, party, lowestBid, guesserNam
         <span style={{ display: 'inline-block', minWidth: '170px', color: 'rgba(255,255,255,0.45)', fontSize: '0.88rem', textAlign: 'center' }}>
           Only they can answer
         </span>
-      </div>
+      </ReadyBody>
     );
   }
   if (isRace) {
     return (
-      <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: bodyGap }}>
+      <ReadyBody bodyGap={bodyGap}>
         <span style={{ color: 'rgba(255,255,255,0.45)', fontSize: '0.65rem', letterSpacing: '0.2em', textTransform: 'uppercase' }}>
           Get ready
         </span>
         <span style={{ display: 'inline-block', minWidth: '220px', color: 'white', fontWeight: 900, fontSize: headlineSize, lineHeight: headlineLineHeight, textAlign: 'center' }}>
           Everyone guesses at once
         </span>
-      </div>
+      </ReadyBody>
     );
   }
   return (
-    <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: bodyGap }}>
+    <ReadyBody bodyGap={bodyGap}>
       <span style={{ color: 'rgba(255,255,255,0.45)', fontSize: '0.65rem', letterSpacing: '0.2em', textTransform: 'uppercase' }}>
         {songPlaying ? 'Listen closely' : 'Get ready'}
       </span>
@@ -200,6 +209,6 @@ function GetReadyBody({ isDuel, isUnderdog, isRace, party, lowestBid, guesserNam
           {duelScoreLine}
         </span>
       )}
-    </div>
+    </ReadyBody>
   );
 }

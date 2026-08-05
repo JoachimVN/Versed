@@ -92,7 +92,7 @@ export function HostScaleShell({ children, className, style }: Readonly<{ childr
   const scale = useHostScale(ref);
   return (
     <HostScaleContext.Provider value={scale}>
-      <div ref={ref} className={`host-scale-shell${className ? ` ${className}` : ''}`} style={style}>
+      <div ref={ref} className={['host-scale-shell', className].filter(Boolean).join(' ')} style={style}>
         {children}
       </div>
     </HostScaleContext.Provider>

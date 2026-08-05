@@ -142,7 +142,7 @@ const MOCK_HOST_REVEAL: HostState = {
   roundDeltas: { Anna: 1250 },
 };
 
-const MOCK_RESULT_YEAR: RoundResultEvent = {
+const YEAR_FIXTURE_BASE: Pick<RoundResultEvent, 'correct' | 'guesserName' | 'songTitle' | 'artist' | 'year' | 'coverUrl' | 'points' | 'party'> = {
   correct: true,
   guesserName: null,
   songTitle: 'Billie Jean',
@@ -155,19 +155,26 @@ const MOCK_RESULT_YEAR: RoundResultEvent = {
     intro: { title: 'Guess the Year', tagline: 'Closest answer wins the round' },
     finale: false, duelists: [], restricted: [],
   },
-  playerGuesses: [
+};
+
+function yearFixture(playerGuesses: NonNullable<RoundResultEvent['playerGuesses']>, yearResults: NonNullable<RoundResultEvent['yearResults']>): RoundResultEvent {
+  return { ...YEAR_FIXTURE_BASE, playerGuesses, yearResults };
+}
+
+const MOCK_RESULT_YEAR = yearFixture(
+  [
     { name: 'Anna', guess: '1984' },
     { name: 'John', guess: '1979' },
     { name: 'Olivia', guess: '1983' },
     { name: 'Marcus', guess: null },
   ],
-  yearResults: [
+  [
     { name: 'Olivia', guess: 1983, diff: 0, points: 650, pity: false },
     { name: 'Anna', guess: 1984, diff: 1, points: 480, pity: false },
     { name: 'John', guess: 1979, diff: 4, points: 210, pity: false },
     { name: 'Marcus', guess: null, diff: null, points: 0, pity: false },
   ],
-};
+);
 
 const MOCK_HOST_YEAR_REVEAL: HostState = {
   ...MOCK_HOST,
@@ -255,20 +262,8 @@ const MOCK_HOST_REVEAL_CROWD: HostState = {
 // Two guesses tied exactly on the actual year (tests the timeline grouping
 // multiple names under one marker) plus a full spread of the rest, so both
 // the name-lane and year-lane packing in YearTimelineContent get exercised.
-const CROWD_RESULT_YEAR: RoundResultEvent = {
-  correct: true,
-  guesserName: null,
-  songTitle: 'Billie Jean',
-  artist: 'Michael Jackson',
-  year: 1983,
-  coverUrl: 'https://i.scdn.co/image/ab67616d0000b27332a7d87248d1b75463483df5',
-  points: 0,
-  party: {
-    format: 'year', target: 'title', event: null, multiplier: 1, winnerOnly: false,
-    intro: { title: 'Guess the Year', tagline: 'Closest answer wins the round' },
-    finale: false, duelists: [], restricted: [],
-  },
-  playerGuesses: [
+const CROWD_RESULT_YEAR = yearFixture(
+  [
     { name: 'Anna', guess: '1984' },
     { name: 'John', guess: '1979' },
     { name: 'Olivia', guess: '1983' },
@@ -277,7 +272,7 @@ const CROWD_RESULT_YEAR: RoundResultEvent = {
     { name: 'Priya', guess: '1983' },
     { name: 'Devon', guess: null },
   ],
-  yearResults: [
+  [
     { name: 'Olivia', guess: 1983, diff: 0, points: 650, pity: false },
     { name: 'Priya', guess: 1983, diff: 0, points: 650, pity: false },
     { name: 'Anna', guess: 1984, diff: 1, points: 480, pity: false },
@@ -286,7 +281,7 @@ const CROWD_RESULT_YEAR: RoundResultEvent = {
     { name: 'Sofia', guess: 1990, diff: 7, points: 80, pity: false },
     { name: 'Devon', guess: null, diff: null, points: 0, pity: false },
   ],
-};
+);
 
 const MOCK_HOST_YEAR_REVEAL_CROWD: HostState = {
   ...MOCK_HOST_CROWD,

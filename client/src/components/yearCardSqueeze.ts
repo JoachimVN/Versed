@@ -41,7 +41,8 @@ export function computeYearCardHeight(hasCover: boolean, result: RoundResultEven
     if (compact) return (hasCover ? 430 : 330) + laneExtra;
     return (hasCover ? 500 : 380) + laneExtra;
   }
-  if (ultra) return landscape ? (hasCover ? 190 : 160) : (hasCover ? 260 : 220);
+  if (ultra && landscape) return hasCover ? 190 : 160;
+  if (ultra) return hasCover ? 260 : 220;
   if (compact) return hasCover ? 300 : 260;
   return hasCover ? 360 : 320;
 }

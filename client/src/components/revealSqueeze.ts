@@ -17,6 +17,13 @@ import { useEffect, useState } from 'react';
 // landscape phone's abundant width instead of its scarce height.
 export type CardSqueeze = { compact: boolean; ultraCompact: boolean; landscape?: boolean };
 
+/** Selects a layout value without scattering nested compact-tier conditionals. */
+export function squeezeValue<T>(squeeze: Pick<CardSqueeze, 'compact' | 'ultraCompact'>, ultraCompactValue: T, compactValue: T, regularValue: T): T {
+  if (squeeze.ultraCompact) return ultraCompactValue;
+  if (squeeze.compact) return compactValue;
+  return regularValue;
+}
+
 // The card content column's own width cap, independent of the glass card's
 // outer width (see computeCardWidth in host/RevealView.tsx) — widened at
 // ultraCompact so a combined title/artist/year line has real room to sit on
@@ -112,9 +119,13 @@ export function computeCardHeight(hasCover: boolean, squeeze: CardSqueeze): numb
     // to hold at one line most of the time; this still carries a margin for
     // when it doesn't.
     if (squeeze.ultraCompact && squeeze.landscape) return 165;
-    return squeeze.ultraCompact ? 264 : squeeze.compact ? 348 : 418;
+    if (squeeze.ultraCompact) return 264;
+    if (squeeze.compact) return 348;
+    return 418;
   }
-  return squeeze.ultraCompact ? 149 : squeeze.compact ? 153 : 178;
+  if (squeeze.ultraCompact) return 149;
+  if (squeeze.compact) return 153;
+  return 178;
 }
 
 // The glass card's own outer width — widened at ultraCompact to match

@@ -6,7 +6,7 @@ import { BIG_POINTS_THRESHOLD, FinalRoundAnswerContent, NoOneGotItCardContent, G
 import { YearTimelineContent } from '../../components/YearReveal';
 import { computeYearCardHeight } from '../../components/yearCardSqueeze';
 import type { RevealLayout } from '../../components/revealSqueeze';
-import { useRevealLayout, computeCardHeight, computeCardWidth } from '../../components/revealSqueeze';
+import { useRevealLayout, computeCardHeight, computeCardWidth, squeezeValue } from '../../components/revealSqueeze';
 import { usePlayerScaleValue } from '../../hooks/usePlayerScale';
 import { PartyRevealExtras, MYSTERY_LANDING_MS } from '../../components/RoundIntro';
 import { LIQUID_CARD_PROPS } from '../../components/liquidGlassPresets';
@@ -106,7 +106,17 @@ const DELTA_LINE_PX = 20;
 const ULTRA_DELTA_BLOCK_PX = 34;
 
 function tierKey(squeeze: RevealLayout): keyof typeof LIST_TIER_CAP {
-  return squeeze.ultraCompact ? 'ultraCompact' : squeeze.compact ? 'compact' : 'normal';
+  return squeezeValue(squeeze, 'ultraCompact', 'compact', 'normal');
+}
+
+function revealPadding(wide: boolean, squeeze: RevealLayout): string {
+  if (wide) return squeezeValue(squeeze, 'px-2 py-3', 'px-2 py-4', 'px-2 py-6');
+  return squeezeValue(squeeze, 'p-3', 'p-4', 'p-6');
+}
+
+function cardPadding(wide: boolean, squeeze: RevealLayout): string {
+  if (wide) return '18px 18px';
+  return squeezeValue(squeeze, '16px 16px', '20px 20px', '24px 24px');
 }
 
 // Reveal for "guess the year" rounds: the year card plus everyone's distances.
@@ -127,7 +137,7 @@ function PlayRevealShell({
   wide?: boolean;
 }>) {
   const { myScore, myScoreDelta, myBreakdown, myStreak, myRank, stealResult } = game;
-  const { compact, ultraCompact, windowHeight } = squeeze;
+  const { ultraCompact, windowHeight } = squeeze;
   const tier = tierKey(squeeze);
   const revealParty = result.party ?? game.party;
   const finaleResolved = revealParty?.duelProgress?.wins.some(w => w.count >= 2) ?? false;
@@ -149,10 +159,10 @@ function PlayRevealShell({
   // same delay elapses — without it they render at mount, before the host's
   // reel has even landed, and give away the multiplier's size in advance.
   const { displayScore, deltaFading, revealed } = useAnimatedScore(myScore, myScoreDelta, mysteryScoreDelay, false, isMystery);
-  const gapClass = ultraCompact ? 'gap-2' : compact ? 'gap-3' : 'gap-5';
-  const paddingClass = wide ? (ultraCompact ? 'px-2 py-3' : compact ? 'px-2 py-4' : 'px-2 py-6') : (ultraCompact ? 'p-3' : compact ? 'p-4' : 'p-6');
-  const gapPx = ultraCompact ? 8 : compact ? 12 : 20;
-  const paddingPx = ultraCompact ? 24 : compact ? 32 : 48;
+  const gapClass = squeezeValue(squeeze, 'gap-2', 'gap-3', 'gap-5');
+  const paddingClass = revealPadding(wide, squeeze);
+  const gapPx = squeezeValue(squeeze, 8, 12, 20);
+  const paddingPx = squeezeValue(squeeze, 24, 32, 48);
   // Mirrors PartyRevealExtras' own render gate (mysteryMultiplier is always
   // null here — hideMysteryChip is passed below — so that half of its gate
   // never applies on the player screen) so the budget only reserves a row +
@@ -164,16 +174,19 @@ function PlayRevealShell({
     || (!stealResult && result.stealPending)
   );
   const breakdownLineCount = myScoreDelta > 0 && myBreakdown ? breakdownLines(myBreakdown, isMystery).length : 0;
-  const scoreBoxPx = SCORE_BOX_BASE_PX[tier]
-    + (ultraCompact
-      ? (myScoreDelta !== 0 ? ULTRA_DELTA_BLOCK_PX : 0)
-      : (myScoreDelta !== 0 ? DELTA_LINE_PX : 0) + breakdownLineCount * BREAKDOWN_LINE_PX)
-    + (myStreak >= 2 ? STREAK_LINE_PX : 0);
+  let scoreBoxPx = SCORE_BOX_BASE_PX[tier];
+  if (ultraCompact) {
+    if (myScoreDelta !== 0) scoreBoxPx += ULTRA_DELTA_BLOCK_PX;
+  } else {
+    if (myScoreDelta !== 0) scoreBoxPx += DELTA_LINE_PX;
+    scoreBoxPx += breakdownLineCount * BREAKDOWN_LINE_PX;
+  }
+  if (myStreak >= 2) scoreBoxPx += STREAK_LINE_PX;
   const chromeHeight = cardHeight + gapPx * (willShowPartyExtras ? 3 : 2) + paddingPx
     + (willShowPartyExtras ? PARTY_EXTRAS_PX[tier] : 0) + scoreBoxPx;
   const listMaxHeight = `${Math.max(LIST_MIN_PX[tier], Math.min(LIST_TIER_CAP[tier], windowHeight - chromeHeight))}px`;
-  const scoreBoxPadding = ultraCompact ? '10px 20px' : compact ? '12px 24px' : '16px 32px';
-  const scoreTextClass = ultraCompact ? 'text-xl' : compact ? 'text-2xl' : 'text-3xl';
+  const scoreBoxPadding = squeezeValue(squeeze, '10px 20px', '12px 24px', '16px 32px');
+  const scoreTextClass = squeezeValue(squeeze, 'text-xl', 'text-2xl', 'text-3xl');
   return (
     <div className="page-enter relative min-h-screen reveal-screen-height" style={{ overflowY: 'auto', overscrollBehavior: 'contain' }}>
       <div className={`screen-center-safe relative flex min-h-full flex-col items-center ${gapClass} ${paddingClass}`} style={{ minHeight: '100%' }}>
@@ -192,7 +205,7 @@ function PlayRevealShell({
           <LiquidGlass
             style={{ position: 'absolute', top: '50%', left: '50%' }}
             {...LIQUID_CARD_PROPS}
-            padding={wide ? '18px 18px' : (ultraCompact ? '16px 16px' : compact ? '20px 20px' : '24px 24px')}
+            padding={cardPadding(wide, squeeze)}
           >
             {cardContent}
           </LiquidGlass>
