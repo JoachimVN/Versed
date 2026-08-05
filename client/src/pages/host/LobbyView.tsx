@@ -16,35 +16,56 @@ import { JoinCard } from './JoinCard';
 
 function SettingsButton({ settingsOpen, toggleSettings }: Readonly<{ settingsOpen: boolean; toggleSettings: () => void }>) {
   const [hovered, setHovered] = useState(false);
-  let bg = 'rgba(255,255,255,0.06)';
-  if (settingsOpen) bg = 'rgba(168,11,219,0.28)';
-  else if (hovered) bg = 'rgba(255,255,255,0.11)';
-  let color = 'rgba(255,255,255,0.5)';
-  if (settingsOpen) color = '#c084fc';
-  else if (hovered) color = 'rgba(255,255,255,0.85)';
   return (
-    <button
-      type="button"
-      onClick={toggleSettings}
+    // Same glass-pill treatment as the volume control below it: a fixed-size
+    // box (LiquidGlass centres itself on this and needs an explicit box to
+    // measure) holding the glass, with a tint overlay div and content row
+    // inside mirroring that component's structure.
+    <div
       onMouseEnter={() => setHovered(true)}
       onMouseLeave={() => setHovered(false)}
-      tabIndex={0}
-      className="absolute top-5 right-5 flex items-center gap-2 rounded-full transition-all duration-200 z-10"
-      style={{
-        background: bg,
-        border: settingsOpen ? '1px solid rgba(188,26,249,0.45)' : '1px solid rgba(255,255,255,0.10)',
-        backdropFilter: 'blur(12px)',
-        padding: '6px 14px 6px 10px',
-        color,
-        cursor: 'pointer',
-      }}
+      className="liquid-btn glass-tint-purple settings-control-glass absolute top-5 right-5 z-10"
+      style={{ width: '112px', height: '44px' }}
     >
-      <Settings
-        className="w-3.5 h-3.5"
-        style={{ transition: 'transform 0.35s ease', transform: settingsOpen ? 'rotate(90deg)' : 'rotate(0deg)' }}
-      />
-      <span style={{ fontSize: '0.8rem', fontWeight: 500, letterSpacing: '0.01em' }}>Settings</span>
-    </button>
+      <LiquidGlass
+        style={{
+          position: 'absolute', top: '50%', left: '50%',
+          filter: hovered ? 'drop-shadow(0 0 10px rgba(192,132,252,0.4))' : 'drop-shadow(0 0 0px rgba(192,132,252,0))',
+          transition: 'filter 0.25s ease',
+        }}
+        {...LIQUID_CONTROL_PROPS}
+        padding="8px 16px 8px 12px"
+      >
+        <div style={{ position: 'relative' }}>
+          <div style={{
+            position: 'absolute', inset: '-8px -16px -8px -12px', borderRadius: '100px', pointerEvents: 'none',
+            background: settingsOpen ? 'rgba(158,18,204,0.16)' : 'rgba(158,18,204,0.05)',
+            transition: 'background 0.2s ease',
+          }} />
+          <button
+            type="button"
+            onClick={toggleSettings}
+            tabIndex={0}
+            className="relative flex items-center gap-2"
+            style={{
+              background: 'transparent',
+              border: 'none',
+              padding: 0,
+              height: '28px',
+              color: settingsOpen ? '#c084fc' : 'rgba(255,255,255,0.75)',
+              cursor: 'pointer',
+              transition: 'color 0.2s ease',
+            }}
+          >
+            <Settings
+              className="w-4 h-4"
+              style={{ transition: 'transform 0.35s ease', transform: settingsOpen ? 'rotate(90deg)' : 'rotate(0deg)' }}
+            />
+            <span style={{ fontSize: '0.8rem', fontWeight: 500, letterSpacing: '0.01em' }}>Settings</span>
+          </button>
+        </div>
+      </LiquidGlass>
+    </div>
   );
 }
 

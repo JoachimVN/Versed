@@ -237,7 +237,7 @@ select:focus-visible,
   .lobby-header {
     gap: 0.25rem;
     /* Top padding must clear the absolutely-positioned Settings/volume
-       buttons (top: 20px, ~34px tall) — the brand logo asset has zero
+       buttons (top: 20px, 44px tall) — the brand logo asset has zero
        transparent headroom above its music-note glyph, so anything less
        here means the note renders straight into the button row. */
     padding: 3.75rem 1.5rem 0.375rem;
@@ -639,6 +639,17 @@ select:focus-visible,
    pill reads as lighter/more see-through overall rather than just a thinner
    edge. */
 .volume-control-glass .glass {
+  box-shadow: 0px 12px 40px rgba(0, 0, 0, 0.125) !important;
+}
+
+/* Settings button picks up the same "small always-on chrome" treatment as
+   the volume control above, so the two floating lobby pills read as one
+   family instead of a glass control paired with a flat one. */
+.settings-control-glass .glass::after {
+  box-shadow: 0 0 0 1px rgba(158,18,204,0.35) inset, 0 1px 4px rgba(0,0,0,0.35) !important;
+  opacity: 0.5 !important;
+}
+.settings-control-glass .glass {
   box-shadow: 0px 12px 40px rgba(0, 0, 0, 0.125) !important;
 }
 
