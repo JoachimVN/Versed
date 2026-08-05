@@ -17,14 +17,12 @@ async function prepPage(page) {
             transition-duration: 0s !important;
             transition-delay: 0s !important;
         }
-        /* liquid-glass-react measures and transitions its internal surface
-           on mount. Freezing that transition leaves Chromium with the
-           library's black shadow geometry, producing a false inset rim in
-           host-card screenshots. Let only those internal layers settle. */
-        .liquid-glass-stabilizer > *,
-        .liquid-glass-stabilizer .glass {
-            transition-duration: 0.2s !important;
-            transition-delay: 0s !important;
+        /* Chromium paints liquid-glass-react's SVG displacement filter as a
+           large black inset rectangle on the two wide host cards. Keep their
+           normal backdrop blur, but skip only that faulty filter in docs
+           captures. */
+        .host-game-card .glass__warp {
+            filter: none !important;
         }`;
         const inject = () => {
             const style = document.createElement('style');
