@@ -69,10 +69,17 @@ function SettingsButton({ settingsOpen, toggleSettings }: Readonly<{ settingsOpe
   );
 }
 
-const MODE_STYLE: Record<Mode, { bg: string; border: string; text: string; icon: string }> = {
-  classic: { bg: 'rgba(178,6,229,0.28)', border: '1px solid rgba(188,16,249,0.45)', text: 'white', icon: '#c084fc' },
-  race: { bg: 'rgba(220, 80, 10, 0.2)', border: '1px solid rgba(234, 88, 12, 0.4)', text: '#fed7aa', icon: '#fb923c' },
-  party: { bg: 'rgba(0,198,192,0.2)', border: '1px solid rgba(0,238,232,0.4)', text: '#99f6e4', icon: '#2dd4bf' },
+// The old flat translucent fill + hard border read fine on a plain rgba
+// panel, but competed with the glass's own refraction once ModeToggle moved
+// onto LiquidGlass. A colored glow (first pass here) fixed legibility but
+// read as neon/busy — a crisp white inset ring plus a colorless ambient
+// shadow (same language as a solid capsule button, not a lit-up chip) is the
+// cleaner, calmer "selected" cue; the color still carries entirely through
+// the fill itself.
+const MODE_STYLE: Record<Mode, { bg: string; tint: string; text: string; icon: string }> = {
+  classic: { bg: 'rgba(191,29,235,0.34)', tint: 'rgba(158,18,204,0.07)', text: 'white', icon: '#c084fc' },
+  race: { bg: 'rgba(234,88,12,0.3)', tint: 'rgba(234,88,12,0.07)', text: '#fed7aa', icon: '#fb923c' },
+  party: { bg: 'rgba(0,210,203,0.26)', tint: 'rgba(0,196,190,0.07)', text: '#99f6e4', icon: '#2dd4bf' },
 };
 
 function ModeToggle({ mode, setMode }: Readonly<{ mode: Mode; setMode: (m: Mode) => void }>) {
@@ -83,6 +90,12 @@ function ModeToggle({ mode, setMode }: Readonly<{ mode: Mode; setMode: (m: Mode)
   ];
   const index = modes.findIndex(m => m.key === mode);
   const active = MODE_STYLE[mode];
+  // Swapping the accent class (rather than pinning glass-tint-purple like
+  // the other three lobby glass surfaces) lets the ring itself track the
+  // selected mode too — .liquid-glass-stabilizer .glass::after carries its
+  // own box-shadow transition, so this cross-fades same as the wash below
+  // instead of snapping between classes.
+  const tintClass = { classic: 'glass-tint-purple', race: 'glass-tint-orange', party: 'glass-tint-cyan' }[mode];
   return (
     // Same glass-card pattern as JoinCard below it: outer box keeps the
     // existing width classes/breakpoint overrides (landscape still pins it
@@ -92,41 +105,58 @@ function ModeToggle({ mode, setMode }: Readonly<{ mode: Mode; setMode: (m: Mode)
     // height. The active-mode pill no longer needs its own inset math (old
     // 4px/-8px accounting for the flat panel's own padding) since the track
     // div below is already the padded-in content box.
-    <div className="liquid-btn glass-tint-purple lobby-mode-toggle relative w-full max-w-md">
+    <div className={`liquid-btn ${tintClass} lobby-mode-toggle relative w-full max-w-md`}>
       <LiquidGlass
         style={{ position: 'absolute', top: '50%', left: '50%' }}
         {...LIQUID_CARD_PROPS}
+        cornerRadius={100}
         padding="4px"
       >
-        <div
-          className="mode-toggle-track relative flex rounded-xl"
-          style={{ width: 'calc(min(calc(100vw - 3rem), 448px) - 8px)' }}
-        >
+        <div style={{ position: 'relative' }}>
+          {/* Glass-wide wash behind the track, tinted to the selected mode's
+              accent and cross-fading on change — same overlay pattern as the
+              volume/settings pills, but dynamic instead of fixed purple. The
+              ring itself (see tintClass above) recolors the same way. */}
           <div
-            className="absolute rounded-xl"
-            style={{
-              top: 0, bottom: 0, left: 0,
-              width: 'calc(100% / 3)',
-              background: active.bg,
-              border: active.border,
-              transform: `translateX(${index * 100}%)`,
-              transition: 'transform 0.25s cubic-bezier(0.4, 0, 0.2, 1), background 0.25s ease, border-color 0.25s ease',
-              pointerEvents: 'none',
-            }}
+            className="absolute rounded-full"
+            style={{ inset: '-4px', background: active.tint, transition: 'background 0.3s ease', pointerEvents: 'none' }}
           />
-          {modes.map(({ key, label, Icon }) => (
-            <button
-              key={key}
-              type="button"
-              onClick={() => setMode(key)}
-              tabIndex={0}
-              className="lobby-mode-option relative flex-1 py-2.5 rounded-xl text-sm font-semibold z-10 transition-colors duration-200 flex items-center justify-center gap-1.5"
-              style={{ color: mode === key ? MODE_STYLE[key].text : 'rgba(255,255,255,0.45)', background: 'transparent', border: 'none', cursor: 'pointer' }}
-            >
-              <Icon className="w-3.5 h-3.5 transition-colors duration-200" style={{ color: mode === key ? MODE_STYLE[key].icon : 'rgba(255,255,255,0.45)' }} />
-              {label}
-            </button>
-          ))}
+          <div
+            className="mode-toggle-track relative flex rounded-full"
+            style={{ width: 'calc(min(calc(100vw - 3rem), 448px) - 8px)' }}
+          >
+            <div
+              className="absolute rounded-full"
+              style={{
+                top: 0, bottom: 0, left: 0,
+                width: 'calc(100% / 3)',
+                background: active.bg,
+                boxShadow: 'inset 0 0 0 1px rgba(255,255,255,0.2), 0 2px 10px rgba(0,0,0,0.22)',
+                transform: `translateX(${index * 100}%)`,
+                transition: 'transform 0.25s cubic-bezier(0.4, 0, 0.2, 1), background 0.25s ease',
+                pointerEvents: 'none',
+              }}
+            />
+            {modes.map(({ key, label, Icon }) => (
+              <button
+                key={key}
+                type="button"
+                onClick={() => setMode(key)}
+                tabIndex={0}
+                className="lobby-mode-option relative flex-1 py-3.5 rounded-full text-sm font-medium z-10 transition-colors duration-200 flex items-center justify-center gap-1.5"
+                style={{
+                  color: mode === key ? MODE_STYLE[key].text : 'rgba(255,255,255,0.45)',
+                  background: 'transparent',
+                  border: 'none',
+                  cursor: 'pointer',
+                  letterSpacing: '0.01em',
+                }}
+              >
+                <Icon className="w-3.5 h-3.5 transition-colors duration-200" style={{ color: mode === key ? MODE_STYLE[key].icon : 'rgba(255,255,255,0.45)' }} />
+                {label}
+              </button>
+            ))}
+          </div>
         </div>
       </LiquidGlass>
     </div>
@@ -175,7 +205,11 @@ function StartButton({ players, mode, startGame, disabled: extraDisabled }: Read
             background: { classic: 'rgba(158,18,204,0.12)', race: 'rgba(220,80,10,0.12)', party: 'rgba(0,238,232,0.1)' }[mode],
             transition: 'background 0.25s ease',
           }} />
-          <span className="lobby-start-label text-white font-bold text-xl" style={{ whiteSpace: 'nowrap', position: 'relative', display: 'inline-block', textAlign: 'center' }}>
+          <span
+            key={mode}
+            className="lobby-start-label text-white font-bold text-xl"
+            style={{ whiteSpace: 'nowrap', position: 'relative', display: 'inline-block', textAlign: 'center', animation: 'startLabelIn 0.25s ease' }}
+          >
             {{ classic: 'Start Classic Game', race: 'Start Race Game', party: 'Start Party Game' }[mode]}
           </span>
         </div>

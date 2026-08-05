@@ -242,7 +242,7 @@ select:focus-visible,
 /* Same reasoning as .lobby-join-card-glass above, for the mode toggle's
    glass wrapper. */
 .lobby-mode-toggle {
-  height: 46px;
+  height: 54px;
 }
 
 /* The host lobby must remain a complete board at every supported viewport.
@@ -289,12 +289,12 @@ select:focus-visible,
   }
 
   .lobby-mode-toggle {
-    height: 40px;
+    height: 46px;
   }
 
   .lobby-mode-option {
-    padding-top: 0.45rem !important;
-    padding-bottom: 0.45rem !important;
+    padding-top: 0.65rem !important;
+    padding-bottom: 0.65rem !important;
     font-size: 0.8125rem !important;
   }
 
@@ -474,7 +474,7 @@ select:focus-visible,
   .lobby-mode-player-row .lobby-mode-toggle {
     flex: 0 0 250px;
     width: 250px;
-    height: 36px;
+    height: 42px;
   }
 
   .mode-toggle-track {
@@ -482,8 +482,8 @@ select:focus-visible,
   }
 
   .lobby-mode-option {
-    padding-top: 0.35rem !important;
-    padding-bottom: 0.35rem !important;
+    padding-top: 0.55rem !important;
+    padding-bottom: 0.55rem !important;
     font-size: 0.75rem !important;
     gap: 0.25rem !important;
   }
@@ -602,7 +602,11 @@ select:focus-visible,
   box-sizing: border-box;
   padding: 1.5px;
   pointer-events: none;
-  transition: background 0.15s ease-out;
+  /* box-shadow here is what StartButton's per-mode tint-class swap
+     (glass-tint-purple/orange/cyan) actually recolors — giving it its own
+     transition lets that ring cross-fade between mode colors instead of
+     snapping, same as the background wash div layered over it already does. */
+  transition: background 0.15s ease-out, box-shadow 0.25s ease;
   background: linear-gradient(calc(135deg + var(--liquid-glass-sheen-x, 0) * 1.2deg),
     rgba(255,255,255,0) 0%,
     rgba(255,255,255,0.22) 33%,
@@ -659,14 +663,26 @@ select:focus-visible,
   box-shadow: 0px 12px 40px rgba(0, 0, 0, 0.125) !important;
 }
 
-/* Same softened "always-on chrome" ring for the join card and mode toggle,
-   so all four floating lobby glass surfaces read as one family. */
-.lobby-join-card-glass .glass::after,
-.lobby-mode-toggle .glass::after {
+/* Same softened "always-on chrome" ring for the join card, so it and
+   settings/volume read as one family (all three stay purple always). */
+.lobby-join-card-glass .glass::after {
   box-shadow: 0 0 0 1px rgba(158,18,204,0.35) inset, 0 1px 4px rgba(0,0,0,0.35) !important;
   opacity: 0.5 !important;
 }
-.lobby-join-card-glass .glass,
+.lobby-join-card-glass .glass {
+  box-shadow: 0px 12px 40px rgba(0, 0, 0, 0.125) !important;
+}
+
+/* Mode toggle wants the same softened weight but not a fixed color — its
+   ring tracks the selected mode via .glass-tint-purple/orange/cyan on the
+   wrapper (see ModeToggle's tintClass), so only opacity is set here. Setting
+   box-shadow too, like the rule above, would out-specificity-tie those
+   accent rules and — since this one comes later in the file — always win,
+   permanently locking the ring to whichever color got written last here
+   regardless of the selected mode. */
+.lobby-mode-toggle .glass::after {
+  opacity: 0.5 !important;
+}
 .lobby-mode-toggle .glass {
   box-shadow: 0px 12px 40px rgba(0, 0, 0, 0.125) !important;
 }
@@ -742,6 +758,15 @@ select:focus-visible,
 @keyframes fadeIn {
   from { opacity: 0; }
   to   { opacity: 1; }
+}
+
+/* StartButton's label swaps text outright on mode change (can't tween
+   between two different strings) — replayed via key={mode} forcing a
+   remount, this stands in for a crossfade instead of the text just
+   snapping to the new mode's copy. */
+@keyframes startLabelIn {
+  from { opacity: 0; transform: translateY(4px); }
+  to   { opacity: 1; transform: translateY(0); }
 }
 
 @keyframes dotBounce {
