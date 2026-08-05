@@ -82,12 +82,28 @@ function scoreDeltaAnimation(scoreDelta: number): React.CSSProperties | undefine
 // push the streak line below the fold. Charged unconditionally by tier
 // (myStreak's own >= 2 gate below decides whether it's paid at all) since
 // the line's markup doesn't change shape across tiers.
+//
+// SCORE_BOX_BASE_PX used to assume the "+N pts" delta line was basically
+// always there, which measured fine on the fixtures that motivated it (all
+// delta > 0) but over-budgeted a "no one got it" reveal (delta === 0, no
+// delta line, no breakdown at all) by ~60px at ultraCompact — stealing that
+// much room from the guesses list below and cutting off however many rows
+// didn't fit in what was left, on a screen with real space to spare. Base
+// now measures the delta === 0 floor (padding + score number + your-score
+// line) and DELTA_LINE_PX/ULTRA_DELTA_BLOCK_PX are charged only when a delta
+// line will actually render, mirroring the streak line's own gate.
+// ultraCompact folds delta + breakdown into one combined block because
+// breakdownCompact's single line only ever renders alongside the delta line
+// there (both gated on the same myScoreDelta > 0), so measuring them
+// separately would just be two numbers that always travel together.
 const LIST_TIER_CAP = { normal: 260, compact: 200, ultraCompact: 130 } as const;
 const LIST_MIN_PX = { normal: 64, compact: 60, ultraCompact: 44 } as const;
 const PARTY_EXTRAS_PX = { normal: 50, compact: 40, ultraCompact: 34 } as const;
-const SCORE_BOX_BASE_PX = { normal: 175, compact: 152, ultraCompact: 135 } as const;
+const SCORE_BOX_BASE_PX = { normal: 155, compact: 132, ultraCompact: 74 } as const;
 const BREAKDOWN_LINE_PX = 17;
 const STREAK_LINE_PX = 20;
+const DELTA_LINE_PX = 20;
+const ULTRA_DELTA_BLOCK_PX = 34;
 
 function tierKey(squeeze: RevealLayout): keyof typeof LIST_TIER_CAP {
   return squeeze.ultraCompact ? 'ultraCompact' : squeeze.compact ? 'compact' : 'normal';
@@ -148,7 +164,10 @@ function PlayRevealShell({
     || (!stealResult && result.stealPending)
   );
   const breakdownLineCount = myScoreDelta > 0 && myBreakdown ? breakdownLines(myBreakdown, isMystery).length : 0;
-  const scoreBoxPx = SCORE_BOX_BASE_PX[tier] + (ultraCompact ? 0 : breakdownLineCount * BREAKDOWN_LINE_PX)
+  const scoreBoxPx = SCORE_BOX_BASE_PX[tier]
+    + (ultraCompact
+      ? (myScoreDelta !== 0 ? ULTRA_DELTA_BLOCK_PX : 0)
+      : (myScoreDelta !== 0 ? DELTA_LINE_PX : 0) + breakdownLineCount * BREAKDOWN_LINE_PX)
     + (myStreak >= 2 ? STREAK_LINE_PX : 0);
   const chromeHeight = cardHeight + gapPx * (willShowPartyExtras ? 3 : 2) + paddingPx
     + (willShowPartyExtras ? PARTY_EXTRAS_PX[tier] : 0) + scoreBoxPx;
