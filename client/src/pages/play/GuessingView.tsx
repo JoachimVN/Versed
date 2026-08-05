@@ -273,6 +273,14 @@ function YearDigitBoxes({ value, focused, size }: Readonly<{ value: string; focu
   );
 }
 
+function guessingLabel(target: ReturnType<typeof resolveTarget>, isChoice: boolean, isChaosHints: boolean): string {
+  if (isChaosHints) return 'One of these is a lie';
+  if (isChoice) {
+    return { title: 'Tap the right title', artist: 'Tap the right artist', both: 'Tap the right title', year: 'Tap the right year' }[target];
+  }
+  return { title: 'Name the song', artist: 'Name the artist', both: 'Name the song · artist = bonus', year: 'Guess the release year' }[target];
+}
+
 export function GuessingView({ game }: Readonly<{ game: PlayState }>) {
   const { phase, timeLeft, timerTotal, myScore, guessText, guessInputRef, setGuessText, submitGuess, submitChoice, submitChaosTap, skipGuess, artistOnly, yearOnly, choiceOptions: gameChoiceOptions, songPlaying, songTempo, mode, party, hints, artistGuessText, setArtistGuessText } = game;
   const isListening = phase === 'watching';
@@ -297,20 +305,7 @@ export function GuessingView({ game }: Readonly<{ game: PlayState }>) {
   // field while listening, keep that deliberate focus instead.
   useGuessAutofocus(phase, isChoice, isChaosHints, guessInputRef);
 
-  let label = {
-    title: 'Name the song',
-    artist: 'Name the artist',
-    both: 'Name the song · artist = bonus',
-    year: 'Guess the release year',
-  }[target];
-  if (isChoice) {
-    label = {
-      title: 'Tap the right title',
-      artist: 'Tap the right artist',
-      both: 'Tap the right title',
-      year: 'Tap the right year',
-    }[target];
-  } else if (isChaosHints) label = 'One of these is a lie';
+  const label = guessingLabel(target, isChoice, isChaosHints);
   const placeholder = {
     title: 'Type song title…',
     artist: 'Type artist name…',

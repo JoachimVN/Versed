@@ -36,6 +36,7 @@ function coverBorderRadius(mid: boolean, ultra: boolean, compact: boolean): stri
 type TimelineLabel = { xPct: number; label: string; fontPx: number };
 type YearGuess = NonNullable<RoundResultEvent['yearResults']>[number];
 type TimelineGroup = { guess: number; entries: YearGuess[] };
+type TimelineMarkerPalette = { nameColor: string; nameWeight: number; dotBackground: string; dotBorder: string; dotAnimation: string; yearColor: string; yearWeight: number };
 
 function packTimelineLanes(items: TimelineLabel[], timelinePx: number): number[] {
   const laneEnds: number[] = [];
@@ -86,6 +87,41 @@ function timelineMetrics(year: number, guesses: YearGuess[], ultra: boolean, lan
   };
 }
 
+function timelineMarkerLayout(group: TimelineGroup, ultra: boolean, isBest: boolean, nameLaneByGuess: Map<number, number>, nameLaneStep: number, yearLaneByGuess: Map<number, number>, yearLaneStep: number) {
+  const baseOffset = ultra ? 10 : 13;
+  const size = isBest ? (ultra ? 8 : 10) : (ultra ? 5 : 6);
+  return {
+    dotSize: size,
+    markerTop: ultra ? 32 : 43,
+    nameFontSize: ultra ? '0.54rem' : '0.62rem',
+    nameOffset: baseOffset + (nameLaneByGuess.get(group.guess) ?? 0) * nameLaneStep,
+    yearFontSize: ultra ? '0.52rem' : '0.6rem',
+    yearOffset: baseOffset + (yearLaneByGuess.get(group.guess) ?? 0) * yearLaneStep,
+  };
+}
+
+function timelineMarkerPalette(isBest: boolean, winnerColor: string, winnerColorSoft: string, winnerGlowAnim: string, delayS: number): TimelineMarkerPalette {
+  if (isBest) {
+    return {
+      nameColor: winnerColor, nameWeight: 800, dotBackground: winnerColor, dotBorder: '2px solid rgba(255,255,255,0.5)',
+      dotAnimation: `${winnerGlowAnim} 1.8s ease-in-out ${delayS + 0.65}s infinite`, yearColor: winnerColorSoft, yearWeight: 700,
+    };
+  }
+  return {
+    nameColor: 'rgba(255,255,255,0.55)', nameWeight: 600, dotBackground: 'rgba(255,255,255,0.5)', dotBorder: 'none',
+    dotAnimation: 'none', yearColor: 'rgba(255,255,255,0.45)', yearWeight: 500,
+  };
+}
+
+function shouldUseCompactTimeline(year: number | null, guessCount: number, ultra: boolean, landscape: boolean): boolean {
+  return !year || guessCount === 0 || (ultra && landscape);
+}
+
+function timelineColors(exactMatch: boolean) {
+  if (exactMatch) return { winnerColor: '#fbbf24', winnerColorSoft: 'rgba(251,191,36,0.85)', winnerGlowAnim: 'markerGlowPulse' };
+  return { winnerColor: '#4ade80', winnerColorSoft: 'rgba(74,222,128,0.85)', winnerGlowAnim: 'markerGlowPulseGreen' };
+}
+
 function TimelineMarker({
   group, delayS, isBest, year, pos, ultra, nameLaneByGuess, nameLaneStep, yearLaneByGuess, yearLaneStep,
   winnerColor, winnerColorSoft, winnerGlowAnim, showGuessValues,
@@ -96,15 +132,14 @@ function TimelineMarker({
 }>) {
   const isExact = group.guess === year;
   const names = group.entries.map(entry => entry.name).join(', ');
-  const nameOffset = (ultra ? 10 : 13) + (nameLaneByGuess.get(group.guess) ?? 0) * nameLaneStep;
-  const yearOffset = (ultra ? 10 : 13) + (yearLaneByGuess.get(group.guess) ?? 0) * yearLaneStep;
-  const dot = isBest ? (ultra ? 8 : 10) : (ultra ? 5 : 6);
+  const layout = timelineMarkerLayout(group, ultra, isBest, nameLaneByGuess, nameLaneStep, yearLaneByGuess, yearLaneStep);
+  const palette = timelineMarkerPalette(isBest, winnerColor, winnerColorSoft, winnerGlowAnim, delayS);
   return (
-    <div style={{ position: 'absolute', left: `${pos(group.guess)}%`, top: `${ultra ? 32 : 43}px`, transform: 'translate(-50%, -50%)', animationName: isBest ? 'winnerMarkerLand' : 'markerCelebrate', animationDuration: isBest ? '0.65s' : '0.5s', animationTimingFunction: 'ease-out', animationFillMode: 'both', animationDelay: `${delayS}s` }}>
-      <span style={{ position: 'absolute', left: '50%', transform: 'translateX(-50%)', bottom: `${nameOffset}px`, fontSize: ultra ? '0.54rem' : '0.62rem', whiteSpace: 'nowrap', color: isBest ? winnerColor : 'rgba(255,255,255,0.55)', fontWeight: isBest ? 800 : 600 }}>{names}</span>
-      <div style={{ width: `${dot}px`, height: `${dot}px`, borderRadius: '50%', background: isBest ? winnerColor : 'rgba(255,255,255,0.5)', border: isBest ? '2px solid rgba(255,255,255,0.5)' : 'none', animation: isBest ? `${winnerGlowAnim} 1.8s ease-in-out ${delayS + 0.65}s infinite` : 'none' }} />
+    <div style={{ position: 'absolute', left: `${pos(group.guess)}%`, top: `${layout.markerTop}px`, transform: 'translate(-50%, -50%)', animationName: isBest ? 'winnerMarkerLand' : 'markerCelebrate', animationDuration: isBest ? '0.65s' : '0.5s', animationTimingFunction: 'ease-out', animationFillMode: 'both', animationDelay: `${delayS}s` }}>
+      <span style={{ position: 'absolute', left: '50%', transform: 'translateX(-50%)', bottom: `${layout.nameOffset}px`, fontSize: layout.nameFontSize, whiteSpace: 'nowrap', color: palette.nameColor, fontWeight: palette.nameWeight }}>{names}</span>
+      <div style={{ width: `${layout.dotSize}px`, height: `${layout.dotSize}px`, borderRadius: '50%', background: palette.dotBackground, border: palette.dotBorder, animation: palette.dotAnimation }} />
       {showGuessValues && !isExact && (
-        <span style={{ position: 'absolute', left: '50%', transform: 'translateX(-50%)', top: `${yearOffset}px`, fontSize: ultra ? '0.52rem' : '0.6rem', whiteSpace: 'nowrap', color: isBest ? winnerColorSoft : 'rgba(255,255,255,0.45)', fontWeight: isBest ? 700 : 500 }}>{group.guess}</span>
+        <span style={{ position: 'absolute', left: '50%', transform: 'translateX(-50%)', top: `${layout.yearOffset}px`, fontSize: layout.yearFontSize, whiteSpace: 'nowrap', color: palette.yearColor, fontWeight: palette.yearWeight }}>{group.guess}</span>
       )}
     </div>
   );
@@ -388,16 +423,17 @@ export function YearTimelineContent({ result, showGuessValues = true, muted = fa
   // landscape threshold mid-round (e.g. rotating a phone) flips this same
   // way; swapping component types there would unmount/remount YearHeading
   // and replay its slot-reel + SFX for a round the player already saw land.
+  const isCompactTimeline = shouldUseCompactTimeline(year, guesses.length, ultra, landscape);
   const heading = (
     <YearHeading
       year={year ?? '–'}
-      compact={!year || guesses.length === 0 || (ultra && landscape)}
+      compact={isCompactTimeline}
       muted={muted}
       hitTier={pickYearHitTier(result)}
       squeeze={squeeze}
     />
   );
-  if (!year || guesses.length === 0 || (ultra && landscape)) {
+  if (isCompactTimeline) {
     return (
       <div style={{ width: cardContentWidth(squeeze), display: 'flex', flexDirection: 'column', alignItems: 'center', textAlign: 'center' }}>
         {heading}
@@ -405,10 +441,11 @@ export function YearTimelineContent({ result, showGuessValues = true, muted = fa
       </div>
     );
   }
+  if (year === null) return null;
 
   const bestDiff = result.yearResults.find(r => r.diff !== null)?.diff ?? null;
   const {
-    groups, maxYearLane, nameLaneByGuess, nameLaneStep, nonExactGroups, pos,
+    groups, maxYearLane, nameLaneByGuess, nameLaneStep, pos,
     timelineHeight, yearLaneByGuess, yearLaneStep,
   } = timelineMetrics(year, guesses, ultra, landscape);
 
@@ -417,9 +454,7 @@ export function YearTimelineContent({ result, showGuessValues = true, muted = fa
   const exactMatch = bestDiff === 0;
   // The winner's marker is gold only for a spot-on guess; otherwise "just
   // won" (closest, not exact) reads as the same green as a correct guess.
-  const winnerColor = exactMatch ? '#fbbf24' : '#4ade80';
-  const winnerColorSoft = exactMatch ? 'rgba(251,191,36,0.85)' : 'rgba(74,222,128,0.85)';
-  const winnerGlowAnim = exactMatch ? 'markerGlowPulse' : 'markerGlowPulseGreen';
+  const { winnerColor, winnerColorSoft, winnerGlowAnim } = timelineColors(exactMatch);
 
   const passCount = result.yearResults.length - guesses.length;
 
@@ -434,7 +469,6 @@ export function YearTimelineContent({ result, showGuessValues = true, muted = fa
   const otherGroups = groups.filter(g => !bestGroups.includes(g));
   const trackTop = ultra ? 32 : 43;
   const tickHeight = ultra ? 22 : 30;
-  const markerFontSize = ultra ? '0.54rem' : '0.62rem';
   const markerYearFontSize = ultra ? '0.52rem' : '0.6rem';
 
   const timelineWidth = timelineDisplayWidth(ultra, landscape);

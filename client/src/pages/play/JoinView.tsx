@@ -64,6 +64,9 @@ function useJoinLayout(): { compact: boolean; ultraCompact: boolean } {
   return layout;
 }
 
+function revealPinOnQrError(cameFromQR: boolean, error: string | null, setPinRevealed: (revealed: boolean) => void) {
+  if (cameFromQR && error) setPinRevealed(true);
+}
 
 export function JoinView({ game }: Readonly<{ game: PlayState }>) {
   const { pin, name, error, savedSession, cameFromQR, setPin, setName, join, rejoinSaved } = game;
@@ -75,7 +78,7 @@ export function JoinView({ game }: Readonly<{ game: PlayState }>) {
   // "game not found" error leaves the player stuck with no way to fix it —
   // reveal the field so they can type the right one.
   useEffect(() => {
-    if (cameFromQR && error) setPinRevealed(true);
+    revealPinOnQrError(cameFromQR, error, setPinRevealed);
   }, [cameFromQR, error]);
   const showPinField = shouldShowPinField(cameFromQR, pinRevealed);
   const canJoin = canJoinGame(showPinField, pin, name);

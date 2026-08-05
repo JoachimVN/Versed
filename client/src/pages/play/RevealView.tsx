@@ -135,7 +135,6 @@ function useRevealShellMetrics(game: PlayState, result: RoundResultEvent, squeez
   const mysteryScoreDelay = isMystery ? Math.max(300, MYSTERY_LANDING_MS - 1000 + 250) : 300;
   const { displayScore, deltaFading, revealed } = useAnimatedScore(myScore, myScoreDelta, mysteryScoreDelay, false, isMystery);
   const gapClass = squeezeValue(squeeze, 'gap-2', 'gap-3', 'gap-5');
-  const paddingClass = revealPadding(wide, squeeze);
   const gapPx = squeezeValue(squeeze, 8, 12, 20);
   const paddingPx = squeezeValue(squeeze, 24, 32, 48);
   const willShowPartyExtras = !!(
