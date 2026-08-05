@@ -51,10 +51,23 @@ export const ULTRA_COMPACT_HEIGHT_PX = 690;
 // height thresholds that could drift out of sync with the tier's real cost.
 export type RevealLayout = CardSqueeze & { windowHeight: number };
 
-export function useRevealLayout(): RevealLayout {
+// scale is the caller's host/player zoom factor (useHostScaleValue /
+// usePlayerScaleValue, default 1 off the desktop/phone baseline where it
+// never binds). Both shells render their content through a CSS `zoom`, which
+// inflates every px value declared here by that same factor without
+// window.innerHeight ever reflecting it — dividing it back out here mirrors
+// how --host-app-height/--player-app-height already correct for it on the
+// CSS side (see useHostScale.tsx's comment on the div-by-self cycle this
+// sidesteps). Skipping the division let a large-scale desktop window (2.5k+
+// tall, scale > 1) measure raw innerHeight as if it were still the tightest
+// "normal" tier's roomy baseline, so the tier thresholds below never
+// engaged even though the real post-zoom space left for content was far
+// smaller — silently overflowing the score box's last line or two off the
+// bottom of the screen.
+export function useRevealLayout(scale = 1): RevealLayout {
   const measure = (): RevealLayout => {
-    const h = typeof window !== 'undefined' ? window.innerHeight : Infinity;
-    const w = typeof window !== 'undefined' ? window.innerWidth : 0;
+    const h = typeof window !== 'undefined' ? window.innerHeight / scale : Infinity;
+    const w = typeof window !== 'undefined' ? window.innerWidth / scale : 0;
     return { compact: h < COMPACT_HEIGHT_PX, ultraCompact: h < ULTRA_COMPACT_HEIGHT_PX, landscape: w > h, windowHeight: h };
   };
   const [layout, setLayout] = useState<RevealLayout>(measure);
@@ -63,7 +76,8 @@ export function useRevealLayout(): RevealLayout {
     check();
     window.addEventListener('resize', check);
     return () => window.removeEventListener('resize', check);
-  }, []);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [scale]);
   return layout;
 }
 

@@ -7,6 +7,7 @@ import { YearTimelineContent } from '../../components/YearReveal';
 import { computeYearCardHeight } from '../../components/yearCardSqueeze';
 import type { RevealLayout } from '../../components/revealSqueeze';
 import { useRevealLayout, computeCardHeight, computeCardWidth } from '../../components/revealSqueeze';
+import { usePlayerScaleValue } from '../../hooks/usePlayerScale';
 import { PartyRevealExtras, MYSTERY_LANDING_MS } from '../../components/RoundIntro';
 import { LIQUID_CARD_PROPS } from '../../components/liquidGlassPresets';
 import type { LeaderboardEntry, RoundResultEvent } from '../../types';
@@ -245,7 +246,7 @@ function PlayRevealShell({
 
 export function YearRevealView({ game, result }: Readonly<{ game: PlayState; result: RoundResultEvent }>) {
   const { myName } = game;
-  const squeeze = useRevealLayout();
+  const squeeze = useRevealLayout(usePlayerScaleValue());
   const finaleResolved = result.party?.duelProgress?.wins.some(w => w.count >= 2) ?? false;
   const isFinalReveal = game.roundIndex + 1 >= game.totalRounds && (!result.party?.finale || finaleResolved);
   const finalLabel = game.myScoreDelta > 0 ? 'You scored' : 'Not quite';
@@ -298,7 +299,7 @@ export function YearRevealView({ game, result }: Readonly<{ game: PlayState; res
 
 export function RevealView({ game, result }: Readonly<{ game: PlayState; result: RoundResultEvent }>) {
   const { myName, myRaceTimeMs, leaderboard } = game;
-  const squeeze = useRevealLayout();
+  const squeeze = useRevealLayout(usePlayerScaleValue());
   const isRace = result.mode === 'race';
   const iGotItInRace = isRace && !!result.correctGuessers?.includes(myName);
   const finaleResolved = result.party?.duelProgress?.wins.some(w => w.count >= 2) ?? false;

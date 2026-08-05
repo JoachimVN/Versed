@@ -407,7 +407,7 @@ export function RevealView({ game, result, instant = false }: Readonly<{ game: H
   const isRace = result.mode === 'race';
   const finaleResolved = result.party?.duelProgress?.wins.some(w => w.count >= 2) ?? false;
   const isFinalReveal = game.roundIndex + 1 >= game.totalRounds && (!result.party?.finale || finaleResolved);
-  const squeeze = useRevealLayout();
+  const squeeze = useRevealLayout(useHostScaleValue());
 
   if (isFinalReveal) {
     const isYearReveal = result.party?.format === 'year' || result.yearOnly;
