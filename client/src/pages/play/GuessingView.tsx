@@ -2,23 +2,89 @@ import { useState, useEffect, useRef } from 'react';
 import LiquidGlass from '../../components/StableLiquidGlass';
 import { useEscapeKey } from '../../hooks/useEscapeKey';
 import { useFocusTrap } from '../../hooks/useFocusTrap';
+import { readKeyboardInset, useKeyboardOpen } from '../../hooks/useViewportLayout';
 import { PartyBadge } from '../../components/RoundIntro';
-import { CircularTimer } from '../../components/CircularTimer';
+import { CircularTimer, LinearTimer } from '../../components/CircularTimer';
 import { AudioBars } from '../../components/AudioBars';
 import { LIQUID_CARD_PROPS, LIQUID_PILL_PROPS } from '../../components/liquidGlassPresets';
 import type { Hint } from '../../types';
 import type { PlayState } from './usePlayGame';
 import { resolveTarget } from './guessTarget';
+import { squeezeValue } from '../../components/revealSqueeze';
+
+// Below this much room (window height minus whatever an iOS keyboard is
+// covering — Android already bakes its keyboard into window.innerHeight),
+// the full-size header (80px timer dial) and actions (64px Submit + Skip)
+// don't leave enough space for the input area to render without clipping —
+// confirmed by measuring the actual overflow on a short landscape phone.
+// Below it, the screen switches to smaller chrome (LinearTimer, tighter
+// gaps/padding) instead of letting the input area silently eat the deficit.
+const COMPACT_HEIGHT_PX = 480;
+// A "both" target adds a whole second text field below the first, which the
+// plain threshold above wasn't sized for — confirmed by a portrait phone
+// with the keyboard up (~490px of room) landing just past COMPACT_HEIGHT_PX
+// and rendering full-size chrome that the two stacked fields don't fit in.
+const COMPACT_HEIGHT_PX_BOTH = 540;
+// Below this, even compact chrome (LinearTimer, tightened gaps/padding)
+// still doesn't fit — confirmed on a landscape phone with the keyboard up
+// (~170-180px of room). The screen drops the recipe label entirely, shrinks
+// every remaining element further, and lays a "both" target's two fields
+// side by side instead of stacked.
+const ULTRA_COMPACT_HEIGHT_PX = 260;
+
+function useGuessingLayout(bothTarget: boolean, keyboardOpen: boolean): { compact: boolean; ultraCompact: boolean; landscape: boolean } {
+  const threshold = bothTarget ? COMPACT_HEIGHT_PX_BOTH : COMPACT_HEIGHT_PX;
+  const measure = () => {
+    const h = typeof window !== 'undefined' ? window.innerHeight - readKeyboardInset() : Infinity;
+    const landscape = typeof window !== 'undefined' && window.innerWidth > window.innerHeight;
+    return { compact: h < threshold, ultraCompact: h < ULTRA_COMPACT_HEIGHT_PX, landscape };
+  };
+  const [layout, setLayout] = useState(measure);
+  useEffect(() => {
+    const check = () => setLayout(measure());
+    check();
+    window.addEventListener('resize', check);
+    window.visualViewport?.addEventListener('resize', check);
+    return () => {
+      window.removeEventListener('resize', check);
+      window.visualViewport?.removeEventListener('resize', check);
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [threshold]);
+  // keyboardOpen (from the caller's useKeyboardOpen()) fires synchronously on
+  // focus; the visualViewport resize above only fires once the keyboard
+  // finishes animating in, ~250-300ms later. Without this, the field is
+  // still measured at its full-size position for that whole window — which
+  // is exactly when iOS Safari decides whether the focused input needs
+  // auto-scrolling clear of the keyboard, so it was deciding against the
+  // stale, uncompacted layout and over-panning. Forcing compact the instant
+  // focus lands (before the real measurement exists) keeps the field inside
+  // the safe area from the first frame, so Safari never has a reason to pan
+  // in the first place.
+  return { compact: layout.compact || keyboardOpen, ultraCompact: layout.ultraCompact, landscape: layout.landscape };
+}
+
+function useGuessAutofocus(phase: PlayState['phase'], isChoice: boolean, isChaosHints: boolean, guessInputRef: PlayState['guessInputRef']) {
+  useEffect(() => {
+    if (phase !== 'guessing' || isChoice || isChaosHints) return;
+    const timeout = window.setTimeout(() => {
+      const active = document.activeElement;
+      const alreadyTyping = active instanceof HTMLInputElement || active instanceof HTMLTextAreaElement;
+      if (!alreadyTyping) guessInputRef.current?.focus();
+    }, 100);
+    return () => window.clearTimeout(timeout);
+  }, [guessInputRef, isChaosHints, isChoice, phase]);
+}
 
 // Handles both the "listening" sub-phase (watching, imGuessing) and the active
 // guessing phase. Keeping a single component across both states means the input
 // element is never unmounted — focus and text survive the transition, which
 // prevents the mobile keyboard from dismissing mid-song.
-function ListeningHeader({ songPlaying, songTempo, isYear }: Readonly<{ songPlaying: boolean; songTempo: number | null; isYear: boolean }>) {
+function ListeningHeader({ songPlaying, songTempo, isYear, compact }: Readonly<{ songPlaying: boolean; songTempo: number | null; isYear: boolean; compact: boolean }>) {
   const accent = isYear ? 'year' : 'classic';
   return (
-    <div className="flex flex-col items-center gap-2.5 pt-10 pb-4">
-      <AudioBars playing={songPlaying} accent={accent} height={28} bpm={songTempo} />
+    <div className={`flex flex-col items-center gap-2.5 ${compact ? 'pt-3 pb-2' : 'pt-10 pb-4'}`}>
+      <AudioBars playing={songPlaying} accent={accent} height={compact ? 18 : 28} bpm={songTempo} />
       <span style={{ color: 'rgba(255,255,255,0.45)', fontSize: '0.72rem', letterSpacing: '0.08em' }}>
         {songPlaying ? 'Your song is playing…' : 'Get ready…'}
       </span>
@@ -28,19 +94,40 @@ function ListeningHeader({ songPlaying, songTempo, isYear }: Readonly<{ songPlay
 
 // Race mode plays the song throughout the guessing window, so it keeps the
 // waveform going here too; classic has already stopped the song by the time
-// a tier's turn starts, so it stays timer-only.
-function ActiveHeader({ timeLeft, timerTotal, myScore, isRace, isYear, songPlaying, songTempo }: Readonly<{ timeLeft: number; timerTotal: number; myScore: number; isRace: boolean; isYear: boolean; songPlaying: boolean; songTempo: number | null }>) {
+// a tier's turn starts, so it stays timer-only. compact swaps the 80px
+// CircularTimer dial for LinearTimer's thin bar — confirmed by measurement
+// to be the single biggest header cost on a short landscape/keyboard-up
+// screen (see COMPACT_HEIGHT_PX above).
+function ActiveHeader({ timeLeft, timerTotal, myScore, isRace, isYear, songPlaying, songTempo, compact, ultraCompact, landscape }: Readonly<{ timeLeft: number; timerTotal: number; myScore: number; isRace: boolean; isYear: boolean; songPlaying: boolean; songTempo: number | null; compact: boolean; ultraCompact: boolean; landscape: boolean }>) {
   const accent = isYear ? 'year' : 'race';
-  return (
-    <div className="flex flex-col items-center gap-2 pt-4 pb-3">
-      <div className="flex items-center justify-between w-full px-5">
-        <span style={{ color: 'rgba(255,255,255,0.45)', fontSize: '0.85rem', fontWeight: 600 }}>Your turn</span>
-        <span style={{ color: 'rgba(255,255,255,0.45)', fontSize: '0.8rem', fontWeight: 500 }}>
+  const squeezeTier = { compact, ultraCompact };
+  // At the tightest squeeze (ultraCompact), a landscape phone has width to
+  // spare even though it has no height to spare — folding "Your turn"/pts
+  // into the same row as the timer bar removes a whole row's height, which
+  // is exactly the room a "both" target's stacked fields need below (see
+  // GuessingView's COMPACT_HEIGHT_PX_BOTH comment: that's what was getting
+  // scrolled up under the badge chip when the guess field grabbed focus).
+  if (ultraCompact && landscape) {
+    return (
+      <div className="flex items-center justify-between w-full gap-2 px-4 pt-1 pb-0">
+        <span style={{ color: 'rgba(255,255,255,0.45)', fontSize: '0.62rem', fontWeight: 600, whiteSpace: 'nowrap' }}>Your turn</span>
+        <LinearTimer timeLeft={timeLeft} total={timerTotal} />
+        <span style={{ color: 'rgba(255,255,255,0.45)', fontSize: '0.6rem', fontWeight: 500, whiteSpace: 'nowrap' }}>
           {myScore.toLocaleString()} pts
         </span>
       </div>
-      <CircularTimer timeLeft={timeLeft} total={timerTotal} size={80} />
-      {(isRace || isYear) && (
+    );
+  }
+  return (
+    <div className={`flex flex-col items-center ${squeezeValue(squeezeTier, 'gap-1 pt-1 pb-0', 'gap-2 pt-2 pb-1', 'gap-2 pt-4 pb-3')} `}>
+      <div className="flex items-center justify-between w-full px-5">
+        <span style={{ color: 'rgba(255,255,255,0.45)', fontSize: ultraCompact ? '0.68rem' : '0.85rem', fontWeight: 600 }}>Your turn</span>
+        <span style={{ color: 'rgba(255,255,255,0.45)', fontSize: ultraCompact ? '0.64rem' : '0.8rem', fontWeight: 500 }}>
+          {myScore.toLocaleString()} pts
+        </span>
+      </div>
+      {compact ? <LinearTimer timeLeft={timeLeft} total={timerTotal} /> : <CircularTimer timeLeft={timeLeft} total={timerTotal} size={80} />}
+      {(isRace || isYear) && !compact && (
         <AudioBars playing={songPlaying} accent={accent} height={20} bpm={songTempo} />
       )}
     </div>
@@ -56,22 +143,32 @@ function applySkipStyle(el: HTMLElement, s: typeof SKIP_IDLE) {
   el.style.color = s.color;
 }
 
-function guessInputBoxStyle(isListening: boolean, focused: boolean): { border: string; background: string; boxShadow: string } {
+// `tightGlow` shrinks the ambient blur radius for the ultraCompact squeeze
+// (landscape + keyboard): with near-zero vertical gap between the party
+// badge and the input below it, the full-size 20-28px blur bled up into the
+// badge chip and washed its text out.
+function guessInputBoxStyle(isListening: boolean, focused: boolean, tightGlow: boolean): { border: string; background: string; boxShadow: string } {
   if (isListening) {
     return { border: '1px solid rgba(255,255,255,0.07)', background: 'rgba(255,255,255,0.03)', boxShadow: 'none' };
   }
   if (focused) {
-    return { border: '1px solid rgba(158,18,204,0.7)', background: 'rgba(158,18,204,0.1)', boxShadow: '0 0 28px rgba(0,238,232,0.18), 0 0 20px rgba(158,18,204,0.22)' };
+    return {
+      border: '1px solid rgba(158,18,204,0.7)', background: 'rgba(158,18,204,0.1)',
+      boxShadow: tightGlow ? '0 0 10px rgba(158,18,204,0.28)' : '0 0 28px rgba(158,18,204,0.28)',
+    };
   }
-  return { border: '1px solid rgba(158,18,204,0.4)', background: 'rgba(158,18,204,0.08)', boxShadow: '0 0 24px rgba(158,18,204,0.1)' };
+  return {
+    border: '1px solid rgba(158,18,204,0.4)', background: 'rgba(158,18,204,0.08)',
+    boxShadow: tightGlow ? '0 0 8px rgba(158,18,204,0.1)' : '0 0 24px rgba(158,18,204,0.1)',
+  };
 }
 
 // Multiple Choice's 4 tappable title options — a tap submits immediately
 // (see submitChoice), so there's no separate Submit button for this format.
 function ChoiceButtons({ options, onPick, disabled }: Readonly<{ options: string[]; onPick: (option: string) => void; disabled?: boolean }>) {
-  const style = guessInputBoxStyle(false, false);
+  const style = guessInputBoxStyle(false, false, false);
   return (
-    <div className="w-full grid grid-cols-2 gap-3" style={{ flexShrink: 0 }}>
+    <div className="w-full grid grid-cols-2 gap-3" style={{ flexShrink: 0, maxWidth: 'min(92vw, 420px)' }}>
       {options.map(option => (
         <button
           key={option}
@@ -98,9 +195,9 @@ function ChoiceButtons({ options, onPick, disabled }: Readonly<{ options: string
 // Chaos Hints' tap-the-fake-hint cards — one per hint, tap = submit
 // immediately, same "no separate submit button" shape as ChoiceButtons.
 function ChaosHintButtons({ hints, onPick, disabled }: Readonly<{ hints: Hint[]; onPick: (index: number) => void; disabled?: boolean }>) {
-  const style = guessInputBoxStyle(false, false);
+  const style = guessInputBoxStyle(false, false, false);
   return (
-    <div className="w-full grid grid-cols-2 gap-2.5" style={{ flexShrink: 0 }}>
+    <div className="w-full grid grid-cols-2 gap-2.5" style={{ flexShrink: 0, maxWidth: 'min(92vw, 420px)' }}>
       {hints.map((h, i) => (
         <button
           key={h.label}
@@ -125,16 +222,28 @@ function ChaosHintButtons({ hints, onPick, disabled }: Readonly<{ hints: Hint[];
   );
 }
 
+// Fixed px dims per squeeze tier rather than relative units: these boxes are
+// laid out by eye against the digits they hold, and a landscape phone with
+// the keyboard up (ULTRA_COMPACT_HEIGHT_PX) needs them shrunk right down to
+// leave room for the header and Submit/Skip below.
+const YEAR_DIGIT_BOX_SIZE = {
+  normal: { width: 48, height: 58, fontSize: '1.5rem' },
+  compact: { width: 40, height: 50, fontSize: '1.3rem' },
+  ultra: { width: 32, height: 40, fontSize: '1.05rem' },
+} as const;
+type DigitBoxSize = keyof typeof YEAR_DIGIT_BOX_SIZE;
+
 // 4-box OTP-style display for year guesses. A single transparent input
 // underneath keeps the real focus/keyboard target (so the mobile keyboard
 // never dismisses), while these boxes render its current characters.
-function YearDigitBox({ digit, active }: Readonly<{ digit: string; active: boolean }>) {
+function YearDigitBox({ digit, active, size }: Readonly<{ digit: string; active: boolean; size: DigitBoxSize }>) {
+  const dims = YEAR_DIGIT_BOX_SIZE[size];
   return (
     <div
       style={{
-        width: '48px', height: '58px', borderRadius: '12px',
+        width: `${dims.width}px`, height: `${dims.height}px`, borderRadius: '12px',
         display: 'flex', alignItems: 'center', justifyContent: 'center',
-        fontSize: '1.5rem', fontWeight: 800, color: 'white',
+        fontSize: dims.fontSize, fontWeight: 800, color: 'white',
         border: active ? '1px solid rgba(158,18,204,0.8)' : '1px solid rgba(255,255,255,0.12)',
         background: active ? 'rgba(158,18,204,0.12)' : 'rgba(255,255,255,0.04)',
         boxShadow: active ? '0 0 16px rgba(158,18,204,0.35)' : 'none',
@@ -149,16 +258,27 @@ function YearDigitBox({ digit, active }: Readonly<{ digit: string; active: boole
 // A year guess is always exactly 4 digits — a fixed set of positional
 // slots, not a reorderable list, so each box is written out rather than
 // mapped over an index.
-function YearDigitBoxes({ value, focused }: Readonly<{ value: string; focused: boolean }>) {
+function YearDigitBoxes({ value, focused, size }: Readonly<{ value: string; focused: boolean; size: DigitBoxSize }>) {
   const activeIndex = Math.min(value.length, 3);
+  let gap = '10px';
+  if (size === 'ultra') gap = '6px';
+  else if (size === 'compact') gap = '8px';
   return (
-    <div style={{ display: 'flex', gap: '10px', justifyContent: 'center', pointerEvents: 'none' }}>
-      <YearDigitBox digit={value[0] ?? ''} active={focused && activeIndex === 0} />
-      <YearDigitBox digit={value[1] ?? ''} active={focused && activeIndex === 1} />
-      <YearDigitBox digit={value[2] ?? ''} active={focused && activeIndex === 2} />
-      <YearDigitBox digit={value[3] ?? ''} active={focused && activeIndex === 3} />
+    <div style={{ display: 'flex', gap, justifyContent: 'center', pointerEvents: 'none' }}>
+      <YearDigitBox digit={value[0] ?? ''} active={focused && activeIndex === 0} size={size} />
+      <YearDigitBox digit={value[1] ?? ''} active={focused && activeIndex === 1} size={size} />
+      <YearDigitBox digit={value[2] ?? ''} active={focused && activeIndex === 2} size={size} />
+      <YearDigitBox digit={value[3] ?? ''} active={focused && activeIndex === 3} size={size} />
     </div>
   );
+}
+
+function guessingLabel(target: ReturnType<typeof resolveTarget>, isChoice: boolean, isChaosHints: boolean): string {
+  if (isChaosHints) return 'One of these is a lie';
+  if (isChoice) {
+    return { title: 'Tap the right title', artist: 'Tap the right artist', both: 'Tap the right title', year: 'Tap the right year' }[target];
+  }
+  return { title: 'Name the song', artist: 'Name the artist', both: 'Name the song · artist = bonus', year: 'Guess the release year' }[target];
 }
 
 export function GuessingView({ game }: Readonly<{ game: PlayState }>) {
@@ -172,23 +292,20 @@ export function GuessingView({ game }: Readonly<{ game: PlayState }>) {
   const isChaosHints = party?.event === 'chaoshints';
   const target = resolveTarget(party, artistOnly, yearOnly);
   const isYear = target === 'year';
+  const isBoth = target === 'both';
+  const keyboardOpen = useKeyboardOpen();
+  const { compact, ultraCompact, landscape } = useGuessingLayout(isBoth, keyboardOpen);
+  const squeezeTier = { compact, ultraCompact };
   const canSubmit = isYear ? guessText.trim().length === 4 : guessText.trim().length > 0;
   const [inputFocused, setInputFocused] = useState(false);
-  const inputBoxStyle = guessInputBoxStyle(isListening, inputFocused);
-  let label = {
-    title: 'Name the song',
-    artist: 'Name the artist',
-    both: 'Name the song · artist = bonus',
-    year: 'Guess the release year',
-  }[target];
-  if (isChoice) {
-    label = {
-      title: 'Tap the right title',
-      artist: 'Tap the right artist',
-      both: 'Tap the right title',
-      year: 'Tap the right year',
-    }[target];
-  } else if (isChaosHints) label = 'One of these is a lie';
+  const inputBoxStyle = guessInputBoxStyle(isListening, inputFocused, ultraCompact);
+
+  // Keep the keyboard ready as soon as a free-text turn starts, including
+  // Race rounds that enter guessing directly. If the player focused either
+  // field while listening, keep that deliberate focus instead.
+  useGuessAutofocus(phase, isChoice, isChaosHints, guessInputRef);
+
+  const label = guessingLabel(target, isChoice, isChaosHints);
   const placeholder = {
     title: 'Type song title…',
     artist: 'Type artist name…',
@@ -202,9 +319,10 @@ export function GuessingView({ game }: Readonly<{ game: PlayState }>) {
   } else if (isChoice) {
     guessControl = <ChoiceButtons options={options} onPick={submitChoice} />;
   } else if (isYear) {
+    const digitBoxSize: DigitBoxSize = squeezeValue(squeezeTier, 'ultra', 'compact', 'normal');
     guessControl = (
       <div style={{ position: 'relative', flexShrink: 0 }}>
-        <YearDigitBoxes value={guessText} focused={inputFocused} />
+        <YearDigitBoxes value={guessText} focused={inputFocused} size={digitBoxSize} />
         <input
           ref={guessInputRef}
           type="text"
@@ -226,7 +344,7 @@ export function GuessingView({ game }: Readonly<{ game: PlayState }>) {
   } else {
     guessControl = (
       <div style={{
-        width: '100%', borderRadius: '16px', overflow: 'hidden', flexShrink: 0,
+        width: '100%', maxWidth: 'min(92vw, 420px)', borderRadius: '16px', overflow: 'hidden', flexShrink: 0,
         border: inputBoxStyle.border,
         background: inputBoxStyle.background,
         boxShadow: inputBoxStyle.boxShadow,
@@ -244,14 +362,50 @@ export function GuessingView({ game }: Readonly<{ game: PlayState }>) {
           autoComplete="off" autoCorrect="off" spellCheck={false}
           style={{
             display: 'block', width: '100%', background: 'transparent', border: 'none',
-            color: 'white', fontSize: '1.3rem', fontWeight: 700, textAlign: 'center',
-            padding: '20px 16px', outline: 'none', fontFamily: 'inherit',
+            // 16px floor at every tier: below that, focusing the input makes
+            // iOS Safari zoom the whole page in to make the text legible,
+            // which is what "switching fields rescales like zooming in" was
+            // — ultraCompact's old 0.95rem (15.2px) tripped it.
+            color: 'white', fontSize: squeezeValue(squeezeTier, '1rem', '1.1rem', '1.3rem'), fontWeight: 700, textAlign: 'center',
+            padding: squeezeValue(squeezeTier, '6px 10px', '10px 16px', '20px 16px'), outline: 'none', fontFamily: 'inherit',
           }}
           className="placeholder-white/20"
         />
       </div>
     );
   }
+
+  // The artist field, split out so the "both" target can lay it beside the
+  // title field instead of stacking under it once ultraCompact leaves no
+  // vertical room to spare (see below).
+  const artistInputEl = isBoth ? (
+    <div style={{
+      width: '100%', maxWidth: 'min(92vw, 420px)', borderRadius: '14px', overflow: 'hidden', flexShrink: 0,
+      border: '1px solid rgba(0,238,232,0.25)',
+      background: 'rgba(0,238,232,0.05)',
+    }}>
+      <input
+        type="text"
+        placeholder="Artist (bonus points)…"
+        value={artistGuessText}
+        onChange={e => setArtistGuessText(e.target.value)}
+        onKeyDown={e => e.key === 'Enter' && canSubmit && submitGuess()}
+        autoComplete="off" autoCorrect="off" spellCheck={false}
+        style={{
+          display: 'block', width: '100%', background: 'transparent', border: 'none',
+          // Same 16px zoom floor as the title field above — ultraCompact and
+          // compact were both under it (12.8px / 14.4px).
+          color: 'white', fontSize: '1rem', fontWeight: 600, textAlign: 'center',
+          padding: squeezeValue(squeezeTier, '5px 8px', '8px 14px', '14px 16px'), outline: 'none', fontFamily: 'inherit',
+        }}
+        className="placeholder-white/20"
+      />
+    </div>
+  ) : null;
+  // Below ULTRA_COMPACT_HEIGHT_PX a "both" target's two fields no longer fit
+  // stacked even at their smallest size, so they go side by side instead —
+  // the header and Submit/Skip are already as small as they'll go by then.
+  const sideBySideFields = isBoth && ultraCompact && !isChoice && !isChaosHints;
 
   return (
     <div className="relative min-h-screen flex flex-col overflow-hidden" style={{ background: '#080812' }}>
@@ -266,65 +420,77 @@ export function GuessingView({ game }: Readonly<{ game: PlayState }>) {
       {/* Reserving the keyboard's height at the bottom is what keeps Submit and
           Skip tappable: the screen itself never resizes, the column just gets
           shorter, so the header stays put and the input area in the middle
-          takes the squeeze (and scrolls if it runs out of room). */}
-      <div className="relative flex flex-col flex-1 keyboard-shift" style={{ zIndex: 2, minHeight: 0, paddingBottom: 'var(--keyboard-inset, 0px)' }}>
+          takes the squeeze. overflowY is forced hidden while the keyboard is
+          up: a real scroll container nested under this fixed-position app
+          shell is what iOS Safari latches onto to "helpfully" scroll the
+          focused input into view — and it badly overshoots, panning the
+          whole shell clean off-screen (see GuessingView's useKeyboardOpen
+          comment / JoinView, which hit this first). With nothing to scroll
+          to, Safari never triggers that pan; compact/ultraCompact are relied
+          on to fit the content instead. Scrolling comes back once the
+          keyboard closes, as the escape hatch for content that still
+          overflows at rest. */}
+      <div className="relative flex flex-col flex-1 keyboard-shift" style={{ zIndex: 2, minHeight: 0, overflowY: keyboardOpen ? 'hidden' : 'auto', overscrollBehavior: 'contain', paddingBottom: 'var(--keyboard-inset, 0px)' }}>
 
       {/* Header: waveform while listening, timer + score when active */}
       {isListening
-        ? <ListeningHeader songPlaying={songPlaying} songTempo={songTempo} isYear={isYear} />
-        : <ActiveHeader timeLeft={timeLeft} timerTotal={timerTotal} myScore={myScore} isRace={mode === 'race'} isYear={isYear} songPlaying={songPlaying} songTempo={songTempo} />}
+        ? <ListeningHeader songPlaying={songPlaying} songTempo={songTempo} isYear={isYear} compact={compact} />
+        : <ActiveHeader timeLeft={timeLeft} timerTotal={timerTotal} myScore={myScore} isRace={mode === 'race'} isYear={isYear} songPlaying={songPlaying} songTempo={songTempo} compact={compact} ultraCompact={ultraCompact} landscape={landscape} />}
 
       {/* Input area. min-h-0 lets it actually shrink when the keyboard takes
-          the bottom of the column, and scrolling is the escape hatch for the
-          tightest case (a "both" round on a short phone, where the title and
-          artist fields together outgrow what's left). overscroll-behavior
-          keeps a drag that reaches the end of it from chaining outwards into
-          an iOS visual-viewport pan, which would slide the whole screen off
-          the bottom of the background. */}
-      <div className="flex-1 flex flex-col items-center justify-center gap-5 px-5 overflow-y-auto" style={{ minHeight: 0, overscrollBehavior: 'contain' }}>
-        {party && <PartyBadge party={party} />}
-        <p style={{
-          color: isListening ? 'rgba(255,255,255,0.45)' : 'rgba(255,255,255,0.6)',
-          fontSize: '0.9rem', fontWeight: 600, letterSpacing: '0.03em',
-          transition: 'color 0.5s ease',
-        }}>
-          {label}
-        </p>
-
-        {guessControl}
-
-        {target === 'both' && (
-          <div style={{
-            width: '100%', borderRadius: '14px', overflow: 'hidden', flexShrink: 0,
-            border: '1px solid rgba(0,238,232,0.25)',
-            background: 'rgba(0,238,232,0.05)',
+          the bottom of the column. Scrolling is only enabled once the
+          keyboard is closed again — while it's up, overflowY is forced
+          hidden (see the wrapper above) so compact/ultraCompact alone have to
+          make everything fit, including the tightest case (a "both" round on
+          a short phone, where the title and artist fields together outgrow
+          what's left). screen-center-safe (safe center, not plain center) is
+          load-bearing for that case: with plain center, content taller than
+          the box overflows equally above and below, stranding the artist
+          field below the fold. overscroll-behavior keeps a drag that reaches
+          the end of the closed-keyboard scroll from chaining outwards into an
+          iOS visual-viewport pan, which would slide the whole screen off the
+          bottom of the background. */}
+      <div className={`screen-center-safe flex-1 flex flex-col items-center px-5 ${squeezeValue(squeezeTier, 'gap-1', 'gap-2', 'gap-5')}`} style={{ minHeight: 0, overflowY: keyboardOpen ? 'hidden' : 'auto', overscrollBehavior: 'contain' }}>
+        {/* compact, not just ultraCompact: at just-compact heights (e.g. a
+            "both" target's two stacked fields on a short phone) the badge's
+            full-size pills wrap onto 2 lines, which was the exact overflow
+            eating into the artist field below — see COMPACT_HEIGHT_PX_BOTH. */}
+        {party && <PartyBadge party={party} compact={compact} />}
+        {/* Dropped entirely at the tightest squeeze (landscape + keyboard):
+            each field's own placeholder already says what to type, and
+            there's no vertical room left to spare once the "both" target's
+            two fields are on screen too. */}
+        {!ultraCompact && (
+          <p style={{
+            color: isListening ? 'rgba(255,255,255,0.45)' : 'rgba(255,255,255,0.6)',
+            fontSize: compact ? '0.78rem' : '0.9rem', fontWeight: 600, letterSpacing: '0.03em',
+            transition: 'color 0.5s ease',
           }}>
-            <input
-              type="text"
-              placeholder="Artist (bonus points)…"
-              value={artistGuessText}
-              onChange={e => setArtistGuessText(e.target.value)}
-              onKeyDown={e => e.key === 'Enter' && canSubmit && submitGuess()}
-              autoComplete="off" autoCorrect="off" spellCheck={false}
-              style={{
-                display: 'block', width: '100%', background: 'transparent', border: 'none',
-                color: 'white', fontSize: '1.05rem', fontWeight: 600, textAlign: 'center',
-                padding: '14px 16px', outline: 'none', fontFamily: 'inherit',
-              }}
-              className="placeholder-white/20"
-            />
+            {label}
+          </p>
+        )}
+
+        {sideBySideFields ? (
+          <div style={{ display: 'flex', gap: '8px', width: '100%', maxWidth: 'min(92vw, 420px)' }}>
+            <div style={{ flex: 1, minWidth: 0 }}>{guessControl}</div>
+            <div style={{ flex: 1, minWidth: 0 }}>{artistInputEl}</div>
           </div>
+        ) : (
+          <>
+            {guessControl}
+            {artistInputEl}
+          </>
         )}
       </div>
 
       {/* Actions */}
-      <div className="px-5 pb-8 flex flex-col items-center gap-4">
+      <div className={`px-5 flex flex-col items-center ${squeezeValue(squeezeTier, 'pb-1 gap-1', 'pb-3 gap-2', 'pb-8 gap-4')}`}>
         {!isChoice && !isChaosHints && (
           <button
             type="button"
             className="liquid-btn glass-tint-purple relative cursor-pointer border-0 bg-transparent p-0"
             style={{
-              width: '310px', height: '64px', borderRadius: '100px',
+              width: 'min(92vw, 310px)', height: squeezeValue(squeezeTier, '36px', '44px', '64px'), borderRadius: '100px',
               background: 'rgba(0,0,0,0.001)',
               opacity: canSubmit ? 1 : 0.28,
               cursor: canSubmit ? 'pointer' : 'not-allowed',
@@ -339,10 +505,11 @@ export function GuessingView({ game }: Readonly<{ game: PlayState }>) {
             <LiquidGlass
               style={{ position: 'absolute', top: '50%', left: '50%' }}
               {...LIQUID_PILL_PROPS}
+              padding={squeezeValue(squeezeTier, '6px 20px', '9px 28px', LIQUID_PILL_PROPS.padding)}
             >
               <div style={{ position: 'relative' }}>
                 <div style={{ position: 'absolute', inset: '-18px -36px', borderRadius: '100px', pointerEvents: 'none', background: 'rgba(158,18,204,0.15)' }} />
-                <span className="text-white font-bold text-xl" style={{ whiteSpace: 'nowrap', position: 'relative', display: 'inline-block', minWidth: '238px', textAlign: 'center' }}>
+                <span className={`text-white font-bold ${squeezeValue(squeezeTier, 'text-sm', 'text-base', 'text-xl')}`} style={{ whiteSpace: 'nowrap', position: 'relative', display: 'inline-block', minWidth: 'min(238px, calc(100vw - 112px))', textAlign: 'center' }}>
                   Submit
                 </span>
               </div>
@@ -360,9 +527,9 @@ export function GuessingView({ game }: Readonly<{ game: PlayState }>) {
           onMouseDown={e => e.preventDefault()}
           onClick={skipGuess}
           style={{
-            padding: '13px 34px', borderRadius: '100px', fontFamily: 'inherit',
+            padding: squeezeValue(squeezeTier, '5px 18px', '8px 26px', '13px 34px'), borderRadius: '100px', fontFamily: 'inherit',
             border: `1px solid ${SKIP_IDLE.border}`, background: SKIP_IDLE.background, color: SKIP_IDLE.color,
-            fontSize: '0.92rem', fontWeight: 700, cursor: 'pointer',
+            fontSize: squeezeValue(squeezeTier, '0.72rem', '0.8rem', '0.92rem'), fontWeight: 700, cursor: 'pointer',
             transition: 'background 0.2s ease, border-color 0.2s ease, color 0.2s ease',
           }}
           onMouseEnter={e => applySkipStyle(e.currentTarget, SKIP_HOVER)}
@@ -404,13 +571,13 @@ export function PassedView() {
           transform: visible ? 'translateY(0)' : 'translateY(14px)',
         }}
       >
-        <div className="liquid-btn relative" style={{ width: '310px', height: cardHeight }}>
+        <div className="liquid-btn relative" style={{ width: 'min(92vw, 310px)', height: cardHeight }}>
           <LiquidGlass
             style={{ position: 'absolute', top: '50%', left: '50%' }}
             {...LIQUID_CARD_PROPS}
             padding="28px 28px"
           >
-            <div style={{ width: '254px', display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '14px' }}>
+            <div style={{ width: 'min(254px, calc(100vw - 104px))', display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '14px' }}>
               <div style={{ display: 'flex', gap: '6px' }}>
                 {[0, 1, 2].map(i => (
                   <div key={i} style={{

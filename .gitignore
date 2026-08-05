@@ -8,3 +8,4 @@ client/.env.production
 /.vscode
 /.codex/
 /tools/vscode-diagnostics/
+.github/scripts/viewport-check-out/

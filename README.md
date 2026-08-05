@@ -56,6 +56,23 @@
   <em>Song Reveal</em>
 </p>
 
+### Local viewport checks
+
+The local viewport checker writes ignored inspection images to
+`.github/scripts/viewport-check-out/<group>/<screen>/` and reports clipped
+elements as failures. Build and serve the client first, then target just the
+screen and device size you are changing:
+
+```bash
+npm exec -w client vite -- build --base=/
+npx serve@14 client/dist -p 4321 -s &
+node .github/scripts/viewport-check.js --views host-reveal --viewports iphone14-390x844-portrait
+```
+
+Use `--list` to see every available screen and viewport. `--groups host`,
+`--groups player`, `--views screen-one,screen-two`, and `--keyboard only` keep
+small checks fast; omit filters to run the full matrix.
+
 ---
 
 ## How it plays

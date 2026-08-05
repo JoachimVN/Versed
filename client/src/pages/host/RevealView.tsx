@@ -5,11 +5,29 @@ import { socket } from '../../socket';
 import { useAnimatedScore } from '../../hooks/useAnimatedScore';
 import { BIG_POINTS_THRESHOLD, FinalRoundAnswerContent, NoOneGotItCardContent, GotItCardContent, PillButton } from '../../components/RevealShared';
 import { YearTimelineContent } from '../../components/YearReveal';
+import { computeYearCardHeight } from '../../components/yearCardSqueeze';
+import type { RevealLayout } from '../../components/revealSqueeze';
+import { useRevealLayout, computeCardHeight, computeCardWidth, squeezeValue } from '../../components/revealSqueeze';
 import { PartyRevealExtras, MYSTERY_LANDING_MS } from '../../components/RoundIntro';
 import { LIQUID_CARD_PROPS } from '../../components/liquidGlassPresets';
+import { useHostScaleValue } from '../../hooks/useHostScale';
 import type { PlayerInfo, RoundResultEvent } from '../../types';
 import type { HostState } from './useHostGame';
 import { EndGameButton } from './dialogs';
+
+// This screen (unlike the guessing screen) never has a keyboard to reserve
+// room for — it's host-only, no text input — so the squeeze only has to
+// react to raw window height (see useRevealLayout in revealSqueeze.ts). The
+// host reveal card is centered inside a fixed-height box rather than sized
+// to its own content (see the `.liquid-btn` wrapper below), so shrinking it
+// without correspondingly shrinking every card's own font/image sizes would
+// just leave it floating in dead space at best, or overlapping the roster
+// below it at worst — hence computeCardHeight() tracking the exact same
+// tiers passed to the card content components. A big roster (7+ players) not
+// fitting even at normal on a tall phone is handled separately by capping the
+// player list's own height (see computeListMaxHeight below) rather than by
+// dragging the squeeze thresholds up near desktop heights, which would
+// compact the desktop view too.
 
 type GuessCorrectness = 'none' | 'correct' | 'exact';
 type PlayerGuess = {
@@ -57,6 +75,16 @@ function deltaText(displayDelta: number, delta: number, pity: boolean, pityAmoun
   const pityText = pity ? ` (+${pityAmount.toLocaleString()} pity)` : '';
   const points = displayDelta > 0 ? displayDelta.toLocaleString() : '';
   return `+${points}${pityText}`;
+}
+
+function revealShellPadding(wide: boolean, squeeze: RevealLayout): string {
+  if (wide) return squeezeValue(squeeze, 'px-2 py-3', 'px-2 py-4', 'px-2 py-6');
+  return squeezeValue(squeeze, 'p-3', 'p-4', 'p-6');
+}
+
+function revealCardPadding(wide: boolean, squeeze: RevealLayout): string {
+  if (wide) return '18px 18px';
+  return squeezeValue(squeeze, '16px 16px', '20px 20px', '24px 24px');
 }
 
 function UnsubmittedPlayerRow({
@@ -191,6 +219,12 @@ function StealFlightOverlay({ stealResult, rowRefs }: Readonly<{
 }>) {
   const [flight, setFlight] = useState<{ key: string; left: number; top: number; dx: number; dy: number; amount: number } | null>(null);
   const firedForRef = useRef<string | null>(null);
+  // getBoundingClientRect() returns real, already-zoomed screen coordinates.
+  // This overlay renders inside the same host-scale-shell it measures, so
+  // writing those numbers straight back as inline px (below) would let
+  // `zoom` multiply them a second time, launching the badge from/to the
+  // wrong spot. Dividing by the live scale here cancels that out.
+  const hostScale = useHostScaleValue();
 
   useEffect(() => {
     if (!stealResult || stealResult.skipped) return;
@@ -205,10 +239,17 @@ function StealFlightOverlay({ stealResult, rowRefs }: Readonly<{
     const tRect = thiefEl.getBoundingClientRect();
     const from = { x: vRect.left + vRect.width / 2, y: vRect.top + vRect.height / 2 };
     const to = { x: tRect.left + tRect.width / 2, y: tRect.top + tRect.height / 2 };
-    setFlight({ key: token, left: from.x, top: from.y, dx: to.x - from.x, dy: to.y - from.y, amount: stealResult.amount });
+    setFlight({
+      key: token,
+      left: from.x / hostScale,
+      top: from.y / hostScale,
+      dx: (to.x - from.x) / hostScale,
+      dy: (to.y - from.y) / hostScale,
+      amount: stealResult.amount,
+    });
     const t = setTimeout(() => setFlight(null), 950);
     return () => clearTimeout(t);
-  }, [stealResult, rowRefs]);
+  }, [stealResult, rowRefs, hostScale]);
 
   if (!flight) return null;
   return (
@@ -231,7 +272,7 @@ function StealFlightOverlay({ stealResult, rowRefs }: Readonly<{
 }
 
 function RevealShell({
-  game, result, instant, cardHeight, cardContent, isCorrectFor, wide = false,
+  game, result, instant, cardHeight, cardContent, isCorrectFor, wide = false, squeeze,
 }: Readonly<{
   game: HostState;
   result: RoundResultEvent;
@@ -240,7 +281,9 @@ function RevealShell({
   cardContent: React.ReactNode;
   isCorrectFor: (player: PlayerInfo) => GuessCorrectness;
   wide?: boolean;
+  squeeze: RevealLayout;
 }>) {
+  const { windowHeight } = squeeze;
   const { roundIndex, totalRounds, players, roundDeltas, roundPity, roundPityAmount, removePlayer, endGame, stealResult, party } = game;
   // Every sub-round of the finale duel reports finale:true — the host can't
   // tell from roundIndex/totalRounds alone whether clicking "next" advances
@@ -276,67 +319,95 @@ function RevealShell({
     ? frozenOrderRef.current.map(name => players.find(p => p.name === name)).filter((p): p is PlayerInfo => !!p)
     : players.slice().sort((a, b) => (b.score ?? 0) - (a.score ?? 0));
   const rowRefs = useRef<Record<string, HTMLButtonElement | null>>({});
+  const gapClass = squeezeValue(squeeze, 'gap-2', 'gap-3', 'gap-5');
+  const paddingClass = revealShellPadding(wide, squeeze);
+  // Caps the roster to roughly 5 rows visible at once (Kahoot-style) rather
+  // than growing the page with every player — Next Round/End game sit right
+  // after this box in normal flow, so a big roster only costs this box a
+  // small internal scroll instead of pushing them further down the page.
+  // Small rosters never hit the cap, so this is a no-op for them. Sized off
+  // the tier's own actual leftover room (windowHeight minus everything else
+  // the tier renders), not just a flat per-tier number: a 7-player roster on
+  // a tall phone (844px) still lands in the "normal" tier — full-size card,
+  // gaps, button — where a flat 260px cap alone would overflow the button
+  // below the fold, but shrinking every device's cap down to fit that one
+  // case would needlessly cramp a real desktop window with the same tier.
+  const gapPx = squeezeValue(squeeze, 8, 12, 20);
+  const buttonPx = squeezeValue(squeeze, 44, 54, 64);
+  const paddingPx = squeezeValue(squeeze, 24, 32, 48);
+  const listTierCap = squeezeValue(squeeze, 130, 200, 260);
+  // 4 gaps across up to 5 flex children (card, party-extras, list, button,
+  // end-game); ~20px covers end-game's own text + its gap when rendered.
+  const chromeHeight = cardHeight + gapPx * 4 + buttonPx + 20 + paddingPx;
+  const listMaxHeight = `${Math.max(90, Math.min(listTierCap, windowHeight - chromeHeight))}px`;
   return (
-    <div className={`page-enter relative min-h-screen flex flex-col items-center gap-5 overflow-hidden ${wide ? 'px-2 py-6' : 'p-6'}`}>
-      <img
-        src={`${import.meta.env.BASE_URL}backgrounds/background3-2.png`}
-        alt=""
-        aria-hidden="true"
-        style={{ position: 'fixed', inset: 0, width: '100%', height: '100%', objectFit: 'cover', zIndex: 0, transform: 'rotate(180deg)' }}
-      />
-      <div style={{ position: 'fixed', inset: 0, zIndex: 1, background: 'rgba(5,5,14,0.82)', backdropFilter: 'blur(32px)' }} />
-      <p className="text-white/45 text-sm self-start" style={{ position: 'relative', zIndex: 2 }}>{roundIndex + 1} / {totalRounds}</p>
+    <div className="page-enter relative min-h-screen reveal-screen-height" style={{ overflowY: 'auto', overscrollBehavior: 'contain' }}>
+      <div className={`screen-center-safe relative flex min-h-full flex-col items-center ${gapClass} ${paddingClass}`} style={{ minHeight: '100%' }}>
+        <img
+          src={`${import.meta.env.BASE_URL}backgrounds/background3-2.png`}
+          alt=""
+          aria-hidden="true"
+          style={{ position: 'absolute', inset: 0, width: '100%', height: '100%', objectFit: 'cover', zIndex: 0, filter: 'blur(32px)', transform: 'rotate(180deg) scale(1.04)' }}
+        />
+        <div style={{ position: 'absolute', inset: 0, zIndex: 1, background: 'rgba(5,5,14,0.82)' }} />
+        {/* Absolutely positioned rather than a flex row of its own: it's the
+            only thing in the header, so giving it a dedicated row just to
+            hold one small label wastes a full gap's worth of height on every
+            tier — a real cost on a short screen. */}
+        <p className="text-white/45 text-xs" style={{ position: 'absolute', top: '10px', left: '14px', zIndex: 3 }}>{roundIndex + 1} / {totalRounds}</p>
 
-      <div className="liquid-btn relative" style={{ width: wide ? 'min(88vw, 366px)' : '310px', height: `${cardHeight}px`, zIndex: 2 }}>
-        <LiquidGlass
-          style={{ position: 'absolute', top: '50%', left: '50%' }}
-          {...LIQUID_CARD_PROPS}
-          padding={wide ? '18px 18px' : '24px 24px'}
-        >
-          {cardContent}
-        </LiquidGlass>
+        <div className="liquid-btn host-game-card relative" style={{ width: computeCardWidth(squeeze, wide), height: `${cardHeight}px`, zIndex: 2 }}>
+          <LiquidGlass
+            style={{ position: 'absolute', top: '50%', left: '50%' }}
+            {...LIQUID_CARD_PROPS}
+            padding={revealCardPadding(wide, squeeze)}
+          >
+            {cardContent}
+          </LiquidGlass>
+        </div>
+
+        {!isFinalReveal && (
+          <div style={{ position: 'relative', zIndex: 2 }}>
+            <PartyRevealExtras result={result} stealResult={stealResult} hints={game.hints} />
+          </div>
+        )}
+
+        {!isFinalReveal && (
+          <div style={{ position: 'relative', zIndex: 2, background: 'rgba(255,255,255,0.05)', border: '1px solid rgba(255,255,255,0.08)', borderRadius: '16px', padding: '8px 12px', width: '310px', maxWidth: '92vw', maxHeight: listMaxHeight, overflowY: 'auto', overscrollBehavior: 'contain' }} className="divide-y divide-white/[0.07]">
+            {sortedPlayers.map((p, i) => (
+              <RevealPlayerRow
+                key={p.name}
+                player={p}
+                entry={result.playerGuesses?.find(g => g.name === p.name)}
+                delta={roundDeltas[p.name] ?? 0}
+                pity={roundPity[p.name] ?? false}
+                pityAmount={roundPityAmount[p.name] ?? 0}
+                delay={baseScoreDelay + i * 80}
+                correct={isCorrectFor(p)}
+                instant={instant}
+                holdReveal={isMystery}
+                removePlayer={removePlayer}
+                registerRow={isStealRound ? (el => { rowRefs.current[p.name] = el; }) : undefined}
+              />
+            ))}
+          </div>
+        )}
+
+        {isStealRound && <StealFlightOverlay stealResult={stealResult} rowRefs={rowRefs} />}
+
+        <PillButton
+          onClick={() => socket.emit('next_round')}
+          label={nextLabel}
+          zIndex={2}
+          squeeze={squeeze}
+        />
+
+        {roundIndex + 1 < totalRounds && (
+          <div style={{ position: 'relative', zIndex: 2 }}>
+            <EndGameButton endGame={endGame} />
+          </div>
+        )}
       </div>
-
-      {!isFinalReveal && (
-        <div style={{ position: 'relative', zIndex: 2 }}>
-          <PartyRevealExtras result={result} stealResult={stealResult} hints={game.hints} />
-        </div>
-      )}
-
-      {!isFinalReveal && (
-        <div style={{ position: 'relative', zIndex: 2, background: 'rgba(255,255,255,0.05)', border: '1px solid rgba(255,255,255,0.08)', borderRadius: '16px', padding: '8px 12px', width: '310px', maxWidth: '92vw' }} className="divide-y divide-white/[0.07]">
-          {sortedPlayers.map((p, i) => (
-            <RevealPlayerRow
-              key={p.name}
-              player={p}
-              entry={result.playerGuesses?.find(g => g.name === p.name)}
-              delta={roundDeltas[p.name] ?? 0}
-              pity={roundPity[p.name] ?? false}
-              pityAmount={roundPityAmount[p.name] ?? 0}
-              delay={baseScoreDelay + i * 80}
-              correct={isCorrectFor(p)}
-              instant={instant}
-              holdReveal={isMystery}
-              removePlayer={removePlayer}
-              registerRow={isStealRound ? (el => { rowRefs.current[p.name] = el; }) : undefined}
-            />
-          ))}
-        </div>
-      )}
-
-      {isStealRound && <StealFlightOverlay stealResult={stealResult} rowRefs={rowRefs} />}
-
-      <PillButton
-        onClick={() => socket.emit('next_round')}
-        label={nextLabel}
-        zIndex={2}
-      />
-
-      {roundIndex + 1 < totalRounds && (
-        <div style={{ position: 'relative', zIndex: 2 }}>
-          <EndGameButton endGame={endGame} />
-        </div>
-      )}
     </div>
   );
 }
@@ -345,38 +416,36 @@ export function RevealView({ game, result, instant = false }: Readonly<{ game: H
   const isRace = result.mode === 'race';
   const finaleResolved = result.party?.duelProgress?.wins.some(w => w.count >= 2) ?? false;
   const isFinalReveal = game.roundIndex + 1 >= game.totalRounds && (!result.party?.finale || finaleResolved);
+  const squeeze = useRevealLayout(useHostScaleValue());
 
   if (isFinalReveal) {
     const isYearReveal = result.party?.format === 'year' || result.yearOnly;
-    let cardHeight = 240;
-    if (result.coverUrl) {
-      cardHeight = 480;
-    } else if (isYearReveal) {
-      cardHeight = 320;
-    }
+    const finalCardHeight = isYearReveal
+      ? computeYearCardHeight(!!result.coverUrl, null, squeeze)
+      : computeCardHeight(!!result.coverUrl, squeeze);
 
     return (
       <RevealShell
         game={game}
         result={result}
         instant={instant}
-        cardHeight={cardHeight}
-        cardContent={<FinalRoundAnswerContent result={result} label="Final answer" />}
+        cardHeight={finalCardHeight}
+        cardContent={<FinalRoundAnswerContent result={result} label="Final answer" squeeze={squeeze} />}
         isCorrectFor={() => 'none'}
+        squeeze={squeeze}
       />
     );
   }
 
-  // "Guess the year" rounds (party or the game-wide toggle) have a numeric
-  // answer — dedicated card.
+  // "Guess the year" rounds (party or the game-wide toggle) have a numeric answer.
   if (result.party?.format === 'year' || result.yearOnly) {
     return (
       <RevealShell
         game={game}
         result={result}
         instant={instant}
-        cardHeight={result.coverUrl ? 500 : 380}
-        cardContent={<YearTimelineContent result={result} />}
+        cardHeight={computeYearCardHeight(!!result.coverUrl, result, squeeze)}
+        cardContent={<YearTimelineContent result={result} squeeze={squeeze} />}
         wide
         isCorrectFor={(p) => {
           const bestDiff = result.yearResults?.find(r => r.diff !== null)?.diff ?? null;
@@ -384,6 +453,7 @@ export function RevealView({ game, result, instant = false }: Readonly<{ game: H
           if (diff === null || bestDiff === null || diff !== bestDiff) return 'none';
           return diff === 0 ? 'exact' : 'correct';
         }}
+        squeeze={squeeze}
       />
     );
   }
@@ -394,9 +464,10 @@ export function RevealView({ game, result, instant = false }: Readonly<{ game: H
         game={game}
         result={result}
         instant={instant}
-        cardHeight={result.coverUrl ? 480 : 240}
-        cardContent={<NoOneGotItCardContent result={result} />}
+        cardHeight={computeCardHeight(!!result.coverUrl, squeeze)}
+        cardContent={<NoOneGotItCardContent result={result} squeeze={squeeze} />}
         isCorrectFor={() => 'none'}
+        squeeze={squeeze}
       />
     );
   }
@@ -406,8 +477,9 @@ export function RevealView({ game, result, instant = false }: Readonly<{ game: H
       game={game}
       result={result}
       instant={instant}
-      cardHeight={result.coverUrl ? 480 : 240}
-      cardContent={<GotItCardContent result={result} />}
+      cardHeight={computeCardHeight(!!result.coverUrl, squeeze)}
+      cardContent={<GotItCardContent result={result} squeeze={squeeze} />}
+      squeeze={squeeze}
       isCorrectFor={(p) => {
         const correct = isRace ? !!result.correctGuessers?.includes(p.name) : (p.name === result.guesserName);
         return correct ? 'correct' : 'none';

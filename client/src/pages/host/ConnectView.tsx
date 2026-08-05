@@ -1,4 +1,5 @@
 import { ShieldAlert } from 'lucide-react';
+import { BRAND_LOGO_SRC, showBrandLogoFallback } from '../../branding';
 import LiquidGlass from '../../components/StableLiquidGlass';
 import { BackButton } from '../../components/BackButton';
 import { LIQUID_CARD_PROPS } from '../../components/liquidGlassPresets';
@@ -21,7 +22,7 @@ export function ConnectView({ game }: Readonly<{ game: HostState }>) {
   return (
     <div className="min-h-screen flex flex-col items-center justify-center gap-6 p-6">
       <BackButton />
-      <img src={`${import.meta.env.BASE_URL}branding/logo.png`} alt={APP_NAME} width={2560} height={1000} className="w-auto drop-shadow-[0_18px_22px_rgba(0,0,0,0.55)]" style={{ maxHeight: '192px', maxWidth: '100%' }} />
+      <img src={BRAND_LOGO_SRC} alt={APP_NAME} onError={showBrandLogoFallback} width={2560} height={1000} className="versed-logo w-auto drop-shadow-[0_18px_22px_rgba(0,0,0,0.55)]" style={{ maxHeight: '192px', maxWidth: '100%' }} />
       {spotify.isConnected && !spotify.playerReady ? (
         <div className="flex flex-col items-center gap-3 text-center">
           <p className="text-white/50">Connecting to Spotify...</p>

@@ -18,12 +18,11 @@ export function WaitingAtmosphere({ leaving }: Readonly<{ leaving: boolean }>) {
   // confetti canvas and purple spotlight used by Home and Join. Disable
   // particle recycling while Waiting is active: everything already visible
   // keeps falling, but nothing new is emitted at the top.
-  // Apply the overlay treatment before the first hand-off frame. If this is
-  // deferred to a passive effect (or animated in), the still-crisp Home
-  // confetti flashes above Waiting for roughly half a second.
+  // Keep the treatment on the shared surface so it can ease in and back out
+  // as the player moves between Home and Waiting.
   useLayoutEffect(() => {
     setHomeBackgroundTarget(true, reducedMotion);
-    setAmbientBackgroundMode(true, true);
+    setAmbientBackgroundMode(true, reducedMotion);
     // Burst on the join -> waiting hand-off, same as a route change, then
     // glide down to Waiting's resting speed.
     setConfettiSpeedTarget(4);

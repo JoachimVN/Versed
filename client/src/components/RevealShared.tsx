@@ -1,8 +1,12 @@
-import { Check, Target, Trophy, X, Zap, Timer, TrendingUp, Swords } from 'lucide-react';
+import { Target, Trophy, Zap, Timer, TrendingUp, Swords } from 'lucide-react';
 import LiquidGlass from './StableLiquidGlass';
 import type { Award, PointsBreakdown, RoundResultEvent } from '../types';
 import { LIQUID_PILL_PROPS } from './liquidGlassPresets';
 import { YearHeading, YearSongFooter } from './YearReveal';
+import type { CardSqueeze } from './revealSqueeze';
+import { cardContentWidth, squeezeValue } from './revealSqueeze';
+
+export type { CardSqueeze } from './revealSqueeze';
 
 // A round delta this large only happens with a multiplier event, a big
 // steal, or several bonuses stacking — comfortably above classic's ordinary
@@ -166,18 +170,23 @@ export function AwardsStrip({ awards }: Readonly<{ awards: Award[] }>) {
   );
 }
 
-export function PillButton({ onClick, label, zIndex }: Readonly<{ onClick: () => void; label: string; zIndex?: number }>) {
+export function PillButton({ onClick, label, zIndex, squeeze }: Readonly<{ onClick: () => void; label: string; zIndex?: number; squeeze?: CardSqueeze }>) {
+  const { compact = false, ultraCompact = false } = squeeze ?? {};
+  const squeezeTier = { compact, ultraCompact };
+  const height = squeezeValue(squeezeTier, '44px', '54px', '64px');
+  const padding = squeezeValue(squeezeTier, '10px 28px', '14px 32px', LIQUID_PILL_PROPS.padding);
+  const textClass = squeezeValue(squeezeTier, 'text-base', 'text-lg', 'text-xl');
   return (
     <button
       type="button"
-      className="liquid-btn glass-tint-purple relative cursor-pointer border-0 bg-transparent p-0"
-      style={{ width: '310px', height: '64px', borderRadius: '100px', background: 'rgba(0,0,0,0.001)', zIndex }}
+      className="liquid-btn reveal-next-round glass-tint-purple relative cursor-pointer border-0 bg-transparent p-0"
+      style={{ width: 'min(92vw, 310px)', height, borderRadius: '100px', background: 'rgba(0,0,0,0.001)', zIndex }}
       onClick={onClick}
     >
-      <LiquidGlass style={{ position: 'absolute', top: '50%', left: '50%' }} {...LIQUID_PILL_PROPS}>
+      <LiquidGlass style={{ position: 'absolute', top: '50%', left: '50%' }} {...LIQUID_PILL_PROPS} padding={padding}>
         <div style={{ position: 'relative' }}>
           <div style={{ position: 'absolute', inset: '-18px -36px', borderRadius: '100px', pointerEvents: 'none', background: 'rgba(158,18,204,0.12)' }} />
-          <span className="text-white font-bold text-xl" style={{ whiteSpace: 'nowrap', position: 'relative', display: 'inline-block', minWidth: '210px', textAlign: 'center' }}>
+          <span className={`text-white font-bold ${textClass}`} style={{ whiteSpace: 'nowrap', position: 'relative', display: 'inline-block', minWidth: 'min(210px, calc(100vw - 120px))', textAlign: 'center' }}>
             {label}
           </span>
         </div>
@@ -186,69 +195,116 @@ export function PillButton({ onClick, label, zIndex }: Readonly<{ onClick: () =>
   );
 }
 
-export function NoOneGotItCardContent({ result }: Readonly<{ result: RoundResultEvent }>) {
+export function NoOneGotItCardContent({ result, squeeze }: Readonly<{ result: RoundResultEvent; squeeze?: CardSqueeze }>) {
+  const { compact = false, ultraCompact = false } = squeeze ?? {};
+  const squeezeTier = { compact, ultraCompact };
+  const titleSize = squeezeValue(squeezeTier, '1.05rem', '1.2rem', '1.4rem');
+  const contentMargin = squeezeValue(squeezeTier, '8px', '10px', '14px');
+  const labelMargin = squeezeValue(squeezeTier, '6px', '8px', '10px');
   const artistOnly = result.artistOnly;
   return (
-    <div style={{ width: '262px', display: 'flex', flexDirection: 'column', alignItems: 'center', textAlign: 'center' }}>
-      <div style={{
-        width: '52px', height: '52px', borderRadius: '50%',
-        background: 'rgba(255,255,255,0.05)',
-        border: '1px solid rgba(255,255,255,0.09)',
-        display: 'flex', alignItems: 'center', justifyContent: 'center',
-        marginBottom: '10px',
-      }}>
-        <X style={{ width: '22px', height: '22px', color: 'rgba(255,255,255,0.45)' }} />
-      </div>
+    <div style={{ width: cardContentWidth(squeeze), display: 'flex', flexDirection: 'column', alignItems: 'center', textAlign: 'center' }}>
       <span style={{
-        fontSize: '1.4rem', fontWeight: 900, letterSpacing: '0.01em',
+        fontSize: titleSize, fontWeight: 900, letterSpacing: '0.01em',
         background: 'linear-gradient(to bottom left, rgba(210,70,50,0.4) 0%, transparent 52%), linear-gradient(to top right, rgba(255,165,70,0.28) 0%, transparent 52%), #fff',
         WebkitBackgroundClip: 'text', WebkitTextFillColor: 'transparent', backgroundClip: 'text',
-        marginBottom: '14px', display: 'inline-block', minWidth: '200px',
+        marginBottom: contentMargin, display: 'inline-block', minWidth: '200px',
       }}>
         No one got it
       </span>
-      <div style={{ width: '100%', height: '1px', background: 'rgba(255,255,255,0.08)', marginBottom: '14px' }} />
+      <div style={{ width: '100%', height: '1px', background: 'rgba(255,255,255,0.08)', marginBottom: contentMargin }} />
       <span style={{
         color: 'rgba(255,255,255,0.45)', fontSize: '0.6rem', letterSpacing: '0.18em', textTransform: 'uppercase',
-        marginBottom: '10px', display: 'inline-block',
+        marginBottom: labelMargin, display: 'inline-block',
       }}>
         {artistOnly ? 'The artist was' : 'The song was'}
       </span>
-      <SongInfo result={result} />
+      <SongInfo result={result} squeeze={squeeze} />
     </div>
   );
 }
 
-function SongInfo({ result }: Readonly<{ result: RoundResultEvent }>) {
+function SongInfo({ result, squeeze }: Readonly<{ result: RoundResultEvent; squeeze?: CardSqueeze }>) {
+  const { compact = false, ultraCompact = false, landscape = false } = squeeze ?? {};
+  const squeezeTier = { compact, ultraCompact };
   const artistOnly = result.artistOnly;
+  const coverSize = squeezeValue(squeezeTier, 110, 150, 200);
+  const titleFontSize = squeezeValue(squeezeTier, '0.92rem', '1.02rem', '1.1rem');
+  const artistFontSize = squeezeValue(squeezeTier, '0.72rem', '0.8rem', '0.875rem');
+  const primary = artistOnly ? result.artist : result.songTitle;
+  const secondary = artistOnly ? result.songTitle : result.artist;
+
+  if (ultraCompact) {
+    const combinedLineText = (
+      <>
+        <span style={{ color: 'white', fontWeight: 900, fontSize: titleFontSize }}>{primary}</span>
+        <span style={{ color: 'rgba(255,255,255,0.45)', fontSize: artistFontSize }}>
+          {' · '}{secondary}
+          {result.featuredArtists && <> feat. {formatFeaturedArtists(result.featuredArtists)}</>}
+          {result.year && ` · ${result.year}`}
+        </span>
+      </>
+    );
+    // A landscape phone has width to spare even at this squeeze (unlike
+    // portrait, where it's scarce on both axes) — putting the cover beside
+    // the text instead of above it removes the cover's own height from the
+    // vertical stack entirely, rather than just shrinking it further. The
+    // text column gets `flex: 1, minWidth: 0` rather than portrait's fixed
+    // minWidth: a fixed floor here doesn't leave enough of the row for the
+    // cover once the two share width, and a flex row won't wrap a child
+    // that's wider than its share — it just overflows past the card's edge.
+    if (landscape && result.coverUrl) {
+      return (
+        <div style={{ display: 'flex', flexDirection: 'row', alignItems: 'center', gap: '10px', width: '100%', textAlign: 'left' }}>
+          <img
+            src={result.coverUrl} alt="Album art"
+            style={{ width: '64px', height: '64px', borderRadius: '12px', objectFit: 'cover', flexShrink: 0, boxShadow: '0 10px 36px rgba(0,0,0,0.65)' }}
+          />
+          <span style={{ flex: 1, minWidth: 0, lineHeight: 1.35 }}>{combinedLineText}</span>
+        </div>
+      );
+    }
+    // width: 100% rather than a fixed minWidth: a hardcoded floor doesn't
+    // adapt to the card's narrowest real width (280px viewport, e.g. iOS's
+    // "Zoomed" display setting), where it forced this span wider than its
+    // container and bled text past the card's own border instead of
+    // wrapping into it.
+    const combinedLine = <span style={{ display: 'block', width: '100%', lineHeight: 1.35 }}>{combinedLineText}</span>;
+    // Three stacked lines (title, artist, year) is the one layout that keeps
+    // costing a fixed line-height no matter how far the font shrinks —
+    // folding them into one line is worth more room at the tightest squeeze
+    // than any further font reduction would be. Wraps rather than
+    // truncates: this text is the answer to the round, so it can't just get
+    // cut off.
+    return (
+      <>
+        {result.coverUrl && (
+          <img
+            src={result.coverUrl} alt="Album art"
+            style={{ width: `${coverSize}px`, height: `${coverSize}px`, borderRadius: '16px', objectFit: 'cover', marginBottom: '6px', boxShadow: '0 10px 36px rgba(0,0,0,0.65)' }}
+          />
+        )}
+        {combinedLine}
+      </>
+    );
+  }
+
   return (
     <>
       {result.coverUrl && (
         <img
           src={result.coverUrl} alt="Album art"
-          style={{ width: '200px', height: '200px', borderRadius: '16px', objectFit: 'cover', marginBottom: '12px', boxShadow: '0 10px 36px rgba(0,0,0,0.65)' }}
+          style={{ width: `${coverSize}px`, height: `${coverSize}px`, borderRadius: '16px', objectFit: 'cover', marginBottom: compact ? '8px' : '12px', boxShadow: '0 10px 36px rgba(0,0,0,0.65)' }}
         />
       )}
-      {artistOnly ? (
-        <>
-          <span style={{ color: 'white', fontWeight: 900, fontSize: '1.1rem', lineHeight: 1.3, display: 'inline-block', minWidth: '220px' }}>
-            {result.artist}
-            {result.featuredArtists && <span style={{ color: 'rgba(255,255,255,0.45)', fontWeight: 400, fontSize: '0.875rem' }}> feat. {formatFeaturedArtists(result.featuredArtists)}</span>}
-          </span>
-          <span style={{ color: 'rgba(255,255,255,0.45)', fontSize: '0.875rem', marginTop: '3px', display: 'inline-block', minWidth: '220px' }}>
-            {result.songTitle}
-          </span>
-        </>
-      ) : (
-        <>
-          <span style={{ color: 'white', fontWeight: 900, fontSize: '1.1rem', lineHeight: 1.3, display: 'inline-block', minWidth: '220px' }}>
-            {result.songTitle}
-          </span>
-          <span style={{ color: 'rgba(255,255,255,0.45)', fontSize: '0.875rem', marginTop: '3px', display: 'inline-block', minWidth: '220px' }}>
-            {result.artist}{result.featuredArtists ? <span style={{ color: 'rgba(255,255,255,0.45)' }}> feat. {formatFeaturedArtists(result.featuredArtists)}</span> : null}
-          </span>
-        </>
-      )}
+      <span style={{ color: 'white', fontWeight: 900, fontSize: titleFontSize, lineHeight: 1.3, display: 'inline-block', minWidth: '220px' }}>
+        {primary}
+        {artistOnly && result.featuredArtists && <span style={{ color: 'rgba(255,255,255,0.45)', fontWeight: 400, fontSize: artistFontSize }}> feat. {formatFeaturedArtists(result.featuredArtists)}</span>}
+      </span>
+      <span style={{ color: 'rgba(255,255,255,0.45)', fontSize: artistFontSize, marginTop: '3px', display: 'inline-block', minWidth: '220px' }}>
+        {secondary}
+        {!artistOnly && result.featuredArtists ? <span style={{ color: 'rgba(255,255,255,0.45)' }}> feat. {formatFeaturedArtists(result.featuredArtists)}</span> : null}
+      </span>
       {result.year && (
         <span style={{ color: 'rgba(255,255,255,0.45)', fontSize: '0.75rem', marginTop: '4px', display: 'inline-block' }}>
           {result.year}
@@ -258,7 +314,12 @@ function SongInfo({ result }: Readonly<{ result: RoundResultEvent }>) {
   );
 }
 
-export function FinalRoundAnswerContent({ result, label, muted = false }: Readonly<{ result: RoundResultEvent; label: string; muted?: boolean }>) {
+export function FinalRoundAnswerContent({ result, label, muted = false, squeeze }: Readonly<{ result: RoundResultEvent; label: string; muted?: boolean; squeeze?: CardSqueeze }>) {
+  const { compact = false, ultraCompact = false } = squeeze ?? {};
+  const squeezeTier = { compact, ultraCompact };
+  const labelMargin = squeezeValue(squeezeTier, '6px', '8px', '10px');
+  const headingSize = squeezeValue(squeezeTier, '1rem', '1.15rem', '1.35rem');
+  const contentMargin = squeezeValue(squeezeTier, '8px', '10px', '14px');
   const artistOnly = result.artistOnly;
   const yearOnly = result.yearOnly || result.party?.format === 'year';
   let answerTypeLabel = 'The song was';
@@ -269,106 +330,87 @@ export function FinalRoundAnswerContent({ result, label, muted = false }: Readon
   }
 
   return (
-    <div style={{ width: '262px', display: 'flex', flexDirection: 'column', alignItems: 'center', textAlign: 'center' }}>
+    <div style={{ width: cardContentWidth(squeeze), display: 'flex', flexDirection: 'column', alignItems: 'center', textAlign: 'center' }}>
       <span style={{
         color: 'rgba(255,255,255,0.45)', fontSize: '0.62rem', fontWeight: 800,
-        letterSpacing: '0.16em', textTransform: 'uppercase', marginBottom: '10px', display: 'inline-block',
+        letterSpacing: '0.16em', textTransform: 'uppercase', marginBottom: labelMargin, display: 'inline-block',
       }}>
         Final round
       </span>
       <span style={{
-        fontSize: '1.35rem', fontWeight: 900, letterSpacing: '0.01em',
+        fontSize: headingSize, fontWeight: 900, letterSpacing: '0.01em',
         background: 'linear-gradient(to bottom left, rgba(158,18,204,0.45) 0%, transparent 52%), linear-gradient(to top right, rgba(0,238,232,0.34) 0%, transparent 52%), #fff',
         WebkitBackgroundClip: 'text', WebkitTextFillColor: 'transparent', backgroundClip: 'text',
-        marginBottom: '14px', display: 'inline-block', minWidth: '200px',
+        marginBottom: contentMargin, display: 'inline-block', minWidth: '200px',
       }}>
         {label}
       </span>
-      <div style={{ width: '100%', height: '1px', background: 'rgba(255,255,255,0.08)', marginBottom: '14px' }} />
+      <div style={{ width: '100%', height: '1px', background: 'rgba(255,255,255,0.08)', marginBottom: contentMargin }} />
       {yearOnly ? (
         <>
-          <YearHeading year={result.year ? Math.floor(result.year) : '-'} compact muted={muted} />
-          <YearSongFooter result={result} compact />
+          <YearHeading year={result.year ? Math.floor(result.year) : '-'} compact muted={muted} squeeze={squeeze} />
+          <YearSongFooter result={result} compact squeeze={squeeze} />
         </>
       ) : (
         <>
           <span style={{
             color: 'rgba(255,255,255,0.45)', fontSize: '0.6rem', letterSpacing: '0.18em', textTransform: 'uppercase',
-            marginBottom: '10px', display: 'inline-block',
+            marginBottom: labelMargin, display: 'inline-block',
           }}>
             {answerTypeLabel}
           </span>
-          <SongInfo result={result} />
+          <SongInfo result={result} squeeze={squeeze} />
         </>
       )}
     </div>
   );
 }
 
-export function GotItCardContent({ result, myName }: Readonly<{ result: RoundResultEvent; myName?: string }>) {
+export function GotItCardContent({ result, myName, squeeze }: Readonly<{ result: RoundResultEvent; myName?: string; squeeze?: CardSqueeze }>) {
+  const { compact = false, ultraCompact = false } = squeeze ?? {};
+  const squeezeTier = { compact, ultraCompact };
+  const titleSize = squeezeValue(squeezeTier, '1.05rem', '1.2rem', '1.4rem');
+  const contentMargin = squeezeValue(squeezeTier, '8px', '10px', '14px');
+  const labelMargin = squeezeValue(squeezeTier, '6px', '8px', '10px');
   const artistOnly = result.artistOnly;
   const isRace = result.mode === 'race';
   const iWon = isRace
     ? (myName != null && !!result.correctGuessers?.includes(myName))
     : (result.correct && myName != null && result.guesserName === myName);
 
-  let iconNode: React.ReactNode;
-  let iconBg: string;
-  let iconBorder: string;
   let labelText: string;
   let labelGradient: string;
 
   if (iWon) {
-    iconNode = <Trophy style={{ width: '24px', height: '24px', color: '#fbbf24' }} />;
-    iconBg = 'rgba(245,158,11,0.16)';
-    iconBorder = 'rgba(245,158,11,0.32)';
     labelText = 'You got it!';
     labelGradient = 'linear-gradient(to bottom left, rgba(30,200,90,0.5) 0%, transparent 52%), linear-gradient(to top right, rgba(250,185,40,0.4) 0%, transparent 52%), #fff';
   } else if (isRace) {
     const count = result.correctGuessers?.length ?? 0;
-    iconNode = <Check style={{ width: '24px', height: '24px', color: 'rgba(255,255,255,0.5)' }} />;
-    iconBg = 'rgba(255,255,255,0.07)';
-    iconBorder = 'rgba(255,255,255,0.12)';
     labelText = count === 1 ? `${result.correctGuessers![0]} got it` : `${count} players got it`;
     labelGradient = 'linear-gradient(to bottom left, rgba(158,18,204,0.4) 0%, transparent 52%), linear-gradient(to top right, rgba(0,238,232,0.3) 0%, transparent 52%), #fff';
   } else {
-    // String indexing grabs a single UTF-16 code unit, which mangles emoji
-    // (most are surrogate pairs) — iterate by code point instead so a name
-    // like "🐈maka" gets the full cat, not half of one.
-    const initial = Array.from(result.guesserName ?? '')[0]?.toUpperCase() ?? '?';
-    iconNode = <span style={{ fontSize: '1.25rem', fontWeight: 900, color: 'rgba(255,255,255,0.7)' }}>{initial}</span>;
-    iconBg = 'rgba(255,255,255,0.07)';
-    iconBorder = 'rgba(255,255,255,0.12)';
     labelText = `${result.guesserName} got it`;
     labelGradient = 'linear-gradient(to bottom left, rgba(158,18,204,0.4) 0%, transparent 52%), linear-gradient(to top right, rgba(0,238,232,0.3) 0%, transparent 52%), #fff';
   }
 
   return (
-    <div style={{ width: '262px', display: 'flex', flexDirection: 'column', alignItems: 'center', textAlign: 'center' }}>
-      <div style={{
-        width: '52px', height: '52px', borderRadius: '50%',
-        background: iconBg, border: `1px solid ${iconBorder}`,
-        display: 'flex', alignItems: 'center', justifyContent: 'center',
-        marginBottom: '10px',
-      }}>
-        {iconNode}
-      </div>
+    <div style={{ width: cardContentWidth(squeeze), display: 'flex', flexDirection: 'column', alignItems: 'center', textAlign: 'center' }}>
       <span style={{
-        fontSize: '1.4rem', fontWeight: 900, letterSpacing: '0.01em',
+        fontSize: titleSize, fontWeight: 900, letterSpacing: '0.01em',
         background: labelGradient,
         WebkitBackgroundClip: 'text', WebkitTextFillColor: 'transparent', backgroundClip: 'text',
-        marginBottom: '14px', display: 'inline-block', minWidth: '200px',
+        marginBottom: contentMargin, display: 'inline-block', minWidth: '200px',
       }}>
         {labelText}
       </span>
-      <div style={{ width: '100%', height: '1px', background: 'rgba(255,255,255,0.08)', marginBottom: '14px' }} />
+      <div style={{ width: '100%', height: '1px', background: 'rgba(255,255,255,0.08)', marginBottom: contentMargin }} />
       <span style={{
         color: 'rgba(255,255,255,0.45)', fontSize: '0.6rem', letterSpacing: '0.18em', textTransform: 'uppercase',
-        marginBottom: '10px', display: 'inline-block',
+        marginBottom: labelMargin, display: 'inline-block',
       }}>
         {artistOnly ? 'The artist was' : 'The song was'}
       </span>
-      <SongInfo result={result} />
+      <SongInfo result={result} squeeze={squeeze} />
     </div>
   );
 }

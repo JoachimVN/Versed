@@ -4,6 +4,7 @@ import { Disc3 } from 'lucide-react';
 import { RoundIntro } from '../components/RoundIntro';
 import { commonPhaseAnnouncement } from '../utils/phaseAnnouncement';
 import { useWakeLock } from '../hooks/useWakeLock';
+import { PlayerScaleShell } from '../hooks/usePlayerScale';
 import type { RoundResultEvent } from '../types';
 
 import { usePlayGame } from './play/usePlayGame';
@@ -55,12 +56,12 @@ export default function Play() {
   }, []);
 
   return (
-    <div
+    <PlayerScaleShell
       className="relative"
       style={isJoin ? undefined : {
         ...(phase === 'waiting' ? {} : { background: '#080812' }),
-        height: 'var(--app-height, 100vh)',
-        minHeight: 'var(--app-height, 100vh)',
+        height: 'var(--player-app-height, var(--app-height, 100vh))',
+        minHeight: 'var(--player-app-height, var(--app-height, 100vh))',
         ...(showsGuessInput ? { transition: 'height 0.25s ease, min-height 0.25s ease' } : {}),
       }}
     >
@@ -107,6 +108,6 @@ export default function Play() {
           <p className="text-white/50 text-xs">Host reconnecting</p>
         </div>
       )}
-    </div>
+    </PlayerScaleShell>
   );
 }

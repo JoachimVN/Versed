@@ -16,6 +16,14 @@ async function prepPage(page) {
             animation-delay: 0s !important;
             transition-duration: 0s !important;
             transition-delay: 0s !important;
+        }
+        /* Chromium paints liquid-glass-react's SVG displacement filter as a
+           large black inset rectangle on the two wide host cards. Keep their
+           normal backdrop blur, but skip only that faulty filter in docs
+           captures. */
+        .host-game-card .glass__warp,
+        .reveal-next-round .glass__warp {
+            filter: none !important;
         }`;
         const inject = () => {
             const style = document.createElement('style');

@@ -6,7 +6,11 @@ const OUT = 'docs/screenshots';
 const VIEWPORT = { width: 1280, height: 800 };
 
 async function take(browser, url, outFile, options = {}) {
-    const page = await browser.newPage();
+    // deviceScaleFactor 2 matches a real Retina Mac; at the Playwright default
+    // of 1, canvas-drawn confetti renders with hard blocky edges instead of
+    // the soft anti-aliased look it has on the actual dev machine, making the
+    // screenshots look uniformly sharper/less blurred than the real app.
+    const page = await browser.newPage({ deviceScaleFactor: 2 });
     await prepPage(page);
     await page.setViewportSize(VIEWPORT);
     await page.goto(`${BASE}${url}`);

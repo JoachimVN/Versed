@@ -7,11 +7,10 @@ export function timerColor(pct: number): string {
   return 'rgba(239,68,68,0.9)';
 }
 
-export function CircularTimer({ timeLeft, total, size = 128 }: Readonly<{ timeLeft: number; total: number; size?: number }>) {
-  const sw = Math.round(size * 0.039);
-  const r = (size - sw * 2) / 2;
-  const circ = 2 * Math.PI * r;
-
+// Smoothly-animated fraction-remaining, shared by both the circular dial and
+// its compact horizontal-bar fallback — the two are just different paint
+// jobs on the same countdown.
+function useTimerPct(timeLeft: number, total: number): number {
   const endsAtRef = useRef(0);
   const [pct, setPct] = useState(total > 0 ? Math.max(0, Math.min(1, timeLeft / total)) : 0);
 
@@ -32,6 +31,33 @@ export function CircularTimer({ timeLeft, total, size = 128 }: Readonly<{ timeLe
     rafId = requestAnimationFrame(tick);
     return () => cancelAnimationFrame(rafId);
   }, [timeLeft, total]);
+
+  return pct;
+}
+
+// Thin horizontal fill bar with an inline "Ns" readout — the CircularTimer's
+// 80px dial doesn't fit a short landscape/keyboard-squeezed guessing screen,
+// so this is what GuessingView swaps to under useCompactGuessing().
+export function LinearTimer({ timeLeft, total }: Readonly<{ timeLeft: number; total: number }>) {
+  const pct = useTimerPct(timeLeft, total);
+  return (
+    <div className="flex items-center gap-2.5" style={{ width: 'min(70vw, 220px)' }}>
+      <div style={{ flex: 1, height: '6px', borderRadius: '999px', background: 'rgba(255,255,255,0.1)', overflow: 'hidden' }}>
+        <div style={{
+          width: `${pct * 100}%`, height: '100%', borderRadius: '999px',
+          background: timerColor(pct), transition: 'width 0.2s linear, background 0.4s ease',
+        }} />
+      </div>
+      <span className="text-white font-black tabular-nums" style={{ fontSize: '0.95rem', minWidth: '1.6em', textAlign: 'right' }}>{timeLeft}</span>
+    </div>
+  );
+}
+
+export function CircularTimer({ timeLeft, total, size = 128 }: Readonly<{ timeLeft: number; total: number; size?: number }>) {
+  const sw = Math.round(size * 0.039);
+  const r = (size - sw * 2) / 2;
+  const circ = 2 * Math.PI * r;
+  const pct = useTimerPct(timeLeft, total);
 
   return (
     <div className="relative" style={{ width: size, height: size }}>

@@ -34,7 +34,7 @@ export {
 } from './party';
 export { initSongs } from './songPool';
 export { bidScoreTable } from './scoring';
-export { BID_OPTIONS, MAX_ACTIVE_GAMES, MIN_PLAYLIST_TRACKS, PITY_BONUS, playMsFor } from './constants';
+export { BID_OPTIONS, MAX_ACTIVE_GAMES, PITY_BONUS, playMsFor } from './constants';
 
 const games = new Map<string, Game>();
 const socketToPin = new Map<string, string>();
