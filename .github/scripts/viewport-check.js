@@ -104,8 +104,15 @@ const VIEWS = [
   { id: 'host-reveal-crowd', group: 'host', v: 'reveal-crowd', name: 'RevealViewCrowd' },
   { id: 'host-year-reveal-crowd', group: 'host', v: 'year-crowd', name: 'YearRevealViewCrowd' },
   { id: 'host-final-results', group: 'host', v: 'final-host', name: 'FinalResultsView', click: 'button:has-text("final reveal")', waitFor: '.standings-list' },
-  { id: 'host-final-results-long-names', group: 'host', v: 'final-host-long', name: 'FinalResultsLongNamesView' },
-  { id: 'host-final-results-empty', group: 'host', v: 'final-empty', name: 'FinalResultsEmptyView' },
+  // These two fixtures start settled with no click to wait on, so without a
+  // waitFor they only got the generic 500ms goto-settle pause below -- fine
+  // in isolation, but under the CPU contention of a full batch run that
+  // wasn't always enough time for FinalResultsView's own layout-effect-driven
+  // panel-height sync to finish, and the screenshot would land mid-render
+  // (an all-black frame, no card). '.recap-title'/the empty-state copy always
+  // exist once that settling is done, regardless of leaderboard size.
+  { id: 'host-final-results-long-names', group: 'host', v: 'final-host-long', name: 'FinalResultsLongNamesView', waitFor: '.recap-title' },
+  { id: 'host-final-results-empty', group: 'host', v: 'final-empty', name: 'FinalResultsEmptyView', waitFor: 'text=No scores yet.' },
   { id: 'player-waiting', group: 'player', v: 'waiting', name: 'WaitingView', waitFor: '.waiting-record' },
   { id: 'player-join', group: 'player', v: 'join', name: 'JoinView' },
   { id: 'player-join-link', group: 'player', v: 'join-link', name: 'JoinViewLink' },
