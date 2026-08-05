@@ -187,10 +187,17 @@ export function FinalResultsPlayerView({ leaderboard, awards, myName, background
       )}
 
       {settled && (
-        <div className="relative z-10 flex flex-col flex-1 min-h-0 gap-4 page-enter-fade">
+        <div className="relative z-10 flex flex-col flex-1 min-h-0 gap-1 page-enter-fade">
           {myEntry && <PersonalHero entry={myEntry} awards={awards} reducedMotion={reducedMotion} />}
-          <div className="flex-1 min-h-0 overflow-y-auto flex">
-            <div className="liquid-btn glass-tint-blue relative" style={{ width: '100%', maxWidth: '520px', height: `${panelHeight}px`, margin: 'auto' }}>
+          {/* justifyContent centers the card horizontally (it's narrower than
+              this row past 520px); alignItems pins it to the top instead of
+              the vertical centering margin:auto used to do, which split the
+              flex-1 area's leftover height evenly above and below the card --
+              visibly padding out the gap right under the hero card on short
+              leaderboards. Anchoring to the top puts all of that slack below
+              the card instead, where it already had room to spare. */}
+          <div className="flex-1 min-h-0 overflow-y-auto flex" style={{ justifyContent: 'center', alignItems: 'flex-start' }}>
+            <div className="liquid-btn glass-tint-blue relative" style={{ width: '100%', maxWidth: '520px', height: `${panelHeight}px` }}>
               <LiquidGlass
                 style={{ position: 'absolute', top: '50%', left: '50%' }}
                 {...LIQUID_CARD_PROPS}
@@ -220,7 +227,7 @@ export function FinalResultsPlayerView({ leaderboard, awards, myName, background
               </LiquidGlass>
             </div>
           </div>
-          <div className="flex flex-col items-center gap-3">{footer}</div>
+          <div className="flex flex-col items-center gap-3 mt-3">{footer}</div>
         </div>
       )}
     </div>
