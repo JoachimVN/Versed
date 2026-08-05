@@ -230,6 +230,21 @@ select:focus-visible,
   justify-content: safe center;
 }
 
+/* JoinCard's glass wrapper needs an explicit height (LiquidGlass's actual
+   content is absolutely positioned and contributes nothing to flow height).
+   Base case here; the media queries below override it per breakpoint —
+   declared first so plain source-order (equal specificity) doesn't let this
+   win over them. */
+.lobby-join-card-glass {
+  height: 204px;
+}
+
+/* Same reasoning as .lobby-join-card-glass above, for the mode toggle's
+   glass wrapper. */
+.lobby-mode-toggle {
+  height: 46px;
+}
+
 /* The host lobby must remain a complete board at every supported viewport.
    These are deliberate compact compositions, not scroll fallbacks: players
    need the invite, mode, roster, and Start control visible at once. */
@@ -253,12 +268,8 @@ select:focus-visible,
     padding: 0 1.5rem 1rem;
   }
 
-  .lobby-join-card {
-    padding: 0.75rem !important;
-  }
-
-  .lobby-join-card-layout {
-    gap: 0.75rem;
+  .lobby-join-card-glass {
+    height: 190px;
   }
 
   .join-card-qr {
@@ -278,7 +289,7 @@ select:focus-visible,
   }
 
   .lobby-mode-toggle {
-    padding: 3px !important;
+    height: 40px;
   }
 
   .lobby-mode-option {
@@ -348,8 +359,8 @@ select:focus-visible,
     height: 84px;
   }
 
-  .lobby-join-card-layout {
-    gap: 0.5rem;
+  .lobby-join-card-glass {
+    height: 170px;
   }
 
   .join-card-pin {
@@ -417,29 +428,23 @@ select:focus-visible,
     padding: 0 1.5rem 0.625rem;
   }
 
-  /* URL+PIN+copy already stack in one column in JoinCard.tsx; landscape just
-     needs that column and the QR side by side instead of QR pushed below,
-     so the whole card fits the limited height. */
-  .lobby-join-card {
-    max-width: 560px;
-    padding: 0.5rem 0.75rem !important;
-    display: grid;
-    grid-template-columns: 1fr auto;
-    align-items: center;
-    gap: 0.25rem 0.75rem;
+  /* URL+PIN+copy already stack in one column in JoinCard.tsx, side by side
+     with the QR; landscape just needs both narrower and shorter so the whole
+     card fits the limited height. */
+  .lobby-join-card-glass {
+    width: min(calc(100vw - 3rem), 560px) !important;
+    height: 132px !important;
   }
 
-  .lobby-join-card-layout {
-    display: contents;
+  .join-card-content-row {
+    align-items: center !important;
   }
 
-  .lobby-join-card-layout > div:first-child {
-    grid-column: 1;
+  .join-card-content-row > div:first-child {
     gap: 0.25rem !important;
   }
 
   .join-card-qr {
-    grid-column: 2;
     padding: 0.375rem !important;
   }
 
@@ -469,10 +474,11 @@ select:focus-visible,
   .lobby-mode-player-row .lobby-mode-toggle {
     flex: 0 0 250px;
     width: 250px;
+    height: 36px;
   }
 
-  .lobby-mode-toggle {
-    padding: 3px !important;
+  .mode-toggle-track {
+    width: 242px !important;
   }
 
   .lobby-mode-option {
@@ -650,6 +656,18 @@ select:focus-visible,
   opacity: 0.5 !important;
 }
 .settings-control-glass .glass {
+  box-shadow: 0px 12px 40px rgba(0, 0, 0, 0.125) !important;
+}
+
+/* Same softened "always-on chrome" ring for the join card and mode toggle,
+   so all four floating lobby glass surfaces read as one family. */
+.lobby-join-card-glass .glass::after,
+.lobby-mode-toggle .glass::after {
+  box-shadow: 0 0 0 1px rgba(158,18,204,0.35) inset, 0 1px 4px rgba(0,0,0,0.35) !important;
+  opacity: 0.5 !important;
+}
+.lobby-join-card-glass .glass,
+.lobby-mode-toggle .glass {
   box-shadow: 0px 12px 40px rgba(0, 0, 0, 0.125) !important;
 }
 

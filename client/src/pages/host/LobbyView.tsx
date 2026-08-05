@@ -6,7 +6,7 @@ import { useLogoMorph } from '../../contexts/LogoMorph';
 import { MIN_PLAYLIST_TRACKS } from '../../hooks/usePlaylistPicker';
 import { useLobbyMusic } from '../../hooks/useLobbyMusic';
 import { BackButton } from '../../components/BackButton';
-import { LIQUID_CONTROL_PROPS, LIQUID_PILL_PROPS } from '../../components/liquidGlassPresets';
+import { LIQUID_CARD_PROPS, LIQUID_CONTROL_PROPS, LIQUID_PILL_PROPS } from '../../components/liquidGlassPresets';
 import { APP_NAME } from '../../config';
 import type { PlayerInfo } from '../../types';
 import { mergePlaylistTracks, type HostState, type Mode } from './useHostGame';
@@ -84,35 +84,51 @@ function ModeToggle({ mode, setMode }: Readonly<{ mode: Mode; setMode: (m: Mode)
   const index = modes.findIndex(m => m.key === mode);
   const active = MODE_STYLE[mode];
   return (
-    <div
-      className="lobby-mode-toggle w-full max-w-md relative flex rounded-2xl"
-      style={{ background: 'rgba(255,255,255,0.05)', border: '1px solid rgba(255,255,255,0.08)', padding: '4px' }}
-    >
-      <div
-        className="absolute rounded-xl"
-        style={{
-          top: '4px', bottom: '4px', left: '4px',
-          width: 'calc((100% - 8px) / 3)',
-          background: active.bg,
-          border: active.border,
-          transform: `translateX(${index * 100}%)`,
-          transition: 'transform 0.25s cubic-bezier(0.4, 0, 0.2, 1), background 0.25s ease, border-color 0.25s ease',
-          pointerEvents: 'none',
-        }}
-      />
-      {modes.map(({ key, label, Icon }) => (
-        <button
-          key={key}
-          type="button"
-          onClick={() => setMode(key)}
-          tabIndex={0}
-          className="lobby-mode-option relative flex-1 py-2.5 rounded-xl text-sm font-semibold z-10 transition-colors duration-200 flex items-center justify-center gap-1.5"
-          style={{ color: mode === key ? MODE_STYLE[key].text : 'rgba(255,255,255,0.45)', background: 'transparent', border: 'none', cursor: 'pointer' }}
+    // Same glass-card pattern as JoinCard below it: outer box keeps the
+    // existing width classes/breakpoint overrides (landscape still pins it
+    // to 250px via the existing .lobby-mode-player-row .lobby-mode-toggle
+    // rule), height set explicitly per breakpoint in index.css since the
+    // glass content is absolutely positioned and can't contribute to flow
+    // height. The active-mode pill no longer needs its own inset math (old
+    // 4px/-8px accounting for the flat panel's own padding) since the track
+    // div below is already the padded-in content box.
+    <div className="liquid-btn glass-tint-purple lobby-mode-toggle relative w-full max-w-md">
+      <LiquidGlass
+        style={{ position: 'absolute', top: '50%', left: '50%' }}
+        {...LIQUID_CARD_PROPS}
+        padding="4px"
+      >
+        <div
+          className="mode-toggle-track relative flex rounded-xl"
+          style={{ width: 'calc(min(calc(100vw - 3rem), 448px) - 8px)' }}
         >
-          <Icon className="w-3.5 h-3.5 transition-colors duration-200" style={{ color: mode === key ? MODE_STYLE[key].icon : 'rgba(255,255,255,0.45)' }} />
-          {label}
-        </button>
-      ))}
+          <div
+            className="absolute rounded-xl"
+            style={{
+              top: 0, bottom: 0, left: 0,
+              width: 'calc(100% / 3)',
+              background: active.bg,
+              border: active.border,
+              transform: `translateX(${index * 100}%)`,
+              transition: 'transform 0.25s cubic-bezier(0.4, 0, 0.2, 1), background 0.25s ease, border-color 0.25s ease',
+              pointerEvents: 'none',
+            }}
+          />
+          {modes.map(({ key, label, Icon }) => (
+            <button
+              key={key}
+              type="button"
+              onClick={() => setMode(key)}
+              tabIndex={0}
+              className="lobby-mode-option relative flex-1 py-2.5 rounded-xl text-sm font-semibold z-10 transition-colors duration-200 flex items-center justify-center gap-1.5"
+              style={{ color: mode === key ? MODE_STYLE[key].text : 'rgba(255,255,255,0.45)', background: 'transparent', border: 'none', cursor: 'pointer' }}
+            >
+              <Icon className="w-3.5 h-3.5 transition-colors duration-200" style={{ color: mode === key ? MODE_STYLE[key].icon : 'rgba(255,255,255,0.45)' }} />
+              {label}
+            </button>
+          ))}
+        </div>
+      </LiquidGlass>
     </div>
   );
 }
