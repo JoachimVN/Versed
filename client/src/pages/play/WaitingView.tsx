@@ -90,7 +90,7 @@ export function WaitingView({
     <div className="relative min-h-screen overflow-x-hidden overflow-y-auto overscroll-contain">
       {/* Content */}
       <div
-        className={`relative flex flex-col items-center justify-center screen-center-safe min-h-screen gap-8 p-6 ${contentTransitionClass}`}
+        className={`waiting-screen-content relative flex flex-col items-center justify-center screen-center-safe min-h-screen gap-8 p-6 ${contentTransitionClass}`}
         style={{ zIndex: 3, pointerEvents: backgroundLeaving ? 'none' : undefined }}
       >
         <BackButton beforeNavigate={goBack} />
@@ -101,7 +101,7 @@ export function WaitingView({
           onError={showBrandLogoFallback}
           width={2560}
           height={1000}
-          className="versed-logo w-auto drop-shadow-[0_18px_22px_rgba(0,0,0,0.55)]"
+          className="waiting-screen-logo versed-logo w-auto drop-shadow-[0_18px_22px_rgba(0,0,0,0.55)]"
           style={{ maxHeight: '140px', maxWidth: '100%', opacity: (morphing || leaving) ? 0 : 1, willChange: 'opacity' }}
         />
 
@@ -115,11 +115,12 @@ export function WaitingView({
             left visible around it is what actually reads as "vinyl" instead
             of a plain dark blob. */}
         <div
+          className="waiting-record"
           style={{
             position: 'relative',
-            width: 'min(420px, calc(100vw - 1.5rem))',
+            width: 'var(--waiting-disc-size)',
             aspectRatio: '1',
-            '--disc-size': 'min(420px, calc(100vw - 1.5rem))',
+            '--disc-size': 'var(--waiting-disc-size)',
             // Keep the same label-to-vinyl proportion as the original
             // composition while allowing the whole record to scale up.
             '--label-size': 'calc(var(--disc-size) * 0.6)',

@@ -370,6 +370,24 @@ select:focus-visible,
 }
 
 @media (max-height: 450px) and (orientation: landscape) {
+  /* On a phone held sideways, the brand logo is expendable but the joined
+     state, editable name, and waiting status are not. Keep the entire vinyl
+     composition reachable in one viewport instead of making the player
+     scroll just to see that they joined. */
+  .waiting-screen-content {
+    gap: 0.75rem;
+    padding: 1rem;
+  }
+
+  .waiting-screen-logo {
+    display: none;
+  }
+
+  .waiting-record {
+    --waiting-disc-size: min(280px, calc(100vh - 6rem)) !important;
+    --waiting-disc-size: min(280px, calc(100dvh - 6rem)) !important;
+  }
+
   .lobby-header {
     gap: 0.2rem;
     padding: 0.625rem 1.5rem 0.25rem;
@@ -470,6 +488,10 @@ select:focus-visible,
   .volume-control-glass .volume-slider {
     display: none;
   }
+}
+
+.waiting-record {
+  --waiting-disc-size: min(420px, calc(100vw - 1.5rem));
 }
 
 /* liquid-glass-react initializes at a hard-coded 270x69, then measures its
