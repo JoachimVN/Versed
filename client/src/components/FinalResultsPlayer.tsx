@@ -19,10 +19,10 @@ function PersonalHero({ entry, awards, reducedMotion }: Readonly<{ entry: Leader
 
   return (
     <div
-      className="personal-hero-card flex flex-wrap items-center gap-4 p-4 rounded-2xl"
+      className="personal-hero-card flex flex-wrap items-center rounded-2xl"
       style={{ border: '1px solid rgba(94,234,212,0.32)', background: 'linear-gradient(135deg, rgba(94,234,212,0.14), rgba(158,18,204,0.10))', width: '100%', maxWidth: '520px', margin: '0 auto' }}
     >
-      <span className="font-black" style={{ fontFamily: "'Montserrat', sans-serif", fontSize: '1.7rem', color: '#5eead4', flexShrink: 0 }}>
+      <span className="font-black" style={{ fontFamily: "'Montserrat', sans-serif", fontSize: 'clamp(1.15rem, calc(5.87vh + 1.97px), 1.7rem)', color: '#5eead4', flexShrink: 0 }}>
         #{entry.rank}
       </span>
       <div className="flex flex-col gap-0.5 flex-1 min-w-0">
@@ -30,7 +30,7 @@ function PersonalHero({ entry, awards, reducedMotion }: Readonly<{ entry: Leader
           {entry.name}
           <span style={{ color: '#5eead4', fontSize: '0.6rem', letterSpacing: '0.1em', marginLeft: '7px', fontWeight: 800 }}>YOU</span>
         </span>
-        <span className="tabular-nums font-black" style={{ fontSize: '1.05rem', color: 'rgba(255,255,255,0.85)' }}>
+        <span className="tabular-nums font-black" style={{ fontSize: 'clamp(0.85rem, calc(2.13vh + 7.63px), 1.05rem)', color: 'rgba(255,255,255,0.85)' }}>
           {displayScore.toLocaleString()}
           <small style={{ fontSize: '0.6em', fontWeight: 700, color: 'rgba(255,255,255,0.4)', marginLeft: '3px' }}>PTS</small>
         </span>
