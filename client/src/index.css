@@ -1008,12 +1008,18 @@ select:focus-visible,
   font-weight: 800;
   letter-spacing: 0.14em;
   text-transform: uppercase;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .award-row-name {
   font-size: 0.94rem;
   font-weight: 800;
   color: #fff;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .award-row-quote {
