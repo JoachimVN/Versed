@@ -119,7 +119,7 @@ export function JoinView({ game }: Readonly<{ game: PlayState }>) {
           intermediate sizes let the logo render underneath the card for a
           frame. display: none pulls it out of layout in one step — there's
           no size for it to pass through. */}
-      <div style={{ display: keyboardOpen ? 'none' : undefined }}>
+      <div className="join-screen-logo" style={{ display: keyboardOpen ? 'none' : undefined }}>
         <img
           ref={logoRef}
           src={BRAND_LOGO_SRC}
@@ -133,7 +133,7 @@ export function JoinView({ game }: Readonly<{ game: PlayState }>) {
       </div>
 
       {savedSession && (
-        <div className="flex flex-col items-center gap-3" style={collapsedWhenTyping(keyboardOpen)}>
+        <div className="flex flex-col items-center gap-3" style={{ ...collapsedWhenTyping(keyboardOpen), flexShrink: 0 }}>
           <button
             type="button"
             onClick={rejoinSaved}
@@ -161,7 +161,7 @@ export function JoinView({ game }: Readonly<{ game: PlayState }>) {
       )}
 
       {/* Input card: LiquidGlass */}
-      <div className="liquid-btn relative" style={{ width: controlWidth, height: showPinField ? '165px' : '115px', transition: 'height 0.3s ease' }}>
+      <div className="liquid-btn relative" style={{ width: controlWidth, height: showPinField ? '165px' : '115px', transition: 'height 0.3s ease', flexShrink: 0 }}>
         <LiquidGlass
           style={{ position: 'absolute', top: '50%', left: '50%' }}
           {...LIQUID_CARD_PROPS}
@@ -253,6 +253,7 @@ export function JoinView({ game }: Readonly<{ game: PlayState }>) {
           cursor: canJoin ? 'pointer' : 'not-allowed',
           transition: 'opacity 0.25s ease, margin-top 0.25s ease',
           marginTop: showPinField ? '0' : '-20px',
+          flexShrink: 0,
         }}
         onMouseEnter={() => setJoinHovered(true)}
         onMouseLeave={() => setJoinHovered(false)}

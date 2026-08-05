@@ -386,6 +386,13 @@ select:focus-visible,
     display: none;
   }
 
+  /* Same trade-off as .waiting-screen-logo above: JoinView's PIN/name card
+     and Join button don't fit under the logo in this little height, so the
+     card's top edge landed over the logo instead of below it. */
+  .join-screen-logo {
+    display: none;
+  }
+
   .waiting-record {
     --waiting-disc-size: min(280px, calc(100vh - 6rem)) !important;
     --waiting-disc-size: min(280px, calc(100dvh - 6rem)) !important;
