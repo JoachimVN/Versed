@@ -1114,6 +1114,17 @@ select:focus-visible,
   .award-row-quote { white-space: normal; }
 }
 
+/* Below ~350px the icon mark is the first thing squeezed out -- it's pure
+   decoration (the award label text already says what it is), while the
+   label/name/stat next to it are the actual content fighting for room.
+   Hiding it lets the flex row's own gap collapse too, so this reclaims the
+   mark's full 30-44px plus the 14px gap rather than just the icon itself. */
+@media (max-width: 350px) {
+  .award-row-mark {
+    display: none;
+  }
+}
+
 /* Each keyframe re-states translate(-50%,-50%) alongside the scale — an
    animated `transform` always wins over the element's static inline
    transform, so without this the marker snaps back to its unshifted
