@@ -1,55 +1,69 @@
 import React, { useState, useEffect } from 'react';
 import type { SongSource } from '../../../types';
 import type { Difficulty } from '../useHostGame';
+import LiquidGlass from '../../../components/StableLiquidGlass';
+import { LIQUID_CONTROL_PROPS } from '../../../components/liquidGlassPresets';
 
 // The single-line control rows of the settings panel: numeric steppers,
 // on/off toggles, the two sliding-pill pickers, and the chaos slider.
 
-const STEPPER_BTN_BG = 'rgba(255,255,255,0.07)';
-const STEPPER_BTN_BORDER = 'rgba(255,255,255,0.09)';
-const STEPPER_BTN_COLOR = 'rgba(255,255,255,0.55)';
-const STEPPER_BTN_BG_HOVER = 'rgba(255,255,255,0.14)';
-const STEPPER_BTN_BORDER_HOVER = 'rgba(255,255,255,0.2)';
-const STEPPER_BTN_COLOR_HOVER = 'rgba(255,255,255,0.85)';
+// Panel content is a fixed w-72 (288px) minus px-5 (20px) padding on each
+// side — never responsive, so (unlike the lobby's ModeToggle) these pills
+// can hardcode one width instead of a per-breakpoint CSS rule.
+const SETTINGS_CONTENT_WIDTH = 248;
 
-// Plain inline `style` always wins over a stylesheet `:hover` rule (even one
-// from a Tailwind class), so hover here has to be applied via JS instead of
-// a `hover:` className — same pattern as the other inline-styled hover
-// buttons in this panel (e.g. the mode/difficulty pills below).
+// Each +/- is its own small real LiquidGlass circle (same fixed-box-plus-
+// centred-glass pattern as the lobby's volume/settings pills, just circular
+// and tiny) rather than a CSS-only bead — displacement/aberration are dialled
+// way down from LIQUID_CONTROL_PROPS, both because a 28px circle has much
+// less edge to refract against than that preset's pill shapes, and because
+// these repeat up to 8 times a panel and shouldn't compete for attention.
+const STEPPER_GLASS_PROPS = {
+  displacementScale: 10,
+  blurAmount: 0.015,
+  saturation: 120,
+  aberrationIntensity: 0.5,
+  elasticity: 0,
+  cornerRadius: 100,
+} as const;
+
 function SettingStepperButton({ symbol, label, onClick, disabled }: Readonly<{
   symbol: string; label: string; onClick: () => void; disabled?: boolean;
 }>) {
+  const [hovered, setHovered] = useState(false);
   return (
-    <button
-      type="button"
-      onClick={disabled ? undefined : onClick}
-      disabled={disabled}
-      aria-label={label}
-      className="flex items-center justify-center active:scale-90 transition-transform"
-      style={{
-        width: '28px', height: '28px', borderRadius: '50%',
-        background: STEPPER_BTN_BG,
-        border: `1px solid ${STEPPER_BTN_BORDER}`,
-        color: STEPPER_BTN_COLOR,
-        fontSize: '1.1rem', lineHeight: 1,
-        cursor: disabled ? 'not-allowed' : 'pointer',
-        opacity: disabled ? 0.4 : 1,
-        transition: 'background 0.15s, border-color 0.15s, color 0.15s',
-      }}
-      onMouseEnter={e => {
-        if (disabled) return;
-        const el = e.currentTarget;
-        el.style.background = STEPPER_BTN_BG_HOVER;
-        el.style.borderColor = STEPPER_BTN_BORDER_HOVER;
-        el.style.color = STEPPER_BTN_COLOR_HOVER;
-      }}
-      onMouseLeave={e => {
-        const el = e.currentTarget;
-        el.style.background = STEPPER_BTN_BG;
-        el.style.borderColor = STEPPER_BTN_BORDER;
-        el.style.color = STEPPER_BTN_COLOR;
-      }}
-    >{symbol}</button>
+    <div
+      className="liquid-btn glass-tint-purple subtle-glass-chip relative shrink-0"
+      style={{ width: '28px', height: '28px', opacity: disabled ? 0.4 : 1 }}
+      onMouseEnter={() => setHovered(true)}
+      onMouseLeave={() => setHovered(false)}
+    >
+      <LiquidGlass
+        style={{
+          position: 'absolute', top: '50%', left: '50%',
+          filter: hovered && !disabled ? 'drop-shadow(0 0 4px rgba(192,132,252,0.3))' : 'drop-shadow(0 0 0px rgba(192,132,252,0))',
+          transition: 'filter 0.2s ease',
+        }}
+        {...STEPPER_GLASS_PROPS}
+        padding="0"
+      >
+        <button
+          type="button"
+          onClick={disabled ? undefined : onClick}
+          disabled={disabled}
+          aria-label={label}
+          className="flex items-center justify-center active:scale-90 transition-transform"
+          style={{
+            width: '28px', height: '28px', borderRadius: '50%',
+            background: 'transparent', border: 'none', padding: 0,
+            color: hovered && !disabled ? 'rgba(255,255,255,0.9)' : 'rgba(255,255,255,0.6)',
+            fontSize: '1.1rem', lineHeight: 1,
+            cursor: disabled ? 'not-allowed' : 'pointer',
+            transition: 'color 0.15s',
+          }}
+        >{symbol}</button>
+      </LiquidGlass>
+    </div>
   );
 }
 
@@ -118,10 +132,14 @@ export function ToggleRow({ label, value, onToggle, disabled }: Readonly<{
         disabled={disabled}
         className="relative shrink-0"
         style={{
-          width: '40px', height: '22px', borderRadius: '100px',
-          background: value ? 'rgba(178,16,224,0.7)' : 'rgba(255,255,255,0.10)',
-          border: value ? '1px solid rgba(198,36,249,0.6)' : '1px solid rgba(255,255,255,0.08)',
-          transition: 'background 0.2s ease, border-color 0.2s ease, opacity 0.2s ease',
+          width: '42px', height: '24px', borderRadius: '100px',
+          background: value
+            ? 'linear-gradient(135deg, rgba(216,70,255,0.9), rgba(147,51,194,0.85))'
+            : 'rgba(255,255,255,0.08)',
+          boxShadow: value
+            ? 'inset 0 1px 1px rgba(255,255,255,0.35), inset 0 -1px 3px rgba(0,0,0,0.25), 0 0 8px rgba(178,16,224,0.35)'
+            : 'inset 0 1px 2px rgba(0,0,0,0.3), inset 0 0 0 1px rgba(255,255,255,0.07)',
+          transition: 'background 0.25s ease, box-shadow 0.25s ease, opacity 0.2s ease',
           cursor: disabled ? 'not-allowed' : 'pointer',
           opacity: disabled ? 0.4 : 1,
         }}
@@ -130,11 +148,11 @@ export function ToggleRow({ label, value, onToggle, disabled }: Readonly<{
           className="absolute"
           style={{
             top: '3px', left: '3px',
-            width: '14px', height: '14px',
+            width: '18px', height: '18px',
             borderRadius: '50%',
-            background: 'white',
-            boxShadow: '0 1px 3px rgba(0,0,0,0.35)',
-            transition: 'transform 0.2s ease',
+            background: 'radial-gradient(circle at 35% 30%, #ffffff, #e2e2e2 70%)',
+            boxShadow: '0 1px 3px rgba(0,0,0,0.4), inset 0 -1px 1px rgba(0,0,0,0.08)',
+            transition: 'transform 0.22s cubic-bezier(0.4, 0, 0.2, 1)',
             transform: value ? 'translateX(18px)' : 'translateX(0)',
           }}
         />
@@ -145,12 +163,15 @@ export function ToggleRow({ label, value, onToggle, disabled }: Readonly<{
 
 // ─── Sliding-pill pickers ────────────────────────────────────────────────────
 
-type PillStyle = { bg: string; border: string; text: string };
+type PillStyle = { bg: string; text: string; tint: string; wash: string };
 
 // A segmented control where a single highlight slides between the options
-// and takes on the selected option's accent colour. Shared by Difficulty and
-// Song Source — the only difference between them is the option list, so the
-// pill width divides by however many options are passed in.
+// and takes on the selected option's accent colour — the same LiquidGlass
+// track/highlight mechanics as the lobby's ModeToggle (tint wash behind the
+// track, active pill as an inset-ring capsule, ring color swapped per
+// selection via glass-tint-*), just resized to this panel's fixed content
+// width instead of ModeToggle's responsive breakpoints. Shared by Difficulty
+// and Song Source — the only difference between them is the option list.
 function SlidingPillRow<T extends string>({ label, value, onChange, options, styles }: Readonly<{
   label: string;
   value: T;
@@ -160,39 +181,49 @@ function SlidingPillRow<T extends string>({ label, value, onChange, options, sty
 }>) {
   const index = options.findIndex(o => o.key === value);
   const active = styles[value];
+  const trackWidth = SETTINGS_CONTENT_WIDTH - 8;
   return (
     <div className="space-y-2">
-      <span style={{ color: 'rgba(255,255,255,0.5)', fontSize: '0.875rem' }}>{label}</span>
-      <div
-        className="relative flex rounded-xl"
-        style={{ background: 'rgba(255,255,255,0.05)', border: '1px solid rgba(255,255,255,0.08)', padding: '3px' }}
-      >
-        <div
-          className="absolute rounded-lg"
-          style={{
-            top: '3px', bottom: '3px', left: '3px',
-            width: `calc((100% - 6px) / ${options.length})`,
-            background: active.bg,
-            border: active.border,
-            transform: `translateX(${index * 100}%)`,
-            transition: 'transform 0.25s cubic-bezier(0.4, 0, 0.2, 1), background 0.25s ease, border-color 0.25s ease',
-            pointerEvents: 'none',
-          }}
-        />
-        {options.map(({ key, label: optionLabel }) => (
-          <button
-            key={key}
-            type="button"
-            onClick={() => onChange(key)}
-            className="relative flex-1 py-1.5 rounded-lg text-xs font-semibold z-10 transition-colors duration-200"
-            style={{
-              color: value === key ? styles[key].text : 'rgba(255,255,255,0.45)',
-              background: 'transparent', border: 'none', cursor: 'pointer',
-            }}
-          >
-            {optionLabel}
-          </button>
-        ))}
+      <span style={{ color: 'rgba(255,255,255,0.4)', fontSize: '0.7rem', letterSpacing: '0.08em', textTransform: 'uppercase' }}>
+        {label}
+      </span>
+      <div className={`liquid-btn ${active.tint} settings-pill-glass relative w-full`} style={{ height: '40px' }}>
+        <LiquidGlass style={{ position: 'absolute', top: '50%', left: '50%' }} {...LIQUID_CONTROL_PROPS} cornerRadius={100} padding="4px">
+          <div style={{ position: 'relative' }}>
+            <div
+              className="absolute rounded-full"
+              style={{ inset: '-4px', background: active.wash, transition: 'background 0.3s ease', pointerEvents: 'none' }}
+            />
+            <div className="relative flex rounded-full" style={{ width: `${trackWidth}px` }}>
+              <div
+                className="absolute rounded-full"
+                style={{
+                  top: 0, bottom: 0, left: 0,
+                  width: `calc(100% / ${options.length})`,
+                  background: active.bg,
+                  boxShadow: 'inset 0 0 0 1px rgba(255,255,255,0.2), 0 2px 8px rgba(0,0,0,0.25)',
+                  transform: `translateX(${index * 100}%)`,
+                  transition: 'transform 0.25s cubic-bezier(0.4, 0, 0.2, 1), background 0.25s ease',
+                  pointerEvents: 'none',
+                }}
+              />
+              {options.map(({ key, label: optionLabel }) => (
+                <button
+                  key={key}
+                  type="button"
+                  onClick={() => onChange(key)}
+                  className="relative flex-1 py-1.5 rounded-full text-xs font-semibold z-10 transition-colors duration-200"
+                  style={{
+                    color: value === key ? styles[key].text : 'rgba(255,255,255,0.45)',
+                    background: 'transparent', border: 'none', cursor: 'pointer',
+                  }}
+                >
+                  {optionLabel}
+                </button>
+              ))}
+            </div>
+          </div>
+        </LiquidGlass>
       </div>
     </div>
   );
@@ -205,9 +236,9 @@ const DIFFICULTY_OPTIONS: { key: Difficulty; label: string }[] = [
 ];
 
 const DIFFICULTY_STYLE: Record<Difficulty, PillStyle> = {
-  easy: { bg: 'rgba(16, 185, 129, 0.25)', border: '1px solid rgba(52, 211, 153, 0.45)', text: '#6ee7b7' },
-  medium: { bg: 'rgba(217, 119, 6, 0.25)', border: '1px solid rgba(251, 191, 36, 0.45)', text: '#fcd34d' },
-  hard: { bg: 'rgba(220, 38, 38, 0.25)', border: '1px solid rgba(248, 113, 113, 0.45)', text: '#fca5a5' },
+  easy: { bg: 'rgba(16,185,129,0.34)', text: '#6ee7b7', tint: 'glass-tint-green', wash: 'rgba(16,185,129,0.07)' },
+  medium: { bg: 'rgba(217,119,6,0.34)', text: '#fcd34d', tint: 'glass-tint-amber', wash: 'rgba(217,119,6,0.07)' },
+  hard: { bg: 'rgba(220,38,38,0.34)', text: '#fca5a5', tint: 'glass-tint-red', wash: 'rgba(220,38,38,0.07)' },
 };
 
 // Restricts the song pool to the most well-known top 20%/50%/100% of tracks —
@@ -222,8 +253,8 @@ const SONG_SOURCE_OPTIONS: { key: SongSource; label: string }[] = [
 ];
 
 const SONG_SOURCE_STYLE: Record<SongSource, PillStyle> = {
-  library: { bg: 'rgba(178,16,224,0.25)', border: '1px solid rgba(208,46,249,0.45)', text: '#d8b4fe' },
-  playlist: { bg: 'rgba(29, 185, 84, 0.25)', border: '1px solid rgba(29, 185, 84, 0.45)', text: '#6ee7a0' },
+  library: { bg: 'rgba(191,29,235,0.34)', text: 'white', tint: 'glass-tint-purple', wash: 'rgba(158,18,204,0.07)' },
+  playlist: { bg: 'rgba(29,185,84,0.34)', text: '#bbf7d0', tint: 'glass-tint-green', wash: 'rgba(29,185,84,0.07)' },
 };
 
 export function SongSourceRow({ value, onChange }: Readonly<{ value: SongSource; onChange: (v: SongSource) => void }>) {

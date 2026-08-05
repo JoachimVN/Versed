@@ -47,10 +47,10 @@ export function SettingsPanel({ game, open }: Readonly<{ game: HostState; open: 
         style={{
           maxHeight: 'calc(100dvh - 88px)',
           overscrollBehavior: 'contain',
-          background: 'rgba(10, 6, 26, 0.65)',
-          backdropFilter: 'blur(32px)',
-          border: '1px solid rgba(255,255,255,0.09)',
-          boxShadow: '0 24px 48px rgba(0,0,0,0.4), inset 0 0 0 1px rgba(255,255,255,0.04)',
+          background: 'rgba(10, 6, 26, 0.68)',
+          backdropFilter: 'blur(28px) saturate(150%)',
+          border: '1px solid rgba(255,255,255,0.1)',
+          boxShadow: '0 24px 48px rgba(0,0,0,0.45), inset 0 0 0 1px rgba(255,255,255,0.05), inset 0 1px 0 rgba(255,255,255,0.06)',
         }}
       >
         <div className="px-5 py-3.5" style={{ borderBottom: '1px solid rgba(255,255,255,0.07)' }}>

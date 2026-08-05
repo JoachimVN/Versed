@@ -636,6 +636,15 @@ select:focus-visible,
 .glass-tint-blue .glass::after {
   box-shadow: 0 0 0 1px rgba(59,130,246,0.18) inset, 0 1px 4px rgba(0,0,0,0.35) !important;
 }
+.glass-tint-green .glass::after {
+  box-shadow: 0 0 0 1px rgba(29,185,84,0.4) inset, 0 1px 4px rgba(0,0,0,0.35) !important;
+}
+.glass-tint-amber .glass::after {
+  box-shadow: 0 0 0 1px rgba(217,119,6,0.4) inset, 0 1px 4px rgba(0,0,0,0.35) !important;
+}
+.glass-tint-red .glass::after {
+  box-shadow: 0 0 0 1px rgba(220,38,38,0.4) inset, 0 1px 4px rgba(0,0,0,0.35) !important;
+}
 
 /* Volume control's edge ring at half strength — opacity (not just the
    box-shadow tint above) so it recedes as a whole rather than just reading
@@ -685,6 +694,31 @@ select:focus-visible,
 }
 .lobby-mode-toggle .glass {
   box-shadow: 0px 12px 40px rgba(0, 0, 0, 0.125) !important;
+}
+
+/* Settings panel's small pill controls (song source / difficulty switches,
+   numeric steppers) — same softened "always-on chrome" weight as the
+   lobby's small pills above, with the ring's tint swapped per active
+   option/context via glass-tint-* on the wrapper (see SlidingPillRow's
+   tintClass) rather than pinned to one color, same technique as the mode
+   toggle. */
+.settings-pill-glass .glass::after {
+  opacity: 0.55 !important;
+}
+.settings-pill-glass .glass {
+  box-shadow: 0px 10px 28px rgba(0, 0, 0, 0.16) !important;
+}
+
+/* The +/- stepper circles want much less presence than the pills above —
+   they're tiny, always-on, repeated up to 8 times a panel, so the ring and
+   ambient shadow are dialled down further to read as a faint bevel rather
+   than a lit-up chip. Ring color still comes from glass-tint-purple on the
+   wrapper, same as the pills. */
+.subtle-glass-chip .glass::after {
+  opacity: 0.28 !important;
+}
+.subtle-glass-chip .glass {
+  box-shadow: 0px 4px 10px rgba(0, 0, 0, 0.12) !important;
 }
 
 /* Thin, on-brand scrollbar for every scroll container (playlist picker grid,
