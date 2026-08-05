@@ -920,28 +920,18 @@ select:focus-visible,
   white-space: nowrap;
 }
 
-/* Below this width the card itself is barely wider than a single column, so
-   a long name has nowhere to spill -- ellipsis stays the safety net there.
-   Above it (desktop/tablet host displays), the row has real slack between
-   columns, so let the name overflow its own .podium-spot into that space
-   instead of clipping -- painting over a neighboring rank's box is fine,
-   since the neighbor is a low-height riser and the name sits at the top. */
-@media (min-width: 768px) {
-  .podium-name {
-    max-width: none;
-    overflow: visible;
-  }
-  /* Un-centers the name+score pair for the two side columns so a spilling
-     name grows inward (toward the champion) instead of symmetrically, which
-     would push half of it past the card's own edge and get clipped by the
-     glass surface's rounded-corner overflow. The riser div stays centered
-     within its column regardless (it's already width: 100%). */
-  .podium-spot-left {
-    align-items: flex-start;
-  }
-  .podium-spot-right {
-    align-items: flex-end;
-  }
+/* Champion only: its column sits centered between the other two with equal
+   slack on both sides, so a long name can safely spill past its own narrow
+   .podium-spot -- 2nd/3rd stay clipped to their own column, since their
+   columns sit flush against the card's outer edge and the same spill would
+   push straight off the card and get clipped by the glass surface anyway.
+   The cap here is the recap panel's own real content width (same calc as
+   the inner wrapper div in FinalResults.tsx), not a breakpoint switch -- so
+   at any screen size the name uses exactly as much of the card as actually
+   exists before falling back to ellipsis, instead of jumping between "just
+   its column" and "unlimited" with nothing in between. */
+.podium-name-champion {
+  max-width: min(calc(100vw - 96px), 672px);
 }
 
 .podium-riser {
