@@ -40,6 +40,10 @@ function compactValue<T>(ultraCompact: boolean, compact: boolean, ultraValue: T,
   return regularValue;
 }
 
+function inputLabelColor(focused: boolean): string {
+  return focused ? 'rgba(255,255,255,0.6)' : 'rgba(255,255,255,0.45)';
+}
+
 // Below this viewport height the default spacing pushes the Join button
 // (and, with a saved session, the whole rejoin card above it) past the
 // bottom edge. The screen must never rely on scrolling to reveal it, so
@@ -226,7 +230,7 @@ export function JoinView({ game }: Readonly<{ game: PlayState }>) {
                 <div style={{ marginBottom: '14px' }}>
                   <span style={{
                     display: 'block',
-                    color: pinFocused ? 'rgba(255,255,255,0.6)' : 'rgba(255,255,255,0.45)',
+                    color: inputLabelColor(pinFocused),
                     fontSize: '0.6rem', letterSpacing: '0.18em', textTransform: 'uppercase',
                     marginBottom: '6px', transition: 'color 0.2s ease',
                   }}>Game PIN</span>
@@ -251,7 +255,7 @@ export function JoinView({ game }: Readonly<{ game: PlayState }>) {
             <div>
               <span style={{
                 display: 'block',
-                color: nameFocused ? 'rgba(255,255,255,0.6)' : 'rgba(255,255,255,0.45)',
+                color: inputLabelColor(nameFocused),
                 fontSize: '0.6rem', letterSpacing: '0.18em', textTransform: 'uppercase',
                 marginBottom: '6px', transition: 'color 0.2s ease',
               }}>Your name</span>

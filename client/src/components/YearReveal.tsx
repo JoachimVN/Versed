@@ -89,7 +89,12 @@ function timelineMetrics(year: number, guesses: YearGuess[], ultra: boolean, lan
 
 function timelineMarkerLayout(group: TimelineGroup, ultra: boolean, isBest: boolean, nameLaneByGuess: Map<number, number>, nameLaneStep: number, yearLaneByGuess: Map<number, number>, yearLaneStep: number) {
   const baseOffset = ultra ? 10 : 13;
-  const size = isBest ? (ultra ? 8 : 10) : (ultra ? 5 : 6);
+  let size: number;
+  if (isBest) {
+    size = ultra ? 8 : 10;
+  } else {
+    size = ultra ? 5 : 6;
+  }
   return {
     dotSize: size,
     markerTop: ultra ? 32 : 43,
