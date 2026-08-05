@@ -21,7 +21,8 @@ async function prepPage(page) {
            large black inset rectangle on the two wide host cards. Keep their
            normal backdrop blur, but skip only that faulty filter in docs
            captures. */
-        .host-game-card .glass__warp {
+        .host-game-card .glass__warp,
+        .reveal-next-round .glass__warp {
             filter: none !important;
         }`;
         const inject = () => {

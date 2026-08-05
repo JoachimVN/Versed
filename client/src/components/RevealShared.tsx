@@ -179,7 +179,7 @@ export function PillButton({ onClick, label, zIndex, squeeze }: Readonly<{ onCli
   return (
     <button
       type="button"
-      className="liquid-btn glass-tint-purple relative cursor-pointer border-0 bg-transparent p-0"
+      className="liquid-btn reveal-next-round glass-tint-purple relative cursor-pointer border-0 bg-transparent p-0"
       style={{ width: 'min(92vw, 310px)', height, borderRadius: '100px', background: 'rgba(0,0,0,0.001)', zIndex }}
       onClick={onClick}
     >
