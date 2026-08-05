@@ -6,6 +6,23 @@ export type MorphRect = { top: number; left: number; width: number; height: numb
 export type BeginMorph = (rect: MorphRect) => void;
 export type ProvideTarget = (rect: MorphRect) => void;
 
+// JoinView collapses its logo with `display: none` while the keyboard is up
+// (or on an ultra-short viewport) — a collapsed element lays out to a
+// zero-size box at (0,0), so reading that as a real rect would send the
+// overlay flying to/from the screen's top-left corner instead of just
+// skipping the flight. Real logos always render with non-zero size, so a
+// perfect (0,0,0,0) rect is unambiguously "not actually on screen".
+function isRenderedRect(rect: MorphRect): boolean {
+  return rect.width > 0 && rect.height > 0;
+}
+
+export function readLogoRect(logoRef: RefObject<HTMLImageElement | null>): MorphRect | null {
+  if (!logoRef.current) return null;
+  const r = logoRef.current.getBoundingClientRect();
+  const rect = { top: r.top, left: r.left, width: r.width, height: r.height };
+  return isRenderedRect(rect) ? rect : null;
+}
+
 // Shared by every logo-morph page transition (JoinView/WaitingView's back
 // navigation): arms the overlay at this page's own logo, fades the rest of
 // the content out, then resolves once that fade has had time to play so
@@ -21,10 +38,8 @@ export function useMorphBack(
       resolve();
       return;
     }
-    if (logoRef.current) {
-      const r = logoRef.current.getBoundingClientRect();
-      beginMorph({ top: r.top, left: r.left, width: r.width, height: r.height });
-    }
+    const rect = readLogoRect(logoRef);
+    if (rect) beginMorph(rect);
     setLeaving(true);
     setTimeout(resolve, 320);
     // logoRef/setLeaving/beginMorph are all stable across renders (ref,
@@ -56,9 +71,9 @@ export function cancelPendingWaitingTransition(
   pageExitTimerRef.current = null;
   transitionTimerRef.current = null;
   setLeaving(false);
-  if (logoRef.current) {
-    const cur = logoRef.current.getBoundingClientRect();
-    provideTarget({ top: cur.top, left: cur.left, width: cur.width, height: cur.height });
+  const rect = readLogoRect(logoRef);
+  if (rect) {
+    provideTarget(rect);
   } else {
     dismissMorph();
   }
@@ -84,12 +99,12 @@ export function useWaitingTransitionMorph(
   const transitionTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   useEffect(() => {
     if (!game.waitingTransitionPending) return;
-    if (reducedMotion || !logoRef.current) {
+    const rect = reducedMotion ? null : readLogoRect(logoRef);
+    if (!rect) {
       game.completeWaitingTransition();
       return;
     }
-    const r = logoRef.current.getBoundingClientRect();
-    beginMorph({ top: r.top, left: r.left, width: r.width, height: r.height });
+    beginMorph(rect);
     // Match Waiting -> Home's choreography: start the background crossfade
     // first, then let the Join content leave during the final 320ms. This
     // keeps the source screen present while the destination settles beneath

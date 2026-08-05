@@ -7,7 +7,7 @@ import { BackButton } from '../../components/BackButton';
 import { LIQUID_CARD_PROPS, LIQUID_PILL_PROPS } from '../../components/liquidGlassPresets';
 import { APP_NAME } from '../../config';
 import type { PlayState } from './usePlayGame';
-import { useMorphBack, useWaitingTransitionMorph, pageTransitionClass } from './morph';
+import { useMorphBack, useWaitingTransitionMorph, pageTransitionClass, readLogoRect } from './morph';
 
 // Collapses an element to nothing while the keyboard is up, keeping it
 // mounted (the savedSession card wraps a LiquidGlass that only measures
@@ -121,10 +121,10 @@ export function JoinView({ game }: Readonly<{ game: PlayState }>) {
   // should show its own logo immediately, not wait on a morph that never
   // started.
   useLayoutEffect(() => {
-    if (morphing && logoRef.current) {
-      const r = logoRef.current.getBoundingClientRect();
-      provideTarget({ top: r.top, left: r.left, width: r.width, height: r.height });
-    }
+    if (!morphing) return;
+    const rect = readLogoRect(logoRef);
+    if (rect) provideTarget(rect);
+    else dismissMorph();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
