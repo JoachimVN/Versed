@@ -29,11 +29,12 @@ export function setAmbientBackgroundMode(waiting: boolean, immediate = false) {
   // 500ms duration, briefly exposing crisp/undarkened confetti on entry.
   if (immediate) root.getBoundingClientRect();
   root.style.setProperty('--ambient-overlay-color', waiting ? 'rgba(5,5,14,0.70)' : 'rgba(8,8,18,0.7)');
-  root.style.setProperty('--ambient-overlay-blur', waiting ? '40px' : '2px');
-  root.style.setProperty('--ambient-overlay-webkit-blur', waiting ? '40px' : '6px');
+  root.style.setProperty('--ambient-overlay-blur', waiting ? '80px' : '2px');
+  root.style.setProperty('--ambient-overlay-webkit-blur', waiting ? '80px' : '6px');
   root.style.setProperty('--ambient-overlay-z-index', waiting ? '1' : '0');
   root.style.setProperty('--confetti-layer-z-index', waiting ? '2' : '0');
   root.style.setProperty('--confetti-layer-opacity', waiting ? '0.55' : '1');
+  root.style.setProperty('--confetti-layer-blur', waiting ? '12px' : '0px');
   root.style.setProperty('--confetti-treatment-opacity', waiting ? '1' : '0');
   if (immediate) {
     requestAnimationFrame(() => {

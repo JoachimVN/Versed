@@ -114,7 +114,8 @@ export default function App() {
           style={{
             zIndex: 'var(--confetti-layer-z-index, 0)',
             opacity: 'var(--confetti-layer-opacity, 1)',
-            transition: 'opacity var(--ambient-surface-duration, 500ms) ease',
+            filter: 'blur(var(--confetti-layer-blur, 0px))',
+            transition: 'opacity var(--ambient-surface-duration, 500ms) ease, filter var(--ambient-surface-duration, 500ms) ease',
           }}
         >
           <ConfettiBackground />
