@@ -543,14 +543,20 @@ export function RankMark({ rank }: Readonly<{ rank: number }>) {
 function PodiumSpot({ rank, entry, delay }: Readonly<{ rank: PodiumRank; entry: LeaderboardEntry; delay: number }>) {
   const { tint, gradient } = RANK_STYLE[rank];
   const champion = rank === 1;
+  // Rank 2 sits left of the champion, rank 3 sits right (PodiumRow always
+  // renders that [2,1,3] order) -- when a long name is allowed to spill past
+  // its own column (see .podium-name's desktop rule), a centered anchor
+  // would push half the overflow off the card's own outer edge. Pinning
+  // these two to their outer edge instead means any overflow only ever
+  // grows inward, toward the champion column, which has room on both sides.
+  const edgeClass = rank === 2 ? ' podium-spot-left' : rank === 3 ? ' podium-spot-right' : '';
   return (
-    <div className={`podium-spot${champion ? ' podium-spot-champion' : ''}`}>
+    <div className={`podium-spot${champion ? ' podium-spot-champion' : ''}${edgeClass}`}>
       <span
-        className={champion ? 'font-black' : 'font-bold'}
+        className={`podium-name ${champion ? 'font-black' : 'font-bold'}`}
         style={{
           fontFamily: champion ? "'Montserrat', sans-serif" : undefined,
           fontSize: champion ? '1.32rem' : '1rem',
-          maxWidth: '100%', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap',
           ...(champion
             ? { background: gradient, WebkitBackgroundClip: 'text', backgroundClip: 'text', WebkitTextFillColor: 'transparent' }
             : { color: '#fff' }),
