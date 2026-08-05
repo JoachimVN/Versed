@@ -544,7 +544,7 @@ function PodiumSpot({ rank, entry, delay }: Readonly<{ rank: PodiumRank; entry: 
   const { tint, gradient } = RANK_STYLE[rank];
   const champion = rank === 1;
   return (
-    <div className="podium-spot">
+    <div className={`podium-spot${champion ? ' podium-spot-champion' : ''}`}>
       <span
         className={champion ? 'font-black' : 'font-bold'}
         style={{
@@ -764,6 +764,17 @@ export function FinalResultsView({ leaderboard, awards, backgroundSrc, footer, o
   // when the real surface was taller, its centered top fell outside the
   // scrollport and clipped the title/rim on short portrait screens. Let the
   // measured surface raise the frame to its actual height instead.
+  //
+  // Host-only wrinkle: this whole tree can sit inside .host-scale-shell,
+  // which scales up via CSS `zoom` (see useHostScale.tsx) on displays bigger
+  // than its 1440x900 baseline. getBoundingClientRect() reports the already
+  // zoomed/physical size, but the height we set below is a local style value
+  // that itself gets zoomed again on paint -- using it would compound the
+  // scale (bug seen only above baseline: the panel rendered zoom^2 tall
+  // instead of zoom tall, overflowing the real viewport). offsetHeight, by
+  // contrast, stays in the element's own local coordinate space regardless
+  // of an ancestor's zoom, so it's the right thing to feed back into another
+  // locally-styled height.
   useLayoutEffect(() => {
     setRecapPanelHeight(panelHeight);
     const frame = recapPanelRef.current;
@@ -773,7 +784,7 @@ export function FinalResultsView({ leaderboard, awards, backgroundSrc, footer, o
     const syncHeight = () => {
       const glass = frame.querySelector<HTMLElement>('.glass');
       if (!glass) return;
-      const measuredHeight = Math.ceil(glass.getBoundingClientRect().height);
+      const measuredHeight = Math.ceil(glass.offsetHeight);
       setRecapPanelHeight(Math.max(panelHeight, measuredHeight));
     };
     const scheduleSync = () => {
