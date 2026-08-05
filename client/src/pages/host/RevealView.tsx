@@ -348,9 +348,9 @@ function RevealShell({
           src={`${import.meta.env.BASE_URL}backgrounds/background3-2.png`}
           alt=""
           aria-hidden="true"
-          style={{ position: 'absolute', inset: 0, width: '100%', height: '100%', objectFit: 'cover', zIndex: 0, transform: 'rotate(180deg)' }}
+          style={{ position: 'absolute', inset: 0, width: '100%', height: '100%', objectFit: 'cover', zIndex: 0, filter: 'blur(32px)', transform: 'rotate(180deg) scale(1.04)' }}
         />
-        <div style={{ position: 'absolute', inset: 0, zIndex: 1, background: 'rgba(5,5,14,0.56)', backdropFilter: 'blur(32px)' }} />
+        <div style={{ position: 'absolute', inset: 0, zIndex: 1, background: 'rgba(5,5,14,0.82)' }} />
         {/* Absolutely positioned rather than a flex row of its own: it's the
             only thing in the header, so giving it a dedicated row just to
             hold one small label wastes a full gap's worth of height on every
