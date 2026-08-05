@@ -56,14 +56,14 @@ export function JoinCard({ pin, copied, copyInvite }: Readonly<{ pin: string; co
 
   return (
     <div className="lobby-join-card w-full max-w-md bg-white/5 rounded-2xl p-5">
+      <div className="join-card-url-row mb-3">
+        <p className="text-white/45 text-xs uppercase tracking-widest mb-0.5">Join at</p>
+        <p className="join-card-url text-white font-semibold text-base">
+          {baseUrl}
+        </p>
+      </div>
       <div className="join-card-layout lobby-join-card-layout flex items-center gap-5">
         <div className="flex-1 min-w-0 flex flex-col gap-3">
-          <div>
-            <p className="text-white/45 text-xs uppercase tracking-widest mb-0.5">Join at</p>
-            <p className="join-card-url text-white font-semibold text-base">
-              {baseUrl}
-            </p>
-          </div>
           <div>
             <p className="text-white/45 text-xs uppercase tracking-widest mb-0.5">PIN</p>
             <p className="join-card-pin text-6xl font-black text-white tracking-widest leading-none select-text">{pin}</p>
