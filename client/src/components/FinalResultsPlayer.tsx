@@ -20,7 +20,7 @@ function PersonalHero({ entry, awards, reducedMotion }: Readonly<{ entry: Leader
   return (
     <div
       className="personal-hero-card flex flex-wrap items-center gap-4 p-4 rounded-2xl"
-      style={{ border: '1px solid rgba(94,234,212,0.32)', background: 'linear-gradient(135deg, rgba(94,234,212,0.14), rgba(158,18,204,0.10))' }}
+      style={{ border: '1px solid rgba(94,234,212,0.32)', background: 'linear-gradient(135deg, rgba(94,234,212,0.14), rgba(158,18,204,0.10))', width: '100%', maxWidth: '520px', margin: '0 auto' }}
     >
       <span className="font-black" style={{ fontFamily: "'Montserrat', sans-serif", fontSize: '1.7rem', color: '#5eead4', flexShrink: 0 }}>
         #{entry.rank}
