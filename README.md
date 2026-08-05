@@ -244,6 +244,8 @@ Configured for **Railway** via `railway.toml`. The server serves the built clien
 
 Songs load from `server/src/data/music_index_full.csv` at startup. Each row has a Spotify track ID plus metadata (year, decade, Billboard chart stats, stream count) used to generate in-round hints. Swap in your own CSV with the same columns to change the default pool.
 
+The library itself is built by [Music-Popularity-Index](https://github.com/JoachimVN/Music-Popularity-Index) ([live](https://joavn.dev/mpi)), which ranks songs by combining multiple popularity metrics.
+
 ### Custom Spotify Playlists
 
 Hosts can select one or more of their Spotify playlists before starting. The host picks playlists from their library, and the selected tracks are merged into the game pool.
