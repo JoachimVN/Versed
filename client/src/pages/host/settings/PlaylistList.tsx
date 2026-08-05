@@ -48,27 +48,37 @@ export function PlaylistList({ customPlaylists, onOpen, onRemove }: Readonly<{
           glass pill and a plus badge instead of a trailing arrow. */}
       <div className="liquid-btn glass-tint-green subtle-glass-chip relative w-full" style={{ height: '48px' }}>
         <LiquidGlass style={{ position: 'absolute', top: '50%', left: '50%' }} {...LIQUID_CONTROL_PROPS} cornerRadius={14} padding="0">
-          <button
-            type="button"
-            onClick={onOpen}
-            className="flex items-center gap-2.5 text-left"
-            style={{ width: `${SETTINGS_CONTENT_WIDTH}px`, height: '48px', padding: '0 12px', background: 'transparent', border: 'none', cursor: 'pointer' }}
-          >
-            <span
-              className="flex items-center justify-center rounded-full shrink-0"
-              style={{ width: '26px', height: '26px', background: 'rgba(29,185,84,0.16)', border: '1px solid rgba(29,185,84,0.32)' }}
+          <div style={{ position: 'relative' }}>
+            {/* Same tint-wash technique as SlidingPillRow, matched to the
+                plus badge's green rather than left uncolored — otherwise
+                the badge reads as an isolated dot on plain glass instead of
+                a piece of one green-tinted surface. */}
+            <div
+              className="absolute rounded-2xl"
+              style={{ inset: 0, background: 'rgba(29,185,84,0.08)', pointerEvents: 'none' }}
+            />
+            <button
+              type="button"
+              onClick={onOpen}
+              className="relative flex items-center gap-2.5 text-left"
+              style={{ width: `${SETTINGS_CONTENT_WIDTH}px`, height: '48px', padding: '0 12px', background: 'transparent', border: 'none', cursor: 'pointer' }}
             >
-              <Plus className="w-3.5 h-3.5" style={{ color: '#6ee7a0' }} strokeWidth={2.5} />
-            </span>
-            <div className="min-w-0 flex-1">
-              <p style={{ color: 'rgba(255,255,255,0.75)', fontWeight: 600, fontSize: '0.8125rem' }}>
-                {customPlaylists.length === 0 ? 'Choose playlists' : 'Add another playlist'}
-              </p>
-              {customPlaylists.length > 1 && (
-                <p style={{ color: 'rgba(255,255,255,0.4)', fontSize: '0.6875rem' }}>{totalTracks} unique tracks total</p>
-              )}
-            </div>
-          </button>
+              <span
+                className="flex items-center justify-center rounded-full shrink-0"
+                style={{ width: '26px', height: '26px', background: 'rgba(29,185,84,0.16)', border: '1px solid rgba(29,185,84,0.32)' }}
+              >
+                <Plus className="w-3.5 h-3.5" style={{ color: '#6ee7a0' }} strokeWidth={2.5} />
+              </span>
+              <div className="min-w-0 flex-1">
+                <p style={{ color: 'rgba(255,255,255,0.75)', fontWeight: 600, fontSize: '0.8125rem' }}>
+                  {customPlaylists.length === 0 ? 'Choose playlists' : 'Add another playlist'}
+                </p>
+                {customPlaylists.length > 1 && (
+                  <p style={{ color: 'rgba(255,255,255,0.4)', fontSize: '0.6875rem' }}>{totalTracks} unique tracks total</p>
+                )}
+              </div>
+            </button>
+          </div>
         </LiquidGlass>
       </div>
       {overCap && (

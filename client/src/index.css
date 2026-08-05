@@ -639,6 +639,13 @@ select:focus-visible,
 .glass-tint-green .glass::after {
   box-shadow: 0 0 0 1px rgba(29,185,84,0.4) inset, 0 1px 4px rgba(0,0,0,0.35) !important;
 }
+/* Separate from glass-tint-green (Spotify green, 29,185,84) — Difficulty's
+   "Easy" wash is a different emerald (16,185,129), and sharing one class
+   between the two made the ring and wash visibly different hues on that
+   pill specifically. */
+.glass-tint-emerald .glass::after {
+  box-shadow: 0 0 0 1px rgba(16,185,129,0.4) inset, 0 1px 4px rgba(0,0,0,0.35) !important;
+}
 .glass-tint-amber .glass::after {
   box-shadow: 0 0 0 1px rgba(217,119,6,0.4) inset, 0 1px 4px rgba(0,0,0,0.35) !important;
 }
@@ -696,6 +703,26 @@ select:focus-visible,
   box-shadow: 0px 12px 40px rgba(0, 0, 0, 0.125) !important;
 }
 
+/* The settings popover's own card — same real LiquidGlass as everything
+   else in it now rather than a flat blurred rgba panel. Ring color is
+   NOT set here — it comes from glass-tint-purple on the same wrapper,
+   same reasoning as the mode toggle above: our own content (the song
+   source/difficulty pills, steppers, toggle) is nested *inside* this
+   glass, so a hardcoded box-shadow here would cascade into their
+   `.glass::after` too and — being defined later in the file than their
+   own glass-tint-*/settings-pill-glass rules — would always win, painting
+   every nested control's ring purple regardless of its own tint. This
+   block has to stay positioned before every per-context tint/opacity rule
+   below for that same reason: the more specific rule further down wins
+   the tiebreak for anything nested inside this card, while this rule is
+   still all this card's own (un-nested) ring/shadow gets. */
+.settings-panel-glass .glass::after {
+  opacity: 0.6 !important;
+}
+.settings-panel-glass .glass {
+  box-shadow: 0 24px 48px rgba(0,0,0,0.45), inset 0 1px 0 rgba(255,255,255,0.05) !important;
+}
+
 /* Settings panel's small pill controls (song source / difficulty switches,
    numeric steppers) — same softened "always-on chrome" weight as the
    lobby's small pills above, with the ring's tint swapped per active
@@ -719,20 +746,6 @@ select:focus-visible,
 }
 .subtle-glass-chip .glass {
   box-shadow: 0px 4px 10px rgba(0, 0, 0, 0.12) !important;
-}
-
-/* The settings popover's own card — same real LiquidGlass as everything
-   else in it now rather than a flat blurred rgba panel, so it reads as one
-   family with the lobby's cards instead of a plain backdrop behind glossy
-   controls. Ring stays a fixed soft purple (this card never changes tint)
-   and the ambient shadow is a bit heavier than the small pills' since it's
-   the largest surface on screen while open. */
-.settings-panel-glass .glass::after {
-  box-shadow: 0 0 0 1px rgba(158,18,204,0.3) inset, 0 1px 4px rgba(0,0,0,0.35) !important;
-  opacity: 0.6 !important;
-}
-.settings-panel-glass .glass {
-  box-shadow: 0 24px 48px rgba(0,0,0,0.45), inset 0 1px 0 rgba(255,255,255,0.05) !important;
 }
 
 /* Thin, on-brand scrollbar for every scroll container (playlist picker grid,

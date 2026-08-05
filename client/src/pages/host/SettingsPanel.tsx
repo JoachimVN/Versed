@@ -22,24 +22,6 @@ export function SettingsPanel({ game, open }: Readonly<{ game: HostState; open: 
   useEscapeKey(toggleSettings, open);
   useFocusTrap(panelRef, open);
 
-  // LiquidGlass only measures its content once on mount (plus native window
-  // resize) — it has no ResizeObserver of its own, so it never notices this
-  // panel's real height changing as mode/song-source/party selections swap
-  // whole sections in and out. Re-firing its resize listener (rather than
-  // remounting) lets it re-measure in place and animate to the new height
-  // instead of snapping back to its ~270px default first. Same technique as
-  // PlaylistPickerDialog's glassContentShape.
-  const contentShape = [
-    mode,
-    songSource === 'playlist' ? `playlist-${customPlaylists.length}` : 'library',
-    enabledEvents.length,
-    enabledRoundTypes.length,
-    finaleEnabled ? 'finale' : 'no-finale',
-  ].join('|');
-  useEffect(() => {
-    globalThis.dispatchEvent(new Event('resize'));
-  }, [contentShape]);
-
   // The library always centers its glass box around the wrapper's own
   // (top:50%,left:50%) point via a fixed translate(-50%,-50%) — every other
   // LiquidGlass in this codebase gives that wrapper a fixed height so
@@ -59,7 +41,13 @@ export function SettingsPanel({ game, open }: Readonly<{ game: HostState; open: 
   // control on the page continuously re-rendering/repainting ("blurring")
   // without settling, worst on the big height swing into/out of party mode.
   // The content div's size is driven purely by which rows are visible, never
-  // by anything the glass does, so watching it can't close that loop.
+  // by anything the glass does, so watching it can't close that loop. For
+  // the same reason, no manual `window.dispatchEvent(new Event('resize'))`
+  // is needed here either (unlike PlaylistPickerDialog, which isn't nested
+  // inside other glass) — changing this wrapper's height already makes
+  // StableLiquidGlass's own resize-dispatch fire on its own; adding a second,
+  // independent dispatch on top of it was very likely what turned one
+  // resolving cascade into a sustained one on party mode's bigger jump.
   const wrapperRef = useRef<HTMLDivElement>(null);
   const contentRef = useRef<HTMLDivElement>(null);
   const [glassHeight, setGlassHeight] = useState<number>();

@@ -243,7 +243,7 @@ const DIFFICULTY_OPTIONS: { key: Difficulty; label: string }[] = [
 ];
 
 const DIFFICULTY_STYLE: Record<Difficulty, PillStyle> = {
-  easy: { bg: 'rgba(16,185,129,0.34)', text: '#6ee7b7', tint: 'glass-tint-green', wash: 'rgba(16,185,129,0.07)' },
+  easy: { bg: 'rgba(16,185,129,0.34)', text: '#6ee7b7', tint: 'glass-tint-emerald', wash: 'rgba(16,185,129,0.07)' },
   medium: { bg: 'rgba(217,119,6,0.34)', text: '#fcd34d', tint: 'glass-tint-amber', wash: 'rgba(217,119,6,0.07)' },
   hard: { bg: 'rgba(220,38,38,0.34)', text: '#fca5a5', tint: 'glass-tint-red', wash: 'rgba(220,38,38,0.07)' },
 };
