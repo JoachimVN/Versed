@@ -343,23 +343,25 @@ export function LobbyView({
       {pin ? (
         <div className={`lobby-content flex flex-1 min-h-0 flex-col items-center gap-5 px-6 pb-6 transition-all duration-500 ${lobbyVisible ? 'opacity-100 translate-y-0' : 'opacity-0 translate-y-6'}`}>
           <JoinCard pin={game.pin} copied={game.copied} copyInvite={game.copyInvite} />
-          <ModeToggle mode={mode} setMode={setMode} />
-          <div className="lobby-player-list w-full max-w-md">
-            <p className="lobby-player-count text-white/45 text-sm mb-2">{players.length} player{players.length === 1 ? '' : 's'}</p>
-            <div className="lobby-player-chips flex flex-wrap gap-2">
-              {players.map(p => (
-                <button
-                  key={p.name}
-                  type="button"
-                  onClick={() => removePlayer(p.name)}
-                  tabIndex={0}
-                  className="lobby-player-chip relative group px-3 py-1.5 rounded-full bg-white/10 text-white text-sm font-semibold"
-                  aria-label={`Remove ${p.name}`}
-                >
-                  {p.name}
-                  <span className="absolute inset-0 rounded-full backdrop-blur-sm opacity-0 group-hover:opacity-100 transition-opacity" />
-                </button>
-              ))}
+          <div className="lobby-mode-player-row flex flex-col gap-5 w-full max-w-md">
+            <ModeToggle mode={mode} setMode={setMode} />
+            <div className="lobby-player-list w-full">
+              <p className="lobby-player-count text-white/45 text-sm mb-2">{players.length} player{players.length === 1 ? '' : 's'}</p>
+              <div className="lobby-player-chips flex flex-wrap gap-2">
+                {players.map(p => (
+                  <button
+                    key={p.name}
+                    type="button"
+                    onClick={() => removePlayer(p.name)}
+                    tabIndex={0}
+                    className="lobby-player-chip relative group px-3 py-1.5 rounded-full bg-white/10 text-white text-sm font-semibold"
+                    aria-label={`Remove ${p.name}`}
+                  >
+                    {p.name}
+                    <span className="absolute inset-0 rounded-full backdrop-blur-sm opacity-0 group-hover:opacity-100 transition-opacity" />
+                  </button>
+                ))}
+              </div>
             </div>
           </div>
           <StartButton players={players} mode={mode} startGame={handleStart} disabled={playlistEmpty} />
