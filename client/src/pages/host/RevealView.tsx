@@ -4,7 +4,6 @@ import LiquidGlass from '../../components/StableLiquidGlass';
 import { socket } from '../../socket';
 import { useAnimatedScore } from '../../hooks/useAnimatedScore';
 import { BIG_POINTS_THRESHOLD, FinalRoundAnswerContent, NoOneGotItCardContent, GotItCardContent, PillButton } from '../../components/RevealShared';
-import type { CardSqueeze } from '../../components/RevealShared';
 import { YearTimelineContent } from '../../components/YearReveal';
 import { computeYearCardHeight } from '../../components/yearCardSqueeze';
 import type { RevealLayout } from '../../components/revealSqueeze';

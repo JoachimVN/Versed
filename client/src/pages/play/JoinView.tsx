@@ -30,6 +30,10 @@ function canJoinGame(showPinField: boolean, pin: string, name: string): boolean 
   return !showPinField || (pin.length === 3 && hasName);
 }
 
+function shouldShowPinField(cameFromQR: boolean, pinRevealed: boolean): boolean {
+  return !cameFromQR || pinRevealed;
+}
+
 function compactValue<T>(ultraCompact: boolean, compact: boolean, ultraValue: T, compactValue: T, regularValue: T): T {
   if (ultraCompact) return ultraValue;
   if (compact) return compactValue;
@@ -73,7 +77,7 @@ export function JoinView({ game }: Readonly<{ game: PlayState }>) {
   useEffect(() => {
     if (cameFromQR && error) setPinRevealed(true);
   }, [cameFromQR, error]);
-  const showPinField = !cameFromQR || pinRevealed;
+  const showPinField = shouldShowPinField(cameFromQR, pinRevealed);
   const canJoin = canJoinGame(showPinField, pin, name);
   const controlWidth = 'min(310px, calc(100vw - 48px))';
   const fieldWidth = 'min(262px, calc(100vw - 96px))';

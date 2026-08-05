@@ -64,6 +64,18 @@ function useGuessingLayout(bothTarget: boolean, keyboardOpen: boolean): { compac
   return { compact: layout.compact || keyboardOpen, ultraCompact: layout.ultraCompact, landscape: layout.landscape };
 }
 
+function useGuessAutofocus(phase: PlayState['phase'], isChoice: boolean, isChaosHints: boolean, guessInputRef: PlayState['guessInputRef']) {
+  useEffect(() => {
+    if (phase !== 'guessing' || isChoice || isChaosHints) return;
+    const timeout = window.setTimeout(() => {
+      const active = document.activeElement;
+      const alreadyTyping = active instanceof HTMLInputElement || active instanceof HTMLTextAreaElement;
+      if (!alreadyTyping) guessInputRef.current?.focus();
+    }, 100);
+    return () => window.clearTimeout(timeout);
+  }, [guessInputRef, isChaosHints, isChoice, phase]);
+}
+
 // Handles both the "listening" sub-phase (watching, imGuessing) and the active
 // guessing phase. Keeping a single component across both states means the input
 // element is never unmounted — focus and text survive the transition, which
@@ -283,15 +295,7 @@ export function GuessingView({ game }: Readonly<{ game: PlayState }>) {
   // Keep the keyboard ready as soon as a free-text turn starts, including
   // Race rounds that enter guessing directly. If the player focused either
   // field while listening, keep that deliberate focus instead.
-  useEffect(() => {
-    if (phase !== 'guessing' || isChoice || isChaosHints) return;
-    const timeout = window.setTimeout(() => {
-      const active = document.activeElement;
-      const alreadyTyping = active instanceof HTMLInputElement || active instanceof HTMLTextAreaElement;
-      if (!alreadyTyping) guessInputRef.current?.focus();
-    }, 100);
-    return () => window.clearTimeout(timeout);
-  }, [guessInputRef, isChaosHints, isChoice, phase]);
+  useGuessAutofocus(phase, isChoice, isChaosHints, guessInputRef);
 
   let label = {
     title: 'Name the song',

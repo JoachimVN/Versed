@@ -124,49 +124,20 @@ function cardPadding(wide: boolean, squeeze: RevealLayout): string {
 // got-it): page background, liquid card, party extras, a guesses list, and
 // the player's score box. Only the card content, guesses list, and an
 // optional extra line under the score differ between them.
-function PlayRevealShell({
-  game, result, squeeze, cardHeight, cardContent, guessesList, scoreExtra, wide = false,
-}: Readonly<{
-  game: PlayState;
-  result: RoundResultEvent;
-  squeeze: RevealLayout;
-  cardHeight: number;
-  cardContent: React.ReactNode;
-  guessesList: React.ReactNode;
-  scoreExtra?: React.ReactNode;
-  wide?: boolean;
-}>) {
+function useRevealShellMetrics(game: PlayState, result: RoundResultEvent, squeeze: RevealLayout, cardHeight: number, wide: boolean) {
   const { myScore, myScoreDelta, myBreakdown, myStreak, myRank, stealResult } = game;
   const { ultraCompact, windowHeight } = squeeze;
   const tier = tierKey(squeeze);
   const revealParty = result.party ?? game.party;
   const finaleResolved = revealParty?.duelProgress?.wins.some(w => w.count >= 2) ?? false;
   const isFinalReveal = game.roundIndex + 1 >= game.totalRounds && (!revealParty?.finale || finaleResolved);
-  // Ties the score bump to the shared reveal moment — for a mystery round
-  // this is the first time the true (multiplied) total is visible, so it
-  // should count up rather than just appear. The "+N pts" line and its
-  // breakdown stay put (no fade-out) — how many points this round earned,
-  // and why, shouldn't disappear a few seconds after the reveal.
-  // For mystery rounds specifically, the count-up is held back until the
-  // slot reel has actually landed (see MysteryMultiplierChip) — otherwise
-  // the score climbing gives away that a bonus is coming before the reel
-  // reveals what it is. useAnimatedScore adds its own 1s buffer on top of
-  // this delay, so that's subtracted back out, plus a short beat so the
-  // number lands before the score starts moving.
   const isMystery = revealParty?.event === 'mystery';
   const mysteryScoreDelay = isMystery ? Math.max(300, MYSTERY_LANDING_MS - 1000 + 250) : 300;
-  // holdDelta hides the "+N pts" line and its breakdown (below) until this
-  // same delay elapses — without it they render at mount, before the host's
-  // reel has even landed, and give away the multiplier's size in advance.
   const { displayScore, deltaFading, revealed } = useAnimatedScore(myScore, myScoreDelta, mysteryScoreDelay, false, isMystery);
   const gapClass = squeezeValue(squeeze, 'gap-2', 'gap-3', 'gap-5');
   const paddingClass = revealPadding(wide, squeeze);
   const gapPx = squeezeValue(squeeze, 8, 12, 20);
   const paddingPx = squeezeValue(squeeze, 24, 32, 48);
-  // Mirrors PartyRevealExtras' own render gate (mysteryMultiplier is always
-  // null here — hideMysteryChip is passed below — so that half of its gate
-  // never applies on the player screen) so the budget only reserves a row +
-  // gap for it when it's actually going to render one.
   const willShowPartyExtras = !!(
     revealParty?.event === 'double'
     || (revealParty?.event === 'chaoshints' && result.chaosFakeIndex != null)
@@ -185,8 +156,34 @@ function PlayRevealShell({
   const chromeHeight = cardHeight + gapPx * (willShowPartyExtras ? 3 : 2) + paddingPx
     + (willShowPartyExtras ? PARTY_EXTRAS_PX[tier] : 0) + scoreBoxPx;
   const listMaxHeight = `${Math.max(LIST_MIN_PX[tier], Math.min(LIST_TIER_CAP[tier], windowHeight - chromeHeight))}px`;
-  const scoreBoxPadding = squeezeValue(squeeze, '10px 20px', '12px 24px', '16px 32px');
-  const scoreTextClass = squeezeValue(squeeze, 'text-xl', 'text-2xl', 'text-3xl');
+  return {
+    deltaFading, displayScore, gapClass, isFinalReveal, isMystery, listMaxHeight,
+    myBreakdown, myRank, myScoreDelta, myStreak, revealed, scoreBoxPadding: squeezeValue(squeeze, '10px 20px', '12px 24px', '16px 32px'),
+    scoreTextClass: squeezeValue(squeeze, 'text-xl', 'text-2xl', 'text-3xl'), stealResult, ultraCompact,
+  };
+}
+
+function PlayRevealShell({
+  game, result, squeeze, cardHeight, cardContent, guessesList, scoreExtra, wide = false,
+}: Readonly<{
+  game: PlayState;
+  result: RoundResultEvent;
+  squeeze: RevealLayout;
+  cardHeight: number;
+  cardContent: React.ReactNode;
+  guessesList: React.ReactNode;
+  scoreExtra?: React.ReactNode;
+  wide?: boolean;
+}>) {
+  // Ties the score bump to the shared reveal moment. Mystery-round scoring
+  // remains held until its reel lands, and the list budget still mirrors the
+  // exact rows that can render below the card.
+  const {
+    deltaFading, displayScore, gapClass, isFinalReveal, isMystery, listMaxHeight,
+    myBreakdown, myRank, myScoreDelta, myStreak, revealed, scoreBoxPadding,
+    scoreTextClass, stealResult, ultraCompact,
+  } = useRevealShellMetrics(game, result, squeeze, cardHeight, wide);
+  const paddingClass = revealPadding(wide, squeeze);
   return (
     <div className="page-enter relative min-h-screen reveal-screen-height" style={{ overflowY: 'auto', overscrollBehavior: 'contain' }}>
       <div className={`screen-center-safe relative flex min-h-full flex-col items-center ${gapClass} ${paddingClass}`} style={{ minHeight: '100%' }}>

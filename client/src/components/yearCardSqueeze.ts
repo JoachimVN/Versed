@@ -29,20 +29,25 @@ import { yearTimelineLaneCounts } from './YearReveal';
 // close enough to collide (see yearTimelineLaneCounts), which a single flat
 // number per tier can't account for — hence adding that lane count's real
 // cost on top of the base budget instead of guessing a margin.
-export function computeYearCardHeight(hasCover: boolean, result: RoundResultEvent | null, squeeze: CardSqueeze): number {
-  const { ultraCompact: ultra, compact, landscape } = squeeze;
-  const hasGuessData = !!result?.year && (result.yearResults ?? []).some(r => r.guess !== null);
-  const showsChart = hasGuessData && !(ultra && landscape);
+function chartHeight(hasCover: boolean, result: RoundResultEvent, squeeze: CardSqueeze): number {
+  const { ultraCompact: ultra, compact } = squeeze;
+  const { nameLanes, yearLanes } = yearTimelineLaneCounts(result, squeeze);
+  const laneExtra = nameLanes * (ultra ? 11 : 13) + yearLanes * (ultra ? 10 : 12);
+  if (ultra) return (hasCover ? 340 : 300) + laneExtra;
+  if (compact) return (hasCover ? 430 : 330) + laneExtra;
+  return (hasCover ? 500 : 380) + laneExtra;
+}
 
-  if (showsChart) {
-    const { nameLanes, yearLanes } = yearTimelineLaneCounts(result!, squeeze);
-    const laneExtra = nameLanes * (ultra ? 11 : 13) + yearLanes * (ultra ? 10 : 12);
-    if (ultra) return (hasCover ? 340 : 300) + laneExtra;
-    if (compact) return (hasCover ? 430 : 330) + laneExtra;
-    return (hasCover ? 500 : 380) + laneExtra;
-  }
+function compactCardHeight(hasCover: boolean, squeeze: CardSqueeze): number {
+  const { ultraCompact: ultra, compact, landscape } = squeeze;
   if (ultra && landscape) return hasCover ? 190 : 160;
   if (ultra) return hasCover ? 260 : 220;
   if (compact) return hasCover ? 300 : 260;
   return hasCover ? 360 : 320;
+}
+
+export function computeYearCardHeight(hasCover: boolean, result: RoundResultEvent | null, squeeze: CardSqueeze): number {
+  const hasGuessData = !!result?.year && (result.yearResults ?? []).some(r => r.guess !== null);
+  const showsChart = hasGuessData && !(squeeze.ultraCompact && squeeze.landscape);
+  return showsChart ? chartHeight(hasCover, result!, squeeze) : compactCardHeight(hasCover, squeeze);
 }

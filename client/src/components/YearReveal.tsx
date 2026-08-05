@@ -6,7 +6,9 @@ import { runWhenVisible } from '../hooks/runWhenVisible';
 import type { CardSqueeze } from './revealSqueeze';
 import { cardContentWidth } from './revealSqueeze';
 
-function squeezeValueWithMid<T>(ultra: boolean, mid: boolean, compact: boolean, ultraValue: T, midCompactValue: T, midValue: T, compactValue: T, regularValue: T): T {
+function squeezeValueWithMid<T>(layout: { ultra: boolean; mid: boolean; compact: boolean }, values: { ultra: T; midCompact: T; mid: T; compact: T; regular: T }): T {
+  const { ultra, mid, compact } = layout;
+  const { ultra: ultraValue, midCompact: midCompactValue, mid: midValue, compact: compactValue, regular: regularValue } = values;
   if (ultra) return ultraValue;
   if (mid && compact) return midCompactValue;
   if (mid) return midValue;
@@ -32,6 +34,8 @@ function coverBorderRadius(mid: boolean, ultra: boolean, compact: boolean): stri
 }
 
 type TimelineLabel = { xPct: number; label: string; fontPx: number };
+type YearGuess = NonNullable<RoundResultEvent['yearResults']>[number];
+type TimelineGroup = { guess: number; entries: YearGuess[] };
 
 function packTimelineLanes(items: TimelineLabel[], timelinePx: number): number[] {
   const laneEnds: number[] = [];
@@ -45,6 +49,65 @@ function packTimelineLanes(items: TimelineLabel[], timelinePx: number): number[]
     laneEnds[lane] = right;
     return lane;
   });
+}
+
+function groupYearGuesses(guesses: YearGuess[]): TimelineGroup[] {
+  const groups: TimelineGroup[] = [];
+  for (const guess of guesses) {
+    const existing = groups.find(group => group.guess === guess.guess);
+    if (existing) existing.entries.push(guess);
+    else groups.push({ guess: guess.guess!, entries: [guess] });
+  }
+  return groups.sort((a, b) => a.guess - b.guess);
+}
+
+function timelineMetrics(year: number, guesses: YearGuess[], ultra: boolean, landscape: boolean) {
+  const minGuess = Math.min(...guesses.map(guess => guess.guess!));
+  const maxGuess = Math.max(...guesses.map(guess => guess.guess!));
+  const min = Math.min(year, minGuess);
+  const max = Math.max(year, maxGuess);
+  const pos = (value: number) => (max === min ? 50 : 11 + ((value - min) / (max - min)) * 78);
+  const groups = groupYearGuesses(guesses);
+  const timelinePx = timelinePixelWidth(ultra, landscape);
+  const nameLanes = packTimelineLanes(groups.map(group => ({ xPct: pos(group.guess), label: group.entries.map(entry => entry.name).join(', '), fontPx: ultra ? 8.6 : 9.9 })), timelinePx);
+  const nonExactGroups = groups.filter(group => group.guess !== year);
+  const yearLaneByGuess = new Map<number, number>();
+  packTimelineLanes(nonExactGroups.map(group => ({ xPct: pos(group.guess), label: String(group.guess), fontPx: ultra ? 8.3 : 9.6 })), timelinePx).forEach((lane, index) => {
+    yearLaneByGuess.set(nonExactGroups[index].guess, lane);
+  });
+  const maxNameLane = Math.max(0, ...nameLanes);
+  const maxYearLane = Math.max(0, ...yearLaneByGuess.values());
+  const nameLaneStep = ultra ? 11 : 13;
+  const yearLaneStep = ultra ? 10 : 12;
+  return {
+    groups, maxNameLane, maxYearLane, nameLaneByGuess: new Map(groups.map((group, index) => [group.guess, nameLanes[index]])),
+    nameLaneStep, nonExactGroups, pos, timelineHeight: (ultra ? 70 : 96) + maxNameLane * nameLaneStep + maxYearLane * yearLaneStep,
+    yearLaneByGuess, yearLaneStep,
+  };
+}
+
+function TimelineMarker({
+  group, delayS, isBest, year, pos, ultra, nameLaneByGuess, nameLaneStep, yearLaneByGuess, yearLaneStep,
+  winnerColor, winnerColorSoft, winnerGlowAnim, showGuessValues,
+}: Readonly<{
+  group: TimelineGroup; delayS: number; isBest: boolean; year: number; pos: (value: number) => number; ultra: boolean;
+  nameLaneByGuess: Map<number, number>; nameLaneStep: number; yearLaneByGuess: Map<number, number>; yearLaneStep: number;
+  winnerColor: string; winnerColorSoft: string; winnerGlowAnim: string; showGuessValues: boolean;
+}>) {
+  const isExact = group.guess === year;
+  const names = group.entries.map(entry => entry.name).join(', ');
+  const nameOffset = (ultra ? 10 : 13) + (nameLaneByGuess.get(group.guess) ?? 0) * nameLaneStep;
+  const yearOffset = (ultra ? 10 : 13) + (yearLaneByGuess.get(group.guess) ?? 0) * yearLaneStep;
+  const dot = isBest ? (ultra ? 8 : 10) : (ultra ? 5 : 6);
+  return (
+    <div style={{ position: 'absolute', left: `${pos(group.guess)}%`, top: `${ultra ? 32 : 43}px`, transform: 'translate(-50%, -50%)', animationName: isBest ? 'winnerMarkerLand' : 'markerCelebrate', animationDuration: isBest ? '0.65s' : '0.5s', animationTimingFunction: 'ease-out', animationFillMode: 'both', animationDelay: `${delayS}s` }}>
+      <span style={{ position: 'absolute', left: '50%', transform: 'translateX(-50%)', bottom: `${nameOffset}px`, fontSize: ultra ? '0.54rem' : '0.62rem', whiteSpace: 'nowrap', color: isBest ? winnerColor : 'rgba(255,255,255,0.55)', fontWeight: isBest ? 800 : 600 }}>{names}</span>
+      <div style={{ width: `${dot}px`, height: `${dot}px`, borderRadius: '50%', background: isBest ? winnerColor : 'rgba(255,255,255,0.5)', border: isBest ? '2px solid rgba(255,255,255,0.5)' : 'none', animation: isBest ? `${winnerGlowAnim} 1.8s ease-in-out ${delayS + 0.65}s infinite` : 'none' }} />
+      {showGuessValues && !isExact && (
+        <span style={{ position: 'absolute', left: '50%', transform: 'translateX(-50%)', top: `${yearOffset}px`, fontSize: ultra ? '0.52rem' : '0.6rem', whiteSpace: 'nowrap', color: isBest ? winnerColorSoft : 'rgba(255,255,255,0.45)', fontWeight: isBest ? 700 : 500 }}>{group.guess}</span>
+      )}
+    </div>
+  );
 }
 
 // Spot-on year guesses get a beefier hit than the routine reveal — and a
@@ -101,9 +164,10 @@ export function YearHeading({ year, compact, muted = false, hitTier = 1, squeeze
   // so both stack: squeeze shrinks further on top of whatever `compact`
   // already picked.
   const { compact: mid = false, ultraCompact: ultra = false } = squeeze ?? {};
-  const headingMargin = squeezeValueWithMid(ultra, mid, compact, '6px', '12px', '12px', '8px', '22px');
-  const headingFontSize = squeezeValueWithMid(ultra, mid, compact, compact ? '1.9rem' : '1.6rem', '2.3rem', '2rem', '2.6rem', '2.2rem');
-  const headingMinWidth = squeezeValueWithMid(ultra, mid, compact, '110px', '130px', '130px', '160px', '140px');
+  const layout = { ultra, mid, compact };
+  const headingMargin = squeezeValueWithMid(layout, { ultra: '6px', midCompact: '12px', mid: '12px', compact: '8px', regular: '22px' });
+  const headingFontSize = squeezeValueWithMid(layout, { ultra: compact ? '1.9rem' : '1.6rem', midCompact: '2.3rem', mid: '2rem', compact: '2.6rem', regular: '2.2rem' });
+  const headingMinWidth = squeezeValueWithMid(layout, { ultra: '110px', midCompact: '130px', mid: '130px', compact: '160px', regular: '140px' });
 
   useEffect(() => {
     if (!isNumber) { setDisplay(year); setLanded(true); return; }
@@ -191,9 +255,10 @@ export function YearHeading({ year, compact, muted = false, hitTier = 1, squeeze
 // Cover art + title + artist footer shared by the same two year cards.
 export function YearSongFooter({ result, compact, squeeze }: Readonly<{ result: RoundResultEvent; compact: boolean; squeeze?: CardSqueeze }>) {
   const { compact: mid = false, ultraCompact: ultra = false, landscape = false } = squeeze ?? {};
-  const coverSize = squeezeValueWithMid(ultra, mid, compact, 64, 130, 110, 170, 140);
-  const titleFontSize = squeezeValueWithMid(ultra, mid, compact, '0.85rem', '0.98rem', '0.9rem', '1.05rem', '0.95rem');
-  const artistFontSize = squeezeValueWithMid(ultra, mid, compact, '0.7rem', '0.8rem', '0.76rem', '0.85rem', '0.8rem');
+  const layout = { ultra, mid, compact };
+  const coverSize = squeezeValueWithMid(layout, { ultra: 64, midCompact: 130, mid: 110, compact: 170, regular: 140 });
+  const titleFontSize = squeezeValueWithMid(layout, { ultra: '0.85rem', midCompact: '0.98rem', mid: '0.9rem', compact: '1.05rem', regular: '0.95rem' });
+  const artistFontSize = squeezeValueWithMid(layout, { ultra: '0.7rem', midCompact: '0.8rem', mid: '0.76rem', compact: '0.85rem', regular: '0.8rem' });
 
   const textBlock = (
     <>
@@ -299,27 +364,8 @@ export function yearTimelineLaneCounts(result: RoundResultEvent, squeeze?: CardS
   const guesses = (result.yearResults ?? []).filter(r => r.guess !== null);
   if (!year || guesses.length === 0) return { nameLanes: 0, yearLanes: 0 };
 
-  const minGuess = Math.min(...guesses.map(g => g.guess!));
-  const maxGuess = Math.max(...guesses.map(g => g.guess!));
-  const min = Math.min(year, minGuess);
-  const max = Math.max(year, maxGuess);
-  const pos = (y: number) => (max === min ? 50 : 11 + ((y - min) / (max - min)) * 78);
-
-  const groups: { guess: number; entries: typeof guesses }[] = [];
-  for (const r of guesses) {
-    const existing = groups.find(g => g.guess === r.guess);
-    if (existing) existing.entries.push(r);
-    else groups.push({ guess: r.guess!, entries: [r] });
-  }
-  groups.sort((a, b) => a.guess - b.guess);
-
-  const timelinePx = timelinePixelWidth(ultra, landscape);
-  const nameFontPx = ultra ? 8.6 : 9.9;
-  const yearFontPx = ultra ? 8.3 : 9.6;
-  const nameLanes = packTimelineLanes(groups.map(g => ({ xPct: pos(g.guess), label: g.entries.map(e => e.name).join(', '), fontPx: nameFontPx })), timelinePx);
-  const nonExactGroups = groups.filter(g => g.guess !== year);
-  const yearLanes = packTimelineLanes(nonExactGroups.map(g => ({ xPct: pos(g.guess), label: String(g.guess), fontPx: yearFontPx })), timelinePx);
-  return { nameLanes: Math.max(0, ...nameLanes), yearLanes: Math.max(0, ...yearLanes) };
+  const { maxNameLane, maxYearLane } = timelineMetrics(year, guesses, ultra, landscape);
+  return { nameLanes: maxNameLane, yearLanes: maxYearLane };
 }
 
 export function YearTimelineContent({ result, showGuessValues = true, muted = false, squeeze }: Readonly<{ result: RoundResultEvent; showGuessValues?: boolean; muted?: boolean; squeeze?: CardSqueeze }>) {
@@ -360,51 +406,11 @@ export function YearTimelineContent({ result, showGuessValues = true, muted = fa
     );
   }
 
-  const minGuess = Math.min(...guesses.map(g => g.guess!));
-  const maxGuess = Math.max(...guesses.map(g => g.guess!));
-  const min = Math.min(year, minGuess);
-  const max = Math.max(year, maxGuess);
-  // Everyone (including the actual year) landed on the same value — nothing
-  // to spread across the line, so just center the single marker.
-  const pos = (y: number) => (max === min ? 50 : 11 + ((y - min) / (max - min)) * 78);
-
-  // Server presorts yearResults by diff ascending, so the first non-null diff is the best.
   const bestDiff = result.yearResults.find(r => r.diff !== null)?.diff ?? null;
-
-  // Group by identical guess so ties share one marker instead of overlapping dots.
-  const groups: { guess: number; entries: typeof guesses }[] = [];
-  for (const r of guesses) {
-    const existing = groups.find(g => g.guess === r.guess);
-    if (existing) existing.entries.push(r);
-    else groups.push({ guess: r.guess!, entries: [r] });
-  }
-  groups.sort((a, b) => a.guess - b.guess);
-
-  // Two guesses close but not identical (e.g. 1983 vs 1984) can still crowd
-  // each other's labels even though their dots are distinct. Pack each row
-  // (names above, years below) into the fewest vertical lanes needed so no
-  // two labels in the same row overlap horizontally — a classic greedy
-  // interval-scheduling sweep over items already sorted by x position.
-  // Approximate rendered width, just for spacing math — matches the width
-  // this content div actually renders at each squeeze tier (see the `width`
-  // style on the returned div below).
-  const TIMELINE_PX = timelinePixelWidth(ultra, landscape);
-  const nameFontPx = ultra ? 8.6 : 9.9;
-  const yearFontPx = ultra ? 8.3 : 9.6;
-  const nameLanes = packTimelineLanes(groups.map(g => ({ xPct: pos(g.guess), label: g.entries.map(e => e.name).join(', '), fontPx: nameFontPx })), TIMELINE_PX);
-  const nonExactGroups = groups.filter(g => g.guess !== year);
-  const yearLaneByGuess = new Map<number, number>();
-  packTimelineLanes(nonExactGroups.map(g => ({ xPct: pos(g.guess), label: String(g.guess), fontPx: yearFontPx })), TIMELINE_PX).forEach((lane, i) => {
-    yearLaneByGuess.set(nonExactGroups[i].guess, lane);
-  });
-  const maxNameLane = Math.max(0, ...nameLanes);
-  const maxYearLane = Math.max(0, ...yearLaneByGuess.values());
-  const laneNameH = ultra ? 11 : 13;
-  const laneYearH = ultra ? 10 : 12;
-  // trackTop below is the same tier-driven value used for the track/tick/
-  // marker positions — this baseline (96 vs 70) is what fits everything
-  // (name labels above, tick + year label below) around that shorter track.
-  const timelineHeight = (ultra ? 70 : 96) + maxNameLane * laneNameH + maxYearLane * laneYearH;
+  const {
+    groups, maxYearLane, nameLaneByGuess, nameLaneStep, nonExactGroups, pos,
+    timelineHeight, yearLaneByGuess, yearLaneStep,
+  } = timelineMetrics(year, guesses, ultra, landscape);
 
   // Someone nailed the year exactly — the actual-year tick and its label
   // pick up the same gold as the winning dot, instead of staying teal.
@@ -426,67 +432,10 @@ export function YearTimelineContent({ result, showGuessValues = true, muted = fa
   // find every group tied for the best diff rather than just the first.
   const bestGroups = groups.filter(g => bestDiff !== null && g.entries[0].diff === bestDiff);
   const otherGroups = groups.filter(g => !bestGroups.includes(g));
-  const nameLaneByGuess = new Map(groups.map((g, i) => [g.guess, nameLanes[i]]));
-
-  // Non-winning guesses cascade in first; the winner then lands last with a
-  // bigger pop, regardless of its x-position in that cascade — a deliberate
-  // "and the winner is…" beat rather than a plain leftmost-to-rightmost reveal.
   const trackTop = ultra ? 32 : 43;
   const tickHeight = ultra ? 22 : 30;
-  const nameLaneStep = ultra ? 11 : 13;
-  const yearLaneStep = ultra ? 10 : 12;
-  const dotSize = ultra ? { best: 8, normal: 5 } : { best: 10, normal: 6 };
   const markerFontSize = ultra ? '0.54rem' : '0.62rem';
   const markerYearFontSize = ultra ? '0.52rem' : '0.6rem';
-
-  function renderMarker(group: typeof groups[number], delayS: number, isBest: boolean) {
-    const isExact = group.guess === year;
-    const names = group.entries.map(e => e.name).join(', ');
-    const nameOffset = (ultra ? 10 : 13) + (nameLaneByGuess.get(group.guess) ?? 0) * nameLaneStep;
-    const yearOffset = (ultra ? 10 : 13) + (yearLaneByGuess.get(group.guess) ?? 0) * yearLaneStep;
-    const dot = isBest ? dotSize.best : dotSize.normal;
-    return (
-      <div
-        key={group.guess}
-        style={{
-          position: 'absolute', left: `${pos(group.guess)}%`, top: `${trackTop}px`,
-          transform: 'translate(-50%, -50%)',
-          animationName: isBest ? 'winnerMarkerLand' : 'markerCelebrate',
-          animationDuration: isBest ? '0.65s' : '0.5s',
-          animationTimingFunction: 'ease-out',
-          animationFillMode: 'both',
-          animationDelay: `${delayS}s`,
-        }}
-      >
-        <span style={{
-          position: 'absolute', left: '50%', transform: 'translateX(-50%)',
-          bottom: `${nameOffset}px`,
-          fontSize: markerFontSize, whiteSpace: 'nowrap',
-          color: isBest ? winnerColor : 'rgba(255,255,255,0.55)',
-          fontWeight: isBest ? 800 : 600,
-        }}>
-          {names}
-        </span>
-        <div style={{
-          width: `${dot}px`, height: `${dot}px`, borderRadius: '50%',
-          background: isBest ? winnerColor : 'rgba(255,255,255,0.5)',
-          border: isBest ? '2px solid rgba(255,255,255,0.5)' : 'none',
-          animation: isBest ? `${winnerGlowAnim} 1.8s ease-in-out ${delayS + 0.65}s infinite` : 'none',
-        }} />
-        {showGuessValues && !isExact && (
-          <span style={{
-            position: 'absolute', left: '50%', transform: 'translateX(-50%)',
-            top: `${yearOffset}px`,
-            fontSize: markerYearFontSize, whiteSpace: 'nowrap',
-            color: isBest ? winnerColorSoft : 'rgba(255,255,255,0.45)',
-            fontWeight: isBest ? 700 : 500,
-          }}>
-            {group.guess}
-          </span>
-        )}
-      </div>
-    );
-  }
 
   const timelineWidth = timelineDisplayWidth(ultra, landscape);
 
@@ -514,8 +463,44 @@ export function YearTimelineContent({ result, showGuessValues = true, muted = fa
           {year}
         </div>
 
-        {otherGroups.map((group, i) => renderMarker(group, timelineRevealS + i * 0.09, false))}
-        {bestGroups.map((group, i) => renderMarker(group, timelineRevealS + otherGroups.length * 0.09 + 0.25 + i * 0.09, true))}
+        {otherGroups.map((group, index) => (
+          <TimelineMarker
+            key={group.guess}
+            group={group}
+            delayS={timelineRevealS + index * 0.09}
+            isBest={false}
+            year={year}
+            pos={pos}
+            ultra={ultra}
+            nameLaneByGuess={nameLaneByGuess}
+            nameLaneStep={nameLaneStep}
+            yearLaneByGuess={yearLaneByGuess}
+            yearLaneStep={yearLaneStep}
+            winnerColor={winnerColor}
+            winnerColorSoft={winnerColorSoft}
+            winnerGlowAnim={winnerGlowAnim}
+            showGuessValues={showGuessValues}
+          />
+        ))}
+        {bestGroups.map((group, index) => (
+          <TimelineMarker
+            key={group.guess}
+            group={group}
+            delayS={timelineRevealS + otherGroups.length * 0.09 + 0.25 + index * 0.09}
+            isBest
+            year={year}
+            pos={pos}
+            ultra={ultra}
+            nameLaneByGuess={nameLaneByGuess}
+            nameLaneStep={nameLaneStep}
+            yearLaneByGuess={yearLaneByGuess}
+            yearLaneStep={yearLaneStep}
+            winnerColor={winnerColor}
+            winnerColorSoft={winnerColorSoft}
+            winnerGlowAnim={winnerGlowAnim}
+            showGuessValues={showGuessValues}
+          />
+        ))}
       </div>
 
       {passCount > 0 && (
