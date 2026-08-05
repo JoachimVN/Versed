@@ -104,13 +104,15 @@ Bid how few seconds of the clip you need to hear. Lowest bid gets the first shot
 points = 500  +  up to 1000 (lower bid → more)  +  up to 500 (difficulty bonus)
 ```
 
+The difficulty bonus scales with how obscure the song is — its popularity rank, computed by [Music-Popularity-Index](https://github.com/JoachimVN/Music-Popularity-Index) (see [Song Source](#song-source) below).
+
 ### Race
 
 Everyone hears the clip at the same time and races to type the answer — speed sets the score. The host can restrict scoring to the fastest correct player only, and/or require the artist as well as the title.
 
 ### Party
 
-Every round deals a random, announced recipe: a format (classic bid-off, race, or closest-guess-the-year), what you need to guess (title, artist, or both for a bonus), and sometimes a twist — double points, a hidden ×1–3 multiplier revealed at the reveal, a steal where the round winner takes a cut of a victim's score, snippet roulette (the clip starts mid-song), full hints, a blind bet with no hints at all, or "Down to the Wire" (the clip plays the song's final stretch instead of the intro). Round 1 is always a plain warm-up, twists never repeat back-to-back, and the last round is a top-2 duel worth 1500 points to whoever answers first.
+Every round deals a random, announced recipe: a format (classic bid-off, race, or closest-guess-the-year), what you need to guess (title, artist, or both for a bonus), and sometimes a twist — double points, a hidden ×1.5-10 multiplier revealed at the reveal, a steal where the round winner takes a cut of a victim's score, snippet roulette (the clip starts mid-song), full hints, a blind bet with no hints at all, or "Down to the Wire" (the clip plays the song's final stretch instead of the intro). Round 1 is always a plain warm-up, twists never repeat back-to-back, and the last round is a top-2 duel worth 1500 points to whoever answers first.
 
 After the configured number of rounds, final scores are tallied.
 
@@ -244,7 +246,7 @@ Configured for **Railway** via `railway.toml`. The server serves the built clien
 
 Songs load from `server/src/data/music_index_full.csv` at startup. Each row has a Spotify track ID plus metadata (year, decade, Billboard chart stats, stream count) used to generate in-round hints. Swap in your own CSV with the same columns to change the default pool.
 
-The library itself is built by [Music-Popularity-Index](https://github.com/JoachimVN/Music-Popularity-Index) ([live](https://joavn.dev/mpi)), which ranks songs by combining multiple popularity metrics.
+The library itself, including each song's `rank` (used for the difficulty bonus, see [Classic](#classic) above), is built by [Music-Popularity-Index](https://github.com/JoachimVN/Music-Popularity-Index) ([live](https://joavn.dev/mpi)). It scores songs 0–100 from eight era-normalized signals — Billboard chart history, Spotify and YouTube all-time counts, iTunes/Apple Music chart points, RIAA certifications, digital sales, and radio airplay — so songs from different decades are comparable.
 
 ### Custom Spotify Playlists
 
