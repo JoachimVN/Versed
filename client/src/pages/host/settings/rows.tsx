@@ -9,8 +9,10 @@ import { LIQUID_CONTROL_PROPS } from '../../../components/liquidGlassPresets';
 
 // Panel content is a fixed w-72 (288px) minus px-5 (20px) padding on each
 // side — never responsive, so (unlike the lobby's ModeToggle) these pills
-// can hardcode one width instead of a per-breakpoint CSS rule.
-const SETTINGS_CONTENT_WIDTH = 248;
+// can hardcode one width instead of a per-breakpoint CSS rule. Exported so
+// PlaylistList's "Choose playlists" glass button can size to the same
+// content column.
+export const SETTINGS_CONTENT_WIDTH = 248;
 
 // Each +/- is its own small real LiquidGlass circle (same fixed-box-plus-
 // centred-glass pattern as the lobby's volume/settings pills, just circular
@@ -126,37 +128,42 @@ export function ToggleRow({ label, value, onToggle, disabled }: Readonly<{
       <span style={{ color: disabled ? 'rgba(255,255,255,0.45)' : 'rgba(255,255,255,0.5)', fontSize: '0.875rem' }}>
         {label}
       </span>
-      <button
-        type="button"
-        onClick={disabled ? undefined : onToggle}
-        disabled={disabled}
-        className="relative shrink-0"
-        style={{
-          width: '42px', height: '24px', borderRadius: '100px',
-          background: value
-            ? 'linear-gradient(135deg, rgba(216,70,255,0.9), rgba(147,51,194,0.85))'
-            : 'rgba(255,255,255,0.08)',
-          boxShadow: value
-            ? 'inset 0 1px 1px rgba(255,255,255,0.35), inset 0 -1px 3px rgba(0,0,0,0.25), 0 0 8px rgba(178,16,224,0.35)'
-            : 'inset 0 1px 2px rgba(0,0,0,0.3), inset 0 0 0 1px rgba(255,255,255,0.07)',
-          transition: 'background 0.25s ease, box-shadow 0.25s ease, opacity 0.2s ease',
-          cursor: disabled ? 'not-allowed' : 'pointer',
-          opacity: disabled ? 0.4 : 1,
-        }}
-      >
-        <span
-          className="absolute"
-          style={{
-            top: '3px', left: '3px',
-            width: '18px', height: '18px',
-            borderRadius: '50%',
-            background: 'radial-gradient(circle at 35% 30%, #ffffff, #e2e2e2 70%)',
-            boxShadow: '0 1px 3px rgba(0,0,0,0.4), inset 0 -1px 1px rgba(0,0,0,0.08)',
-            transition: 'transform 0.22s cubic-bezier(0.4, 0, 0.2, 1)',
-            transform: value ? 'translateX(18px)' : 'translateX(0)',
-          }}
-        />
-      </button>
+      {/* Same subtle real-LiquidGlass treatment as the +/- steppers (see
+          SettingStepperButton) rather than a flat rgba track — the on/off
+          fill and knob still carry the state, the glass is just the same
+          quiet chrome the rest of the panel's small controls share now. */}
+      <div className="liquid-btn glass-tint-purple subtle-glass-chip relative shrink-0" style={{ width: '42px', height: '24px', opacity: disabled ? 0.4 : 1 }}>
+        <LiquidGlass style={{ position: 'absolute', top: '50%', left: '50%' }} {...STEPPER_GLASS_PROPS} padding="0">
+          <button
+            type="button"
+            onClick={disabled ? undefined : onToggle}
+            disabled={disabled}
+            aria-pressed={value}
+            className="relative block"
+            style={{
+              width: '42px', height: '24px', borderRadius: '100px', border: 'none', padding: 0,
+              background: value
+                ? 'linear-gradient(135deg, rgba(216,70,255,0.75), rgba(147,51,194,0.7))'
+                : 'rgba(255,255,255,0.05)',
+              transition: 'background 0.25s ease',
+              cursor: disabled ? 'not-allowed' : 'pointer',
+            }}
+          >
+            <span
+              className="absolute"
+              style={{
+                top: '3px', left: '3px',
+                width: '18px', height: '18px',
+                borderRadius: '50%',
+                background: 'radial-gradient(circle at 35% 30%, #ffffff, #e2e2e2 70%)',
+                boxShadow: '0 1px 3px rgba(0,0,0,0.4), inset 0 -1px 1px rgba(0,0,0,0.08)',
+                transition: 'transform 0.22s cubic-bezier(0.4, 0, 0.2, 1)',
+                transform: value ? 'translateX(18px)' : 'translateX(0)',
+              }}
+            />
+          </button>
+        </LiquidGlass>
+      </div>
     </div>
   );
 }

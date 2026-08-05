@@ -721,6 +721,20 @@ select:focus-visible,
   box-shadow: 0px 4px 10px rgba(0, 0, 0, 0.12) !important;
 }
 
+/* The settings popover's own card — same real LiquidGlass as everything
+   else in it now rather than a flat blurred rgba panel, so it reads as one
+   family with the lobby's cards instead of a plain backdrop behind glossy
+   controls. Ring stays a fixed soft purple (this card never changes tint)
+   and the ambient shadow is a bit heavier than the small pills' since it's
+   the largest surface on screen while open. */
+.settings-panel-glass .glass::after {
+  box-shadow: 0 0 0 1px rgba(158,18,204,0.3) inset, 0 1px 4px rgba(0,0,0,0.35) !important;
+  opacity: 0.6 !important;
+}
+.settings-panel-glass .glass {
+  box-shadow: 0 24px 48px rgba(0,0,0,0.45), inset 0 1px 0 rgba(255,255,255,0.05) !important;
+}
+
 /* Thin, on-brand scrollbar for every scroll container (playlist picker grid,
    leaderboard, etc.) instead of the OS default. Firefox reads the two
    scrollbar-* properties on the `*` reset above; everything else reads the
