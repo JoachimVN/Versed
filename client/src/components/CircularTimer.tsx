@@ -88,20 +88,22 @@ export function CircularTimer({ timeLeft, total, size = 128 }: Readonly<{ timeLe
 // them (read as too light/washed out) — this sits between the two. The
 // middle stop is deliberately the most desaturated of the three so it reads
 // as a bridging accent rather than a third competing hue.
-const HERO_GRADIENT_STOPS: Record<'classic' | 'race' | 'party', readonly [string, string, string]> = {
+const HERO_GRADIENT_STOPS: Record<'classic' | 'race' | 'party' | 'year', readonly [string, string, string]> = {
   classic: ['#7e5dab', '#79648f', '#9c5fa0'],
   race: ['#c07a45', '#957a6d', '#c99b7d'],
-  party: ['#5bacbb', '#587f89', '#3d7d76'],
+  party: ['#3d7d76', '#587f89', '#5bacbb'],
+  year: ['#2e6e82', '#517685', '#4fc0d1'],
 };
 
 // Drop-shadow tint for the ring's glow — the average of each mode's three
 // gradient stops above, so the glow reads as "light cast by this ring"
 // rather than a generic fixed color that drifts from whatever's actually
 // on the stroke.
-const HERO_GLOW_COLOR: Record<'classic' | 'race' | 'party', string> = {
+const HERO_GLOW_COLOR: Record<'classic' | 'race' | 'party' | 'year', string> = {
   classic: 'rgba(126,110,161,0.22)',
   race: 'rgba(172,128,113,0.22)',
   party: 'rgba(92,134,150,0.22)',
+  year: 'rgba(75,142,158,0.24)',
 };
 
 function hexToRgb(hex: string): readonly [number, number, number] {
@@ -129,12 +131,12 @@ function lerpColor(a: string, b: string, t: number): string {
 // endpoints coincide). conic-gradient interpolates by angle instead, so
 // pacing is even all the way around and a full sweep is just the ordinary
 // 360° case, no special-casing needed.
-export function HeroTimer({ timeLeft, total, size = 200, mode = 'classic' }: Readonly<{ timeLeft: number; total: number; size?: number; mode?: 'classic' | 'race' | 'party' }>) {
+export function HeroTimer({ timeLeft, total, size = 200, accent = 'classic' }: Readonly<{ timeLeft: number; total: number; size?: number; accent?: 'classic' | 'race' | 'party' | 'year' }>) {
   const sw = size * 0.058;
   const r = (size - sw * 2) / 2; // ring centerline radius — matches the old SVG stroke circle's radius exactly
   const pct = useTimerPct(timeLeft, total);
   const center = size / 2;
-  const [startColor, midColor, endColor] = HERO_GRADIENT_STOPS[mode];
+  const [startColor, midColor, endColor] = HERO_GRADIENT_STOPS[accent];
   // 12 o'clock, sweeping clockwise as pct grows — conic-gradient's own 0deg
   // already points up, so no extra rotation is needed here (unlike the old
   // SVG circle, which had to rotate -90deg to move its 0deg from 3 o'clock).
@@ -163,7 +165,7 @@ export function HeroTimer({ timeLeft, total, size = 200, mode = 'classic' }: Rea
           <div
             aria-hidden="true"
             className="absolute inset-0 rounded-full"
-            style={{ background: ringBackground, WebkitMaskImage: ringMask, maskImage: ringMask, filter: `drop-shadow(0 0 5px ${HERO_GLOW_COLOR[mode]})` }}
+            style={{ background: ringBackground, WebkitMaskImage: ringMask, maskImage: ringMask, filter: `drop-shadow(0 0 5px ${HERO_GLOW_COLOR[accent]})` }}
           />
           {/* Round caps at both arc ends — a conic-gradient cuts off flat by
               default, unlike the old SVG stroke's strokeLinecap="round". */}

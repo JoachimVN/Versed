@@ -7,16 +7,42 @@ import { useRevealLayout } from '../../components/revealSqueeze';
 import type { HostState } from './useHostGame';
 import { roundAccent, usesRaceFlow, RaceHintBar } from './roundBits';
 import { EndGameButton } from './dialogs';
+import { BID_OPTIONS } from '../../config';
+
+// Bid display shared by PlayingView and GuessingView: a genuine relative
+// timeline, positioned against the fixed BID_OPTIONS ladder rather than
+// today's own min/max — the old design rescaled to fill 8%-92% every round
+// regardless of the actual spread, so a 2s/5s pair and a 2s/60s pair looked
+// identically spaced and "relative" was a lie. Anchoring to the ladder's own
+// index means the same bid always lands in the same spot, and the ladder's
+// own steps (0.1, 0.5, 1, 2, 3... 45, 60) are already spaced the way people
+// intuit duration — small gaps low, big gaps high — so nothing needs its own
+// log/sqrt curve on top.
+const TIMELINE_MAX_NAMES = 3;
+const TIMELINE_PAD_PCT = 6;
+// Dots are pinned to this exact y (via their own transform) rather than
+// falling out of flex-stacking a variable-height label above/below them —
+// a longer name used to push its dot a few px off the rail; anchoring both
+// the dot and the label to this one fixed point keeps every dot dead-center
+// on the rail regardless of label length.
+const TIMELINE_HEIGHT = 56;
+const TIMELINE_RAIL_Y = 28;
+const TIMELINE_GAP = 8;
+
+function bidTimelinePosition(bid: number): number {
+  let idx = BID_OPTIONS.indexOf(bid);
+  if (idx === -1) {
+    // Shouldn't happen (bids always come off the ladder) — fall back to the closest step.
+    idx = BID_OPTIONS.reduce((best, opt, i) => Math.abs(opt - bid) < Math.abs(BID_OPTIONS[best] - bid) ? i : best, 0);
+  }
+  return TIMELINE_PAD_PCT + (idx / (BID_OPTIONS.length - 1)) * (100 - TIMELINE_PAD_PCT * 2);
+}
 
 export function BidTimeline({ bids, lowestBid }: Readonly<{ bids: { name: string; bid: number }[]; lowestBid: number }>) {
   if (bids.length === 0) return null;
   const sorted = [...bids].sort((a, b) => a.bid - b.bid);
-  const min = sorted[0].bid;
-  const max = sorted.at(-1)!.bid;
-  const span = max === min ? 0 : max - min;
-  const pos = (bid: number) => span === 0 ? 50 : 8 + ((bid - min) / span) * 84;
 
-  // Group players by bid so ties share one position instead of stacking on top of each other.
+  // Group players by bid so ties share one marker instead of stacking.
   const groups: { bid: number; names: string[] }[] = [];
   for (const { name, bid } of sorted) {
     const last = groups.at(-1);
@@ -24,85 +50,61 @@ export function BidTimeline({ bids, lowestBid }: Readonly<{ bids: { name: string
     else groups.push({ bid, names: [name] });
   }
 
-  const MAX_NAMES = 3;
-  const maxLines = groups.reduce((m, g) => Math.max(m, Math.min(g.names.length, MAX_NAMES) + (g.names.length > MAX_NAMES ? 1 : 0)), 0);
-  const nameAreaHeight = 22 + maxLines * 16 + 8;
-
   return (
-    <div className="w-full">
-      {/* Name labels — alternate above/below to reduce overlap on close bids */}
-      <div className="relative" style={{ height: nameAreaHeight }}>
-        {groups.map((group, i) => (
-          <div
-            key={group.bid}
-            className={`absolute -translate-x-1/2 flex flex-col items-center gap-0.5 ${group.bid === lowestBid ? 'text-purple-300' : 'text-white/50'}`}
-            style={{ left: `${pos(group.bid)}%`, top: i % 2 === 0 ? 2 : 22 }}
-          >
-            {group.names.slice(0, MAX_NAMES).map(name => (
-              <span key={name} className="text-xs font-semibold whitespace-nowrap">{name}</span>
-            ))}
-            {group.names.length > MAX_NAMES && (
-              <span className="text-xs whitespace-nowrap opacity-60">+{group.names.length - MAX_NAMES} more</span>
-            )}
+    <div className="relative w-full" style={{ height: `${TIMELINE_HEIGHT}px` }}>
+      {/* The rail itself — a soft gradient track, not a hard line, so it reads as a scale rather than a divider. */}
+      <div
+        aria-hidden="true"
+        className="absolute rounded-full"
+        style={{ left: 0, right: 0, top: `${TIMELINE_RAIL_Y}px`, height: '3px', transform: 'translateY(-50%)', background: 'linear-gradient(90deg, rgba(255,255,255,0.05), rgba(255,255,255,0.18), rgba(255,255,255,0.05))' }}
+      />
+      {groups.map((group, i) => {
+        const active = group.bid === lowestBid;
+        const left = bidTimelinePosition(group.bid);
+        // Alternate the label above/below the rail so adjacent close-together
+        // ladder steps don't overlap each other's text.
+        const above = i % 2 === 0;
+        const names = group.names.slice(0, TIMELINE_MAX_NAMES).join(', ')
+          + (group.names.length > TIMELINE_MAX_NAMES ? ` +${group.names.length - TIMELINE_MAX_NAMES}` : '');
+        return (
+          <div key={group.bid} className="absolute" style={{ left: `${left}%`, top: 0, bottom: 0 }}>
+            {/* Pinned to the rail's exact center via its own transform, independent
+                of the label's height, so a longer/shorter name never nudges the dot
+                off the line the way stacking it in flex flow with the label did. */}
+            <div
+              className="absolute rounded-full -translate-x-1/2 -translate-y-1/2"
+              style={{
+                left: 0, top: `${TIMELINE_RAIL_Y}px`,
+                width: active ? '13px' : '8px', height: active ? '13px' : '8px',
+                background: active ? '#c084fc' : 'rgba(255,255,255,0.45)',
+                boxShadow: active ? '0 0 12px rgba(192,132,252,0.85)' : undefined,
+                border: active ? '2px solid rgba(255,255,255,0.9)' : undefined,
+              }}
+            />
+            <div
+              className="absolute -translate-x-1/2"
+              style={above
+                ? { left: 0, bottom: `${TIMELINE_HEIGHT - TIMELINE_RAIL_Y + TIMELINE_GAP}px` }
+                : { left: 0, top: `${TIMELINE_RAIL_Y + TIMELINE_GAP}px` }}
+            >
+              <TimelineLabel active={active} bid={group.bid} names={names} />
+            </div>
           </div>
-        ))}
-      </div>
-
-      {/* Bar + dots */}
-      <div className="relative h-px bg-white/20">
-        {groups.map(group => (
-          <div
-            key={group.bid}
-            className={`absolute top-1/2 -translate-y-1/2 -translate-x-1/2 rounded-full ${group.bid === lowestBid ? 'w-3 h-3 bg-purple-400' : 'w-2 h-2 bg-white/40'}`}
-            style={{ left: `${pos(group.bid)}%` }}
-          />
-        ))}
-      </div>
-
-      {/* Bid value labels */}
-      <div className="relative h-5 mt-1">
-        {groups.map(group => (
-          <span
-            key={group.bid}
-            className={`absolute text-xs -translate-x-1/2 ${group.bid === lowestBid ? 'text-purple-400' : 'text-white/45'}`}
-            style={{ left: `${pos(group.bid)}%` }}
-          >
-            {group.bid}s
-          </span>
-        ))}
-      </div>
+        );
+      })}
     </div>
   );
 }
 
-// PlayingView's own bid display — a flat row of chips (one per bid, ties
-// grouped) rather than BidTimeline's spatial number-line. Demoted to small
-// supporting chrome under the hero timer, so a plain list reads better here
-// than a whole secondary spatial widget competing for attention.
-function BidChipRow({ bids, lowestBid }: Readonly<{ bids: { name: string; bid: number }[]; lowestBid: number }>) {
-  if (bids.length === 0) return null;
-  const sorted = [...bids].sort((a, b) => a.bid - b.bid);
-  const groups: { bid: number; names: string[] }[] = [];
-  for (const { name, bid } of sorted) {
-    const last = groups.at(-1);
-    if (last?.bid === bid) last.names.push(name);
-    else groups.push({ bid, names: [name] });
-  }
+function TimelineLabel({ active, bid, names }: Readonly<{ active: boolean; bid: number; names: string }>) {
   return (
-    <div style={{ display: 'flex', flexWrap: 'wrap', justifyContent: 'center', gap: '8px' }}>
-      {groups.map(group => {
-        const active = group.bid === lowestBid;
-        return (
-          <div key={group.bid} style={{
-            display: 'flex', alignItems: 'center', gap: '6px', padding: '6px 14px', borderRadius: '999px',
-            background: active ? 'rgba(158,18,204,0.28)' : 'rgba(255,255,255,0.06)',
-            border: active ? '1px solid rgba(216,144,240,0.55)' : '1px solid rgba(255,255,255,0.1)',
-          }}>
-            <span style={{ fontSize: '0.82rem', fontWeight: 700, color: active ? '#fff' : 'rgba(255,255,255,0.7)' }}>{group.names.join(' & ')}</span>
-            <span style={{ fontSize: '0.78rem', fontWeight: 600, color: active ? 'rgba(230,190,250,0.95)' : 'rgba(255,255,255,0.4)' }}>{group.bid}s</span>
-          </div>
-        );
-      })}
+    <div className="flex flex-col items-center" style={{ gap: '1px' }}>
+      <span style={{ fontSize: active ? '0.78rem' : '0.68rem', fontWeight: 700, whiteSpace: 'nowrap', color: active ? '#fff' : 'rgba(255,255,255,0.55)' }}>
+        {names}
+      </span>
+      <span style={{ fontSize: active ? '0.72rem' : '0.62rem', fontWeight: 900, whiteSpace: 'nowrap', color: active ? '#d8a8f0' : 'rgba(255,255,255,0.4)' }}>
+        {bid}s
+      </span>
     </div>
   );
 }
@@ -144,9 +146,10 @@ export function PlayingView({ game }: Readonly<{ game: HostState }>) {
     ? `${restrictedNames.join(nameSeparator)} - first correct wins`
     : `${answeredCount} / ${players.length} answered`;
   // Party mode gets its own aqua identity across the card (ring, tint, eq
-  // bar) rather than falling through to race/classic's colors, since here
-  // "mode" is the thing driving HeroTimer's ring gradient too — year rounds
-  // still win out, since that's a guess-target distinction orthogonal to mode.
+  // bar) rather than falling through to race/classic's colors — year rounds
+  // still win out over that, since target is a distinction orthogonal to
+  // mode. This drives HeroTimer's ring gradient too (passed as `accent`),
+  // so a year round rings cyan regardless of which underlying mode it rides.
   const accent: 'classic' | 'race' | 'year' | 'party' = isYear ? 'year' : mode === 'party' ? 'party' : roundAccent(isRace, isYear);
   const { compact, ultraCompact } = useRevealLayout();
   const tier: 'ultra' | 'compact' | 'normal' = ultraCompact ? 'ultra' : compact ? 'compact' : 'normal';
@@ -188,11 +191,11 @@ export function PlayingView({ game }: Readonly<{ game: HostState }>) {
                 {countdown === null ? (
                   <>
                     <EyebrowRow label="Now playing" accent={accent} songPlaying={songPlaying} songTempo={songTempo} size={iconSize} />
-                    <HeroTimer timeLeft={timeLeft} total={timerTotal} size={timerSize} mode={mode} />
+                    <HeroTimer timeLeft={timeLeft} total={timerTotal} size={timerSize} accent={accent} />
                     <span style={{ color: 'rgba(255,255,255,0.6)', fontWeight: 600, fontSize: captionSize, display: 'inline-block', minWidth: '210px', textAlign: 'center' }}>
                       {isRace ? raceStatus : `${guesserNames.join(' & ')} will guess`}
                     </span>
-                    {!isRace && <BidChipRow bids={playerBids} lowestBid={lowestBid} />}
+                    {!isRace && <div className="w-full"><BidTimeline bids={playerBids} lowestBid={lowestBid} /></div>}
                   </>
                 ) : (
                   <>
@@ -207,7 +210,7 @@ export function PlayingView({ game }: Readonly<{ game: HostState }>) {
                         <span style={{ color: 'rgba(255,255,255,0.6)', fontWeight: 600, fontSize: captionSize, display: 'inline-block', minWidth: '210px', textAlign: 'center' }}>
                           {guesserNames.join(' & ')} will guess
                         </span>
-                        <BidChipRow bids={playerBids} lowestBid={lowestBid} />
+                        <div className="w-full"><BidTimeline bids={playerBids} lowestBid={lowestBid} /></div>
                       </>
                     )}
                   </>

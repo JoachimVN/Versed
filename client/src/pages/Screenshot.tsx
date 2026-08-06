@@ -1,6 +1,6 @@
 import { useState, type ReactNode } from 'react';
 import { useSearchParams } from 'react-router';
-import { PlayingView } from './host/PlayingView';
+import { PlayingView, GuessingView as HostGuessingView } from './host/PlayingView';
 import { RevealView } from './host/RevealView';
 import { LobbyView } from './host/LobbyView';
 import type { HostState } from './host/useHostGame';
@@ -140,6 +140,46 @@ const MOCK_HOST_REVEAL: HostState = {
   phase: 'reveal',
   result: MOCK_RESULT,
   roundDeltas: { Anna: 1250 },
+};
+
+// Race "now playing" — everyone guesses at once, so there's no bid tier to
+// show, just the answered-count status the race branch of PlayingView reads.
+const MOCK_HOST_PLAYING_RACE: HostState = {
+  ...MOCK_HOST,
+  mode: 'race',
+  guesserNames: ['Anna', 'John', 'Olivia'],
+  answeredCount: 1,
+};
+
+const MOCK_HOST_PLAYING_WIDE_BIDS: HostState = {
+  ...MOCK_HOST,
+  guesserNames: ['Anna', 'Ben'],
+  lowestBid: 0.1,
+  playerBids: [
+    { name: 'Anna', bid: 0.1 }, { name: 'Ben', bid: 0.1 }, { name: 'Cara', bid: 5 },
+    { name: 'Dan', bid: 15 }, { name: 'Eve', bid: 45 }, { name: 'Fay', bid: 60 },
+  ],
+};
+
+// Standalone (non-Party) "guess the year" round — yearOnly rides the race
+// flow (usesRaceFlow), same as a Party year format round.
+const MOCK_HOST_PLAYING_YEAR: HostState = {
+  ...MOCK_HOST,
+  mode: 'race',
+  yearOnly: true,
+  roundYearOnly: true,
+  guesserNames: ['Anna', 'John', 'Olivia'],
+  answeredCount: 2,
+};
+
+const MOCK_HOST_PLAYING_PARTY: HostState = {
+  ...MOCK_HOST,
+  mode: 'party',
+  party: {
+    format: 'classic', target: 'title', event: null, multiplier: 1, winnerOnly: false,
+    intro: { title: 'Name It', tagline: 'Bid & guess the title' },
+    finale: false, duelists: [], restricted: [],
+  },
 };
 
 const YEAR_FIXTURE_BASE: Pick<RoundResultEvent, 'correct' | 'guesserName' | 'songTitle' | 'artist' | 'year' | 'coverUrl' | 'points' | 'party'> = {
@@ -566,6 +606,11 @@ export default function Screenshot() {
     'join-link': <PlayerScaleShell><JoinView game={MOCK_PLAY_JOIN_LINK} /></PlayerScaleShell>,
     'join-rejoin': <PlayerScaleShell><JoinView game={MOCK_PLAY_JOIN_REJOIN} /></PlayerScaleShell>,
     playing: <HostScaleShell><PlayingView game={MOCK_HOST} /></HostScaleShell>,
+    'playing-race': <HostScaleShell><PlayingView game={MOCK_HOST_PLAYING_RACE} /></HostScaleShell>,
+    'playing-year': <HostScaleShell><PlayingView game={MOCK_HOST_PLAYING_YEAR} /></HostScaleShell>,
+    'playing-party': <HostScaleShell><PlayingView game={MOCK_HOST_PLAYING_PARTY} /></HostScaleShell>,
+    'host-guessing': <HostScaleShell><HostGuessingView game={MOCK_HOST} /></HostScaleShell>,
+    'playing-wide-bids': <HostScaleShell><PlayingView game={MOCK_HOST_PLAYING_WIDE_BIDS} /></HostScaleShell>,
     reveal: <HostScaleShell><RevealView game={MOCK_HOST_REVEAL} result={MOCK_RESULT} instant /></HostScaleShell>,
     year: <HostScaleShell><RevealView game={MOCK_HOST_YEAR_REVEAL} result={MOCK_RESULT_YEAR} instant /></HostScaleShell>,
     'mystery-reveal': <HostScaleShell><RevealView game={MOCK_HOST_MYSTERY_REVEAL} result={MOCK_RESULT_MYSTERY} /></HostScaleShell>,
@@ -600,5 +645,5 @@ export default function Screenshot() {
   };
 
   return screenshots[params.get('v') ?? '']
-    ?? <p className="text-white p-6 font-mono">?v=home|join|join-link|join-rejoin|playing|reveal|year|mystery-reveal|big-points-reveal|watching|guessing|year-guessing|guessing-both|play-reveal|play-year-reveal|play-reveal-noone|play-reveal-crowd|reveal-crowd|year-crowd|lobby|party-intro|final-host|final-host-classic-only|final-host-race-only|final-host-no-speed|final-host-1|final-host-2|final-host-long|final-player|final-empty</p>;
+    ?? <p className="text-white p-6 font-mono">?v=home|join|join-link|join-rejoin|playing|playing-race|playing-year|playing-party|reveal|year|mystery-reveal|big-points-reveal|watching|guessing|year-guessing|guessing-both|play-reveal|play-year-reveal|play-reveal-noone|play-reveal-crowd|reveal-crowd|year-crowd|lobby|party-intro|final-host|final-host-classic-only|final-host-race-only|final-host-no-speed|final-host-1|final-host-2|final-host-long|final-player|final-empty</p>;
 }
