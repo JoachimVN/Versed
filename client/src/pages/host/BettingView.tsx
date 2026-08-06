@@ -1,14 +1,17 @@
 import React from 'react';
 import { PartyBadge } from '../../components/RoundIntro';
-import { CircularTimer } from '../../components/CircularTimer';
+import { HeroTimer, LinearTimer } from '../../components/CircularTimer';
+import { useRevealLayout } from '../../components/revealSqueeze';
 import type { HostState } from './useHostGame';
-import { AlbumArtHint } from './roundBits';
+import { AlbumArtHint, fullRoundAccent } from './roundBits';
 import { EndGameButton } from './dialogs';
 
 export function BettingView({ game }: Readonly<{ game: HostState }>) {
-  const { roundIndex, totalRounds, timeLeft, bettingTime, hints, bidCount, players, pin, skipTurn, endGame, party } = game;
+  const { roundIndex, totalRounds, timeLeft, bettingTime, hints, bidCount, players, pin, skipTurn, endGame, party, mode, roundYearOnly } = game;
   const imageHint = hints.find(h => h.imageUrl);
   const textHints = hints.filter(h => !h.imageUrl);
+  const accent = fullRoundAccent(mode, roundYearOnly, party);
+  const { compact } = useRevealLayout();
 
   return (
     <div className="relative min-h-screen flex flex-col overflow-hidden">
@@ -42,8 +45,10 @@ export function BettingView({ game }: Readonly<{ game: HostState }>) {
 
         <PartyBadge party={party} />
 
-        {/* Circular timer */}
-        <CircularTimer timeLeft={timeLeft} total={bettingTime} />
+        {/* Playback ring, matching the game's mode accent */}
+        {compact
+          ? <LinearTimer timeLeft={timeLeft} total={bettingTime} />
+          : <HeroTimer timeLeft={timeLeft} total={bettingTime} size={128} accent={accent} />}
 
         {/* Text hints */}
         {textHints.length > 0 && (

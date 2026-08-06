@@ -1,11 +1,11 @@
 import LiquidGlass from '../../components/StableLiquidGlass';
 import { PartyBadge } from '../../components/RoundIntro';
-import { CircularTimer, HeroTimer } from '../../components/CircularTimer';
+import { HeroTimer, LinearTimer } from '../../components/CircularTimer';
 import { AudioBars, ACCENT_TINT_CLASS, ACCENT_WASH, ACCENT_GLOW_ANIMATION, ACCENT_BG_HUE } from '../../components/AudioBars';
 import { LIQUID_CARD_PROPS } from '../../components/liquidGlassPresets';
-import { useRevealLayout } from '../../components/revealSqueeze';
+import { useRevealLayout, squeezeValue } from '../../components/revealSqueeze';
 import type { HostState } from './useHostGame';
-import { roundAccent, usesRaceFlow, RaceHintBar } from './roundBits';
+import { fullRoundAccent, usesRaceFlow, RaceHintBar } from './roundBits';
 import { EndGameButton } from './dialogs';
 import { BID_OPTIONS } from '../../config';
 
@@ -135,7 +135,6 @@ export function PlayingView({ game }: Readonly<{ game: HostState }>) {
   // differ once a round's target is randomized rather than static for the
   // whole game.
   const isRace = usesRaceFlow(mode, roundYearOnly, party);
-  const isYear = party ? party.format === 'year' : roundYearOnly;
   // Finale duelists or (for underdog rounds) the trailing player(s) — the
   // only ones actually guessing this round, if either applies.
   let restrictedNames: string[] | null = null;
@@ -150,7 +149,7 @@ export function PlayingView({ game }: Readonly<{ game: HostState }>) {
   // still win out over that, since target is a distinction orthogonal to
   // mode. This drives HeroTimer's ring gradient too (passed as `accent`),
   // so a year round rings cyan regardless of which underlying mode it rides.
-  const accent: 'classic' | 'race' | 'year' | 'party' = isYear ? 'year' : mode === 'party' ? 'party' : roundAccent(isRace, isYear);
+  const accent = fullRoundAccent(mode, roundYearOnly, party);
   const { compact, ultraCompact } = useRevealLayout();
   const tier: 'ultra' | 'compact' | 'normal' = ultraCompact ? 'ultra' : compact ? 'compact' : 'normal';
   // The dial is the card's one dominant hero (much bigger than the old
@@ -243,41 +242,50 @@ export function GuessingView({ game }: Readonly<{ game: HostState }>) {
   const { roundIndex, totalRounds, guesserNames, lowestBid, playerBids, timeLeft, timerTotal, mode, roundYearOnly, hints, party, skipTurn, endGame } = game;
   // roundYearOnly is this round's resolved value, not the settings-panel
   // draft — see PlayingView's comment above for why that distinction matters.
-  const isRace = mode === 'race' || (party === null && roundYearOnly) || (party !== null && party.format !== 'classic');
-  const isYear = party ? party.format === 'year' : roundYearOnly;
-  const accent = roundAccent(isRace, isYear);
+  const accent = fullRoundAccent(mode, roundYearOnly, party);
   // Bidders who placed a bid this round but aren't in the current tier —
   // if everyone bid the same (or there's only one player), there's no one
   // else left waiting on a later turn.
   const othersWaiting = playerBids.length > guesserNames.length;
+  const { compact, ultraCompact } = useRevealLayout();
+  const squeezeTier = { compact, ultraCompact };
+  // The card's own fixed dims never had to answer to viewport height before
+  // (this screen predates the tier system PlayingView above uses) — a short
+  // or narrow viewport (a landscape phone, or a heavily zoomed-out desktop
+  // window) was overflowing both the card itself and the column around it.
+  const cardWidth = squeezeValue(squeezeTier, 'min(80vw, 260px)', 'min(78vw, 290px)', '310px');
+  const cardHeight = squeezeValue(squeezeTier, '250px', '340px', '420px');
+  const innerWidth = squeezeValue(squeezeTier, 'min(68vw, 208px)', 'min(66vw, 236px)', '254px');
   return (
-    <div className="relative min-h-screen flex flex-col items-center justify-center p-6 gap-5 text-center overflow-hidden">
+    <div className={`relative min-h-screen flex flex-col items-center justify-center text-center overflow-hidden ${squeezeValue(squeezeTier, 'p-4 gap-2', 'p-5 gap-3', 'p-6 gap-5')}`}>
       <div aria-hidden="true" style={{ position: 'fixed', inset: 0, zIndex: 0, overflow: 'hidden', pointerEvents: 'none' }}>
         <img src={`${import.meta.env.BASE_URL}backgrounds/background8.png`} alt="" className="bg-fill-image" style={{ filter: `hue-rotate(${ACCENT_BG_HUE[accent]}deg)` }} />
       </div>
       <div style={{ position: 'fixed', inset: 0, zIndex: 1, background: 'rgba(5,5,14,0.82)', backdropFilter: 'blur(36px)' }} />
-      <div className="flex flex-col items-center gap-5 text-center w-full" style={{ position: 'relative', zIndex: 2 }}>
+      <div className={`flex flex-col items-center text-center w-full ${squeezeValue(squeezeTier, 'gap-2', 'gap-3', 'gap-5')}`} style={{ position: 'relative', zIndex: 2 }}>
         <p className="text-white/45 text-sm">Round {roundIndex + 1}/{totalRounds}</p>
         <PartyBadge party={party} />
         <RaceHintBar hints={hints} />
 
-        <div className="liquid-btn relative" style={{ width: '310px', height: '420px' }}>
+        <div className="liquid-btn relative" style={{ width: cardWidth, height: cardHeight }}>
           <LiquidGlass
             style={{ position: 'absolute', top: '50%', left: '50%' }}
             {...LIQUID_CARD_PROPS}
-            padding="28px 28px"
+            padding={squeezeValue(squeezeTier, '18px 20px', '22px 24px', '28px 28px')}
           >
-            <div style={{ width: '254px', display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '16px' }}>
+            <div style={{ width: innerWidth, display: 'flex', flexDirection: 'column', alignItems: 'center', gap: squeezeValue(squeezeTier, '10px', '13px', '16px') }}>
               {/* Audio is always paused by the time this view mounts (guessing_start pauses it). */}
-              <AudioBars playing={false} accent={accent} height={32} />
+              <AudioBars playing={false} accent={accent} height={ultraCompact ? 22 : 32} />
               <span style={{ color: 'rgba(255,255,255,0.45)', fontSize: '0.6rem', letterSpacing: '0.2em', textTransform: 'uppercase' }}>
                 Guessing
               </span>
-              <span style={{ color: 'white', fontWeight: 900, fontSize: '1.4rem', lineHeight: 1.3, display: 'inline-block', minWidth: '210px', textAlign: 'center' }}>
+              <span style={{ color: 'white', fontWeight: 900, fontSize: ultraCompact ? '1.15rem' : '1.4rem', lineHeight: 1.3, display: 'inline-block', minWidth: '210px', textAlign: 'center' }}>
                 {guesserNames.join(' & ')}
               </span>
               <div style={{ width: '100%', height: '1px', background: 'rgba(255,255,255,0.07)' }} />
-              <CircularTimer timeLeft={timeLeft} total={timerTotal} size={90} />
+              {compact
+                ? <LinearTimer timeLeft={timeLeft} total={timerTotal} />
+                : <HeroTimer timeLeft={timeLeft} total={timerTotal} size={90} accent={accent} />}
               <div className="w-full">
                 <BidTimeline bids={playerBids} lowestBid={lowestBid} />
               </div>
@@ -286,7 +294,7 @@ export function GuessingView({ game }: Readonly<{ game: HostState }>) {
         </div>
 
         {othersWaiting && <p className="text-white/45 text-sm">Other players are waiting...</p>}
-        <div className="flex flex-col items-center gap-2 mt-2">
+        <div className={`flex flex-col items-center ${ultraCompact ? 'gap-1' : 'gap-2'} mt-2`}>
           <button type="button" onClick={skipTurn} className="text-white/28 text-xs hover:text-white/50 transition-colors">
             Skip turn
           </button>

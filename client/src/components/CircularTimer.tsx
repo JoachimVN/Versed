@@ -35,52 +35,6 @@ function useTimerPct(timeLeft: number, total: number): number {
   return pct;
 }
 
-// Thin horizontal fill bar with an inline "Ns" readout — the CircularTimer's
-// 80px dial doesn't fit a short landscape/keyboard-squeezed guessing screen,
-// so this is what GuessingView swaps to under useCompactGuessing().
-export function LinearTimer({ timeLeft, total }: Readonly<{ timeLeft: number; total: number }>) {
-  const pct = useTimerPct(timeLeft, total);
-  return (
-    <div className="flex items-center gap-2.5" style={{ width: 'min(70vw, 220px)' }}>
-      <div style={{ flex: 1, height: '6px', borderRadius: '999px', background: 'rgba(255,255,255,0.1)', overflow: 'hidden' }}>
-        <div style={{
-          width: `${pct * 100}%`, height: '100%', borderRadius: '999px',
-          background: timerColor(pct), transition: 'width 0.2s linear, background 0.4s ease',
-        }} />
-      </div>
-      <span className="text-white font-black tabular-nums" style={{ fontSize: '0.95rem', minWidth: '1.6em', textAlign: 'right' }}>{timeLeft}</span>
-    </div>
-  );
-}
-
-export function CircularTimer({ timeLeft, total, size = 128 }: Readonly<{ timeLeft: number; total: number; size?: number }>) {
-  const sw = Math.round(size * 0.039);
-  const r = (size - sw * 2) / 2;
-  const circ = 2 * Math.PI * r;
-  const pct = useTimerPct(timeLeft, total);
-
-  return (
-    <div className="relative" style={{ width: size, height: size }}>
-      <svg width={size} height={size} className="absolute inset-0" style={{ transform: 'rotate(-90deg)' }}>
-        <circle cx={size / 2} cy={size / 2} r={r} fill="none" stroke="rgba(255,255,255,0.07)" strokeWidth={sw} />
-        <circle
-          cx={size / 2} cy={size / 2} r={r} fill="none"
-          stroke={timerColor(pct)}
-          strokeWidth={sw}
-          strokeDasharray={circ}
-          strokeDashoffset={circ * (1 - pct)}
-          strokeLinecap="round"
-          style={{ transition: 'stroke 0.4s ease' }}
-        />
-      </svg>
-      <div className="absolute inset-0 flex flex-col items-center justify-center">
-        <span className="text-white font-black" style={{ fontSize: `${size * 0.148}px`, lineHeight: 1 }}>{timeLeft}</span>
-        <span style={{ color: 'rgba(255,255,255,0.45)', fontSize: `${size * 0.047}px`, textTransform: 'uppercase', letterSpacing: '0.14em' }}>sec</span>
-      </div>
-    </div>
-  );
-}
-
 // Per-mode palettes, deep and muted like the app's classic/year accent hues
 // (rgba(158,18,204) / rgba(0,238,232) — see AudioBars' AUDIO_BAR_COLORS) but
 // as jewel tones rather than either the fully-saturated brand colors (read
@@ -94,6 +48,30 @@ const HERO_GRADIENT_STOPS: Record<'classic' | 'race' | 'party' | 'year', readonl
   party: ['#3d7d76', '#587f89', '#5bacbb'],
   year: ['#2e6e82', '#517685', '#4fc0d1'],
 };
+
+// Thin horizontal fill bar with an inline "Ns" readout — HeroTimer's ring
+// doesn't fit a short landscape/keyboard-squeezed or otherwise cramped
+// screen, so this is what every timer placement swaps to once compact.
+// `accent`, when given, paints the fill with that mode's own HeroTimer hue
+// (its brightest stop) instead of the red/amber/green urgency ramp — for a
+// placement where HeroTimer's ring already reads as "this screen's own
+// color" and the default rainbow fill would look like a mismatched second
+// timer rather than the same dial in a different shape.
+export function LinearTimer({ timeLeft, total, accent }: Readonly<{ timeLeft: number; total: number; accent?: 'classic' | 'race' | 'party' | 'year' }>) {
+  const pct = useTimerPct(timeLeft, total);
+  const fill = accent ? HERO_GRADIENT_STOPS[accent][2] : timerColor(pct);
+  return (
+    <div className="flex items-center gap-2.5" style={{ width: 'min(70vw, 220px)' }}>
+      <div style={{ flex: 1, height: '6px', borderRadius: '999px', background: 'rgba(255,255,255,0.1)', overflow: 'hidden' }}>
+        <div style={{
+          width: `${pct * 100}%`, height: '100%', borderRadius: '999px',
+          background: fill, transition: 'width 0.2s linear, background 0.4s ease',
+        }} />
+      </div>
+      <span className="text-white font-black tabular-nums" style={{ fontSize: '0.95rem', minWidth: '1.6em', textAlign: 'right' }}>{timeLeft}</span>
+    </div>
+  );
+}
 
 // Drop-shadow tint for the ring's glow — the average of each mode's three
 // gradient stops above, so the glow reads as "light cast by this ring"
