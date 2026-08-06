@@ -24,7 +24,7 @@ html, body {
   height: 100%;
 }
 
-/* background8.png is a tall 2560x5120 portrait image used as a full-bleed
+/* background8-2.png is a 5120x3327 landscape image used as a full-bleed
    backdrop — cover-fit and centered, so the image's own vertical middle is
    always what shows regardless of screen aspect ratio. */
 .bg-fill-image {

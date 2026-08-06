@@ -46,7 +46,7 @@ export function WatchingView({ game }: Readonly<{ game: PlayState }>) {
       {/* Background */}
       <div aria-hidden="true" style={{ position: 'absolute', inset: 0, zIndex: 0, overflow: 'hidden', pointerEvents: 'none' }}>
         <img
-          src={`${import.meta.env.BASE_URL}backgrounds/background8.png`}
+          src={`${import.meta.env.BASE_URL}backgrounds/background8-2.png`}
           alt=""
           className="bg-fill-image"
           style={{ filter: `hue-rotate(${ACCENT_BG_HUE[watchAccent]}deg)` }}

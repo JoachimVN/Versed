@@ -71,7 +71,7 @@ export const ACCENT_GLOW_ANIMATION: Record<'classic' | 'race' | 'year' | 'party'
   party: 'cardGlowPulseCyan',
 };
 
-// CSS hue-rotate degree applied to the shared background8.png backdrop so
+// CSS hue-rotate degree applied to the shared background8-2.png backdrop so
 // its native blue tint reads as this round's accent color instead of a
 // fixed hue regardless of mode.
 export const ACCENT_BG_HUE: Record<'classic' | 'race' | 'year' | 'party', number> = {

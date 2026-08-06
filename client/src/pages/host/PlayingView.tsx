@@ -165,7 +165,7 @@ export function PlayingView({ game }: Readonly<{ game: HostState }>) {
   return (
     <div className="relative min-h-screen screen-center-safe flex flex-col items-center justify-center p-6 gap-5 text-center overflow-x-hidden overflow-y-auto overscroll-contain">
       <div aria-hidden="true" style={{ position: 'fixed', inset: 0, zIndex: 0, overflow: 'hidden', pointerEvents: 'none' }}>
-        <img src={`${import.meta.env.BASE_URL}backgrounds/background8.png`} alt="" className="bg-fill-image" style={{ filter: `blur(24px) hue-rotate(${ACCENT_BG_HUE[accent]}deg)`, transform: 'scale(1.04)' }} />
+        <img src={`${import.meta.env.BASE_URL}backgrounds/background8-2.png`} alt="" className="bg-fill-image" style={{ filter: `blur(24px) hue-rotate(${ACCENT_BG_HUE[accent]}deg)`, transform: 'scale(1.04)' }} />
       </div>
       <div style={{ position: 'fixed', inset: 0, zIndex: 1, background: 'rgba(5,5,14,0.82)' }} />
       <div className="flex flex-col items-center gap-5 text-center w-full" style={{ position: 'relative', zIndex: 2 }}>
@@ -259,7 +259,7 @@ export function GuessingView({ game }: Readonly<{ game: HostState }>) {
   return (
     <div className={`relative min-h-screen flex flex-col items-center justify-center text-center overflow-hidden ${squeezeValue(squeezeTier, 'p-4 gap-2', 'p-5 gap-3', 'p-6 gap-5')}`}>
       <div aria-hidden="true" style={{ position: 'fixed', inset: 0, zIndex: 0, overflow: 'hidden', pointerEvents: 'none' }}>
-        <img src={`${import.meta.env.BASE_URL}backgrounds/background8.png`} alt="" className="bg-fill-image" style={{ filter: `hue-rotate(${ACCENT_BG_HUE[accent]}deg)` }} />
+        <img src={`${import.meta.env.BASE_URL}backgrounds/background8-2.png`} alt="" className="bg-fill-image" style={{ filter: `hue-rotate(${ACCENT_BG_HUE[accent]}deg)` }} />
       </div>
       <div style={{ position: 'fixed', inset: 0, zIndex: 1, background: 'rgba(5,5,14,0.82)', backdropFilter: 'blur(36px)' }} />
       <div className={`flex flex-col items-center text-center w-full ${squeezeValue(squeezeTier, 'gap-2', 'gap-3', 'gap-5')}`} style={{ position: 'relative', zIndex: 2 }}>

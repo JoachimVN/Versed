@@ -428,7 +428,7 @@ export function GuessingView({ game }: Readonly<{ game: PlayState }>) {
           App.tsx). absolute against this relative, min-h-screen wrapper
           covers the same area without the clipping. */}
       <div aria-hidden="true" style={{ position: 'absolute', inset: 0, zIndex: 0, overflow: 'hidden', pointerEvents: 'none' }}>
-        <img src={`${import.meta.env.BASE_URL}backgrounds/background8.png`} alt="" className="bg-fill-image" style={{ filter: `hue-rotate(${ACCENT_BG_HUE[bgAccent]}deg)` }} />
+        <img src={`${import.meta.env.BASE_URL}backgrounds/background8-2.png`} alt="" className="bg-fill-image" style={{ filter: `hue-rotate(${ACCENT_BG_HUE[bgAccent]}deg)` }} />
       </div>
       <div style={{ position: 'absolute', inset: 0, zIndex: 1, background: 'rgba(5,5,14,0.82)', backdropFilter: 'blur(36px)' }} />
 
