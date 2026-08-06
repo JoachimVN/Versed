@@ -6,7 +6,7 @@ import { LobbyView } from './host/LobbyView';
 import type { HostState } from './host/useHostGame';
 import { WatchingView } from './play/WatchingView';
 import { GuessingView } from './play/GuessingView';
-import { RevealView as PlayRevealView } from './play/RevealView';
+import { RevealView as PlayRevealView, YearRevealView as PlayYearRevealView } from './play/RevealView';
 import { WaitingAtmosphere } from './play/WaitingAtmosphere';
 import { WaitingView } from './play/WaitingView';
 import type { PlayState } from './play/usePlayGame';
@@ -373,6 +373,7 @@ const MOCK_PLAY: PlayState = {
   leaderboardDeltas: {},
   awards: [],
   finalResultsSkipped: false,
+  finishedAt: null,
   songPlaying: true,
   songTempo: 117,
   reconnecting: false,
@@ -415,6 +416,18 @@ const MOCK_PLAY_REVEAL: PlayState = {
   myRank: { rank: 1, total: 3 },
   myBreakdown: { parts: [{ label: 'Base', amount: 500 }, { label: 'Bid bonus', amount: 600 }, { label: 'Difficulty', amount: 150 }], multiplier: 1, multiplierBonus: 0, pity: 0, total: 1250 },
   myStreak: 3,
+};
+
+const MOCK_PLAY_YEAR_REVEAL: PlayState = {
+  ...MOCK_PLAY,
+  phase: 'reveal',
+  myName: 'Anna',
+  myScore: 4350,
+  myScoreDelta: 480,
+  myRank: { rank: 2, total: 4 },
+  myBreakdown: { parts: [{ label: 'Closeness', amount: 480 }], multiplier: 1, multiplierBonus: 0, pity: 0, total: 480 },
+  myStreak: 0,
+  party: MOCK_RESULT_YEAR.party ?? null,
 };
 
 const MOCK_RESULT_NOONE: RoundResultEvent = {
@@ -559,6 +572,7 @@ export default function Screenshot() {
     'year-guessing': <PlayerScaleShell><GuessingView game={MOCK_PLAY_YEAR_GUESSING} /></PlayerScaleShell>,
     'guessing-both': <PlayerScaleShell><GuessingView game={MOCK_PLAY_GUESSING_BOTH} /></PlayerScaleShell>,
     'play-reveal': <PlayerScaleShell><PlayRevealView game={MOCK_PLAY_REVEAL} result={MOCK_RESULT} /></PlayerScaleShell>,
+    'play-year-reveal': <PlayerScaleShell><PlayYearRevealView game={MOCK_PLAY_YEAR_REVEAL} result={MOCK_RESULT_YEAR} /></PlayerScaleShell>,
     'play-reveal-noone': <PlayerScaleShell><PlayRevealView game={MOCK_PLAY_REVEAL_NOONE} result={MOCK_RESULT_NOONE} /></PlayerScaleShell>,
     'play-reveal-crowd': <PlayerScaleShell><PlayRevealView game={MOCK_PLAY_REVEAL_CROWD} result={CROWD_RESULT} /></PlayerScaleShell>,
     'reveal-crowd': <HostScaleShell><RevealView game={MOCK_HOST_REVEAL_CROWD} result={CROWD_RESULT} instant /></HostScaleShell>,
@@ -582,5 +596,5 @@ export default function Screenshot() {
   };
 
   return screenshots[params.get('v') ?? '']
-    ?? <p className="text-white p-6 font-mono">?v=home|join|join-link|join-rejoin|playing|reveal|year|mystery-reveal|big-points-reveal|watching|guessing|year-guessing|guessing-both|play-reveal|play-reveal-noone|play-reveal-crowd|reveal-crowd|year-crowd|lobby|party-intro|final-host|final-host-classic-only|final-host-race-only|final-host-no-speed|final-host-1|final-host-2|final-host-long|final-player|final-empty</p>;
+    ?? <p className="text-white p-6 font-mono">?v=home|join|join-link|join-rejoin|playing|reveal|year|mystery-reveal|big-points-reveal|watching|guessing|year-guessing|guessing-both|play-reveal|play-year-reveal|play-reveal-noone|play-reveal-crowd|reveal-crowd|year-crowd|lobby|party-intro|final-host|final-host-classic-only|final-host-race-only|final-host-no-speed|final-host-1|final-host-2|final-host-long|final-player|final-empty</p>;
 }

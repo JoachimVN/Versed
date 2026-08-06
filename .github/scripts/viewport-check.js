@@ -122,6 +122,7 @@ const VIEWS = [
   { id: 'player-year-guessing', group: 'player', v: 'year-guessing', name: 'YearGuessingView' },
   { id: 'player-guessing-both', group: 'player', v: 'guessing-both', name: 'GuessingBothView' },
   { id: 'player-reveal', group: 'player', v: 'play-reveal', name: 'RevealView' },
+  { id: 'player-year-reveal', group: 'player', v: 'play-year-reveal', name: 'YearRevealView' },
   { id: 'player-reveal-no-one', group: 'player', v: 'play-reveal-noone', name: 'RevealViewNoOne' },
   { id: 'player-reveal-crowd', group: 'player', v: 'play-reveal-crowd', name: 'RevealViewCrowd' },
   { id: 'player-final-results', group: 'player', v: 'final-player', name: 'FinalResultsView' },
