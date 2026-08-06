@@ -93,7 +93,9 @@ const VIEWPORTS = [
 const VIEWS = [
   { id: 'home', group: 'shared', v: 'home', name: 'Home' },
   { id: 'host-lobby', group: 'host', v: 'lobby', name: 'LobbyView' },
+  { id: 'host-betting', group: 'host', v: 'host-betting', name: 'HostBettingView' },
   { id: 'host-playing', group: 'host', v: 'playing', name: 'PlayingView' },
+  { id: 'host-guessing', group: 'host', v: 'host-guessing', name: 'HostGuessingView' },
   { id: 'host-reveal', group: 'host', v: 'reveal', name: 'RevealView' },
   { id: 'host-year-reveal', group: 'host', v: 'year', name: 'YearRevealView' },
   { id: 'host-mystery-reveal', group: 'host', v: 'mystery-reveal', name: 'MysteryRevealView' },

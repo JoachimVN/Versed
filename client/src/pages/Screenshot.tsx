@@ -1,6 +1,7 @@
 import { useState, type ReactNode } from 'react';
 import { useSearchParams } from 'react-router';
 import { PlayingView, GuessingView as HostGuessingView } from './host/PlayingView';
+import { BettingView as HostBettingView } from './host/BettingView';
 import { RevealView } from './host/RevealView';
 import { LobbyView } from './host/LobbyView';
 import type { HostState } from './host/useHostGame';
@@ -610,6 +611,7 @@ export default function Screenshot() {
     'playing-year': <HostScaleShell><PlayingView game={MOCK_HOST_PLAYING_YEAR} /></HostScaleShell>,
     'playing-party': <HostScaleShell><PlayingView game={MOCK_HOST_PLAYING_PARTY} /></HostScaleShell>,
     'host-guessing': <HostScaleShell><HostGuessingView game={MOCK_HOST} /></HostScaleShell>,
+    'host-betting': <HostScaleShell><HostBettingView game={MOCK_HOST} /></HostScaleShell>,
     'playing-wide-bids': <HostScaleShell><PlayingView game={MOCK_HOST_PLAYING_WIDE_BIDS} /></HostScaleShell>,
     reveal: <HostScaleShell><RevealView game={MOCK_HOST_REVEAL} result={MOCK_RESULT} instant /></HostScaleShell>,
     year: <HostScaleShell><RevealView game={MOCK_HOST_YEAR_REVEAL} result={MOCK_RESULT_YEAR} instant /></HostScaleShell>,
