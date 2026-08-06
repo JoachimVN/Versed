@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useId, useRef, useState } from 'react';
 
 export function timerColor(pct: number): string {
   if (pct > 0.6) return 'rgba(52,211,153,0.9)';
@@ -76,6 +76,83 @@ export function CircularTimer({ timeLeft, total, size = 128 }: Readonly<{ timeLe
       <div className="absolute inset-0 flex flex-col items-center justify-center">
         <span className="text-white font-black" style={{ fontSize: `${size * 0.148}px`, lineHeight: 1 }}>{timeLeft}</span>
         <span style={{ color: 'rgba(255,255,255,0.45)', fontSize: `${size * 0.047}px`, textTransform: 'uppercase', letterSpacing: '0.14em' }}>sec</span>
+      </div>
+    </div>
+  );
+}
+
+// Per-mode palettes, deep and muted like the app's classic/year accent hues
+// (rgba(158,18,204) / rgba(0,238,232) — see AudioBars' AUDIO_BAR_COLORS) but
+// as jewel tones rather than either the fully-saturated brand colors (read
+// as a generic punchy "AI gradient") or a white-blended pastel version of
+// them (read as too light/washed out) — this sits between the two. The
+// middle stop is deliberately the most desaturated of the three so it reads
+// as a bridging accent rather than a third competing hue.
+const HERO_GRADIENT_STOPS: Record<'classic' | 'race' | 'party', readonly [string, string][]> = {
+  classic: [
+    ['0%', '#7e5dab'],
+    ['50%', '#5f8f99'],
+    ['100%', '#9c5fa0'],
+  ],
+  race: [
+    ['0%', '#c07a45'],
+    ['50%', '#7c6a90'],
+    ['100%', '#c99b7d'],
+  ],
+  party: [
+    ['0%', '#5b93a3'],
+    ['50%', '#7c6a90'],
+    ['100%', '#539c94'],
+  ],
+};
+
+// The host "playing" card's dominant hero dial: a thick ring painted with
+// that fixed gradient. `gradientUnits="userSpaceOnUse"` with x1/y1/x2/y2 set
+// to the arc's own start/end points (rather than a plain 0%-100% diagonal
+// across the ring's whole bounding box) is what makes the full color range
+// visible on a short arc too — a corner-to-corner diagonal only shows a
+// narrow slice of the gradient when just 10-20% of the ring is drawn, which
+// read as "no gradient" at low time-remaining.
+export function HeroTimer({ timeLeft, total, size = 200, mode = 'classic' }: Readonly<{ timeLeft: number; total: number; size?: number; mode?: 'classic' | 'race' | 'party' }>) {
+  const sw = size * 0.058;
+  const r = (size - sw * 2) / 2;
+  const circ = 2 * Math.PI * r;
+  const pct = useTimerPct(timeLeft, total);
+  const gradId = useId();
+  const center = size / 2;
+  const gradientStops = HERO_GRADIENT_STOPS[mode];
+  // Arc start is fixed at local angle 0 (screen 12 o'clock, after the -90deg
+  // rotate below); the visible arc sweeps clockwise on screen as pct grows,
+  // which is local angle +pct*360deg (see CircularTimer's identical
+  // strokeDasharray/offset mechanic for the underlying geometry).
+  const endAngle = pct * 2 * Math.PI;
+  const gx1 = center + r;
+  const gy1 = center;
+  const gx2 = center + r * Math.cos(endAngle);
+  const gy2 = center + r * Math.sin(endAngle);
+
+  return (
+    <div className="relative" style={{ width: size, height: size }}>
+      <svg width={size} height={size} className="absolute inset-0" style={{ transform: 'rotate(-90deg)', overflow: 'visible' }}>
+        <defs>
+          <linearGradient id={gradId} gradientUnits="userSpaceOnUse" x1={gx1} y1={gy1} x2={gx2} y2={gy2}>
+            {gradientStops.map(([offset, color]) => <stop key={offset} offset={offset} stopColor={color} />)}
+          </linearGradient>
+        </defs>
+        <circle cx={center} cy={center} r={r} fill="none" stroke="rgba(255,255,255,0.05)" strokeWidth={sw} />
+        <circle
+          cx={center} cy={center} r={r} fill="none"
+          stroke={`url(#${gradId})`}
+          strokeWidth={sw}
+          strokeDasharray={circ}
+          strokeDashoffset={circ * (1 - pct)}
+          strokeLinecap="round"
+          style={{ filter: 'drop-shadow(0 0 5px rgba(120,110,150,0.22))' }}
+        />
+      </svg>
+      <div className="absolute inset-0 flex flex-col items-center justify-center">
+        <span className="text-white font-black" style={{ fontSize: `${size * 0.2}px`, lineHeight: 1 }}>{timeLeft}</span>
+        <span style={{ color: 'rgba(255,255,255,0.55)', fontSize: `${size * 0.05}px`, textTransform: 'uppercase', letterSpacing: '0.14em', marginTop: `${size * 0.015}px` }}>sec</span>
       </div>
     </div>
   );
