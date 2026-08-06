@@ -687,6 +687,11 @@ select:focus-visible,
 }
 .lobby-join-card-glass .glass {
   box-shadow: 0px 12px 40px rgba(0, 0, 0, 0.125) !important;
+  /* Dark scrim behind the frosted blur, so the URL/PIN text and the white
+     QR swatch both read against a consistently dim panel regardless of
+     what's showing through from the page behind it. Tinted purple to match
+     this card's ring/accent instead of a neutral black. */
+  background: rgba(158, 18, 204, 0.005);
 }
 
 /* Mode toggle wants the same softened weight but not a fixed color — its
@@ -703,24 +708,34 @@ select:focus-visible,
   box-shadow: 0px 12px 40px rgba(0, 0, 0, 0.125) !important;
 }
 
-/* The settings popover's own card — same real LiquidGlass as everything
-   else in it now rather than a flat blurred rgba panel. Ring color is
-   NOT set here — it comes from glass-tint-purple on the same wrapper,
-   same reasoning as the mode toggle above: our own content (the song
-   source/difficulty pills, steppers, toggle) is nested *inside* this
-   glass, so a hardcoded box-shadow here would cascade into their
-   `.glass::after` too and — being defined later in the file than their
-   own glass-tint-*/settings-pill-glass rules — would always win, painting
-   every nested control's ring purple regardless of its own tint. This
-   block has to stay positioned before every per-context tint/opacity rule
-   below for that same reason: the more specific rule further down wins
-   the tiebreak for anything nested inside this card, while this rule is
-   still all this card's own (un-nested) ring/shadow gets. */
-.settings-panel-glass .glass::after {
-  opacity: 0.6 !important;
-}
-.settings-panel-glass .glass {
-  box-shadow: 0 24px 48px rgba(0,0,0,0.45), inset 0 1px 0 rgba(255,255,255,0.05) !important;
+/* Settings panel's own emulated ring (see SettingsPanel.tsx for why it's a
+   plain div, not real LiquidGlass): same masked-gradient-ring technique as
+   .liquid-glass-stabilizer .glass::after above, but with the highlight at
+   both far corners (top-right/bottom-left) rather than a single streak
+   through the middle — the 0%/100% stops of a `to top right` gradient sit
+   exactly on those two opposite corners regardless of the panel's aspect
+   ratio, with the dim point at 50% falling on the other two corners. The
+   uniform box-shadow ring underneath is kept very faint — it's just there
+   so the border reads as a border between the two corner highlights, not a
+   flat colored outline competing with them. */
+.settings-panel-ring::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  border-radius: inherit;
+  box-sizing: border-box;
+  padding: 1.5px;
+  pointer-events: none;
+  background: linear-gradient(to top right,
+    rgba(235,222,255,0.4) 0%,
+    rgba(158,18,204,0) 42%,
+    rgba(158,18,204,0) 58%,
+    rgba(235,222,255,0.4) 100%);
+  -webkit-mask: linear-gradient(#000 0 0) content-box, linear-gradient(#000 0 0);
+  mask: linear-gradient(#000 0 0) content-box, linear-gradient(#000 0 0);
+  -webkit-mask-composite: xor;
+  mask-composite: exclude;
+  box-shadow: 0 0 0 0.5px rgba(158,18,204,0.15) inset, 0 0 0 1px rgba(158,18,204,0.1) inset;
 }
 
 /* Settings panel's small pill controls (song source / difficulty switches,
