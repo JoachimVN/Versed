@@ -32,8 +32,10 @@ export const AUDIO_BAR_COLORS: Record<'classic' | 'race' | 'year' | 'party', str
   classic: 'rgba(158,18,204,0.75)',
   race: 'rgba(234,88,12,0.75)',
   year: 'rgba(0,238,232,0.75)',
-  // Aqua/teal, distinct from year's brighter cyan — matches glass-tint-teal.
-  party: 'rgba(0,166,163,0.75)',
+  // Matches year's cyan — the eq bar/playing-card accent no longer
+  // distinguishes party from year (party still keeps its own teal
+  // elsewhere, e.g. the Home/Join mode buttons).
+  party: 'rgba(0,238,232,0.75)',
 };
 
 // Matches the AUDIO_BAR_COLORS hue to the app's existing per-mode glass ring
@@ -44,7 +46,7 @@ export const ACCENT_TINT_CLASS: Record<'classic' | 'race' | 'year' | 'party', st
   classic: 'glass-tint-purple',
   race: 'glass-tint-orange',
   year: 'glass-tint-cyan',
-  party: 'glass-tint-teal',
+  party: 'glass-tint-cyan',
 };
 
 // A faint interior wash to lay over a "playing" card's own content area, so
@@ -55,7 +57,7 @@ export const ACCENT_WASH: Record<'classic' | 'race' | 'year' | 'party', string> 
   classic: 'rgba(158,18,204,0.035)',
   race: 'rgba(234,88,12,0.035)',
   year: 'rgba(0,238,232,0.035)',
-  party: 'rgba(0,166,163,0.035)',
+  party: 'rgba(0,238,232,0.035)',
 };
 
 // The "playing" card's own breathing glow (index.css @keyframes) — one
@@ -66,7 +68,17 @@ export const ACCENT_GLOW_ANIMATION: Record<'classic' | 'race' | 'year' | 'party'
   classic: 'cardGlowPulsePurple',
   race: 'cardGlowPulseOrange',
   year: 'cardGlowPulseCyan',
-  party: 'cardGlowPulseTeal',
+  party: 'cardGlowPulseCyan',
+};
+
+// CSS hue-rotate degree applied to the shared background8.png backdrop so
+// its native blue tint reads as this round's accent color instead of a
+// fixed hue regardless of mode.
+export const ACCENT_BG_HUE: Record<'classic' | 'race' | 'year' | 'party', number> = {
+  classic: 72,
+  race: 160,
+  year: -22,
+  party: -22,
 };
 
 // Detected tempo can be wildly wrong (half/double-time, or missing) — clamp

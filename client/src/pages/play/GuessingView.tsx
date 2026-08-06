@@ -5,7 +5,7 @@ import { useFocusTrap } from '../../hooks/useFocusTrap';
 import { readKeyboardInset, useKeyboardOpen } from '../../hooks/useViewportLayout';
 import { PartyBadge } from '../../components/RoundIntro';
 import { CircularTimer, LinearTimer } from '../../components/CircularTimer';
-import { AudioBars } from '../../components/AudioBars';
+import { AudioBars, ACCENT_BG_HUE } from '../../components/AudioBars';
 import { LIQUID_CARD_PROPS, LIQUID_PILL_PROPS } from '../../components/liquidGlassPresets';
 import type { Hint } from '../../types';
 import type { PlayState } from './usePlayGame';
@@ -293,6 +293,7 @@ export function GuessingView({ game }: Readonly<{ game: PlayState }>) {
   const target = resolveTarget(party, artistOnly, yearOnly);
   const isYear = target === 'year';
   const isBoth = target === 'both';
+  const bgAccent: 'classic' | 'race' | 'year' | 'party' = isYear ? 'year' : party ? 'party' : mode === 'race' ? 'race' : 'classic';
   const keyboardOpen = useKeyboardOpen();
   const { compact, ultraCompact, landscape } = useGuessingLayout(isBoth, keyboardOpen);
   const squeezeTier = { compact, ultraCompact };
@@ -414,7 +415,9 @@ export function GuessingView({ game }: Readonly<{ game: PlayState }>) {
           off at the keyboard's edge instead of extending behind it (see
           App.tsx). absolute against this relative, min-h-screen wrapper
           covers the same area without the clipping. */}
-      <img src={`${import.meta.env.BASE_URL}backgrounds/background4.svg`} alt="" aria-hidden="true" style={{ position: 'absolute', inset: 0, width: '100%', height: '100%', objectFit: 'cover', zIndex: 0, transform: 'rotate(180deg)' }} />
+      <div aria-hidden="true" style={{ position: 'absolute', inset: 0, zIndex: 0, overflow: 'hidden', pointerEvents: 'none' }}>
+        <img src={`${import.meta.env.BASE_URL}backgrounds/background8.png`} alt="" className="bg-fill-image" style={{ filter: `hue-rotate(${ACCENT_BG_HUE[bgAccent]}deg)` }} />
+      </div>
       <div style={{ position: 'absolute', inset: 0, zIndex: 1, background: 'rgba(5,5,14,0.82)', backdropFilter: 'blur(36px)' }} />
 
       {/* Reserving the keyboard's height at the bottom is what keeps Submit and

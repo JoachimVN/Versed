@@ -24,6 +24,17 @@ html, body {
   height: 100%;
 }
 
+/* background8.png is a tall 2560x5120 portrait image used as a full-bleed
+   backdrop — cover-fit and centered, so the image's own vertical middle is
+   always what shows regardless of screen aspect ratio. */
+.bg-fill-image {
+  display: block;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  object-position: center;
+}
+
 body {
   background-color: #080812;
   color: white;

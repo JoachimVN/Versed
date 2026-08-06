@@ -2,7 +2,7 @@ import { useState, useEffect } from 'react';
 import { Flame } from 'lucide-react';
 import LiquidGlass from '../../components/StableLiquidGlass';
 import { PartyBadge } from '../../components/RoundIntro';
-import { AudioBars, ACCENT_TINT_CLASS, ACCENT_WASH, ACCENT_GLOW_ANIMATION } from '../../components/AudioBars';
+import { AudioBars, ACCENT_TINT_CLASS, ACCENT_WASH, ACCENT_GLOW_ANIMATION, ACCENT_BG_HUE } from '../../components/AudioBars';
 import { useRevealLayout } from '../../components/revealSqueeze';
 import type { PartyInfo } from '../../types';
 import type { PlayState } from './usePlayGame';
@@ -44,12 +44,14 @@ export function WatchingView({ game }: Readonly<{ game: PlayState }>) {
   return (
     <div className="relative min-h-screen overflow-x-hidden overflow-y-auto overscroll-contain">
       {/* Background */}
-      <img
-        src={`${import.meta.env.BASE_URL}backgrounds/background4.svg`}
-        alt=""
-        aria-hidden="true"
-        style={{ position: 'absolute', inset: 0, width: '100%', height: '100%', objectFit: 'cover', zIndex: 0, transform: 'rotate(180deg)' }}
-      />
+      <div aria-hidden="true" style={{ position: 'absolute', inset: 0, zIndex: 0, overflow: 'hidden', pointerEvents: 'none' }}>
+        <img
+          src={`${import.meta.env.BASE_URL}backgrounds/background8.png`}
+          alt=""
+          className="bg-fill-image"
+          style={{ filter: `hue-rotate(${ACCENT_BG_HUE[watchAccent]}deg)` }}
+        />
+      </div>
       <div style={{ position: 'absolute', inset: 0, zIndex: 1, background: 'rgba(5,5,14,0.82)', backdropFilter: 'blur(36px)' }} />
 
       {/* Content */}
