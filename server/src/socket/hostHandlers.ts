@@ -200,7 +200,8 @@ export function registerHostHandlers(socket: Socket) {
     if (game.phaseTimer) clearTimeout(game.phaseTimer);
     game.phaseEndsAt = null;
     game.phase = 'finished';
-    getIo().to(game.pin).emit('game_over', { leaderboard: gm.getLeaderboard(game), awards: gm.computeAwards(game) });
+    game.finishedAt = Date.now();
+    getIo().to(game.pin).emit('game_over', { leaderboard: gm.getLeaderboard(game), awards: gm.computeAwards(game), finishedAt: game.finishedAt });
   });
 
   // ── Host: skip the final-results cinematic ─────────────────────────────────
@@ -239,7 +240,8 @@ export function registerHostHandlers(socket: Socket) {
     game.roundIndex += 1;
     if (game.roundIndex >= game.totalRounds) {
       game.phase = 'finished';
-      getIo().to(game.pin).emit('game_over', { leaderboard: gm.getLeaderboard(game), awards: gm.computeAwards(game) });
+      game.finishedAt = Date.now();
+      getIo().to(game.pin).emit('game_over', { leaderboard: gm.getLeaderboard(game), awards: gm.computeAwards(game), finishedAt: game.finishedAt });
       return;
     }
     beginRound(game);

@@ -124,7 +124,7 @@ export function syncState(socket: Socket, game: Game) {
   const round = game.currentRound;
 
   if (game.phase === 'finished') {
-    socket.emit('game_over', { leaderboard: gm.getLeaderboard(game), awards: gm.computeAwards(game) });
+    socket.emit('game_over', { leaderboard: gm.getLeaderboard(game), awards: gm.computeAwards(game), finishedAt: game.finishedAt });
     return;
   }
 
