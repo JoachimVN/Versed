@@ -418,16 +418,20 @@ const MOCK_PLAY_REVEAL: PlayState = {
   myStreak: 3,
 };
 
+// Uses the 7-player crowd fixture (not the 3-player MOCK_RESULT_YEAR) so the
+// "other scorers" strip under the timeline actually has several rows to show
+// -- with only 3 players, 'me' and the one skip leave just 1-2 other
+// scorers, never enough to see the list's own spacing/truncation at work.
 const MOCK_PLAY_YEAR_REVEAL: PlayState = {
   ...MOCK_PLAY,
   phase: 'reveal',
   myName: 'Anna',
   myScore: 4350,
   myScoreDelta: 480,
-  myRank: { rank: 2, total: 4 },
+  myRank: { rank: 3, total: 7 },
   myBreakdown: { parts: [{ label: 'Closeness', amount: 480 }], multiplier: 1, multiplierBonus: 0, pity: 0, total: 480 },
   myStreak: 0,
-  party: MOCK_RESULT_YEAR.party ?? null,
+  party: CROWD_RESULT_YEAR.party ?? null,
 };
 
 const MOCK_RESULT_NOONE: RoundResultEvent = {
@@ -572,7 +576,7 @@ export default function Screenshot() {
     'year-guessing': <PlayerScaleShell><GuessingView game={MOCK_PLAY_YEAR_GUESSING} /></PlayerScaleShell>,
     'guessing-both': <PlayerScaleShell><GuessingView game={MOCK_PLAY_GUESSING_BOTH} /></PlayerScaleShell>,
     'play-reveal': <PlayerScaleShell><PlayRevealView game={MOCK_PLAY_REVEAL} result={MOCK_RESULT} /></PlayerScaleShell>,
-    'play-year-reveal': <PlayerScaleShell><PlayYearRevealView game={MOCK_PLAY_YEAR_REVEAL} result={MOCK_RESULT_YEAR} /></PlayerScaleShell>,
+    'play-year-reveal': <PlayerScaleShell><PlayYearRevealView game={MOCK_PLAY_YEAR_REVEAL} result={CROWD_RESULT_YEAR} /></PlayerScaleShell>,
     'play-reveal-noone': <PlayerScaleShell><PlayRevealView game={MOCK_PLAY_REVEAL_NOONE} result={MOCK_RESULT_NOONE} /></PlayerScaleShell>,
     'play-reveal-crowd': <PlayerScaleShell><PlayRevealView game={MOCK_PLAY_REVEAL_CROWD} result={CROWD_RESULT} /></PlayerScaleShell>,
     'reveal-crowd': <HostScaleShell><RevealView game={MOCK_HOST_REVEAL_CROWD} result={CROWD_RESULT} instant /></HostScaleShell>,
