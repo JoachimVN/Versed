@@ -89,9 +89,9 @@ export function CircularTimer({ timeLeft, total, size = 128 }: Readonly<{ timeLe
 // middle stop is deliberately the most desaturated of the three so it reads
 // as a bridging accent rather than a third competing hue.
 const HERO_GRADIENT_STOPS: Record<'classic' | 'race' | 'party', readonly [string, string, string]> = {
-  classic: ['#7e5dab', '#5f8f99', '#9c5fa0'],
-  race: ['#c07a45', '#7c6a90', '#c99b7d'],
-  party: ['#5bacbb', '#7c6a90', '#3d7d76'],
+  classic: ['#7e5dab', '#79648f', '#9c5fa0'],
+  race: ['#c07a45', '#957a6d', '#c99b7d'],
+  party: ['#5bacbb', '#587f89', '#3d7d76'],
 };
 
 // Drop-shadow tint for the ring's glow — the average of each mode's three
@@ -104,18 +104,31 @@ const HERO_GLOW_COLOR: Record<'classic' | 'race' | 'party', string> = {
   party: 'rgba(92,134,150,0.22)',
 };
 
+function hexToRgb(hex: string): readonly [number, number, number] {
+  const n = parseInt(hex.slice(1), 16);
+  return [(n >> 16) & 255, (n >> 8) & 255, n & 255];
+}
+
+function lerpColor(a: string, b: string, t: number): string {
+  const [ar, ag, ab] = hexToRgb(a);
+  const [br, bg, bb] = hexToRgb(b);
+  return `rgb(${Math.round(ar + (br - ar) * t)},${Math.round(ag + (bg - ag) * t)},${Math.round(ab + (bb - ab) * t)})`;
+}
+
 // The host "playing" card's dominant hero dial: a thick ring painted with a
-// true angular (conic) gradient, compressed into just the swept arc so the
-// full 3-color range is visible even on a short arc — a plain 0%-100% div
-// diagonal would only show a narrow slice of it at low time-remaining.
-// This used to be an SVG <linearGradient> painted across the circle via
-// userSpaceOnUse, matching its vector to the arc's own start/end points, but
-// a linear gradient interpolates along a straight chord — for points on a
-// circular arc that means color pacing is slow near both ends and fast
-// through the arc's middle, and undefined outright at a full 360° sweep
-// (the chord's two endpoints coincide). conic-gradient interpolates by
-// angle instead, so pacing is even all the way around and a full sweep is
-// just the ordinary 360° case, no special-casing needed.
+// true angular (conic) gradient. The 3 colors are anchored to fixed points
+// around the circle (0deg/180deg/360deg) rather than rescaled to fit
+// whatever's currently swept — so the ring is a single gradient "painting"
+// that a shrinking/growing arc reveals more or less of, not a gradient that
+// itself stretches and squashes as the arc changes size. This used to be an
+// SVG <linearGradient> painted across the circle via userSpaceOnUse,
+// matching its vector to the arc's own start/end points, but a linear
+// gradient interpolates along a straight chord — for points on a circular
+// arc that means color pacing is slow near both ends and fast through the
+// arc's middle, and undefined outright at a full 360° sweep (the chord's two
+// endpoints coincide). conic-gradient interpolates by angle instead, so
+// pacing is even all the way around and a full sweep is just the ordinary
+// 360° case, no special-casing needed.
 export function HeroTimer({ timeLeft, total, size = 200, mode = 'classic' }: Readonly<{ timeLeft: number; total: number; size?: number; mode?: 'classic' | 'race' | 'party' }>) {
   const sw = size * 0.058;
   const r = (size - sw * 2) / 2; // ring centerline radius — matches the old SVG stroke circle's radius exactly
@@ -126,7 +139,13 @@ export function HeroTimer({ timeLeft, total, size = 200, mode = 'classic' }: Rea
   // already points up, so no extra rotation is needed here (unlike the old
   // SVG circle, which had to rotate -90deg to move its 0deg from 3 o'clock).
   const sweepDeg = pct * 360;
-  const ringBackground = `conic-gradient(from 0deg, ${startColor} 0deg, ${midColor} ${sweepDeg / 2}deg, ${endColor} ${sweepDeg}deg, transparent ${sweepDeg}deg)`;
+  // The color exactly at the sweep's cutoff, on the *fixed* 0/180/360 ramp —
+  // used both to paint the hard transparent cutoff at the right color (so it
+  // doesn't jump) and to color the moving cap dot below.
+  const cutoffColor = sweepDeg <= 180 ? lerpColor(startColor, midColor, sweepDeg / 180) : lerpColor(midColor, endColor, (sweepDeg - 180) / 180);
+  const ringBackground = sweepDeg <= 180
+    ? `conic-gradient(from 0deg, ${startColor} 0deg, ${cutoffColor} ${sweepDeg}deg, transparent ${sweepDeg}deg, transparent 360deg)`
+    : `conic-gradient(from 0deg, ${startColor} 0deg, ${midColor} 180deg, ${cutoffColor} ${sweepDeg}deg, transparent ${sweepDeg}deg, transparent 360deg)`;
   // Explicit pixel radii, not percentages — a radial-gradient's own "100%"
   // is the ending shape's radius, not the box's, so "50%" here would NOT
   // mean "half the box" the way it does for a plain background-position;
@@ -149,7 +168,7 @@ export function HeroTimer({ timeLeft, total, size = 200, mode = 'classic' }: Rea
           {/* Round caps at both arc ends — a conic-gradient cuts off flat by
               default, unlike the old SVG stroke's strokeLinecap="round". */}
           <div aria-hidden="true" className="absolute rounded-full" style={{ width: sw, height: sw, left: center - sw / 2, top: center - r - sw / 2, background: startColor }} />
-          <div aria-hidden="true" className="absolute rounded-full" style={{ width: sw, height: sw, left: capX - sw / 2, top: capY - sw / 2, background: endColor }} />
+          <div aria-hidden="true" className="absolute rounded-full" style={{ width: sw, height: sw, left: capX - sw / 2, top: capY - sw / 2, background: cutoffColor }} />
         </>
       )}
       <div className="absolute inset-0 flex flex-col items-center justify-center">

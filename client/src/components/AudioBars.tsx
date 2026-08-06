@@ -58,6 +58,17 @@ export const ACCENT_WASH: Record<'classic' | 'race' | 'year' | 'party', string> 
   party: 'rgba(0,166,163,0.035)',
 };
 
+// The "playing" card's own breathing glow (index.css @keyframes) — one
+// single-hue variant per accent, so the glow reads as this round's color
+// instead of the generic fixed purple/cyan cardGlowPulse every other glass
+// card uses.
+export const ACCENT_GLOW_ANIMATION: Record<'classic' | 'race' | 'year' | 'party', string> = {
+  classic: 'cardGlowPulsePurple',
+  race: 'cardGlowPulseOrange',
+  year: 'cardGlowPulseCyan',
+  party: 'cardGlowPulseTeal',
+};
+
 // Detected tempo can be wildly wrong (half/double-time, or missing) — clamp
 // the resulting pulse length so a bad value can't freeze or strobe the bars.
 // Wide enough (0.3s-2s) to stay out of the way for the ~50-190bpm range real

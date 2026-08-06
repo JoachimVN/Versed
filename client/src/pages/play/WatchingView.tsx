@@ -2,7 +2,7 @@ import { useState, useEffect } from 'react';
 import { Flame } from 'lucide-react';
 import LiquidGlass from '../../components/StableLiquidGlass';
 import { PartyBadge } from '../../components/RoundIntro';
-import { AudioBars, ACCENT_TINT_CLASS, ACCENT_WASH } from '../../components/AudioBars';
+import { AudioBars, ACCENT_TINT_CLASS, ACCENT_WASH, ACCENT_GLOW_ANIMATION } from '../../components/AudioBars';
 import { useRevealLayout } from '../../components/revealSqueeze';
 import type { PartyInfo } from '../../types';
 import type { PlayState } from './usePlayGame';
@@ -75,7 +75,7 @@ export function WatchingView({ game }: Readonly<{ game: PlayState }>) {
             className={`liquid-btn relative ${ACCENT_TINT_CLASS[watchAccent]}`}
             style={{
               width: 'min(94vw, 480px)', height: cardHeight,
-              animationName: songPlaying ? 'cardGlowPulse' : undefined,
+              animationName: songPlaying ? ACCENT_GLOW_ANIMATION[watchAccent] : undefined,
               animationDuration: '4.2s', animationTimingFunction: 'ease-in-out', animationIterationCount: 'infinite',
             }}
           >

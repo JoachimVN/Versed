@@ -1,7 +1,7 @@
 import LiquidGlass from '../../components/StableLiquidGlass';
 import { PartyBadge } from '../../components/RoundIntro';
 import { CircularTimer, HeroTimer } from '../../components/CircularTimer';
-import { AudioBars, ACCENT_TINT_CLASS, ACCENT_WASH } from '../../components/AudioBars';
+import { AudioBars, ACCENT_TINT_CLASS, ACCENT_WASH, ACCENT_GLOW_ANIMATION } from '../../components/AudioBars';
 import { LIQUID_CARD_PROPS } from '../../components/liquidGlassPresets';
 import { useRevealLayout } from '../../components/revealSqueeze';
 import type { HostState } from './useHostGame';
@@ -173,7 +173,7 @@ export function PlayingView({ game }: Readonly<{ game: HostState }>) {
           className={`liquid-btn host-game-card relative ${ACCENT_TINT_CLASS[accent]}`}
           style={{
             width: cardWidth, height: cardHeight,
-            animationName: songPlaying ? 'cardGlowPulse' : undefined,
+            animationName: songPlaying ? ACCENT_GLOW_ANIMATION[accent] : undefined,
             animationDuration: '4.2s', animationTimingFunction: 'ease-in-out', animationIterationCount: 'infinite',
           }}
         >

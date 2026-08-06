@@ -1398,6 +1398,28 @@ select:focus-visible,
   50%       { filter: drop-shadow(0 0 18px rgba(158,18,204,0.32)) drop-shadow(0 0 26px rgba(0,238,232,0.16)); }
 }
 
+/* Same breathing glow as cardGlowPulse above, but tinted to a single accent
+   color instead of the fixed purple/cyan pair — used by the host/player
+   "playing" cards (PlayingView.tsx / WatchingView.tsx), which pick one of
+   these per round accent so the card's own glow doesn't read as a fixed
+   purple regardless of classic/race/party/year. */
+@keyframes cardGlowPulsePurple {
+  0%, 100% { filter: drop-shadow(0 0 10px rgba(158,18,204,0.18)) drop-shadow(0 0 18px rgba(158,18,204,0.08)); }
+  50%       { filter: drop-shadow(0 0 18px rgba(158,18,204,0.32)) drop-shadow(0 0 26px rgba(158,18,204,0.16)); }
+}
+@keyframes cardGlowPulseOrange {
+  0%, 100% { filter: drop-shadow(0 0 10px rgba(234,88,12,0.18)) drop-shadow(0 0 18px rgba(234,88,12,0.08)); }
+  50%       { filter: drop-shadow(0 0 18px rgba(234,88,12,0.32)) drop-shadow(0 0 26px rgba(234,88,12,0.16)); }
+}
+@keyframes cardGlowPulseCyan {
+  0%, 100% { filter: drop-shadow(0 0 10px rgba(0,238,232,0.18)) drop-shadow(0 0 18px rgba(0,238,232,0.08)); }
+  50%       { filter: drop-shadow(0 0 18px rgba(0,238,232,0.32)) drop-shadow(0 0 26px rgba(0,238,232,0.16)); }
+}
+@keyframes cardGlowPulseTeal {
+  0%, 100% { filter: drop-shadow(0 0 10px rgba(0,166,163,0.18)) drop-shadow(0 0 18px rgba(0,166,163,0.08)); }
+  50%       { filter: drop-shadow(0 0 18px rgba(0,166,163,0.32)) drop-shadow(0 0 26px rgba(0,166,163,0.16)); }
+}
+
 /* Idle pulse for the "Waiting for host to start…" caption beneath Play's
    waiting-room vinyl — a small secondary motion cue so the big disc doesn't
    have to double as the only sign anything is "live". */
