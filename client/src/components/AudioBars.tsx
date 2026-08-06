@@ -28,30 +28,34 @@ const AUDIO_BARS = [
   { anim: 'audioBarC', dur: 1.2, beats: 1,    delay: 0.26, delayFrac: 0.24, base: 0.5  },
 ] as const;
 
-export const AUDIO_BAR_COLORS: Record<'classic' | 'race' | 'year', string> = {
+export const AUDIO_BAR_COLORS: Record<'classic' | 'race' | 'year' | 'party', string> = {
   classic: 'rgba(158,18,204,0.75)',
   race: 'rgba(234,88,12,0.75)',
   year: 'rgba(0,238,232,0.75)',
+  // Aqua/teal, distinct from year's brighter cyan — matches glass-tint-teal.
+  party: 'rgba(0,166,163,0.75)',
 };
 
 // Matches the AUDIO_BAR_COLORS hue to the app's existing per-mode glass ring
 // treatment (index.css .glass-tint-*, already used by every mode-colored CTA)
 // so the "playing" cards can pick up a breathing accent glow without
 // inventing a new color system.
-export const ACCENT_TINT_CLASS: Record<'classic' | 'race' | 'year', string> = {
+export const ACCENT_TINT_CLASS: Record<'classic' | 'race' | 'year' | 'party', string> = {
   classic: 'glass-tint-purple',
   race: 'glass-tint-orange',
   year: 'glass-tint-cyan',
+  party: 'glass-tint-teal',
 };
 
 // A faint interior wash to lay over a "playing" card's own content area, so
 // the accent reads as light filling the glass, not just the edge ring above.
 // Deliberately subtle — bled to the card's full edges (see callers), a
 // stronger value here reads as a solid colored panel rather than a tint.
-export const ACCENT_WASH: Record<'classic' | 'race' | 'year', string> = {
+export const ACCENT_WASH: Record<'classic' | 'race' | 'year' | 'party', string> = {
   classic: 'rgba(158,18,204,0.035)',
   race: 'rgba(234,88,12,0.035)',
   year: 'rgba(0,238,232,0.035)',
+  party: 'rgba(0,166,163,0.035)',
 };
 
 // Detected tempo can be wildly wrong (half/double-time, or missing) — clamp
@@ -71,7 +75,7 @@ function beatSeconds(bpm: number | null | undefined): number | null {
 // 9-bar equalizer, each bar animating independently. Idle (low, static bars)
 // when nothing's playing. Pass `bpm` (the song's tempo) to have the bars
 // pulse in time with the track instead of a fixed, tempo-agnostic rhythm.
-export function AudioBars({ playing, accent, height, bpm }: Readonly<{ playing: boolean; accent: 'classic' | 'race' | 'year'; height: number; bpm?: number | null }>) {
+export function AudioBars({ playing, accent, height, bpm }: Readonly<{ playing: boolean; accent: 'classic' | 'race' | 'year' | 'party'; height: number; bpm?: number | null }>) {
   const barColor = AUDIO_BAR_COLORS[accent];
   const beatSec = beatSeconds(bpm);
   return (

@@ -1,4 +1,4 @@
-import { useEffect, useId, useRef, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 
 export function timerColor(pct: number): string {
   if (pct > 0.6) return 'rgba(52,211,153,0.9)';
@@ -88,68 +88,70 @@ export function CircularTimer({ timeLeft, total, size = 128 }: Readonly<{ timeLe
 // them (read as too light/washed out) — this sits between the two. The
 // middle stop is deliberately the most desaturated of the three so it reads
 // as a bridging accent rather than a third competing hue.
-const HERO_GRADIENT_STOPS: Record<'classic' | 'race' | 'party', readonly [string, string][]> = {
-  classic: [
-    ['0%', '#7e5dab'],
-    ['50%', '#5f8f99'],
-    ['100%', '#9c5fa0'],
-  ],
-  race: [
-    ['0%', '#c07a45'],
-    ['50%', '#7c6a90'],
-    ['100%', '#c99b7d'],
-  ],
-  party: [
-    ['0%', '#5b93a3'],
-    ['50%', '#7c6a90'],
-    ['100%', '#539c94'],
-  ],
+const HERO_GRADIENT_STOPS: Record<'classic' | 'race' | 'party', readonly [string, string, string]> = {
+  classic: ['#7e5dab', '#5f8f99', '#9c5fa0'],
+  race: ['#c07a45', '#7c6a90', '#c99b7d'],
+  party: ['#5bacbb', '#7c6a90', '#3d7d76'],
 };
 
-// The host "playing" card's dominant hero dial: a thick ring painted with
-// that fixed gradient. `gradientUnits="userSpaceOnUse"` with x1/y1/x2/y2 set
-// to the arc's own start/end points (rather than a plain 0%-100% diagonal
-// across the ring's whole bounding box) is what makes the full color range
-// visible on a short arc too — a corner-to-corner diagonal only shows a
-// narrow slice of the gradient when just 10-20% of the ring is drawn, which
-// read as "no gradient" at low time-remaining.
+// Drop-shadow tint for the ring's glow — the average of each mode's three
+// gradient stops above, so the glow reads as "light cast by this ring"
+// rather than a generic fixed color that drifts from whatever's actually
+// on the stroke.
+const HERO_GLOW_COLOR: Record<'classic' | 'race' | 'party', string> = {
+  classic: 'rgba(126,110,161,0.22)',
+  race: 'rgba(172,128,113,0.22)',
+  party: 'rgba(92,134,150,0.22)',
+};
+
+// The host "playing" card's dominant hero dial: a thick ring painted with a
+// true angular (conic) gradient, compressed into just the swept arc so the
+// full 3-color range is visible even on a short arc — a plain 0%-100% div
+// diagonal would only show a narrow slice of it at low time-remaining.
+// This used to be an SVG <linearGradient> painted across the circle via
+// userSpaceOnUse, matching its vector to the arc's own start/end points, but
+// a linear gradient interpolates along a straight chord — for points on a
+// circular arc that means color pacing is slow near both ends and fast
+// through the arc's middle, and undefined outright at a full 360° sweep
+// (the chord's two endpoints coincide). conic-gradient interpolates by
+// angle instead, so pacing is even all the way around and a full sweep is
+// just the ordinary 360° case, no special-casing needed.
 export function HeroTimer({ timeLeft, total, size = 200, mode = 'classic' }: Readonly<{ timeLeft: number; total: number; size?: number; mode?: 'classic' | 'race' | 'party' }>) {
   const sw = size * 0.058;
-  const r = (size - sw * 2) / 2;
-  const circ = 2 * Math.PI * r;
+  const r = (size - sw * 2) / 2; // ring centerline radius — matches the old SVG stroke circle's radius exactly
   const pct = useTimerPct(timeLeft, total);
-  const gradId = useId();
   const center = size / 2;
-  const gradientStops = HERO_GRADIENT_STOPS[mode];
-  // Arc start is fixed at local angle 0 (screen 12 o'clock, after the -90deg
-  // rotate below); the visible arc sweeps clockwise on screen as pct grows,
-  // which is local angle +pct*360deg (see CircularTimer's identical
-  // strokeDasharray/offset mechanic for the underlying geometry).
-  const endAngle = pct * 2 * Math.PI;
-  const gx1 = center + r;
-  const gy1 = center;
-  const gx2 = center + r * Math.cos(endAngle);
-  const gy2 = center + r * Math.sin(endAngle);
+  const [startColor, midColor, endColor] = HERO_GRADIENT_STOPS[mode];
+  // 12 o'clock, sweeping clockwise as pct grows — conic-gradient's own 0deg
+  // already points up, so no extra rotation is needed here (unlike the old
+  // SVG circle, which had to rotate -90deg to move its 0deg from 3 o'clock).
+  const sweepDeg = pct * 360;
+  const ringBackground = `conic-gradient(from 0deg, ${startColor} 0deg, ${midColor} ${sweepDeg / 2}deg, ${endColor} ${sweepDeg}deg, transparent ${sweepDeg}deg)`;
+  // Explicit pixel radii, not percentages — a radial-gradient's own "100%"
+  // is the ending shape's radius, not the box's, so "50%" here would NOT
+  // mean "half the box" the way it does for a plain background-position;
+  // spelling out the two band edges in px sidesteps that trap entirely.
+  const ringMask = `radial-gradient(circle ${r + sw / 2}px at 50% 50%, transparent ${r - sw / 2 - 1}px, black ${r - sw / 2}px, black ${r + sw / 2}px, transparent ${r + sw / 2 + 1}px)`;
+  const sweepRad = (sweepDeg * Math.PI) / 180;
+  const capX = center + r * Math.sin(sweepRad);
+  const capY = center - r * Math.cos(sweepRad);
 
   return (
     <div className="relative" style={{ width: size, height: size }}>
-      <svg width={size} height={size} className="absolute inset-0" style={{ transform: 'rotate(-90deg)', overflow: 'visible' }}>
-        <defs>
-          <linearGradient id={gradId} gradientUnits="userSpaceOnUse" x1={gx1} y1={gy1} x2={gx2} y2={gy2}>
-            {gradientStops.map(([offset, color]) => <stop key={offset} offset={offset} stopColor={color} />)}
-          </linearGradient>
-        </defs>
-        <circle cx={center} cy={center} r={r} fill="none" stroke="rgba(255,255,255,0.05)" strokeWidth={sw} />
-        <circle
-          cx={center} cy={center} r={r} fill="none"
-          stroke={`url(#${gradId})`}
-          strokeWidth={sw}
-          strokeDasharray={circ}
-          strokeDashoffset={circ * (1 - pct)}
-          strokeLinecap="round"
-          style={{ filter: 'drop-shadow(0 0 5px rgba(120,110,150,0.22))' }}
-        />
-      </svg>
+      <div aria-hidden="true" className="absolute inset-0 rounded-full" style={{ background: 'rgba(255,255,255,0.05)', WebkitMaskImage: ringMask, maskImage: ringMask }} />
+      {pct > 0 && (
+        <>
+          <div
+            aria-hidden="true"
+            className="absolute inset-0 rounded-full"
+            style={{ background: ringBackground, WebkitMaskImage: ringMask, maskImage: ringMask, filter: `drop-shadow(0 0 5px ${HERO_GLOW_COLOR[mode]})` }}
+          />
+          {/* Round caps at both arc ends — a conic-gradient cuts off flat by
+              default, unlike the old SVG stroke's strokeLinecap="round". */}
+          <div aria-hidden="true" className="absolute rounded-full" style={{ width: sw, height: sw, left: center - sw / 2, top: center - r - sw / 2, background: startColor }} />
+          <div aria-hidden="true" className="absolute rounded-full" style={{ width: sw, height: sw, left: capX - sw / 2, top: capY - sw / 2, background: endColor }} />
+        </>
+      )}
       <div className="absolute inset-0 flex flex-col items-center justify-center">
         <span className="text-white font-black" style={{ fontSize: `${size * 0.2}px`, lineHeight: 1 }}>{timeLeft}</span>
         <span style={{ color: 'rgba(255,255,255,0.55)', fontSize: `${size * 0.05}px`, textTransform: 'uppercase', letterSpacing: '0.14em', marginTop: `${size * 0.015}px` }}>sec</span>

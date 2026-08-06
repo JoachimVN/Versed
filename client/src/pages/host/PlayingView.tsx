@@ -111,7 +111,7 @@ function BidChipRow({ bids, lowestBid }: Readonly<{ bids: { name: string; bid: n
 // demoted to compact supporting chrome so the countdown dial underneath is
 // the card's one dominant hero, not one block among several equal-weight ones.
 function EyebrowRow({ label, accent, songPlaying, songTempo, size }: Readonly<{
-  label: string; accent: 'classic' | 'race' | 'year'; songPlaying: boolean; songTempo?: number | null; size: number;
+  label: string; accent: 'classic' | 'race' | 'year' | 'party'; songPlaying: boolean; songTempo?: number | null; size: number;
 }>) {
   return (
     <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '6px' }}>
@@ -143,7 +143,11 @@ export function PlayingView({ game }: Readonly<{ game: HostState }>) {
   const raceStatus = restrictedNames
     ? `${restrictedNames.join(nameSeparator)} - first correct wins`
     : `${answeredCount} / ${players.length} answered`;
-  const accent = roundAccent(isRace, isYear);
+  // Party mode gets its own aqua identity across the card (ring, tint, eq
+  // bar) rather than falling through to race/classic's colors, since here
+  // "mode" is the thing driving HeroTimer's ring gradient too — year rounds
+  // still win out, since that's a guess-target distinction orthogonal to mode.
+  const accent: 'classic' | 'race' | 'year' | 'party' = isYear ? 'year' : mode === 'party' ? 'party' : roundAccent(isRace, isYear);
   const { compact, ultraCompact } = useRevealLayout();
   const tier: 'ultra' | 'compact' | 'normal' = ultraCompact ? 'ultra' : compact ? 'compact' : 'normal';
   // The dial is the card's one dominant hero (much bigger than the old
