@@ -141,7 +141,15 @@ function TimelineMarker({
   const palette = timelineMarkerPalette(isBest, winnerColor, winnerColorSoft, winnerGlowAnim, delayS);
   return (
     <div style={{ position: 'absolute', left: `${pos(group.guess)}%`, top: `${layout.markerTop}px`, transform: 'translate(-50%, -50%)', animationName: isBest ? 'winnerMarkerLand' : 'markerCelebrate', animationDuration: isBest ? '0.65s' : '0.5s', animationTimingFunction: 'ease-out', animationFillMode: 'both', animationDelay: `${delayS}s` }}>
-      <span style={{ position: 'absolute', left: '50%', transform: 'translateX(-50%)', bottom: `${layout.nameOffset}px`, fontSize: layout.nameFontSize, whiteSpace: 'nowrap', color: palette.nameColor, fontWeight: palette.nameWeight }}>{names}</span>
+      {/* maxWidth is a fixed px cap (not a %, which would resolve against
+          this marker's own shrink-to-fit absolutely-positioned wrapper —
+          circular with the child it's meant to constrain) comfortably
+          smaller than the narrowest real timeline track (260px, see
+          timelinePixelWidth). Without it, a long name (or several names
+          grouped on one guess, joined with ", ") centered near either end of
+          the track could render wide enough to bleed off the actual screen
+          edge, not just past the card. */}
+      <span style={{ position: 'absolute', left: '50%', transform: 'translateX(-50%)', bottom: `${layout.nameOffset}px`, fontSize: layout.nameFontSize, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis', maxWidth: ultra ? '110px' : '150px', display: 'inline-block', color: palette.nameColor, fontWeight: palette.nameWeight }}>{names}</span>
       <div style={{ width: `${layout.dotSize}px`, height: `${layout.dotSize}px`, borderRadius: '50%', background: palette.dotBackground, border: palette.dotBorder, animation: palette.dotAnimation }} />
       {showGuessValues && !isExact && (
         <span style={{ position: 'absolute', left: '50%', transform: 'translateX(-50%)', top: `${layout.yearOffset}px`, fontSize: layout.yearFontSize, whiteSpace: 'nowrap', color: palette.yearColor, fontWeight: palette.yearWeight }}>{group.guess}</span>
