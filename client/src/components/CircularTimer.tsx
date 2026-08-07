@@ -35,17 +35,16 @@ function useTimerPct(timeLeft: number, total: number): number {
   return pct;
 }
 
-// Per-mode palettes, deep and muted like the app's classic/year accent hues
-// (rgba(158,18,204) / rgba(0,238,232) — see AudioBars' AUDIO_BAR_COLORS) but
-// as jewel tones rather than either the fully-saturated brand colors (read
-// as a generic punchy "AI gradient") or a white-blended pastel version of
-// them (read as too light/washed out) — this sits between the two. The
-// middle stop is deliberately the most desaturated of the three so it reads
-// as a bridging accent rather than a third competing hue.
+// Per-mode palettes — each ring ends on the same saturated hue already used
+// as that mode's icon/accent color elsewhere (LobbyView's ModeToggle: purple
+// #c084fc for classic, orange #fb923c for race, teal #2dd4bf for party), so
+// the playing screen's dial reads as the same color identity rather than its
+// own separate, more muted gradient. The middle stop stays a bridging tone
+// between the two ends rather than a third competing hue.
 const HERO_GRADIENT_STOPS: Record<'classic' | 'race' | 'party' | 'year', readonly [string, string, string]> = {
-  classic: ['#7e5dab', '#79648f', '#9c5fa0'],
-  race: ['#c07a45', '#957a6d', '#c99b7d'],
-  party: ['#3d7d76', '#587f89', '#5bacbb'],
+  classic: ['#9d34d9', '#8a4aa8', '#c084fc'],
+  race: ['#e2650d', '#c97b3f', '#fb923c'],
+  party: ['#0ea89a', '#279a9e', '#2dd4bf'],
   year: ['#2e6e82', '#517685', '#4fc0d1'],
 };
 
@@ -78,9 +77,9 @@ export function LinearTimer({ timeLeft, total, accent }: Readonly<{ timeLeft: nu
 // rather than a generic fixed color that drifts from whatever's actually
 // on the stroke.
 const HERO_GLOW_COLOR: Record<'classic' | 'race' | 'party' | 'year', string> = {
-  classic: 'rgba(126,110,161,0.22)',
-  race: 'rgba(172,128,113,0.22)',
-  party: 'rgba(92,134,150,0.22)',
+  classic: 'rgba(162,86,212,0.26)',
+  race: 'rgba(226,123,45,0.26)',
+  party: 'rgba(33,178,168,0.26)',
   year: 'rgba(75,142,158,0.24)',
 };
 
