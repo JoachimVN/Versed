@@ -3,7 +3,7 @@ import { Flame } from 'lucide-react';
 import LiquidGlass from '../../components/StableLiquidGlass';
 import { PartyBadge } from '../../components/RoundIntro';
 import { AudioBars, ACCENT_TINT_CLASS, ACCENT_WASH, ACCENT_GLOW_ANIMATION, ACCENT_BG_HUE } from '../../components/AudioBars';
-import { useRevealLayout } from '../../components/revealSqueeze';
+import { useRevealLayout, squeezeValue } from '../../components/revealSqueeze';
 import type { PartyInfo } from '../../types';
 import type { PlayState } from './usePlayGame';
 import { resolveTarget, TargetChip } from './guessTarget';
@@ -141,7 +141,7 @@ function EyebrowRow({ label, accent, songPlaying, songTempo, ultraCompact, compa
 }>) {
   return (
     <div style={{ display: 'flex', flexDirection: ultraCompact ? 'row' : 'column', alignItems: 'center', gap: ultraCompact ? '8px' : '6px' }}>
-      <AudioBars playing={songPlaying} accent={accent} height={ultraCompact ? 14 : compact ? 16 : 18} bpm={songTempo} />
+      <AudioBars playing={songPlaying} accent={accent} height={squeezeValue({ compact, ultraCompact }, 14, 16, 18)} bpm={songTempo} />
       <span style={{ color: 'rgba(255,255,255,0.45)', fontSize: ultraCompact ? '0.6rem' : '0.7rem', letterSpacing: '0.2em', textTransform: 'uppercase', fontWeight: 700 }}>
         {label}
       </span>
@@ -162,7 +162,7 @@ function GetReadyBody({ isDuel, isUnderdog, isRace, party, lowestBid, guesserNam
   // name still lands well inside that budget instead of pushing the score
   // card off the bottom of the screen (see WatchingView's cardHeight tiers).
   const bodyGap = ultraCompact ? '8px' : '14px';
-  const headlineSize = ultraCompact ? '1.3rem' : compact ? '2.4rem' : '3.1rem';
+  const headlineSize = squeezeValue({ compact, ultraCompact }, '1.3rem', '2.4rem', '3.1rem');
   const headlineLineHeight = ultraCompact ? 1.15 : 1.05;
   // Race/year sub-rounds keep the existing "everyone races" duel framing —
   // the classic sub-round (game 1) falls through to the normal bid-based
@@ -204,7 +204,7 @@ function GetReadyBody({ isDuel, isUnderdog, isRace, party, lowestBid, guesserNam
       </ReadyBody>
     );
   }
-  const nameMinWidth = ultraCompact ? '180px' : compact ? '260px' : '320px';
+  const nameMinWidth = squeezeValue({ compact, ultraCompact }, '180px', '260px', '320px');
   return (
     <ReadyBody bodyGap={bodyGap}>
       <EyebrowRow label={songPlaying ? 'Listen closely' : 'Get ready'} accent={accent} songPlaying={songPlaying} songTempo={songTempo} ultraCompact={ultraCompact} compact={compact} />
