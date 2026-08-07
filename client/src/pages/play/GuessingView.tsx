@@ -4,7 +4,7 @@ import { useEscapeKey } from '../../hooks/useEscapeKey';
 import { useFocusTrap } from '../../hooks/useFocusTrap';
 import { readKeyboardInset, useKeyboardOpen } from '../../hooks/useViewportLayout';
 import { PartyBadge } from '../../components/RoundIntro';
-import { HeroTimer, LinearTimer } from '../../components/CircularTimer';
+import { HeroTimer, LinearTimer, type TimerAccent } from '../../components/CircularTimer';
 import { AudioBars, ACCENT_BG_HUE } from '../../components/AudioBars';
 import { LIQUID_CARD_PROPS, LIQUID_PILL_PROPS } from '../../components/liquidGlassPresets';
 import type { Hint } from '../../types';
@@ -285,6 +285,13 @@ function YearDigitBoxes({ value, focused, size }: Readonly<{ value: string; focu
   );
 }
 
+function resolveBgAccent(isYear: boolean, party: PlayState['party'], mode: PlayState['mode']): TimerAccent {
+  if (isYear) return 'year';
+  if (party) return 'party';
+  if (mode === 'race') return 'race';
+  return 'classic';
+}
+
 function guessingLabel(target: ReturnType<typeof resolveTarget>, isChoice: boolean, isChaosHints: boolean): string {
   if (isChaosHints) return 'One of these is a lie';
   if (isChoice) {
@@ -293,47 +300,30 @@ function guessingLabel(target: ReturnType<typeof resolveTarget>, isChoice: boole
   return { title: 'Name the song', artist: 'Name the artist', both: 'Name the song · artist = bonus', year: 'Guess the release year' }[target];
 }
 
-export function GuessingView({ game }: Readonly<{ game: PlayState }>) {
-  const { phase, timeLeft, timerTotal, myScore, guessText, guessInputRef, setGuessText, submitGuess, submitChoice, submitChaosTap, skipGuess, artistOnly, yearOnly, choiceOptions: gameChoiceOptions, songPlaying, songTempo, mode, party, hints, artistGuessText, setArtistGuessText } = game;
-  const isListening = phase === 'watching';
-  // Covers both Party's 'choice' format (party.choiceOptions) and the
-  // Classic/Race Multiple Choice toggle (game.choiceOptions) — an empty/
-  // undefined array either way means this round fell back to free text.
-  const options = party?.choiceOptions ?? gameChoiceOptions ?? [];
-  const isChoice = options.length > 0;
-  const isChaosHints = party?.event === 'chaoshints';
-  const target = resolveTarget(party, artistOnly, yearOnly);
-  const isYear = target === 'year';
-  const isBoth = target === 'both';
-  const bgAccent: 'classic' | 'race' | 'year' | 'party' = isYear ? 'year' : party ? 'party' : mode === 'race' ? 'race' : 'classic';
-  const keyboardOpen = useKeyboardOpen();
-  const { compact, ultraCompact, landscape, windowHeight } = useGuessingLayout(isBoth, keyboardOpen);
-  const squeezeTier = { compact, ultraCompact };
-  const canSubmit = isYear ? guessText.trim().length === 4 : guessText.trim().length > 0;
-  const [inputFocused, setInputFocused] = useState(false);
-  const inputBoxStyle = guessInputBoxStyle(isListening, inputFocused, ultraCompact);
-
-  // Keep the keyboard ready as soon as a free-text turn starts, including
-  // Race rounds that enter guessing directly. If the player focused either
-  // field while listening, keep that deliberate focus instead.
-  useGuessAutofocus(phase, isChoice, isChaosHints, guessInputRef);
-
-  const label = guessingLabel(target, isChoice, isChaosHints);
-  const placeholder = {
-    title: 'Type song title…',
-    artist: 'Type artist name…',
-    both: 'Type song title…',
-    year: 'e.g. 1994',
-  }[target];
-
-  let guessControl: React.ReactNode;
+function GuessControl({
+  isChaosHints, isChoice, isYear, hints, options, submitChaosTap, submitChoice,
+  guessText, setGuessText, inputFocused, setInputFocused, guessInputRef,
+  canSubmit, submitGuess, squeezeTier, inputBoxStyle, placeholder,
+}: Readonly<{
+  isChaosHints: boolean; isChoice: boolean; isYear: boolean;
+  hints: Hint[]; options: string[];
+  submitChaosTap: (index: number) => void; submitChoice: (option: string) => void;
+  guessText: string; setGuessText: (value: string) => void;
+  inputFocused: boolean; setInputFocused: (value: boolean) => void;
+  guessInputRef: PlayState['guessInputRef'];
+  canSubmit: boolean; submitGuess: () => void;
+  squeezeTier: { compact: boolean; ultraCompact: boolean };
+  inputBoxStyle: ReturnType<typeof guessInputBoxStyle>; placeholder: string;
+}>) {
   if (isChaosHints) {
-    guessControl = <ChaosHintButtons hints={hints} onPick={submitChaosTap} />;
-  } else if (isChoice) {
-    guessControl = <ChoiceButtons options={options} onPick={submitChoice} />;
-  } else if (isYear) {
+    return <ChaosHintButtons hints={hints} onPick={submitChaosTap} />;
+  }
+  if (isChoice) {
+    return <ChoiceButtons options={options} onPick={submitChoice} />;
+  }
+  if (isYear) {
     const digitBoxSize: DigitBoxSize = squeezeValue(squeezeTier, 'ultra', 'compact', 'normal');
-    guessControl = (
+    return (
       <div style={{ position: 'relative', flexShrink: 0 }}>
         <YearDigitBoxes value={guessText} focused={inputFocused} size={digitBoxSize} />
         <input
@@ -354,39 +344,85 @@ export function GuessingView({ game }: Readonly<{ game: PlayState }>) {
         />
       </div>
     );
-  } else {
-    guessControl = (
-      <div style={{
-        width: '100%', maxWidth: 'min(92vw, 420px)', borderRadius: '16px', overflow: 'hidden', flexShrink: 0,
-        border: inputBoxStyle.border,
-        background: inputBoxStyle.background,
-        boxShadow: inputBoxStyle.boxShadow,
-        transition: 'border-color 0.5s ease, background 0.5s ease, box-shadow 0.5s ease',
-      }}>
-        <input
-          ref={guessInputRef}
-          type="text"
-          placeholder={placeholder}
-          value={guessText}
-          onChange={e => setGuessText(e.target.value)}
-          onKeyDown={e => e.key === 'Enter' && canSubmit && submitGuess()}
-          onFocus={() => setInputFocused(true)}
-          onBlur={() => setInputFocused(false)}
-          autoComplete="off" autoCorrect="off" spellCheck={false}
-          style={{
-            display: 'block', width: '100%', background: 'transparent', border: 'none',
-            // 16px floor at every tier: below that, focusing the input makes
-            // iOS Safari zoom the whole page in to make the text legible,
-            // which is what "switching fields rescales like zooming in" was
-            // — ultraCompact's old 0.95rem (15.2px) tripped it.
-            color: 'white', fontSize: squeezeValue(squeezeTier, '1rem', '1.1rem', '1.3rem'), fontWeight: 700, textAlign: 'center',
-            padding: squeezeValue(squeezeTier, '6px 10px', '10px 16px', '20px 16px'), outline: 'none', fontFamily: 'inherit',
-          }}
-          className="placeholder-white/20"
-        />
-      </div>
-    );
   }
+  return (
+    <div style={{
+      width: '100%', maxWidth: 'min(92vw, 420px)', borderRadius: '16px', overflow: 'hidden', flexShrink: 0,
+      border: inputBoxStyle.border,
+      background: inputBoxStyle.background,
+      boxShadow: inputBoxStyle.boxShadow,
+      transition: 'border-color 0.5s ease, background 0.5s ease, box-shadow 0.5s ease',
+    }}>
+      <input
+        ref={guessInputRef}
+        type="text"
+        placeholder={placeholder}
+        value={guessText}
+        onChange={e => setGuessText(e.target.value)}
+        onKeyDown={e => e.key === 'Enter' && canSubmit && submitGuess()}
+        onFocus={() => setInputFocused(true)}
+        onBlur={() => setInputFocused(false)}
+        autoComplete="off" autoCorrect="off" spellCheck={false}
+        style={{
+          display: 'block', width: '100%', background: 'transparent', border: 'none',
+          // 16px floor at every tier: below that, focusing the input makes
+          // iOS Safari zoom the whole page in to make the text legible,
+          // which is what "switching fields rescales like zooming in" was
+          // — ultraCompact's old 0.95rem (15.2px) tripped it.
+          color: 'white', fontSize: squeezeValue(squeezeTier, '1rem', '1.1rem', '1.3rem'), fontWeight: 700, textAlign: 'center',
+          padding: squeezeValue(squeezeTier, '6px 10px', '10px 16px', '20px 16px'), outline: 'none', fontFamily: 'inherit',
+        }}
+        className="placeholder-white/20"
+      />
+    </div>
+  );
+}
+
+export function GuessingView({ game }: Readonly<{ game: PlayState }>) {
+  const { phase, timeLeft, timerTotal, myScore, guessText, guessInputRef, setGuessText, submitGuess, submitChoice, submitChaosTap, skipGuess, artistOnly, yearOnly, choiceOptions: gameChoiceOptions, songPlaying, songTempo, mode, party, hints, artistGuessText, setArtistGuessText } = game;
+  const isListening = phase === 'watching';
+  // Covers both Party's 'choice' format (party.choiceOptions) and the
+  // Classic/Race Multiple Choice toggle (game.choiceOptions) — an empty/
+  // undefined array either way means this round fell back to free text.
+  const options = party?.choiceOptions ?? gameChoiceOptions ?? [];
+  const isChoice = options.length > 0;
+  const isChaosHints = party?.event === 'chaoshints';
+  const target = resolveTarget(party, artistOnly, yearOnly);
+  const isYear = target === 'year';
+  const isBoth = target === 'both';
+  const bgAccent = resolveBgAccent(isYear, party, mode);
+  const keyboardOpen = useKeyboardOpen();
+  const { compact, ultraCompact, landscape, windowHeight } = useGuessingLayout(isBoth, keyboardOpen);
+  const squeezeTier = { compact, ultraCompact };
+  const canSubmit = isYear ? guessText.trim().length === 4 : guessText.trim().length > 0;
+  const [inputFocused, setInputFocused] = useState(false);
+  const inputBoxStyle = guessInputBoxStyle(isListening, inputFocused, ultraCompact);
+
+  // Keep the keyboard ready as soon as a free-text turn starts, including
+  // Race rounds that enter guessing directly. If the player focused either
+  // field while listening, keep that deliberate focus instead.
+  useGuessAutofocus(phase, isChoice, isChaosHints, guessInputRef);
+
+  const label = guessingLabel(target, isChoice, isChaosHints);
+  const placeholder = {
+    title: 'Type song title…',
+    artist: 'Type artist name…',
+    both: 'Type song title…',
+    year: 'e.g. 1994',
+  }[target];
+
+  const guessControl = (
+    <GuessControl
+      isChaosHints={isChaosHints} isChoice={isChoice} isYear={isYear}
+      hints={hints} options={options}
+      submitChaosTap={submitChaosTap} submitChoice={submitChoice}
+      guessText={guessText} setGuessText={setGuessText}
+      inputFocused={inputFocused} setInputFocused={setInputFocused}
+      guessInputRef={guessInputRef}
+      canSubmit={canSubmit} submitGuess={submitGuess}
+      squeezeTier={squeezeTier} inputBoxStyle={inputBoxStyle} placeholder={placeholder}
+    />
+  );
 
   // The artist field, split out so the "both" target can lay it beside the
   // title field instead of stacking under it once ultraCompact leaves no
