@@ -41,7 +41,9 @@ function useTimerPct(timeLeft: number, total: number): number {
 // the playing screen's dial reads as the same color identity rather than its
 // own separate, more muted gradient. The middle stop stays a bridging tone
 // between the two ends rather than a third competing hue.
-const HERO_GRADIENT_STOPS: Record<'classic' | 'race' | 'party' | 'year', readonly [string, string, string]> = {
+export type TimerAccent = 'classic' | 'race' | 'party' | 'year';
+
+const HERO_GRADIENT_STOPS: Record<TimerAccent, readonly [string, string, string]> = {
   classic: ['#9d34d9', '#8a4aa8', '#c084fc'],
   race: ['#e2650d', '#c97b3f', '#fb923c'],
   party: ['#0ea89a', '#279a9e', '#2dd4bf'],
@@ -56,7 +58,7 @@ const HERO_GRADIENT_STOPS: Record<'classic' | 'race' | 'party' | 'year', readonl
 // placement where HeroTimer's ring already reads as "this screen's own
 // color" and the default rainbow fill would look like a mismatched second
 // timer rather than the same dial in a different shape.
-export function LinearTimer({ timeLeft, total, accent }: Readonly<{ timeLeft: number; total: number; accent?: 'classic' | 'race' | 'party' | 'year' }>) {
+export function LinearTimer({ timeLeft, total, accent }: Readonly<{ timeLeft: number; total: number; accent?: TimerAccent }>) {
   const pct = useTimerPct(timeLeft, total);
   const fill = accent ? HERO_GRADIENT_STOPS[accent][2] : timerColor(pct);
   return (
@@ -76,7 +78,7 @@ export function LinearTimer({ timeLeft, total, accent }: Readonly<{ timeLeft: nu
 // gradient stops above, so the glow reads as "light cast by this ring"
 // rather than a generic fixed color that drifts from whatever's actually
 // on the stroke.
-const HERO_GLOW_COLOR: Record<'classic' | 'race' | 'party' | 'year', string> = {
+const HERO_GLOW_COLOR: Record<TimerAccent, string> = {
   classic: 'rgba(162,86,212,0.26)',
   race: 'rgba(226,123,45,0.26)',
   party: 'rgba(33,178,168,0.26)',
@@ -84,7 +86,7 @@ const HERO_GLOW_COLOR: Record<'classic' | 'race' | 'party' | 'year', string> = {
 };
 
 function hexToRgb(hex: string): readonly [number, number, number] {
-  const n = parseInt(hex.slice(1), 16);
+  const n = Number.parseInt(hex.slice(1), 16);
   return [(n >> 16) & 255, (n >> 8) & 255, n & 255];
 }
 
@@ -108,7 +110,7 @@ function lerpColor(a: string, b: string, t: number): string {
 // endpoints coincide). conic-gradient interpolates by angle instead, so
 // pacing is even all the way around and a full sweep is just the ordinary
 // 360° case, no special-casing needed.
-export function HeroTimer({ timeLeft, total, size = 200, accent = 'classic' }: Readonly<{ timeLeft: number; total: number; size?: number; accent?: 'classic' | 'race' | 'party' | 'year' }>) {
+export function HeroTimer({ timeLeft, total, size = 200, accent = 'classic' }: Readonly<{ timeLeft: number; total: number; size?: number; accent?: TimerAccent }>) {
   const sw = size * 0.058;
   const r = (size - sw * 2) / 2; // ring centerline radius — matches the old SVG stroke circle's radius exactly
   const pct = useTimerPct(timeLeft, total);
