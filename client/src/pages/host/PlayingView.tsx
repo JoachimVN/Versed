@@ -125,6 +125,49 @@ function EyebrowRow({ label, accent, songPlaying, songTempo, size }: Readonly<{
   );
 }
 
+function PlayingCardBody({
+  countdown, isRace, raceStatus, restrictedNames, nameSeparator, guesserNames,
+  accent, songPlaying, songTempo, iconSize, timeLeft, timerTotal, timerSize, captionSize,
+  playerBids, lowestBid,
+}: Readonly<{
+  countdown: number | null; isRace: boolean; raceStatus: string;
+  restrictedNames: string[] | null; nameSeparator: string; guesserNames: string[];
+  accent: 'classic' | 'race' | 'year' | 'party'; songPlaying: boolean; songTempo?: number | null;
+  iconSize: number; timeLeft: number; timerTotal: number; timerSize: number; captionSize: string;
+  playerBids: Parameters<typeof BidTimeline>[0]['bids']; lowestBid: number;
+}>) {
+  if (countdown === null) {
+    return (
+      <>
+        <EyebrowRow label="Now playing" accent={accent} songPlaying={songPlaying} songTempo={songTempo} size={iconSize} />
+        <HeroTimer timeLeft={timeLeft} total={timerTotal} size={timerSize} accent={accent} />
+        <span style={{ color: 'rgba(255,255,255,0.6)', fontWeight: 600, fontSize: captionSize, display: 'inline-block', minWidth: '210px', textAlign: 'center' }}>
+          {isRace ? raceStatus : `${guesserNames.join(' & ')} will guess`}
+        </span>
+        {!isRace && <div className="w-full"><BidTimeline bids={playerBids} lowestBid={lowestBid} /></div>}
+      </>
+    );
+  }
+  return (
+    <>
+      <EyebrowRow label="Get ready" accent={accent} songPlaying={songPlaying} songTempo={songTempo} size={iconSize} />
+      <div className="text-8xl font-black text-white" style={{ animation: 'badgeBreathe 1s ease-in-out infinite' }}>{countdown}</div>
+      {isRace ? (
+        <span style={{ color: 'rgba(255,255,255,0.6)', fontWeight: 600, fontSize: captionSize, display: 'inline-block', minWidth: '210px', textAlign: 'center' }}>
+          {restrictedNames ? restrictedNames.join(nameSeparator) : 'Everyone will guess'}
+        </span>
+      ) : (
+        <>
+          <span style={{ color: 'rgba(255,255,255,0.6)', fontWeight: 600, fontSize: captionSize, display: 'inline-block', minWidth: '210px', textAlign: 'center' }}>
+            {guesserNames.join(' & ')} will guess
+          </span>
+          <div className="w-full"><BidTimeline bids={playerBids} lowestBid={lowestBid} /></div>
+        </>
+      )}
+    </>
+  );
+}
+
 export function PlayingView({ game }: Readonly<{ game: HostState }>) {
   const { roundIndex, totalRounds, countdown, guesserNames, lowestBid, playerBids, timeLeft, timerTotal, mode, roundYearOnly, hints, answeredCount, players, skipTurn, endGame, party, songPlaying, songTempo, spotify } = game;
   // Party rounds that aren't classic-format arrive with an empty bid state and
@@ -151,7 +194,7 @@ export function PlayingView({ game }: Readonly<{ game: HostState }>) {
   // so a year round rings cyan regardless of which underlying mode it rides.
   const accent = fullRoundAccent(mode, roundYearOnly, party);
   const { compact, ultraCompact } = useRevealLayout();
-  const tier: 'ultra' | 'compact' | 'normal' = ultraCompact ? 'ultra' : compact ? 'compact' : 'normal';
+  const tier: 'ultra' | 'compact' | 'normal' = squeezeValue({ compact, ultraCompact }, 'ultra', 'compact', 'normal');
   // The dial is the card's one dominant hero (much bigger than the old
   // "one block among several" size); everything else — the now-playing icon,
   // the guesser caption, the bid chips — is deliberately small supporting
@@ -189,33 +232,13 @@ export function PlayingView({ game }: Readonly<{ game: HostState }>) {
             <div style={{ position: 'relative', width: innerWidth }}>
               <div aria-hidden="true" style={{ position: 'absolute', inset: '-28px', borderRadius: '20px', zIndex: 0, pointerEvents: 'none', background: ACCENT_WASH[accent] }} />
               <div style={{ position: 'relative', zIndex: 1, display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '18px' }}>
-                {countdown === null ? (
-                  <>
-                    <EyebrowRow label="Now playing" accent={accent} songPlaying={songPlaying} songTempo={songTempo} size={iconSize} />
-                    <HeroTimer timeLeft={timeLeft} total={timerTotal} size={timerSize} accent={accent} />
-                    <span style={{ color: 'rgba(255,255,255,0.6)', fontWeight: 600, fontSize: captionSize, display: 'inline-block', minWidth: '210px', textAlign: 'center' }}>
-                      {isRace ? raceStatus : `${guesserNames.join(' & ')} will guess`}
-                    </span>
-                    {!isRace && <div className="w-full"><BidTimeline bids={playerBids} lowestBid={lowestBid} /></div>}
-                  </>
-                ) : (
-                  <>
-                    <EyebrowRow label="Get ready" accent={accent} songPlaying={songPlaying} songTempo={songTempo} size={iconSize} />
-                    <div className="text-8xl font-black text-white" style={{ animation: 'badgeBreathe 1s ease-in-out infinite' }}>{countdown}</div>
-                    {isRace ? (
-                      <span style={{ color: 'rgba(255,255,255,0.6)', fontWeight: 600, fontSize: captionSize, display: 'inline-block', minWidth: '210px', textAlign: 'center' }}>
-                        {restrictedNames ? restrictedNames.join(nameSeparator) : 'Everyone will guess'}
-                      </span>
-                    ) : (
-                      <>
-                        <span style={{ color: 'rgba(255,255,255,0.6)', fontWeight: 600, fontSize: captionSize, display: 'inline-block', minWidth: '210px', textAlign: 'center' }}>
-                          {guesserNames.join(' & ')} will guess
-                        </span>
-                        <div className="w-full"><BidTimeline bids={playerBids} lowestBid={lowestBid} /></div>
-                      </>
-                    )}
-                  </>
-                )}
+                <PlayingCardBody
+                  countdown={countdown} isRace={isRace} raceStatus={raceStatus}
+                  restrictedNames={restrictedNames} nameSeparator={nameSeparator} guesserNames={guesserNames}
+                  accent={accent} songPlaying={songPlaying} songTempo={songTempo} iconSize={iconSize}
+                  timeLeft={timeLeft} timerTotal={timerTotal} timerSize={timerSize} captionSize={captionSize}
+                  playerBids={playerBids} lowestBid={lowestBid}
+                />
               </div>
             </div>
           </LiquidGlass>
