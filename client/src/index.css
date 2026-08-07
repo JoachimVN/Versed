@@ -664,6 +664,22 @@ select:focus-visible,
   box-shadow: 0 0 0 1px rgba(220,38,38,0.4) inset, 0 1px 4px rgba(0,0,0,0.35) !important;
 }
 
+/* Reveal's fixed cyan/purple treatment (see REVEAL_TINT_CLASS) — unlike the
+   single-color rings above, this recolors the ring's own `background`
+   (not just its box-shadow) so the gradient's two ends read as distinct
+   hues right at the card's edge, while keeping the same cursor-tracking
+   angle and masked-border technique as the base ::after rule. The center
+   stays a faint white sheen rather than blending straight cyan into
+   purple, so it still reads as glass, not a solid colored ring. */
+.glass-tint-reveal .glass::after {
+  background: linear-gradient(calc(135deg + var(--liquid-glass-sheen-x, 0) * 1.2deg),
+    rgba(0,238,232,0.45) 0%,
+    rgba(255,255,255,0.25) 45%,
+    rgba(255,255,255,0.25) 55%,
+    rgba(158,18,204,0.45) 100%) !important;
+  box-shadow: 0 0 0 1px rgba(158,18,204,0.12) inset, 0 1px 4px rgba(0,0,0,0.35) !important;
+}
+
 /* Volume control's edge ring at half strength — opacity (not just the
    box-shadow tint above) so it recedes as a whole rather than just reading
    as a thinner hard edge. It's small always-on chrome, not a CTA. */

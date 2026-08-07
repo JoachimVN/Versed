@@ -55,3 +55,13 @@ export const LIQUID_LABEL_PROPS = {
   elasticity: 0.08,
   cornerRadius: 999,
 } as const;
+
+// Reveal's card has no round accent to key off (unlike PlayingView's
+// ACCENT_TINT_CLASS/ACCENT_WASH, which pick per-mode colors) — this is a
+// fixed cyan/purple pairing instead, echoing the same combo WaitingView's
+// vinyl label already uses. glass-tint-reveal (index.css) recolors the ring
+// itself so both hues reach the card's edge, not just a single accent tint;
+// REVEAL_WASH is the matching interior glow, kept faint (0.06 peak) so it
+// reads as ambient light rather than a colored panel.
+export const REVEAL_TINT_CLASS = 'glass-tint-reveal';
+export const REVEAL_WASH = 'radial-gradient(circle at 12% 88%, rgba(158,18,204,0.06) 0%, transparent 55%), radial-gradient(circle at 88% 12%, rgba(0,238,232,0.06) 0%, transparent 55%)';
