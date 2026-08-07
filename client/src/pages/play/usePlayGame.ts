@@ -49,6 +49,7 @@ export interface PlayState {
   leaderboardDeltas: Record<string, number>;
   awards: Award[];
   finalResultsSkipped: boolean;
+  finishedAt: number | null;
   songPlaying: boolean;
   songTempo: number | null;
   reconnecting: boolean;
@@ -150,6 +151,7 @@ export function usePlayGame(pinParam?: string): PlayState {
   const [leaderboardDeltas, setLeaderboardDeltas] = useState<Record<string, number>>({});
   const [awards, setAwards] = useState<Award[]>([]);
   const [finalResultsSkipped, setFinalResultsSkipped] = useState(false);
+  const [finishedAt, setFinishedAt] = useState<number | null>(null);
   const [songPlaying, setSongPlaying] = useState(false);
   const [songTempo, setSongTempo] = useState<number | null>(null);
   const [reconnecting, setReconnecting] = useState(false);
@@ -456,11 +458,12 @@ export function usePlayGame(pinParam?: string): PlayState {
       setPhase('leaderboard');
     });
 
-    socket.on('game_over', ({ leaderboard: lb, awards: aw }: { leaderboard: LeaderboardEntry[]; awards?: Award[] }) => {
+    socket.on('game_over', ({ leaderboard: lb, awards: aw, finishedAt: fa }: { leaderboard: LeaderboardEntry[]; awards?: Award[]; finishedAt?: number | null }) => {
       clearRoundTimers();
       applyLeaderboard(lb);
       setAwards(aw ?? []);
       setFinalResultsSkipped(false);
+      setFinishedAt(fa ?? null);
       setPhase('finished');
     });
 
@@ -700,7 +703,7 @@ export function usePlayGame(pinParam?: string): PlayState {
     timeLeft, timerTotal, bettingTime, bidIndex, bidOptions, bidScores, myBid, guesserNames, lowestBid,
     guessText, result, myScore, myScoreDelta, myRank, myPity, myPityAmount, myBreakdown, myStreak, mode, artistOnly, yearOnly, choiceOptions, myRacePoints, myRaceTimeMs,
     party, introParty, artistGuessText, stealVictims, stealResult,
-    leaderboard, leaderboardDeltas, awards, finalResultsSkipped, songPlaying, songTempo, reconnecting, hostReconnecting, savedSession, guessInputRef,
+    leaderboard, leaderboardDeltas, awards, finalResultsSkipped, finishedAt, songPlaying, songTempo, reconnecting, hostReconnecting, savedSession, guessInputRef,
     cameFromQR, newGamePin, rejoinNewGame,
     setPin, setName,
     setArtistGuessText: (v: string) => {

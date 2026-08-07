@@ -22,7 +22,8 @@ async function prepPage(page) {
            normal backdrop blur, but skip only that faulty filter in docs
            captures. */
         .host-game-card .glass__warp,
-        .reveal-next-round .glass__warp {
+        .reveal-next-round .glass__warp,
+        .final-results-recap-panel .glass__warp {
             filter: none !important;
         }`;
         const inject = () => {

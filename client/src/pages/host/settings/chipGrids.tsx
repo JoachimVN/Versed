@@ -11,7 +11,7 @@ import { ALL_PARTY_EVENTS, ALL_PARTY_ROUND_TYPES } from '../useHostGame';
 
 function chipStyle(on: boolean): React.CSSProperties {
   return {
-    borderRadius: '10px',
+    borderRadius: '12px',
     minHeight: '46px',
     padding: '6px 10px',
     display: 'flex',

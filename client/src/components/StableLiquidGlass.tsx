@@ -71,6 +71,33 @@ export default function StableLiquidGlass(props: Readonly<LiquidGlassProps>) {
     };
   }, []);
 
+  // Safari's page zoom (and pinch-zoom on trackpads) rescales the visual
+  // viewport without firing a native window 'resize' or changing this
+  // element's own CSS-px box size, so neither the library's resize listener
+  // nor the ResizeObserver above ever re-fires — the SVG-filtered backdrop
+  // (which is what actually draws the refraction) stays snapshotted at the
+  // pre-zoom scale and visibly drifts from its own container, most visible
+  // as glass panels no longer lining up with plain DOM siblings beside them.
+  // visualViewport's 'resize' event is the one signal that reliably fires
+  // for both page zoom and pinch-zoom across Safari and Chrome, so reuse it
+  // to trigger the same re-measure nudge as the ResizeObserver above.
+  useEffect(() => {
+    const viewport = window.visualViewport;
+    if (!viewport) return;
+    let trailingTimeout = 0;
+    const dispatchResize = () => window.dispatchEvent(new Event('resize'));
+    const handleViewportResize = () => {
+      clearTimeout(trailingTimeout);
+      dispatchResize();
+      trailingTimeout = window.setTimeout(dispatchResize, 250);
+    };
+    viewport.addEventListener('resize', handleViewportResize);
+    return () => {
+      clearTimeout(trailingTimeout);
+      viewport.removeEventListener('resize', handleViewportResize);
+    };
+  }, []);
+
   // The library's own edge-highlight ring tracked the cursor via a
   // `background: linear-gradient(...)` angle driven by its internal
   // mouseOffset state -- lost when CSS replaced those separately-animated

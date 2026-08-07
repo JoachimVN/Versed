@@ -28,10 +28,59 @@ const AUDIO_BARS = [
   { anim: 'audioBarC', dur: 1.2, beats: 1,    delay: 0.26, delayFrac: 0.24, base: 0.5  },
 ] as const;
 
-const AUDIO_BAR_COLORS: Record<'classic' | 'race' | 'year', string> = {
+export type BarAccent = 'classic' | 'race' | 'year' | 'party';
+
+export const AUDIO_BAR_COLORS: Record<BarAccent, string> = {
   classic: 'rgba(158,18,204,0.75)',
   race: 'rgba(234,88,12,0.75)',
   year: 'rgba(0,238,232,0.75)',
+  // Matches year's cyan — the eq bar/playing-card accent no longer
+  // distinguishes party from year (party still keeps its own teal
+  // elsewhere, e.g. the Home/Join mode buttons).
+  party: 'rgba(0,238,232,0.75)',
+};
+
+// Matches the AUDIO_BAR_COLORS hue to the app's existing per-mode glass ring
+// treatment (index.css .glass-tint-*, already used by every mode-colored CTA)
+// so the "playing" cards can pick up a breathing accent glow without
+// inventing a new color system.
+export const ACCENT_TINT_CLASS: Record<BarAccent, string> = {
+  classic: 'glass-tint-purple',
+  race: 'glass-tint-orange',
+  year: 'glass-tint-cyan',
+  party: 'glass-tint-cyan',
+};
+
+// A faint interior wash to lay over a "playing" card's own content area, so
+// the accent reads as light filling the glass, not just the edge ring above.
+// Deliberately subtle — bled to the card's full edges (see callers), a
+// stronger value here reads as a solid colored panel rather than a tint.
+export const ACCENT_WASH: Record<BarAccent, string> = {
+  classic: 'rgba(158,18,204,0.035)',
+  race: 'rgba(234,88,12,0.035)',
+  year: 'rgba(0,238,232,0.035)',
+  party: 'rgba(0,238,232,0.035)',
+};
+
+// The "playing" card's own breathing glow (index.css @keyframes) — one
+// single-hue variant per accent, so the glow reads as this round's color
+// instead of the generic fixed purple/cyan cardGlowPulse every other glass
+// card uses.
+export const ACCENT_GLOW_ANIMATION: Record<BarAccent, string> = {
+  classic: 'cardGlowPulsePurple',
+  race: 'cardGlowPulseOrange',
+  year: 'cardGlowPulseCyan',
+  party: 'cardGlowPulseCyan',
+};
+
+// CSS hue-rotate degree applied to the shared background8-2.png backdrop so
+// its native blue tint reads as this round's accent color instead of a
+// fixed hue regardless of mode.
+export const ACCENT_BG_HUE: Record<BarAccent, number> = {
+  classic: 72,
+  race: 160,
+  year: -22,
+  party: -22,
 };
 
 // Detected tempo can be wildly wrong (half/double-time, or missing) — clamp
@@ -51,7 +100,7 @@ function beatSeconds(bpm: number | null | undefined): number | null {
 // 9-bar equalizer, each bar animating independently. Idle (low, static bars)
 // when nothing's playing. Pass `bpm` (the song's tempo) to have the bars
 // pulse in time with the track instead of a fixed, tempo-agnostic rhythm.
-export function AudioBars({ playing, accent, height, bpm }: Readonly<{ playing: boolean; accent: 'classic' | 'race' | 'year'; height: number; bpm?: number | null }>) {
+export function AudioBars({ playing, accent, height, bpm }: Readonly<{ playing: boolean; accent: BarAccent; height: number; bpm?: number | null }>) {
   const barColor = AUDIO_BAR_COLORS[accent];
   const beatSec = beatSeconds(bpm);
   return (

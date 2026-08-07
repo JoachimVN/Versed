@@ -1,4 +1,4 @@
-import { createContext, useContext, useEffect, useRef, useState } from 'react';
+import { createContext, useContext, useEffect, useState } from 'react';
 import type { CSSProperties, ReactNode } from 'react';
 
 // The host screen gets cast to a TV/monitor and read from across a room, but
@@ -56,43 +56,62 @@ export function useHostScaleValue() {
  * silently fall through to the un-divided height and overflow by exactly the
  * zoom factor. A plain JS division sidesteps the cycle entirely.
  */
-export function useHostScale(ref: React.RefObject<HTMLElement | null>) {
+export function useHostScale() {
+  // Lazy-initialized from the real window size, so this is already correct
+  // for the very first render — but a *component* only gets to react to that
+  // correct value from its own effects/JSX, not from CSS. The old version
+  // additionally pushed --host-scale onto the DOM node imperatively inside
+  // this hook's own mount effect, which is a *sibling* timing problem: React
+  // fires effects children-before-parents within one commit, so any
+  // descendant's own useLayoutEffect (e.g. the logo-morph code measuring a
+  // rect to fly to) always ran before this shell's effect got a chance to
+  // set the CSS variable — meaning that measurement was taken with
+  // `zoom: var(--host-scale, 1)` still on its 1-fallback, one paint before
+  // the real scale applied and silently rescaled/repositioned everything
+  // under it. Rendering the variable straight into the style prop instead
+  // makes React apply it during the same commit's mutation phase, which
+  // *does* run before any layout effect fires, parent or child alike.
   const [scale, setScale] = useState(computeScale);
 
   useEffect(() => {
-    const el = ref.current;
-    if (!el) return;
-
     const sync = () => {
       const next = computeScale();
-      el.style.setProperty('--host-scale', String(next));
-      el.style.setProperty('--host-app-height', `${window.innerHeight / next}px`);
       setScale(next);
       window.dispatchEvent(new CustomEvent<number>(HOST_SCALE_CHANGE_EVENT, { detail: next }));
     };
 
-    sync();
+    window.dispatchEvent(new CustomEvent<number>(HOST_SCALE_CHANGE_EVENT, { detail: scale }));
     window.addEventListener('resize', sync);
     return () => {
       window.removeEventListener('resize', sync);
       window.dispatchEvent(new CustomEvent<number>(HOST_SCALE_CHANGE_EVENT, { detail: 1 }));
     };
-  }, [ref]);
+    // scale is only read here to seed the mount-time event with the same
+    // lazily-computed value the first render already used — not a live
+    // dependency the effect needs to re-run for.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   return scale;
 }
 
-// Wraps host content in the ref + provider wiring useHostScale needs. Used by
+// Wraps host content in the provider wiring useHostScale needs. Used by
 // Host.tsx for the real app, and by Screenshot.tsx's host-group fixtures so
 // the viewport-check script actually exercises this instead of silently
 // bypassing it (Screenshot.tsx renders each view standalone, outside Host.tsx
 // entirely).
 export function HostScaleShell({ children, className, style }: Readonly<{ children: ReactNode; className?: string; style?: CSSProperties }>) {
-  const ref = useRef<HTMLDivElement>(null);
-  const scale = useHostScale(ref);
+  const scale = useHostScale();
   return (
     <HostScaleContext.Provider value={scale}>
-      <div ref={ref} className={['host-scale-shell', className].filter(Boolean).join(' ')} style={style}>
+      <div
+        className={['host-scale-shell', className].filter(Boolean).join(' ')}
+        style={{
+          ...style,
+          ['--host-scale' as string]: scale,
+          ['--host-app-height' as string]: `${window.innerHeight / scale}px`,
+        } as CSSProperties}
+      >
         {children}
       </div>
     </HostScaleContext.Provider>

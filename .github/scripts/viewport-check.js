@@ -93,7 +93,9 @@ const VIEWPORTS = [
 const VIEWS = [
   { id: 'home', group: 'shared', v: 'home', name: 'Home' },
   { id: 'host-lobby', group: 'host', v: 'lobby', name: 'LobbyView' },
+  { id: 'host-betting', group: 'host', v: 'host-betting', name: 'HostBettingView' },
   { id: 'host-playing', group: 'host', v: 'playing', name: 'PlayingView' },
+  { id: 'host-guessing', group: 'host', v: 'host-guessing', name: 'HostGuessingView' },
   { id: 'host-reveal', group: 'host', v: 'reveal', name: 'RevealView' },
   { id: 'host-year-reveal', group: 'host', v: 'year', name: 'YearRevealView' },
   { id: 'host-mystery-reveal', group: 'host', v: 'mystery-reveal', name: 'MysteryRevealView' },
@@ -122,6 +124,7 @@ const VIEWS = [
   { id: 'player-year-guessing', group: 'player', v: 'year-guessing', name: 'YearGuessingView' },
   { id: 'player-guessing-both', group: 'player', v: 'guessing-both', name: 'GuessingBothView' },
   { id: 'player-reveal', group: 'player', v: 'play-reveal', name: 'RevealView' },
+  { id: 'player-year-reveal', group: 'player', v: 'play-year-reveal', name: 'YearRevealView' },
   { id: 'player-reveal-no-one', group: 'player', v: 'play-reveal-noone', name: 'RevealViewNoOne' },
   { id: 'player-reveal-crowd', group: 'player', v: 'play-reveal-crowd', name: 'RevealViewCrowd' },
   { id: 'player-final-results', group: 'player', v: 'final-player', name: 'FinalResultsView' },

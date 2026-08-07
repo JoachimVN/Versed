@@ -4,8 +4,8 @@ import { useEscapeKey } from '../../hooks/useEscapeKey';
 import { useFocusTrap } from '../../hooks/useFocusTrap';
 import { readKeyboardInset, useKeyboardOpen } from '../../hooks/useViewportLayout';
 import { PartyBadge } from '../../components/RoundIntro';
-import { CircularTimer, LinearTimer } from '../../components/CircularTimer';
-import { AudioBars } from '../../components/AudioBars';
+import { HeroTimer, LinearTimer, type TimerAccent } from '../../components/CircularTimer';
+import { AudioBars, ACCENT_BG_HUE } from '../../components/AudioBars';
 import { LIQUID_CARD_PROPS, LIQUID_PILL_PROPS } from '../../components/liquidGlassPresets';
 import type { Hint } from '../../types';
 import type { PlayState } from './usePlayGame';
@@ -32,12 +32,12 @@ const COMPACT_HEIGHT_PX_BOTH = 540;
 // side by side instead of stacked.
 const ULTRA_COMPACT_HEIGHT_PX = 260;
 
-function useGuessingLayout(bothTarget: boolean, keyboardOpen: boolean): { compact: boolean; ultraCompact: boolean; landscape: boolean } {
+function useGuessingLayout(bothTarget: boolean, keyboardOpen: boolean): { compact: boolean; ultraCompact: boolean; landscape: boolean; windowHeight: number } {
   const threshold = bothTarget ? COMPACT_HEIGHT_PX_BOTH : COMPACT_HEIGHT_PX;
   const measure = () => {
     const h = typeof window !== 'undefined' ? window.innerHeight - readKeyboardInset() : Infinity;
     const landscape = typeof window !== 'undefined' && window.innerWidth > window.innerHeight;
-    return { compact: h < threshold, ultraCompact: h < ULTRA_COMPACT_HEIGHT_PX, landscape };
+    return { compact: h < threshold, ultraCompact: h < ULTRA_COMPACT_HEIGHT_PX, landscape, windowHeight: h };
   };
   const [layout, setLayout] = useState(measure);
   useEffect(() => {
@@ -61,7 +61,7 @@ function useGuessingLayout(bothTarget: boolean, keyboardOpen: boolean): { compac
   // focus lands (before the real measurement exists) keeps the field inside
   // the safe area from the first frame, so Safari never has a reason to pan
   // in the first place.
-  return { compact: layout.compact || keyboardOpen, ultraCompact: layout.ultraCompact, landscape: layout.landscape };
+  return { compact: layout.compact || keyboardOpen, ultraCompact: layout.ultraCompact, landscape: layout.landscape, windowHeight: layout.windowHeight };
 }
 
 function useGuessAutofocus(phase: PlayState['phase'], isChoice: boolean, isChaosHints: boolean, guessInputRef: PlayState['guessInputRef']) {
@@ -94,12 +94,15 @@ function ListeningHeader({ songPlaying, songTempo, isYear, compact }: Readonly<{
 
 // Race mode plays the song throughout the guessing window, so it keeps the
 // waveform going here too; classic has already stopped the song by the time
-// a tier's turn starts, so it stays timer-only. compact swaps the 80px
-// CircularTimer dial for LinearTimer's thin bar — confirmed by measurement
-// to be the single biggest header cost on a short landscape/keyboard-up
-// screen (see COMPACT_HEIGHT_PX above).
-function ActiveHeader({ timeLeft, timerTotal, myScore, isRace, isYear, songPlaying, songTempo, compact, ultraCompact, landscape }: Readonly<{ timeLeft: number; timerTotal: number; myScore: number; isRace: boolean; isYear: boolean; songPlaying: boolean; songTempo: number | null; compact: boolean; ultraCompact: boolean; landscape: boolean }>) {
-  const accent = isYear ? 'year' : 'race';
+// a tier's turn starts, so it stays timer-only. compact swaps the HeroTimer
+// dial for LinearTimer's thin bar — confirmed by measurement to be the
+// single biggest header cost on a short landscape/keyboard-up screen (see
+// COMPACT_HEIGHT_PX above). The dial itself is always purple — matching the
+// guess field's border/glow and the Submit button's tint below it, the
+// screen's one consistent accent — rather than the race/year waveform's own
+// accent, which stays on the AudioBars underneath instead.
+function ActiveHeader({ timeLeft, timerTotal, myScore, isRace, isYear, songPlaying, songTempo, compact, ultraCompact, landscape, windowHeight }: Readonly<{ timeLeft: number; timerTotal: number; myScore: number; isRace: boolean; isYear: boolean; songPlaying: boolean; songTempo: number | null; compact: boolean; ultraCompact: boolean; landscape: boolean; windowHeight: number }>) {
+  const waveAccent = isYear ? 'year' : 'race';
   const squeezeTier = { compact, ultraCompact };
   // At the tightest squeeze (ultraCompact), a landscape phone has width to
   // spare even though it has no height to spare — folding "Your turn"/pts
@@ -109,26 +112,35 @@ function ActiveHeader({ timeLeft, timerTotal, myScore, isRace, isYear, songPlayi
   // scrolled up under the badge chip when the guess field grabbed focus).
   if (ultraCompact && landscape) {
     return (
-      <div className="flex items-center justify-between w-full gap-2 px-4 pt-1 pb-0">
+      <div className="flex items-center justify-between w-full gap-2 px-4 pt-2 pb-0">
         <span style={{ color: 'rgba(255,255,255,0.45)', fontSize: '0.62rem', fontWeight: 600, whiteSpace: 'nowrap' }}>Your turn</span>
-        <LinearTimer timeLeft={timeLeft} total={timerTotal} />
+        <LinearTimer timeLeft={timeLeft} total={timerTotal} accent="classic" />
         <span style={{ color: 'rgba(255,255,255,0.45)', fontSize: '0.6rem', fontWeight: 500, whiteSpace: 'nowrap' }}>
           {myScore.toLocaleString()} pts
         </span>
       </div>
     );
   }
+  // Below COMPACT_HEIGHT_PX the dial goes Linear regardless; above it, the
+  // dial had been a flat 80px no matter how much taller the viewport got —
+  // scaling it up with the actual headroom (clamped so a huge desktop window
+  // doesn't get a dial as big as the card below it) makes it read as the
+  // screen's dominant element on a normal phone/desktop instead of looking
+  // stranded above a mostly-empty middle.
+  const heroSize = Math.round(Math.min(160, Math.max(90, windowHeight * 0.16)));
   return (
-    <div className={`flex flex-col items-center ${squeezeValue(squeezeTier, 'gap-1 pt-1 pb-0', 'gap-2 pt-2 pb-1', 'gap-2 pt-4 pb-3')} `}>
+    <div className={`flex flex-col items-center ${squeezeValue(squeezeTier, 'gap-1 pt-3 pb-0', 'gap-2 pt-4 pb-1', 'gap-2 pt-6 pb-3')} `}>
       <div className="flex items-center justify-between w-full px-5">
         <span style={{ color: 'rgba(255,255,255,0.45)', fontSize: ultraCompact ? '0.68rem' : '0.85rem', fontWeight: 600 }}>Your turn</span>
         <span style={{ color: 'rgba(255,255,255,0.45)', fontSize: ultraCompact ? '0.64rem' : '0.8rem', fontWeight: 500 }}>
           {myScore.toLocaleString()} pts
         </span>
       </div>
-      {compact ? <LinearTimer timeLeft={timeLeft} total={timerTotal} /> : <CircularTimer timeLeft={timeLeft} total={timerTotal} size={80} />}
+      {compact
+        ? <LinearTimer timeLeft={timeLeft} total={timerTotal} accent="classic" />
+        : <HeroTimer timeLeft={timeLeft} total={timerTotal} size={heroSize} accent="classic" />}
       {(isRace || isYear) && !compact && (
-        <AudioBars playing={songPlaying} accent={accent} height={20} bpm={songTempo} />
+        <AudioBars playing={songPlaying} accent={waveAccent} height={20} bpm={songTempo} />
       )}
     </div>
   );
@@ -273,6 +285,13 @@ function YearDigitBoxes({ value, focused, size }: Readonly<{ value: string; focu
   );
 }
 
+function resolveBgAccent(isYear: boolean, party: PlayState['party'], mode: PlayState['mode']): TimerAccent {
+  if (isYear) return 'year';
+  if (party) return 'party';
+  if (mode === 'race') return 'race';
+  return 'classic';
+}
+
 function guessingLabel(target: ReturnType<typeof resolveTarget>, isChoice: boolean, isChaosHints: boolean): string {
   if (isChaosHints) return 'One of these is a lie';
   if (isChoice) {
@@ -281,46 +300,30 @@ function guessingLabel(target: ReturnType<typeof resolveTarget>, isChoice: boole
   return { title: 'Name the song', artist: 'Name the artist', both: 'Name the song · artist = bonus', year: 'Guess the release year' }[target];
 }
 
-export function GuessingView({ game }: Readonly<{ game: PlayState }>) {
-  const { phase, timeLeft, timerTotal, myScore, guessText, guessInputRef, setGuessText, submitGuess, submitChoice, submitChaosTap, skipGuess, artistOnly, yearOnly, choiceOptions: gameChoiceOptions, songPlaying, songTempo, mode, party, hints, artistGuessText, setArtistGuessText } = game;
-  const isListening = phase === 'watching';
-  // Covers both Party's 'choice' format (party.choiceOptions) and the
-  // Classic/Race Multiple Choice toggle (game.choiceOptions) — an empty/
-  // undefined array either way means this round fell back to free text.
-  const options = party?.choiceOptions ?? gameChoiceOptions ?? [];
-  const isChoice = options.length > 0;
-  const isChaosHints = party?.event === 'chaoshints';
-  const target = resolveTarget(party, artistOnly, yearOnly);
-  const isYear = target === 'year';
-  const isBoth = target === 'both';
-  const keyboardOpen = useKeyboardOpen();
-  const { compact, ultraCompact, landscape } = useGuessingLayout(isBoth, keyboardOpen);
-  const squeezeTier = { compact, ultraCompact };
-  const canSubmit = isYear ? guessText.trim().length === 4 : guessText.trim().length > 0;
-  const [inputFocused, setInputFocused] = useState(false);
-  const inputBoxStyle = guessInputBoxStyle(isListening, inputFocused, ultraCompact);
-
-  // Keep the keyboard ready as soon as a free-text turn starts, including
-  // Race rounds that enter guessing directly. If the player focused either
-  // field while listening, keep that deliberate focus instead.
-  useGuessAutofocus(phase, isChoice, isChaosHints, guessInputRef);
-
-  const label = guessingLabel(target, isChoice, isChaosHints);
-  const placeholder = {
-    title: 'Type song title…',
-    artist: 'Type artist name…',
-    both: 'Type song title…',
-    year: 'e.g. 1994',
-  }[target];
-
-  let guessControl: React.ReactNode;
+function GuessControl({
+  isChaosHints, isChoice, isYear, hints, options, submitChaosTap, submitChoice,
+  guessText, setGuessText, inputFocused, setInputFocused, guessInputRef,
+  canSubmit, submitGuess, squeezeTier, inputBoxStyle, placeholder,
+}: Readonly<{
+  isChaosHints: boolean; isChoice: boolean; isYear: boolean;
+  hints: Hint[]; options: string[];
+  submitChaosTap: (index: number) => void; submitChoice: (option: string) => void;
+  guessText: string; setGuessText: (value: string) => void;
+  inputFocused: boolean; setInputFocused: (value: boolean) => void;
+  guessInputRef: PlayState['guessInputRef'];
+  canSubmit: boolean; submitGuess: () => void;
+  squeezeTier: { compact: boolean; ultraCompact: boolean };
+  inputBoxStyle: ReturnType<typeof guessInputBoxStyle>; placeholder: string;
+}>) {
   if (isChaosHints) {
-    guessControl = <ChaosHintButtons hints={hints} onPick={submitChaosTap} />;
-  } else if (isChoice) {
-    guessControl = <ChoiceButtons options={options} onPick={submitChoice} />;
-  } else if (isYear) {
+    return <ChaosHintButtons hints={hints} onPick={submitChaosTap} />;
+  }
+  if (isChoice) {
+    return <ChoiceButtons options={options} onPick={submitChoice} />;
+  }
+  if (isYear) {
     const digitBoxSize: DigitBoxSize = squeezeValue(squeezeTier, 'ultra', 'compact', 'normal');
-    guessControl = (
+    return (
       <div style={{ position: 'relative', flexShrink: 0 }}>
         <YearDigitBoxes value={guessText} focused={inputFocused} size={digitBoxSize} />
         <input
@@ -341,39 +344,85 @@ export function GuessingView({ game }: Readonly<{ game: PlayState }>) {
         />
       </div>
     );
-  } else {
-    guessControl = (
-      <div style={{
-        width: '100%', maxWidth: 'min(92vw, 420px)', borderRadius: '16px', overflow: 'hidden', flexShrink: 0,
-        border: inputBoxStyle.border,
-        background: inputBoxStyle.background,
-        boxShadow: inputBoxStyle.boxShadow,
-        transition: 'border-color 0.5s ease, background 0.5s ease, box-shadow 0.5s ease',
-      }}>
-        <input
-          ref={guessInputRef}
-          type="text"
-          placeholder={placeholder}
-          value={guessText}
-          onChange={e => setGuessText(e.target.value)}
-          onKeyDown={e => e.key === 'Enter' && canSubmit && submitGuess()}
-          onFocus={() => setInputFocused(true)}
-          onBlur={() => setInputFocused(false)}
-          autoComplete="off" autoCorrect="off" spellCheck={false}
-          style={{
-            display: 'block', width: '100%', background: 'transparent', border: 'none',
-            // 16px floor at every tier: below that, focusing the input makes
-            // iOS Safari zoom the whole page in to make the text legible,
-            // which is what "switching fields rescales like zooming in" was
-            // — ultraCompact's old 0.95rem (15.2px) tripped it.
-            color: 'white', fontSize: squeezeValue(squeezeTier, '1rem', '1.1rem', '1.3rem'), fontWeight: 700, textAlign: 'center',
-            padding: squeezeValue(squeezeTier, '6px 10px', '10px 16px', '20px 16px'), outline: 'none', fontFamily: 'inherit',
-          }}
-          className="placeholder-white/20"
-        />
-      </div>
-    );
   }
+  return (
+    <div style={{
+      width: '100%', maxWidth: 'min(92vw, 420px)', borderRadius: '16px', overflow: 'hidden', flexShrink: 0,
+      border: inputBoxStyle.border,
+      background: inputBoxStyle.background,
+      boxShadow: inputBoxStyle.boxShadow,
+      transition: 'border-color 0.5s ease, background 0.5s ease, box-shadow 0.5s ease',
+    }}>
+      <input
+        ref={guessInputRef}
+        type="text"
+        placeholder={placeholder}
+        value={guessText}
+        onChange={e => setGuessText(e.target.value)}
+        onKeyDown={e => e.key === 'Enter' && canSubmit && submitGuess()}
+        onFocus={() => setInputFocused(true)}
+        onBlur={() => setInputFocused(false)}
+        autoComplete="off" autoCorrect="off" spellCheck={false}
+        style={{
+          display: 'block', width: '100%', background: 'transparent', border: 'none',
+          // 16px floor at every tier: below that, focusing the input makes
+          // iOS Safari zoom the whole page in to make the text legible,
+          // which is what "switching fields rescales like zooming in" was
+          // — ultraCompact's old 0.95rem (15.2px) tripped it.
+          color: 'white', fontSize: squeezeValue(squeezeTier, '1rem', '1.1rem', '1.3rem'), fontWeight: 700, textAlign: 'center',
+          padding: squeezeValue(squeezeTier, '6px 10px', '10px 16px', '20px 16px'), outline: 'none', fontFamily: 'inherit',
+        }}
+        className="placeholder-white/20"
+      />
+    </div>
+  );
+}
+
+export function GuessingView({ game }: Readonly<{ game: PlayState }>) {
+  const { phase, timeLeft, timerTotal, myScore, guessText, guessInputRef, setGuessText, submitGuess, submitChoice, submitChaosTap, skipGuess, artistOnly, yearOnly, choiceOptions: gameChoiceOptions, songPlaying, songTempo, mode, party, hints, artistGuessText, setArtistGuessText } = game;
+  const isListening = phase === 'watching';
+  // Covers both Party's 'choice' format (party.choiceOptions) and the
+  // Classic/Race Multiple Choice toggle (game.choiceOptions) — an empty/
+  // undefined array either way means this round fell back to free text.
+  const options = party?.choiceOptions ?? gameChoiceOptions ?? [];
+  const isChoice = options.length > 0;
+  const isChaosHints = party?.event === 'chaoshints';
+  const target = resolveTarget(party, artistOnly, yearOnly);
+  const isYear = target === 'year';
+  const isBoth = target === 'both';
+  const bgAccent = resolveBgAccent(isYear, party, mode);
+  const keyboardOpen = useKeyboardOpen();
+  const { compact, ultraCompact, landscape, windowHeight } = useGuessingLayout(isBoth, keyboardOpen);
+  const squeezeTier = { compact, ultraCompact };
+  const canSubmit = isYear ? guessText.trim().length === 4 : guessText.trim().length > 0;
+  const [inputFocused, setInputFocused] = useState(false);
+  const inputBoxStyle = guessInputBoxStyle(isListening, inputFocused, ultraCompact);
+
+  // Keep the keyboard ready as soon as a free-text turn starts, including
+  // Race rounds that enter guessing directly. If the player focused either
+  // field while listening, keep that deliberate focus instead.
+  useGuessAutofocus(phase, isChoice, isChaosHints, guessInputRef);
+
+  const label = guessingLabel(target, isChoice, isChaosHints);
+  const placeholder = {
+    title: 'Type song title…',
+    artist: 'Type artist name…',
+    both: 'Type song title…',
+    year: 'e.g. 1994',
+  }[target];
+
+  const guessControl = (
+    <GuessControl
+      isChaosHints={isChaosHints} isChoice={isChoice} isYear={isYear}
+      hints={hints} options={options}
+      submitChaosTap={submitChaosTap} submitChoice={submitChoice}
+      guessText={guessText} setGuessText={setGuessText}
+      inputFocused={inputFocused} setInputFocused={setInputFocused}
+      guessInputRef={guessInputRef}
+      canSubmit={canSubmit} submitGuess={submitGuess}
+      squeezeTier={squeezeTier} inputBoxStyle={inputBoxStyle} placeholder={placeholder}
+    />
+  );
 
   // The artist field, split out so the "both" target can lay it beside the
   // title field instead of stacking under it once ultraCompact leaves no
@@ -414,7 +463,9 @@ export function GuessingView({ game }: Readonly<{ game: PlayState }>) {
           off at the keyboard's edge instead of extending behind it (see
           App.tsx). absolute against this relative, min-h-screen wrapper
           covers the same area without the clipping. */}
-      <img src={`${import.meta.env.BASE_URL}backgrounds/background4.svg`} alt="" aria-hidden="true" style={{ position: 'absolute', inset: 0, width: '100%', height: '100%', objectFit: 'cover', zIndex: 0, transform: 'rotate(180deg)' }} />
+      <div aria-hidden="true" style={{ position: 'absolute', inset: 0, zIndex: 0, overflow: 'hidden', pointerEvents: 'none' }}>
+        <img src={`${import.meta.env.BASE_URL}backgrounds/background8-2.png`} alt="" className="bg-fill-image" style={{ filter: `hue-rotate(${ACCENT_BG_HUE[bgAccent]}deg)` }} />
+      </div>
       <div style={{ position: 'absolute', inset: 0, zIndex: 1, background: 'rgba(5,5,14,0.82)', backdropFilter: 'blur(36px)' }} />
 
       {/* Reserving the keyboard's height at the bottom is what keeps Submit and
@@ -435,7 +486,7 @@ export function GuessingView({ game }: Readonly<{ game: PlayState }>) {
       {/* Header: waveform while listening, timer + score when active */}
       {isListening
         ? <ListeningHeader songPlaying={songPlaying} songTempo={songTempo} isYear={isYear} compact={compact} />
-        : <ActiveHeader timeLeft={timeLeft} timerTotal={timerTotal} myScore={myScore} isRace={mode === 'race'} isYear={isYear} songPlaying={songPlaying} songTempo={songTempo} compact={compact} ultraCompact={ultraCompact} landscape={landscape} />}
+        : <ActiveHeader timeLeft={timeLeft} timerTotal={timerTotal} myScore={myScore} isRace={mode === 'race'} isYear={isYear} songPlaying={songPlaying} songTempo={songTempo} compact={compact} ultraCompact={ultraCompact} landscape={landscape} windowHeight={windowHeight} />}
 
       {/* Input area. min-h-0 lets it actually shrink when the keyboard takes
           the bottom of the column. Scrolling is only enabled once the

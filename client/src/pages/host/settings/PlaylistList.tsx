@@ -1,4 +1,8 @@
+import { Plus } from 'lucide-react';
+import LiquidGlass from '../../../components/StableLiquidGlass';
+import { LIQUID_CONTROL_PROPS } from '../../../components/liquidGlassPresets';
 import { mergeUniqueTracks, MAX_POOL_TRACKS, type CustomPlaylist } from '../useHostGame';
+import { SETTINGS_CONTENT_WIDTH } from './rows';
 
 // The chosen-playlists list shown when Song Source is "My Playlist": each
 // picked playlist with a remove button, plus the add-another affordance and
@@ -37,24 +41,46 @@ export function PlaylistList({ customPlaylists, onOpen, onRemove }: Readonly<{
           </button>
         </div>
       ))}
-      <button
-        type="button"
-        onClick={onOpen}
-        className="w-full flex items-center gap-2.5 rounded-xl text-left"
-        style={{ padding: '8px 10px', background: 'rgba(255,255,255,0.05)', border: '1px dashed rgba(255,255,255,0.15)', cursor: 'pointer', transition: 'background 0.15s, border-color 0.15s' }}
-        onMouseEnter={e => { const el = e.currentTarget; el.style.background = 'rgba(255,255,255,0.09)'; el.style.borderColor = 'rgba(255,255,255,0.3)'; }}
-        onMouseLeave={e => { const el = e.currentTarget; el.style.background = 'rgba(255,255,255,0.05)'; el.style.borderColor = 'rgba(255,255,255,0.15)'; }}
-      >
-        <div className="min-w-0 flex-1">
-          <p style={{ color: 'rgba(255,255,255,0.5)', fontSize: '0.8125rem' }}>
-            {customPlaylists.length === 0 ? 'Choose playlists' : '+ Add another playlist'}
-          </p>
-          {customPlaylists.length > 1 && (
-            <p style={{ color: 'rgba(255,255,255,0.35)', fontSize: '0.6875rem' }}>{totalTracks} unique tracks total</p>
-          )}
-        </div>
-        <span style={{ color: 'rgba(255,255,255,0.35)', fontSize: '0.75rem' }}>→</span>
-      </button>
+      {/* Same subtle real-LiquidGlass chrome as the panel's other small
+          controls (see SettingStepperButton/ToggleRow), tinted green for
+          the Spotify-playlist context rather than the panel's default
+          purple — replaces the old dashed "add" affordance with a quiet
+          glass pill and a plus badge instead of a trailing arrow. */}
+      <div className="liquid-btn glass-tint-green subtle-glass-chip relative w-full" style={{ height: '48px' }}>
+        <LiquidGlass style={{ position: 'absolute', top: '50%', left: '50%' }} {...LIQUID_CONTROL_PROPS} cornerRadius={14} padding="0">
+          <div style={{ position: 'relative' }}>
+            {/* Same tint-wash technique as SlidingPillRow, matched to the
+                plus badge's green rather than left uncolored — otherwise
+                the badge reads as an isolated dot on plain glass instead of
+                a piece of one green-tinted surface. */}
+            <div
+              className="absolute rounded-2xl"
+              style={{ inset: 0, background: 'rgba(29,185,84,0.08)', pointerEvents: 'none' }}
+            />
+            <button
+              type="button"
+              onClick={onOpen}
+              className="relative flex items-center gap-2.5 text-left"
+              style={{ width: `${SETTINGS_CONTENT_WIDTH}px`, height: '48px', padding: '0 12px', background: 'transparent', border: 'none', cursor: 'pointer' }}
+            >
+              <span
+                className="flex items-center justify-center rounded-full shrink-0"
+                style={{ width: '26px', height: '26px', background: 'rgba(29,185,84,0.16)', border: '1px solid rgba(29,185,84,0.32)' }}
+              >
+                <Plus className="w-3.5 h-3.5" style={{ color: '#6ee7a0' }} strokeWidth={2.5} />
+              </span>
+              <div className="min-w-0 flex-1">
+                <p style={{ color: 'rgba(255,255,255,0.75)', fontWeight: 600, fontSize: '0.8125rem' }}>
+                  {customPlaylists.length === 0 ? 'Choose playlists' : 'Add another playlist'}
+                </p>
+                {customPlaylists.length > 1 && (
+                  <p style={{ color: 'rgba(255,255,255,0.4)', fontSize: '0.6875rem' }}>{totalTracks} unique tracks total</p>
+                )}
+              </div>
+            </button>
+          </div>
+        </LiquidGlass>
+      </div>
       {overCap && (
         <p style={{ color: '#fcd34d', fontSize: '0.6875rem' }}>
           Combined pool capped at {MAX_POOL_TRACKS.toLocaleString()} tracks — {(uncappedTotal - MAX_POOL_TRACKS).toLocaleString()} track{uncappedTotal - MAX_POOL_TRACKS === 1 ? '' : 's'} from the most recently added playlist(s) won't be included.

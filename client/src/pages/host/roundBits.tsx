@@ -2,17 +2,23 @@ import React from 'react';
 import type { Hint, PartyInfo } from '../../types';
 import type { HostState } from './useHostGame';
 
-// Which brand accent a round reads as: year rounds get teal (matching Play.tsx),
-// race/non-classic party rounds get orange, classic stays purple.
-export function roundAccent(isRace: boolean, isYear: boolean): 'classic' | 'race' | 'year' {
-  if (isYear) return 'year';
-  return isRace ? 'race' : 'classic';
-}
-
 export function usesRaceFlow(mode: HostState['mode'], yearOnly: boolean, party: PartyInfo | null): boolean {
   if (mode === 'race') return true;
   if (party === null) return yearOnly;
   return party.format !== 'classic';
+}
+
+// Which brand accent a round reads as: year rounds get teal (matching
+// Play.tsx), race/non-classic party rounds get orange, classic stays purple —
+// except Party mode itself, which keeps its own teal identity even on a
+// classic-format sub-round (which reads as 'classic' under isRace/isYear
+// alone), so it stays consistent across every screen in the round rather
+// than only wherever isRace happens to be true.
+export function fullRoundAccent(mode: HostState['mode'], roundYearOnly: boolean, party: PartyInfo | null): 'classic' | 'race' | 'year' | 'party' {
+  const isYear = party ? party.format === 'year' : roundYearOnly;
+  if (isYear) return 'year';
+  if (mode === 'party') return 'party';
+  return usesRaceFlow(mode, roundYearOnly, party) ? 'race' : 'classic';
 }
 
 // Renders an album-art image hint, blurred as a teaser (per `hint.blurred`,

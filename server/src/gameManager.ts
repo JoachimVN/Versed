@@ -183,6 +183,7 @@ export function createGame(hostSocketId: string, preferredPin?: string): Game {
     artistWindow: [],
     phaseTimer: null,
     phaseEndsAt: null,
+    finishedAt: null,
   };
   games.set(pin, game);
   socketToPin.set(hostSocketId, pin);

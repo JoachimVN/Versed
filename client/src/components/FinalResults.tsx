@@ -437,6 +437,13 @@ function PodiumRevealCard({ rank, entry, awards, visible, reducedMotion }: Reado
           lineHeight: 0.98, letterSpacing: '-0.01em',
           background: gradient, WebkitBackgroundClip: 'text', backgroundClip: 'text', WebkitTextFillColor: 'transparent',
           animation: nameAnimation,
+          // Unlike the settled recap's podium name (.podium-name-champion),
+          // this card has no neighboring columns to protect and plenty of
+          // vertical room while it's the only thing on screen — so an
+          // extremely long name wraps onto extra lines instead of
+          // ellipsis-ing, and overflowWrap breaks a single unbroken long
+          // word rather than letting it run off the edge of the screen.
+          maxWidth: '92vw', overflowWrap: 'anywhere',
         }}
       >
         {entry.name}

@@ -1,12 +1,13 @@
 import { useState, type ReactNode } from 'react';
 import { useSearchParams } from 'react-router';
-import { PlayingView } from './host/PlayingView';
+import { PlayingView, GuessingView as HostGuessingView } from './host/PlayingView';
+import { BettingView as HostBettingView } from './host/BettingView';
 import { RevealView } from './host/RevealView';
 import { LobbyView } from './host/LobbyView';
 import type { HostState } from './host/useHostGame';
 import { WatchingView } from './play/WatchingView';
 import { GuessingView } from './play/GuessingView';
-import { RevealView as PlayRevealView } from './play/RevealView';
+import { RevealView as PlayRevealView, YearRevealView as PlayYearRevealView } from './play/RevealView';
 import { WaitingAtmosphere } from './play/WaitingAtmosphere';
 import { WaitingView } from './play/WaitingView';
 import type { PlayState } from './play/usePlayGame';
@@ -53,8 +54,8 @@ const MOCK_HOST: HostState = {
   totalRounds: 10,
   hints: [],
   bettingTime: 15,
-  timeLeft: 2,
-  timerTotal: 15,
+  timeLeft: 24,
+  timerTotal: 30,
   bidCount: 3,
   countdown: null,
   guesserNames: ['Anna'],
@@ -140,6 +141,46 @@ const MOCK_HOST_REVEAL: HostState = {
   phase: 'reveal',
   result: MOCK_RESULT,
   roundDeltas: { Anna: 1250 },
+};
+
+// Race "now playing" — everyone guesses at once, so there's no bid tier to
+// show, just the answered-count status the race branch of PlayingView reads.
+const MOCK_HOST_PLAYING_RACE: HostState = {
+  ...MOCK_HOST,
+  mode: 'race',
+  guesserNames: ['Anna', 'John', 'Olivia'],
+  answeredCount: 1,
+};
+
+const MOCK_HOST_PLAYING_WIDE_BIDS: HostState = {
+  ...MOCK_HOST,
+  guesserNames: ['Anna', 'Ben'],
+  lowestBid: 0.1,
+  playerBids: [
+    { name: 'Anna', bid: 0.1 }, { name: 'Ben', bid: 0.1 }, { name: 'Cara', bid: 5 },
+    { name: 'Dan', bid: 15 }, { name: 'Eve', bid: 45 }, { name: 'Fay', bid: 60 },
+  ],
+};
+
+// Standalone (non-Party) "guess the year" round — yearOnly rides the race
+// flow (usesRaceFlow), same as a Party year format round.
+const MOCK_HOST_PLAYING_YEAR: HostState = {
+  ...MOCK_HOST,
+  mode: 'race',
+  yearOnly: true,
+  roundYearOnly: true,
+  guesserNames: ['Anna', 'John', 'Olivia'],
+  answeredCount: 2,
+};
+
+const MOCK_HOST_PLAYING_PARTY: HostState = {
+  ...MOCK_HOST,
+  mode: 'party',
+  party: {
+    format: 'classic', target: 'title', event: null, multiplier: 1, winnerOnly: false,
+    intro: { title: 'Name It', tagline: 'Bid & guess the title' },
+    finale: false, duelists: [], restricted: [],
+  },
 };
 
 const YEAR_FIXTURE_BASE: Pick<RoundResultEvent, 'correct' | 'guesserName' | 'songTitle' | 'artist' | 'year' | 'coverUrl' | 'points' | 'party'> = {
@@ -373,6 +414,7 @@ const MOCK_PLAY: PlayState = {
   leaderboardDeltas: {},
   awards: [],
   finalResultsSkipped: false,
+  finishedAt: null,
   songPlaying: true,
   songTempo: 117,
   reconnecting: false,
@@ -415,6 +457,22 @@ const MOCK_PLAY_REVEAL: PlayState = {
   myRank: { rank: 1, total: 3 },
   myBreakdown: { parts: [{ label: 'Base', amount: 500 }, { label: 'Bid bonus', amount: 600 }, { label: 'Difficulty', amount: 150 }], multiplier: 1, multiplierBonus: 0, pity: 0, total: 1250 },
   myStreak: 3,
+};
+
+// Uses the 7-player crowd fixture (not the 3-player MOCK_RESULT_YEAR) so the
+// "other scorers" strip under the timeline actually has several rows to show
+// -- with only 3 players, 'me' and the one skip leave just 1-2 other
+// scorers, never enough to see the list's own spacing/truncation at work.
+const MOCK_PLAY_YEAR_REVEAL: PlayState = {
+  ...MOCK_PLAY,
+  phase: 'reveal',
+  myName: 'Anna',
+  myScore: 4350,
+  myScoreDelta: 480,
+  myRank: { rank: 3, total: 7 },
+  myBreakdown: { parts: [{ label: 'Closeness', amount: 480 }], multiplier: 1, multiplierBonus: 0, pity: 0, total: 480 },
+  myStreak: 0,
+  party: CROWD_RESULT_YEAR.party ?? null,
 };
 
 const MOCK_RESULT_NOONE: RoundResultEvent = {
@@ -549,6 +607,12 @@ export default function Screenshot() {
     'join-link': <PlayerScaleShell><JoinView game={MOCK_PLAY_JOIN_LINK} /></PlayerScaleShell>,
     'join-rejoin': <PlayerScaleShell><JoinView game={MOCK_PLAY_JOIN_REJOIN} /></PlayerScaleShell>,
     playing: <HostScaleShell><PlayingView game={MOCK_HOST} /></HostScaleShell>,
+    'playing-race': <HostScaleShell><PlayingView game={MOCK_HOST_PLAYING_RACE} /></HostScaleShell>,
+    'playing-year': <HostScaleShell><PlayingView game={MOCK_HOST_PLAYING_YEAR} /></HostScaleShell>,
+    'playing-party': <HostScaleShell><PlayingView game={MOCK_HOST_PLAYING_PARTY} /></HostScaleShell>,
+    'host-guessing': <HostScaleShell><HostGuessingView game={MOCK_HOST} /></HostScaleShell>,
+    'host-betting': <HostScaleShell><HostBettingView game={MOCK_HOST} /></HostScaleShell>,
+    'playing-wide-bids': <HostScaleShell><PlayingView game={MOCK_HOST_PLAYING_WIDE_BIDS} /></HostScaleShell>,
     reveal: <HostScaleShell><RevealView game={MOCK_HOST_REVEAL} result={MOCK_RESULT} instant /></HostScaleShell>,
     year: <HostScaleShell><RevealView game={MOCK_HOST_YEAR_REVEAL} result={MOCK_RESULT_YEAR} instant /></HostScaleShell>,
     'mystery-reveal': <HostScaleShell><RevealView game={MOCK_HOST_MYSTERY_REVEAL} result={MOCK_RESULT_MYSTERY} /></HostScaleShell>,
@@ -559,6 +623,7 @@ export default function Screenshot() {
     'year-guessing': <PlayerScaleShell><GuessingView game={MOCK_PLAY_YEAR_GUESSING} /></PlayerScaleShell>,
     'guessing-both': <PlayerScaleShell><GuessingView game={MOCK_PLAY_GUESSING_BOTH} /></PlayerScaleShell>,
     'play-reveal': <PlayerScaleShell><PlayRevealView game={MOCK_PLAY_REVEAL} result={MOCK_RESULT} /></PlayerScaleShell>,
+    'play-year-reveal': <PlayerScaleShell><PlayYearRevealView game={MOCK_PLAY_YEAR_REVEAL} result={CROWD_RESULT_YEAR} /></PlayerScaleShell>,
     'play-reveal-noone': <PlayerScaleShell><PlayRevealView game={MOCK_PLAY_REVEAL_NOONE} result={MOCK_RESULT_NOONE} /></PlayerScaleShell>,
     'play-reveal-crowd': <PlayerScaleShell><PlayRevealView game={MOCK_PLAY_REVEAL_CROWD} result={CROWD_RESULT} /></PlayerScaleShell>,
     'reveal-crowd': <HostScaleShell><RevealView game={MOCK_HOST_REVEAL_CROWD} result={CROWD_RESULT} instant /></HostScaleShell>,
@@ -582,5 +647,5 @@ export default function Screenshot() {
   };
 
   return screenshots[params.get('v') ?? '']
-    ?? <p className="text-white p-6 font-mono">?v=home|join|join-link|join-rejoin|playing|reveal|year|mystery-reveal|big-points-reveal|watching|guessing|year-guessing|guessing-both|play-reveal|play-reveal-noone|play-reveal-crowd|reveal-crowd|year-crowd|lobby|party-intro|final-host|final-host-classic-only|final-host-race-only|final-host-no-speed|final-host-1|final-host-2|final-host-long|final-player|final-empty</p>;
+    ?? <p className="text-white p-6 font-mono">?v=home|join|join-link|join-rejoin|playing|playing-race|playing-year|playing-party|reveal|year|mystery-reveal|big-points-reveal|watching|guessing|year-guessing|guessing-both|play-reveal|play-year-reveal|play-reveal-noone|play-reveal-crowd|reveal-crowd|year-crowd|lobby|party-intro|final-host|final-host-classic-only|final-host-race-only|final-host-no-speed|final-host-1|final-host-2|final-host-long|final-player|final-empty</p>;
 }

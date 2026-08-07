@@ -282,4 +282,9 @@ export interface Game {
   artistWindow: Song[]; // last few rounds' songs, most recent last — see artistWindowSize
   phaseTimer: ReturnType<typeof setTimeout> | null;
   phaseEndsAt: number | null; // epoch ms when the current countdown expires
+  // epoch ms when the game reached 'finished' — lets a client that only
+  // reconnects/resyncs well after the fact (see sync.ts's game_over resend)
+  // compute how much of the fixed-length "look up at the board" holding
+  // screen has already elapsed instead of always starting a fresh countdown.
+  finishedAt: number | null;
 }

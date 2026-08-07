@@ -9,7 +9,7 @@ import { computeYearCardHeight } from '../../components/yearCardSqueeze';
 import type { RevealLayout } from '../../components/revealSqueeze';
 import { useRevealLayout, computeCardHeight, computeCardWidth, squeezeValue } from '../../components/revealSqueeze';
 import { PartyRevealExtras, MYSTERY_LANDING_MS } from '../../components/RoundIntro';
-import { LIQUID_CARD_PROPS } from '../../components/liquidGlassPresets';
+import { LIQUID_CARD_PROPS, REVEAL_TINT_CLASS, REVEAL_WASH } from '../../components/liquidGlassPresets';
 import { useHostScaleValue } from '../../hooks/useHostScale';
 import type { PlayerInfo, RoundResultEvent } from '../../types';
 import type { HostState } from './useHostGame';
@@ -356,13 +356,16 @@ function RevealShell({
             tier — a real cost on a short screen. */}
         <p className="text-white/45 text-xs" style={{ position: 'absolute', top: '10px', left: '14px', zIndex: 3 }}>{roundIndex + 1} / {totalRounds}</p>
 
-        <div className="liquid-btn host-game-card relative" style={{ width: computeCardWidth(squeeze, wide), height: `${cardHeight}px`, zIndex: 2 }}>
+        <div className={`liquid-btn host-game-card relative ${REVEAL_TINT_CLASS}`} style={{ width: computeCardWidth(squeeze, wide), height: `${cardHeight}px`, zIndex: 2 }}>
           <LiquidGlass
             style={{ position: 'absolute', top: '50%', left: '50%' }}
             {...LIQUID_CARD_PROPS}
             padding={revealCardPadding(wide, squeeze)}
           >
-            {cardContent}
+            <div style={{ position: 'relative' }}>
+              <div aria-hidden="true" style={{ position: 'absolute', inset: '-24px', borderRadius: '20px', zIndex: 0, pointerEvents: 'none', background: REVEAL_WASH }} />
+              <div style={{ position: 'relative', zIndex: 1 }}>{cardContent}</div>
+            </div>
           </LiquidGlass>
         </div>
 

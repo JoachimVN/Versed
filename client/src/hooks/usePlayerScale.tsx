@@ -1,4 +1,4 @@
-import { createContext, useContext, useEffect, useRef, useState } from 'react';
+import { createContext, useContext, useEffect, useState } from 'react';
 import type { CSSProperties, ReactNode } from 'react';
 
 // Mirrors useHostScale.tsx's mechanism (see its comments for the `zoom` vs
@@ -42,37 +42,42 @@ export function usePlayerScaleValue() {
  * driving the .player-scale-shell rules in index.css. See useHostScale.tsx
  * for why --player-app-height is computed in JS rather than as a CSS
  * calc()-on-itself. */
-export function usePlayerScale(ref: React.RefObject<HTMLElement | null>) {
+export function usePlayerScale() {
+  // See useHostScale.tsx's matching comment: --player-scale used to be
+  // pushed onto the DOM node imperatively from this hook's own mount effect,
+  // but React fires effects children-before-parents within a commit, so any
+  // descendant's own useLayoutEffect (the logo-morph code measuring a rect
+  // to fly to, in particular) always ran first — one paint before
+  // `zoom: var(--player-scale, 1)` came off its 1-fallback, silently
+  // rescaling/repositioning everything under it right after. Rendering the
+  // variable into the style prop instead applies it during the commit's
+  // mutation phase, which runs before any layout effect, parent or child.
   const [scale, setScale] = useState(computeScale);
 
   useEffect(() => {
-    const el = ref.current;
-    if (!el) return;
-
-    const sync = () => {
-      const next = computeScale();
-      el.style.setProperty('--player-scale', String(next));
-      el.style.setProperty('--player-app-height', `${window.innerHeight / next}px`);
-      setScale(next);
-    };
-
-    sync();
+    const sync = () => setScale(computeScale());
     window.addEventListener('resize', sync);
     return () => window.removeEventListener('resize', sync);
-  }, [ref]);
+  }, []);
 
   return scale;
 }
 
-// Wraps player content in the ref + provider wiring usePlayerScale needs.
+// Wraps player content in the provider wiring usePlayerScale needs.
 // Used by Play.tsx for the real app, and by Screenshot.tsx's player-group
 // fixtures for the same reason HostScaleShell wraps host ones there.
 export function PlayerScaleShell({ children, className, style }: Readonly<{ children: ReactNode; className?: string; style?: CSSProperties }>) {
-  const ref = useRef<HTMLDivElement>(null);
-  const scale = usePlayerScale(ref);
+  const scale = usePlayerScale();
   return (
     <PlayerScaleContext.Provider value={scale}>
-      <div ref={ref} className={['player-scale-shell', className].filter(Boolean).join(' ')} style={style}>
+      <div
+        className={['player-scale-shell', className].filter(Boolean).join(' ')}
+        style={{
+          ...style,
+          ['--player-scale' as string]: scale,
+          ['--player-app-height' as string]: `${window.innerHeight / scale}px`,
+        } as CSSProperties}
+      >
         {children}
       </div>
     </PlayerScaleContext.Provider>

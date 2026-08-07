@@ -41,6 +41,10 @@ export function useSpotify() {
   // Incremented by prepareTrack and pauseTrack; startPrepared bails if it
   // changes mid-flight, preventing orphaned stop timers and stale resumes.
   const playGenRef = useRef(0);
+  // Aborts a prepareTrack fetch that a newer prepareTrack/pauseTrack has
+  // superseded — without this, rapid skips leave every stale PUT request
+  // running to completion, flooding Spotify's API and tripping its rate limit.
+  const prepareAbortRef = useRef<AbortController | null>(null);
   // Where the prepared track starts (party "snippet" rounds start mid-song);
   // startPrepared seeks here and playback detection is offset by it.
   const preparedPositionRef = useRef(0);
@@ -227,6 +231,10 @@ export function useSpotify() {
   // the play window is timed from the audible start rather than the resume()
   // call (which precedes real output by 100-300ms of device/SDK latency).
   function waitForPlaybackStart(startPositionMs: number): Promise<boolean> {
+    // A pauseTrack/prepareTrack that lands mid-poll (e.g. a fast skip cutting
+    // this round short) bumps playGenRef — stop polling immediately instead
+    // of continuing to hit getCurrentState for the rest of the 2.5s window.
+    const startGen = playGenRef.current;
     return new Promise((resolve) => {
       let done = false;
       const finish = (started: boolean) => {
@@ -237,6 +245,7 @@ export function useSpotify() {
         resolve(started);
       };
       const poll = setInterval(async () => {
+        if (playGenRef.current !== startGen) { finish(false); return; }
         try {
           const st = await playerRef.current?.getCurrentState();
           // >start+40ms: past the very start, so audio is really flowing.
@@ -265,11 +274,19 @@ export function useSpotify() {
       return false;
     }
     clearStopTimer();
+    // A previous prepareTrack may still be in flight (fast skip landed before
+    // it resolved) — abort it so its PUT doesn't keep running alongside this
+    // one and pile onto Spotify's rate limit.
+    prepareAbortRef.current?.abort();
+    const controller = new AbortController();
+    prepareAbortRef.current = controller;
     playGenRef.current += 1;
+    const myGen = playGenRef.current;
     playStateRef.current = 'preparing';
     preparedPositionRef.current = positionMs;
     try {
       await playerRef.current?.setVolume(0);
+      if (myGen !== playGenRef.current) return false; // superseded while awaiting setVolume
       const res = await fetch(`https://api.spotify.com/v1/me/player/play?device_id=${device}`, {
         method: 'PUT',
         headers: {
@@ -277,16 +294,27 @@ export function useSpotify() {
           'Content-Type': 'application/json',
         },
         body: JSON.stringify({ uris: [`spotify:track:${trackId}`], position_ms: positionMs }),
+        signal: controller.signal,
       });
+      if (myGen !== playGenRef.current) return false; // superseded; a newer prepareTrack already running
       if (!res.ok) {
         const body = await res.text();
-        reportPlaybackError(`prepare failed ${res.status}`, body);
+        if (res.status === 429) {
+          // Transient — almost always caused by a burst of rapid skips, not a
+          // real playback failure. The server's fallback timer moves the
+          // round along on its own, so don't alarm the host into thinking
+          // they need to reconnect Spotify.
+          reportPlaybackError(`prepare failed 429`, { message: 'Spotify briefly rate-limited playback — this round will continue automatically.' });
+        } else {
+          reportPlaybackError(`prepare failed ${res.status}`, body);
+        }
         playStateRef.current = 'idle';
         return false;
       }
       setPlaybackError(null);
       return true;
     } catch (err) {
+      if (controller.signal.aborted) return false; // expected: superseded by a newer prepareTrack/pauseTrack
       reportPlaybackError('prepare failed', err);
       playStateRef.current = 'idle';
       return false;
@@ -330,6 +358,7 @@ export function useSpotify() {
 
   async function pauseTrack() {
     clearStopTimer();
+    prepareAbortRef.current?.abort(); // cancel a still-running prepareTrack fetch
     playGenRef.current += 1; // invalidate any in-flight startPrepared
     playStateRef.current = 'stopping';
     try {

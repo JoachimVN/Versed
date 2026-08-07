@@ -56,13 +56,14 @@ function PersonalHero({ entry, awards, reducedMotion }: Readonly<{ entry: Leader
  * result card -- rank, score, and this player's own award if they earned one
  * -- followed by the full standings and every award, same as before.
  */
-export function FinalResultsPlayerView({ leaderboard, awards, myName, backgroundSrc, footer, skipped }: Readonly<{
+export function FinalResultsPlayerView({ leaderboard, awards, myName, backgroundSrc, footer, skipped, finishedAt }: Readonly<{
   leaderboard: LeaderboardEntry[];
   awards: Award[];
   myName: string;
   backgroundSrc: string;
   footer: ReactNode;
   skipped?: boolean;
+  finishedAt?: number | null;
 }>) {
   const [reducedMotion] = useState(() => globalThis.matchMedia?.('(prefers-reduced-motion: reduce)').matches ?? false);
   const [phase, setPhase] = useState<Phase>(reducedMotion || leaderboard.length === 0 ? 'settled' : 'hold');
@@ -96,7 +97,16 @@ export function FinalResultsPlayerView({ leaderboard, awards, myName, background
     // immediately once the deadline has actually passed, regardless of
     // whether the tab was hidden at the start, hidden partway through, or
     // never hidden at all.
-    const deadline = Date.now() + getCeremonyDuration(podiumCount);
+    //
+    // Anchored to the server's finishedAt rather than Date.now(): a player
+    // who reconnects (socket drop, backgrounded app, page refresh) well
+    // after the host's ceremony already finished gets game_over resent with
+    // the *original* finishedAt (see sync.ts), so the deadline computed here
+    // lands in the past and settleIfDue below resolves it immediately.
+    // Using Date.now() here always started a brand-new full-length wait,
+    // leaving a late-reconnecting player stuck on "Look up at the board"
+    // long after the host's board had already moved on.
+    const deadline = (finishedAt ?? Date.now()) + getCeremonyDuration(podiumCount);
     let timer: ReturnType<typeof setTimeout> | undefined;
     const settleIfDue = () => { if (Date.now() >= deadline) setPhase('settled'); };
     const armTimer = () => {
@@ -118,7 +128,7 @@ export function FinalResultsPlayerView({ leaderboard, awards, myName, background
     // deliberate: a reconnect resync resends an equal-content but new-reference
     // array, which would otherwise cancel this timer without rescheduling it,
     // leaving the player stuck on "Look up at the board" forever.
-  }, [leaderboardSignature, reducedMotion]);
+  }, [leaderboardSignature, reducedMotion, finishedAt]);
 
   // Host held down the hold-to-skip control on their own cinematic — jump
   // straight to settled instead of sitting out the rest of the fixed-length
