@@ -4,7 +4,7 @@ import LiquidGlass from '../../components/StableLiquidGlass';
 import { useLogoMorph } from '../../contexts/LogoMorph';
 import { useKeyboardOpen } from '../../hooks/useViewportLayout';
 import { BackButton } from '../../components/BackButton';
-import { LIQUID_CARD_PROPS, LIQUID_PILL_PROPS } from '../../components/liquidGlassPresets';
+import { LIQUID_CARD_PROPS, LIQUID_PILL_PROPS, REVEAL_TINT_CLASS, REVEAL_WASH } from '../../components/liquidGlassPresets';
 import { APP_NAME } from '../../config';
 import type { PlayState } from './usePlayGame';
 import { useMorphBack, useWaitingTransitionMorph, pageTransitionClass, readLogoRect } from './morph';
@@ -217,13 +217,14 @@ export function JoinView({ game }: Readonly<{ game: PlayState }>) {
       )}
 
       {/* Input card: LiquidGlass */}
-      <div className="liquid-btn relative" style={{ width: controlWidth, height: showPinField ? '165px' : '115px', transition: 'height 0.3s ease', flexShrink: 0 }}>
+      <div className={`liquid-btn relative ${REVEAL_TINT_CLASS}`} style={{ width: controlWidth, height: showPinField ? '165px' : '115px', transition: 'height 0.3s ease', flexShrink: 0 }}>
         <LiquidGlass
           style={{ position: 'absolute', top: '50%', left: '50%' }}
           {...LIQUID_CARD_PROPS}
           padding="20px 24px"
         >
-          <div style={{ width: fieldWidth, textAlign: 'center' }}>
+          <div aria-hidden="true" style={{ position: 'absolute', inset: '-24px', borderRadius: '20px', zIndex: 0, pointerEvents: 'none', background: REVEAL_WASH }} />
+          <div style={{ position: 'relative', zIndex: 1, width: fieldWidth, textAlign: 'center' }}>
             {showPinField && (
               <>
                 {/* PIN */}
