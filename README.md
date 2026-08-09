@@ -45,33 +45,16 @@
 </p>
 
 <p align="center">
-  <img src="docs/screenshots/PartyIntro.png" alt="Versed party mode round announcement: Steal Round"/>
-  <br>
-  <em>Party mode round intro</em>
-</p>
-
-<p align="center">
   <img src="docs/screenshots/Reveal.png" alt="Versed player view song reveal"/>
   <br>
   <em>Song Reveal</em>
 </p>
 
-### Local viewport checks
-
-The local viewport checker writes ignored inspection images to
-`.github/scripts/viewport-check-out/<group>/<screen>/` and reports clipped
-elements as failures. Build and serve the client first, then target just the
-screen and device size you are changing:
-
-```bash
-npm exec -w client vite -- build --base=/
-npx serve@14 client/dist -p 4321 -s &
-node .github/scripts/viewport-check.js --views host-reveal --viewports iphone14-390x844-portrait
-```
-
-Use `--list` to see every available screen and viewport. `--groups host`,
-`--groups player`, `--views screen-one,screen-two`, and `--keyboard only` keep
-small checks fast; omit filters to run the full matrix.
+<p align="center">
+  <img src="docs/screenshots/PartyIntro.png" alt="Versed party mode round announcement: Steal Round"/>
+  <br>
+  <em>Party mode round intro</em>
+</p>
 
 ---
 
@@ -227,6 +210,23 @@ Open the host view on a laptop, join from phones at `http://<your-local-ip>:5173
 | `npm run dev` | Runs client (Vite) and server (tsx watch) concurrently |
 | `npm run build` | Type-checks and builds both workspaces |
 | `npm start` | Starts the compiled server (`node dist/index.js`) |
+
+### Local viewport checks
+
+The local viewport checker writes ignored inspection images to
+`.github/scripts/viewport-check-out/<group>/<screen>/` and reports clipped
+elements as failures. Build and serve the client first, then target just the
+screen and device size you are changing:
+
+```bash
+npm exec -w client vite -- build --base=/
+npx serve@14 client/dist -p 4321 -s &
+node .github/scripts/viewport-check.js --views host-reveal --viewports iphone14-390x844-portrait
+```
+
+Use `--list` to see every available screen and viewport. `--groups host`,
+`--groups player`, `--views screen-one,screen-two`, and `--keyboard only` keep
+small checks fast; omit filters to run the full matrix.
 
 ---
 
