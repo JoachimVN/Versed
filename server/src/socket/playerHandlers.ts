@@ -1,5 +1,6 @@
 import { Socket } from 'socket.io';
 import * as gm from '../gameManager';
+import { Game, Player } from '../types';
 import { getIo, playerDisconnectTimers } from './context';
 import { syncState } from './sync';
 import { raceFlow, endRaceRound, closeBettingAndPlay, advanceTierOrReveal, songFields, stealPendingName, emitScoreUpdate, maybeOfferSteal } from './roundLifecycle';
@@ -7,6 +8,54 @@ import {
   asRecord, logSecurityViolation, MAX_NAME_LENGTH, parseFiniteNumber, parseGuessText, parseInteger, parsePin,
   parsePlayerName, parseSessionToken, respond,
 } from './security';
+
+type JoinRequest = { pin: string; name: string; sessionToken?: string };
+
+// Validates a join_game payload down to the three fields the handler needs,
+// or the message to send back when it doesn't hold up. Check order decides
+// which complaint a bad payload gets, so it matches the order players hit
+// them: name length, then PIN, then name, then token.
+function parseJoinRequest(payload: unknown): { ok: true; request: JoinRequest } | { ok: false; error: string } {
+  const data = asRecord(payload);
+  const pin = parsePin(data?.pin);
+  const name = parsePlayerName(data?.name);
+  const parsedToken = data?.playerToken === undefined ? undefined : parseSessionToken(data.playerToken);
+  if (typeof data?.name === 'string' && data.name.trim().length > MAX_NAME_LENGTH) {
+    return { ok: false, error: `Name must be ${MAX_NAME_LENGTH} characters or fewer` };
+  }
+  if (!pin) return { ok: false, error: 'PIN must be exactly 3 digits' };
+  if (!name) return { ok: false, error: 'Enter a valid name' };
+  if (data?.playerToken !== undefined && !parsedToken) return { ok: false, error: 'Invalid join details' };
+  return { ok: true, request: { pin, name, sessionToken: parsedToken ?? undefined } };
+}
+
+// The host's lobby roster, re-sent whenever the player list changes.
+function broadcastLobby(game: Game): void {
+  const players = Array.from(game.players.values()).map(p => ({ name: p.name, score: p.score, streak: p.streak }));
+  getIo().to(`host:${game.pin}`).emit('player_joined', { players });
+}
+
+// A name already in the game means a reconnect: cancel any pending removal
+// timer, migrate the socket ID off the stale connection, and snap the player
+// to the current phase.
+function resumeRejoinedPlayer(
+  socket: Socket, game: Game, oldId: string, rejoined: Player, callback: unknown,
+): void {
+  const t = playerDisconnectTimers.get(oldId);
+  if (t) { clearTimeout(t); playerDisconnectTimers.delete(oldId); }
+  socket.join(game.pin);
+  socket.join(`player:${game.pin}`);
+  if (oldId !== socket.id) getIo().sockets.sockets.get(oldId)?.disconnect(true);
+  respond(callback, { success: true, playerToken: rejoined.sessionToken });
+  if (game.phase === 'lobby') {
+    broadcastLobby(game);
+  } else {
+    syncState(socket, game);
+    getIo().to(`host:${game.pin}`).emit('player_reconnected', {
+      name: rejoined.name, score: rejoined.score, streak: rejoined.streak,
+    });
+  }
+}
 
 export function registerPlayerHandlers(socket: Socket) {
   // ── Player: check if a game PIN is still active ───────────────────────────
@@ -21,60 +70,31 @@ export function registerPlayerHandlers(socket: Socket) {
     'join_game',
     (payload: unknown, callback?: unknown) => {
       if (typeof callback !== 'function') return;
-      const data = asRecord(payload);
-      const pin = parsePin(data?.pin);
-      const name = parsePlayerName(data?.name);
-      const parsedToken = data?.playerToken === undefined ? undefined : parseSessionToken(data.playerToken);
-      const sessionToken = parsedToken ?? undefined;
-      if (typeof data?.name === 'string' && data.name.trim().length > MAX_NAME_LENGTH) {
-        respond(callback, { error: `Name must be ${MAX_NAME_LENGTH} characters or fewer` });
+      const parsed = parseJoinRequest(payload);
+      if (!parsed.ok) {
+        respond(callback, { error: parsed.error });
         return;
       }
-      if (!pin) {
-        respond(callback, { error: 'PIN must be exactly 3 digits' });
-        return;
-      }
-      if (!name) {
-        respond(callback, { error: 'Enter a valid name' });
-        return;
-      }
-      if (data?.playerToken !== undefined && !sessionToken) {
-        respond(callback, { error: 'Invalid join details' });
-        return;
-      }
+      const { pin, name, sessionToken } = parsed.request;
       const game = gm.getGame(pin);
       if (!game) {
         respond(callback, { error: 'Game not found' });
         return;
       }
 
-      // If this name is already in the game (lobby or mid-game), it's a
-      // reconnect — cancel any pending removal timer, migrate the socket ID,
-      // and snap to the current phase.
+      // If this name is already in the game (lobby or mid-game), it's either a
+      // reconnect holding the matching session token, or someone trying to
+      // take over a name that isn't theirs.
       const oldEntry = Array.from(game.players.entries())
         .find(([, p]) => p.name.toLowerCase() === name.trim().toLowerCase());
-      const rejoined = oldEntry ? gm.rejoinPlayer(game, socket.id, name, sessionToken) : null;
-      if (rejoined) {
-        const [oldId] = oldEntry!;
-        const t = playerDisconnectTimers.get(oldId);
-        if (t) { clearTimeout(t); playerDisconnectTimers.delete(oldId); }
-        socket.join(pin);
-        socket.join(`player:${pin}`);
-        if (oldId !== socket.id) getIo().sockets.sockets.get(oldId)?.disconnect(true);
-        respond(callback, { success: true, playerToken: rejoined.sessionToken });
-        if (game.phase === 'lobby') {
-          const players = Array.from(game.players.values()).map(p => ({ name: p.name, score: p.score, streak: p.streak }));
-          getIo().to(`host:${pin}`).emit('player_joined', { players });
-        } else {
-          syncState(socket, game);
-          getIo().to(`host:${pin}`).emit('player_reconnected', { name: rejoined.name, score: rejoined.score, streak: rejoined.streak });
-        }
-        return;
-      }
-
       if (oldEntry) {
-        logSecurityViolation(socket, 'join_game_identity');
-        respond(callback, { error: 'Name already taken' });
+        const rejoined = gm.rejoinPlayer(game, socket.id, name, sessionToken);
+        if (!rejoined) {
+          logSecurityViolation(socket, 'join_game_identity');
+          respond(callback, { error: 'Name already taken' });
+          return;
+        }
+        resumeRejoinedPlayer(socket, game, oldEntry[0], rejoined, callback);
         return;
       }
 
@@ -87,9 +107,7 @@ export function registerPlayerHandlers(socket: Socket) {
       socket.join(pin);
       socket.join(`player:${pin}`);
       respond(callback, { success: true, playerToken: player.sessionToken });
-
-      const players = Array.from(game.players.values()).map(p => ({ name: p.name, score: p.score, streak: p.streak }));
-      getIo().to(`host:${pin}`).emit('player_joined', { players });
+      broadcastLobby(game);
 
       // New player joining an in-progress game — sync them to the current phase.
       if (game.phase !== 'lobby') syncState(socket, game);
@@ -115,8 +133,7 @@ export function registerPlayerHandlers(socket: Socket) {
       return;
     }
     respond(callback, { success: true });
-    const players = Array.from(game.players.values()).map(p => ({ name: p.name, score: p.score, streak: p.streak }));
-    getIo().to(`host:${game.pin}`).emit('player_joined', { players });
+    broadcastLobby(game);
   });
 
   // ── Player: rejoin after reconnect ─────────────────────────────────────────
