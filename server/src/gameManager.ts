@@ -610,6 +610,28 @@ function guessDeadlineOpen(round: Round): boolean {
   return round.guessingEndsMono === null || performance.now() <= round.guessingEndsMono + SUBMISSION_GRACE_MS;
 }
 
+// The guards every race-flow submission shares: the round has to be live, the
+// caller a player in it who hasn't already answered, and — in rounds with a
+// restricted field (steal victim, finale duel) — one of its participants.
+// Returns the round when the submission may proceed, null when it may not.
+function openRaceRound(game: Game, socketId: string, allowExpiredDraft = false): Round | null {
+  const round = game.currentRound;
+  if (!round) return null;
+  if (!game.players.has(socketId)) return null;
+  if (game.phase !== 'guessing') return null;
+  if (!allowExpiredDraft && !guessDeadlineOpen(round)) return null;
+  if (round.passed.has(socketId)) return null;
+  const restricted = restrictedParticipantIds(round);
+  if (restricted && !restricted.includes(socketId)) return null;
+  return round;
+}
+
+// Winner-only and finale rounds close to everyone the moment someone lands
+// the first correct answer.
+function raceAlreadyWon(game: Game, round: Round): boolean {
+  return !!((isWinnerOnlyRound(game, round) || round.party?.finale) && round.firstCorrectAt !== null);
+}
+
 function applyRaceCorrectGuess(
   game: Game, round: Round, socketId: string, elapsedMs: number, artistBonus: boolean, guess: string,
 ): number {
@@ -784,15 +806,9 @@ export function recordRaceGuess(
   artistText?: string,
   allowExpiredDraft = false,
 ): { correct: boolean; points: number; elapsedMs: number; allDone: boolean } | null {
-  const round = game.currentRound;
+  const round = openRaceRound(game, socketId, allowExpiredDraft);
   if (!round) return null;
-  if (!game.players.has(socketId)) return null;
-  if (game.phase !== 'guessing') return null;
-  if (!allowExpiredDraft && !guessDeadlineOpen(round)) return null;
-  if (round.passed.has(socketId)) return null;
-  const restricted = restrictedParticipantIds(round);
-  if (restricted && !restricted.includes(socketId)) return null;
-  if ((isWinnerOnlyRound(game, round) || round.party?.finale) && round.firstCorrectAt !== null) return null;
+  if (raceAlreadyWon(game, round)) return null;
 
   const elapsedMs = Math.max(0, performance.now() - (round.playStartMono ?? performance.now()));
   round.guesses.set(socketId, text);
@@ -827,14 +843,8 @@ export function skipRaceGuess(
   game: Game,
   socketId: string,
 ): { allDone: boolean } | null {
-  const round = game.currentRound;
+  const round = openRaceRound(game, socketId);
   if (!round) return null;
-  if (!game.players.has(socketId)) return null;
-  if (game.phase !== 'guessing') return null;
-  if (!guessDeadlineOpen(round)) return null;
-  if (round.passed.has(socketId)) return null;
-  const restricted = restrictedParticipantIds(round);
-  if (restricted && !restricted.includes(socketId)) return null;
 
   round.guesses.set(socketId, null);
   round.passed.add(socketId);
@@ -887,15 +897,9 @@ function applyChaosHintTap(
 export function recordChaosHintTap(
   game: Game, socketId: string, tappedIndex: number,
 ): { correct: boolean; points: number; elapsedMs: number; allDone: boolean } | null {
-  const round = game.currentRound;
+  const round = openRaceRound(game, socketId);
   if (!round || round.party?.event !== 'chaoshints') return null;
-  if (!game.players.has(socketId)) return null;
-  if (game.phase !== 'guessing') return null;
-  if (!guessDeadlineOpen(round)) return null;
-  if (round.passed.has(socketId)) return null;
-  const restricted = restrictedParticipantIds(round);
-  if (restricted && !restricted.includes(socketId)) return null;
-  if ((isWinnerOnlyRound(game, round) || round.party?.finale) && round.firstCorrectAt !== null) return null;
+  if (raceAlreadyWon(game, round)) return null;
 
   const elapsedMs = Math.max(0, performance.now() - (round.playStartMono ?? performance.now()));
   round.chaosTapped.set(socketId, tappedIndex);
