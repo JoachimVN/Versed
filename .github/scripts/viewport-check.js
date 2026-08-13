@@ -121,6 +121,7 @@ const VIEWS = [
   { id: 'player-join-rejoin', group: 'player', v: 'join-rejoin', name: 'JoinViewRejoin' },
   { id: 'player-watching', group: 'player', v: 'watching', name: 'WatchingView' },
   { id: 'player-guessing', group: 'player', v: 'guessing', name: 'GuessingView' },
+  { id: 'player-guessing-race', group: 'player', v: 'guessing-race', name: 'GuessingRaceView' },
   { id: 'player-year-guessing', group: 'player', v: 'year-guessing', name: 'YearGuessingView' },
   { id: 'player-guessing-both', group: 'player', v: 'guessing-both', name: 'GuessingBothView' },
   { id: 'player-reveal', group: 'player', v: 'play-reveal', name: 'RevealView' },
@@ -136,7 +137,7 @@ const VIEWS = [
 // target) is the tightest case per GuessingView's own comments, so it only
 // needs the keyboard-open pass, not a first plain one already covered by the
 // others.
-const KEYBOARD_VIEW_IDS = new Set(['player-guessing', 'player-year-guessing', 'player-guessing-both']);
+const KEYBOARD_VIEW_IDS = new Set(['player-guessing', 'player-guessing-race', 'player-year-guessing', 'player-guessing-both']);
 
 // Scans every element for a bounding box that extends past its nearest
 // clipping ancestor (the nearest overflow:hidden container going up to
