@@ -1,9 +1,9 @@
 import { Socket } from 'socket.io';
 import * as gm from '../gameManager';
-import { Award } from '../types';
 import { getIo, hostDisconnectTimers, playerDisconnectTimers } from './context';
 import { StartGameSettings, applyStartGameSettings, applySongSource } from './settings';
 import { beginRound, raceFlow, endRaceRound, startGuessingPhase, closeBettingAndPlay, revealRound, advanceTierOrReveal } from './roundLifecycle';
+import { asRecord, logSecurityViolation, parsePlayerName, parsePin, parseSessionToken, respond } from './security';
 
 // IP → timestamps of recent create_game calls (for rate limiting)
 const createGameAttempts = new Map<string, number[]>();
@@ -23,16 +23,19 @@ setInterval(() => {
 
 export function registerHostHandlers(socket: Socket) {
   // ── Host: create game ──────────────────────────────────────────────────────
-  socket.on('create_game', (callback: (r: { pin?: string; error?: string }) => void) => {
+  socket.on('create_game', (callback?: unknown) => {
+    if (typeof callback !== 'function') return;
     if (gm.activeGameCount() >= gm.MAX_ACTIVE_GAMES) {
-      return callback({ error: 'Server is at capacity, try again later' });
+      respond(callback, { error: 'Server is at capacity, try again later' });
+      return;
     }
 
     const ip = socket.handshake.address;
     const now = Date.now();
     const attempts = (createGameAttempts.get(ip) ?? []).filter(t => now - t < CREATE_GAME_WINDOW_MS);
     if (attempts.length >= CREATE_GAME_LIMIT) {
-      return callback({ error: 'Too many games created, try again later' });
+      respond(callback, { error: 'Too many games created, try again later' });
+      return;
     }
     createGameAttempts.set(ip, [...attempts, now]);
 
@@ -40,13 +43,17 @@ export function registerHostHandlers(socket: Socket) {
     socket.join(game.pin);
     socket.join(`host:${game.pin}`);
     console.log(`[create_game] socket=${socket.id} pin=${game.pin} rooms=${[...socket.rooms].join(',')}`);
-    callback({ pin: game.pin });
+    respond(callback, { pin: game.pin, hostToken: game.hostToken });
   });
 
   // ── Host: start a new game without a page reload ─────────────────────────
-  socket.on('new_game', (callback: (r: { pin?: string; error?: string }) => void) => {
+  socket.on('new_game', (callback?: unknown) => {
+    if (typeof callback !== 'function') return;
     const oldGame = gm.getGameBySocket(socket.id);
-    if (oldGame?.hostSocketId !== socket.id) return callback({ error: 'Not a host' });
+    if (oldGame?.hostSocketId !== socket.id) {
+      respond(callback, { error: 'Not a host' });
+      return;
+    }
     const oldPin = oldGame.pin;
 
     // Cancel any pending player disconnect timers for this game.
@@ -74,33 +81,47 @@ export function registerHostHandlers(socket: Socket) {
     socket.join(newGame.pin);
     socket.join(`host:${newGame.pin}`);
 
-    callback({ pin: newGame.pin });
+    respond(callback, { pin: newGame.pin, hostToken: newGame.hostToken });
   });
 
   // ── Host: rejoin after reconnect or page reload ───────────────────────────
   // `fresh` marks a full page reload: the host client lost all round UI state,
   // so any round in flight can't be resumed. A plain socket reconnect (host
   // tab still alive) keeps the round running as before.
-  socket.on('rejoin_host', ({ pin, fresh }: { pin: string; fresh?: boolean }, callback: (r: {
-    players: { name: string; score: number; streak: number }[];
-    phase: string; roundIndex: number; totalRounds: number;
-    leaderboard: { rank: number; name: string; score: number }[];
-    awards: Award[];
-  } | { error: string }) => void) => {
+  socket.on('rejoin_host', (payload: unknown, callback?: unknown) => {
+    if (typeof callback !== 'function') return;
+    const data = asRecord(payload);
+    const pin = parsePin(data?.pin);
+    const hostToken = parseSessionToken(data?.hostToken);
+    const fresh = data?.fresh === true;
+    if (!pin || !hostToken) {
+      respond(callback, { error: 'Invalid host session' });
+      return;
+    }
+
     const game = gm.getGame(pin);
-    if (!game) return callback({ error: 'Game not found' });
+    if (!game || !gm.sessionTokenMatches(game.hostToken, hostToken)) {
+      logSecurityViolation(socket, 'rejoin_host');
+      respond(callback, { error: 'Game not found' });
+      return;
+    }
+
+    const previousHostId = game.hostSocketId;
 
     // Cancel the host grace-period timer so the game survives.
     const hostTimer = hostDisconnectTimers.get(pin);
     if (hostTimer) { clearTimeout(hostTimer); hostDisconnectTimers.delete(pin); }
 
-    // Remove the stale host socket from the lookup table.
-    if (game.hostSocketId !== socket.id) gm.removeSocket(game.hostSocketId);
+    // Remove and disconnect the stale host only after the bearer token has
+    // proved this reconnect owns the session. The removed lookup means its
+    // disconnect handler cannot start a second teardown timer.
+    if (previousHostId !== socket.id) gm.removeSocket(previousHostId);
 
     game.hostSocketId = socket.id;
     socket.join(pin);
     socket.join(`host:${pin}`);
     gm.updateSocketPin(socket.id, pin);
+    if (previousHostId !== socket.id) getIo().sockets.sockets.get(previousHostId)?.disconnect(true);
     getIo().to(game.pin).emit('host_reconnected');
 
     // After a reload mid-round, the safest resume point is the between-rounds
@@ -112,7 +133,7 @@ export function registerHostHandlers(socket: Socket) {
       getIo().to(`player:${pin}`).emit('leaderboard', { leaderboard: gm.getLeaderboard(game) });
     }
 
-    callback({
+    respond(callback, {
       players: Array.from(game.players.values()).map(p => ({ name: p.name, score: p.score, streak: p.streak })),
       phase: game.phase,
       roundIndex: game.roundIndex,
@@ -123,14 +144,16 @@ export function registerHostHandlers(socket: Socket) {
   });
 
   // ── Host: kick player from lobby or reveal ────────────────────────────────
-  socket.on('kick_player', ({ name }: { name: string }) => {
+  socket.on('kick_player', (payload: unknown) => {
+    const name = parsePlayerName(asRecord(payload)?.name);
+    if (!name) return;
     const game = gm.getGameBySocket(socket.id);
     const allowedPhases = ['lobby', 'reveal'] as const;
     if (game?.hostSocketId !== socket.id || !allowedPhases.includes(game.phase as typeof allowedPhases[number])) return;
     const entry = Array.from(game.players.entries()).find(([, p]) => p.name === name);
     if (!entry) return;
     const [kickedId] = entry;
-    gm.removeSocket(kickedId);
+    gm.removeSocket(kickedId, false);
     getIo().to(kickedId).emit('kicked');
     getIo().to(`host:${game.pin}`).emit('player_left', {
       players: Array.from(game.players.values()).map(p => ({ name: p.name })),
@@ -139,19 +162,26 @@ export function registerHostHandlers(socket: Socket) {
 
   // ── Host: start game → first round ────────────────────────────────────────
   socket.on('start_game', (
-    payload?: { settings?: StartGameSettings },
-    callback?: (r: { error?: string }) => void,
+    payload?: unknown,
+    callback?: unknown,
   ) => {
     const game = gm.getGameBySocket(socket.id);
-    if (game?.hostSocketId !== socket.id || game.phase !== 'lobby') return callback?.({ error: 'Not ready' });
+    if (game?.hostSocketId !== socket.id || game.phase !== 'lobby') {
+      respond(callback, { error: 'Not ready' });
+      return;
+    }
 
-    applyStartGameSettings(game, payload?.settings);
-    const sourceResult = applySongSource(game, payload?.settings);
-    if (!sourceResult.ok) return callback?.({ error: sourceResult.error });
+    const settings = asRecord(asRecord(payload)?.settings) as StartGameSettings | null;
+    applyStartGameSettings(game, settings ?? undefined);
+    const sourceResult = applySongSource(game, settings ?? undefined);
+    if (!sourceResult.ok) {
+      respond(callback, { error: sourceResult.error });
+      return;
+    }
 
     game.roundIndex = 0;
     beginRound(game);
-    callback?.({});
+    respond(callback, {});
   });
 
   // ── Host: song playback confirmed ──────────────────────────────────────────

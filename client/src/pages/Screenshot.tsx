@@ -435,6 +435,17 @@ const MOCK_PLAY_GUESSING: PlayState = {
   guessText: 'Bil',
 };
 
+// The plain race-mode guessing turn: no party recipe, so the whole screen
+// resolves to the race accent (orange) rather than classic's purple — the
+// case that has to be checked separately from MOCK_PLAY_GUESSING above.
+const MOCK_PLAY_GUESSING_RACE: PlayState = {
+  ...MOCK_PLAY,
+  phase: 'guessing',
+  guesserNames: ['Anna'],
+  guessText: 'Bil',
+  mode: 'race',
+};
+
 const MOCK_PLAY_YEAR_GUESSING: PlayState = {
   ...MOCK_PLAY,
   phase: 'guessing',
@@ -548,7 +559,7 @@ const MOCK_PLAY_JOIN_LINK: PlayState = {
 
 const MOCK_PLAY_JOIN_REJOIN: PlayState = {
   ...MOCK_PLAY_JOIN,
-  savedSession: { pin: '123', name: 'Anna' },
+  savedSession: { pin: '123', name: 'Anna', playerToken: 'fixture-session-token' },
 };
 
 // ─── Entry ────────────────────────────────────────────────────────────────────
@@ -620,6 +631,7 @@ export default function Screenshot() {
     watching: <PlayerScaleShell><WatchingView game={MOCK_PLAY} /></PlayerScaleShell>,
     waiting: <PlayerScaleShell><WaitingAtmosphere leaving={false} /><WaitingView game={{ ...MOCK_PLAY, phase: 'waiting', myName: 'Joachim' }} leaveBackground={noop} /></PlayerScaleShell>,
     guessing: <PlayerScaleShell><GuessingView game={MOCK_PLAY_GUESSING} /></PlayerScaleShell>,
+    'guessing-race': <PlayerScaleShell><GuessingView game={MOCK_PLAY_GUESSING_RACE} /></PlayerScaleShell>,
     'year-guessing': <PlayerScaleShell><GuessingView game={MOCK_PLAY_YEAR_GUESSING} /></PlayerScaleShell>,
     'guessing-both': <PlayerScaleShell><GuessingView game={MOCK_PLAY_GUESSING_BOTH} /></PlayerScaleShell>,
     'play-reveal': <PlayerScaleShell><PlayRevealView game={MOCK_PLAY_REVEAL} result={MOCK_RESULT} /></PlayerScaleShell>,
@@ -647,5 +659,5 @@ export default function Screenshot() {
   };
 
   return screenshots[params.get('v') ?? '']
-    ?? <p className="text-white p-6 font-mono">?v=home|join|join-link|join-rejoin|playing|playing-race|playing-year|playing-party|reveal|year|mystery-reveal|big-points-reveal|watching|guessing|year-guessing|guessing-both|play-reveal|play-year-reveal|play-reveal-noone|play-reveal-crowd|reveal-crowd|year-crowd|lobby|party-intro|final-host|final-host-classic-only|final-host-race-only|final-host-no-speed|final-host-1|final-host-2|final-host-long|final-player|final-empty</p>;
+    ?? <p className="text-white p-6 font-mono">?v=home|join|join-link|join-rejoin|playing|playing-race|playing-year|playing-party|reveal|year|mystery-reveal|big-points-reveal|watching|guessing|guessing-race|year-guessing|guessing-both|play-reveal|play-year-reveal|play-reveal-noone|play-reveal-crowd|reveal-crowd|year-crowd|lobby|party-intro|final-host|final-host-classic-only|final-host-race-only|final-host-no-speed|final-host-1|final-host-2|final-host-long|final-player|final-empty</p>;
 }

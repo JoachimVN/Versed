@@ -11,6 +11,7 @@ import { setIo } from './socket/context';
 import { registerHostHandlers } from './socket/hostHandlers';
 import { registerPlayerHandlers } from './socket/playerHandlers';
 import { registerDisconnectHandler } from './socket/disconnect';
+import { installConnectionLimits, installSocketRateLimit, MAX_SOCKET_MESSAGE_BYTES } from './socket/security';
 
 dotenv.config();
 gm.initSongs();
@@ -34,10 +35,18 @@ const corsOptions = {
   methods: ['GET', 'POST'],
 };
 
+function requestOriginAllowed(origin: string | undefined): boolean {
+  if (!origin) return true;
+  if (process.env.NODE_ENV !== 'production') return true;
+  return allowedOrigins.has(origin);
+}
+
 const app = express();
 const httpServer = createServer(app);
 const io = new Server(httpServer, {
   cors: corsOptions,
+  maxHttpBufferSize: MAX_SOCKET_MESSAGE_BYTES,
+  allowRequest: (req, callback) => callback(null, requestOriginAllowed(req.headers.origin)),
 });
 
 app.use(cors(corsOptions));
@@ -66,11 +75,13 @@ if (process.env.NODE_ENV === 'production') {
 }
 
 setIo(io);
+installConnectionLimits(io);
 
 io.on('connection', (socket) => {
   console.log(`[socket] connected: ${socket.id}`);
   socket.on('disconnect', (reason) => console.log(`[socket] disconnected: ${socket.id} (${reason})`));
 
+  installSocketRateLimit(socket);
   registerHostHandlers(socket);
   registerPlayerHandlers(socket);
   registerDisconnectHandler(socket);

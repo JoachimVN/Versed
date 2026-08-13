@@ -1,16 +1,17 @@
 import React from 'react';
 import { PartyBadge } from '../../components/RoundIntro';
 import { HeroTimer, LinearTimer } from '../../components/CircularTimer';
+import { resolveRoundAccent } from '../../components/AudioBars';
 import { useRevealLayout } from '../../components/revealSqueeze';
 import type { HostState } from './useHostGame';
-import { AlbumArtHint, fullRoundAccent } from './roundBits';
+import { AlbumArtHint } from './roundBits';
 import { EndGameButton } from './dialogs';
 
 export function BettingView({ game }: Readonly<{ game: HostState }>) {
   const { roundIndex, totalRounds, timeLeft, bettingTime, hints, bidCount, players, pin, skipTurn, endGame, party, mode, roundYearOnly } = game;
   const imageHint = hints.find(h => h.imageUrl);
   const textHints = hints.filter(h => !h.imageUrl);
-  const accent = fullRoundAccent(mode, roundYearOnly, party);
+  const accent = resolveRoundAccent(mode, roundYearOnly, party);
   const { compact } = useRevealLayout();
 
   return (
