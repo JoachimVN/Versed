@@ -615,7 +615,7 @@ export function PassedView() {
         aria-hidden="true"
         style={{ position: 'absolute', inset: 0, width: '100%', height: '100%', objectFit: 'cover', zIndex: 0 }}
       />
-      <div style={{ position: 'absolute', inset: 0, zIndex: 1, background: 'rgba(5,5,14,0.75)', backdropFilter: 'blur(28px)' }} />
+      <div style={{ position: 'absolute', inset: 0, zIndex: 1, background: 'rgba(5,5,14,0.82)', backdropFilter: 'blur(28px)' }} />
 
       <div
         className="relative flex flex-col items-center justify-center min-h-screen p-6"
