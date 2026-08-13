@@ -135,6 +135,7 @@ function buildRound(game: Game, party?: Round['party']): Round {
     firstCorrectAt: null,
     correctGuessers: new Set(),
     guessTimes: new Map(),
+    doubleDutyCredits: new Map(),
     tierStartAt: null,
   };
 }
@@ -605,12 +606,99 @@ function applyRaceCorrectGuess(
   }
   applyRaceScoreToPlayer(game, round, socketId, elapsedMs, points, guess);
   recordFinaleRaceWin(game, round, socketId, isFirst);
+  if (isFirst && effectiveTarget(round) === 'both') {
+    creditDraftedDoubleDutyMatches(game, round, socketId, elapsedMs, base);
+  }
   // The mystery multiplier stays hidden until everyone sees the shared
   // reveal, so the guesser's own immediate ack can't carry the true
   // (multiplied) total — that would let them back out ×2 vs ×10 right away.
   // Hand back the pre-multiplier amount instead; the real score still lands
   // via player.score, and score_update carries the true delta at reveal.
   return round.party?.event === 'mystery' ? preMultiplier : points;
+}
+
+// Double Duty pays whoever's title lands first a flat rate and decays (or, in
+// winner-only rounds, zeroes) everyone after — which used to make it
+// strictly better to race the title alone than to spend the extra beat also
+// typing the artist. Anyone else who already had the correct title drafted
+// at this same instant gets the same flat rate as the actual submitter (own
+// artist bonus and pity still checked individually), so knowing both answers
+// is never worse than knowing just the title.
+//
+// Winner-only rounds end the instant this fires — recordRaceGuess already
+// hard-rejects any later guess once firstCorrectAt is set — so a credited
+// player there is locked in by that gate regardless; nothing to top up.
+// Non-winner-only rounds keep everyone free to keep typing, exactly like a
+// player who hadn't been credited at all: this only banks a floor, it
+// doesn't end their turn. If they hadn't also drafted the correct artist
+// yet, the credit is logged in round.doubleDutyCredits so their eventual
+// real submission (or the round-timeout draft auto-submit) can top up the
+// artist bonus instead of re-paying the base amount — see
+// settleDoubleDutyTopUp.
+function creditDraftedDoubleDutyMatches(
+  game: Game, round: Round, submitterId: string, elapsedMs: number, base: number,
+): void {
+  const diffBonus = difficultyBonus(game, round.song.rank);
+  const mult = roundMultiplier(round);
+  const winnerOnly = isWinnerOnlyRound(game, round);
+  for (const id of raceParticipants(game, round)) {
+    if (id === submitterId || round.passed.has(id)) continue;
+    const draftTitle = round.liveDrafts.get(id)?.trim();
+    if (!draftTitle) continue;
+    const draftArtist = round.liveArtistDrafts.get(id)?.trim();
+    const { correct, artistBonus } = checkGuess('both', draftTitle, draftArtist, round.song);
+    if (!correct) continue;
+
+    round.guesses.set(id, draftTitle);
+    if (draftArtist) round.artistGuesses.set(id, draftArtist);
+    round.correctGuessers.add(id);
+    round.guessTimes.set(id, elapsedMs);
+    if (winnerOnly) round.passed.add(id);
+
+    const parts: PointsBreakdownPart[] = [
+      { label: 'Speed', amount: base - diffBonus },
+      { label: 'Difficulty', amount: diffBonus },
+    ];
+    if (artistBonus) parts.push({ label: 'Title + artist bonus', amount: base });
+    const preMultiplier = parts.reduce((sum, p) => sum + p.amount, 0);
+    let points = Math.round(preMultiplier * mult);
+    let pity = 0;
+    if (points > 0) { pity = pityBonus(currentScores(game), id, round); points += pity; }
+    round.pointsBreakdown.set(id, buildBreakdown(parts, mult, pity));
+    applyRaceScoreToPlayer(game, round, id, elapsedMs, points, draftTitle);
+
+    if (!winnerOnly) round.doubleDutyCredits.set(id, { base, artistAwarded: artistBonus });
+  }
+}
+
+// Pays the artist-bonus top-up for a player who was already credited by
+// creditDraftedDoubleDutyMatches but hadn't drafted the correct artist yet at
+// that moment. The banked base credit stands regardless of what they do
+// next, but the top-up itself requires this actual submission to still be a
+// correct title — editing the title away to something wrong and submitting
+// only the artist correctly earns nothing further.
+function settleDoubleDutyTopUp(
+  game: Game, round: Round, socketId: string,
+  credit: { base: number; artistAwarded: boolean }, titleStillCorrect: boolean,
+  artistText: string | undefined, elapsedMs: number,
+): number {
+  round.guessTimes.set(socketId, elapsedMs);
+  if (credit.artistAwarded || !titleStillCorrect) return 0;
+  const trimmedArtist = artistText?.trim();
+  const artistOk = !!trimmedArtist && isCorrectArtistGuess(trimmedArtist, round.song.artist, round.song.featuredArtists);
+  if (!artistOk) return 0;
+  credit.artistAwarded = true;
+
+  const existing = round.pointsBreakdown.get(socketId);
+  if (!existing) return 0;
+  const parts = [...existing.parts, { label: 'Title + artist bonus', amount: credit.base }];
+  const rebuilt = buildBreakdown(parts, existing.multiplier, existing.pity);
+  round.pointsBreakdown.set(socketId, rebuilt);
+  const delta = rebuilt.total - existing.total;
+  const player = game.players.get(socketId)!;
+  player.score += delta;
+  if (delta > player.biggestSwing) player.biggestSwing = delta;
+  return delta;
 }
 
 function applyRaceScoreToPlayer(
@@ -667,7 +755,10 @@ export function recordRaceGuess(
   const { correct, artistBonus } = checkGuess(target, text, artistText, round.song);
   const trimmedArtist = artistText?.trim();
   if (target === 'both' && trimmedArtist) round.artistGuesses.set(socketId, trimmedArtist);
-  const points = correct ? applyRaceCorrectGuess(game, round, socketId, elapsedMs, artistBonus, text) : 0;
+  const priorCredit = round.doubleDutyCredits.get(socketId);
+  const points = priorCredit
+    ? settleDoubleDutyTopUp(game, round, socketId, priorCredit, correct, artistText, elapsedMs)
+    : (correct ? applyRaceCorrectGuess(game, round, socketId, elapsedMs, artistBonus, text) : 0);
 
   const allDone = ((isWinnerOnlyRound(game, round) || round.party?.finale === true) && correct)
     || participants.every(id => round.passed.has(id));
