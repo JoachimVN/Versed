@@ -53,7 +53,7 @@ export function WatchingView({ game }: Readonly<{ game: PlayState }>) {
           style={{ filter: `hue-rotate(${ACCENT_BG_HUE[watchAccent]}deg)` }}
         />
       </div>
-      <div style={{ position: 'absolute', inset: 0, zIndex: 1, background: 'rgba(5,5,14,0.82)', backdropFilter: 'blur(36px)' }} />
+      <div style={{ position: 'absolute', inset: 0, zIndex: 1, background: 'rgba(5,5,14,0.75)', backdropFilter: 'blur(36px)' }} />
 
       {/* Content */}
       <div

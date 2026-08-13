@@ -24,7 +24,7 @@ export function BettingView({ game }: Readonly<{ game: HostState }>) {
         aria-hidden="true"
         style={{ position: 'fixed', inset: 0, width: '100%', height: '100%', objectFit: 'cover', zIndex: 0, transform: 'rotate(90deg)' }}
       />
-      <div style={{ position: 'fixed', inset: 0, zIndex: 1, background: 'rgba(5,5,14,0.82)', backdropFilter: 'blur(28px)' }} />
+      <div style={{ position: 'fixed', inset: 0, zIndex: 1, background: 'rgba(5,5,14,0.75)', backdropFilter: 'blur(28px)' }} />
 
       {/* Top bar */}
       <div className="relative flex items-center justify-between px-9 pt-7" style={{ zIndex: 2 }}>

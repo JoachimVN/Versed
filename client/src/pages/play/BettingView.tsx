@@ -85,7 +85,7 @@ export function BettingView({ game }: Readonly<{ game: PlayState }>) {
         aria-hidden="true"
         style={{ position: 'absolute', inset: 0, width: '100%', height: '100%', objectFit: 'cover', zIndex: 0, transform: 'rotate(270deg)' }}
       />
-      <div style={{ position: 'absolute', inset: 0, zIndex: 1, background: 'rgba(5,5,14,0.82)', backdropFilter: 'blur(28px)' }} />
+      <div style={{ position: 'absolute', inset: 0, zIndex: 1, background: 'rgba(5,5,14,0.75)', backdropFilter: 'blur(28px)' }} />
 
       {/* Top bar. Horizontal padding floors at max(20px, safe-area inset) —
           in landscape the notch/Dynamic Island sits on the left or right

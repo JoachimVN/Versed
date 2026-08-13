@@ -210,7 +210,7 @@ export function PlayingView({ game }: Readonly<{ game: HostState }>) {
       <div aria-hidden="true" style={{ position: 'fixed', inset: 0, zIndex: 0, overflow: 'hidden', pointerEvents: 'none' }}>
         <img src={`${import.meta.env.BASE_URL}backgrounds/background8-2.png`} alt="" className="bg-fill-image" style={{ filter: `blur(24px) hue-rotate(${ACCENT_BG_HUE[accent]}deg)`, transform: 'scale(1.04)' }} />
       </div>
-      <div style={{ position: 'fixed', inset: 0, zIndex: 1, background: 'rgba(5,5,14,0.82)' }} />
+      <div style={{ position: 'fixed', inset: 0, zIndex: 1, background: 'rgba(5,5,14,0.75)' }} />
       <div className="flex flex-col items-center gap-5 text-center w-full" style={{ position: 'relative', zIndex: 2 }}>
         <p className="text-white/50 text-sm" style={{ letterSpacing: '0.08em', textTransform: 'uppercase', fontWeight: 600 }}>Round {roundIndex + 1}/{totalRounds}</p>
         <PartyBadge party={party} />
@@ -284,7 +284,7 @@ export function GuessingView({ game }: Readonly<{ game: HostState }>) {
       <div aria-hidden="true" style={{ position: 'fixed', inset: 0, zIndex: 0, overflow: 'hidden', pointerEvents: 'none' }}>
         <img src={`${import.meta.env.BASE_URL}backgrounds/background8-2.png`} alt="" className="bg-fill-image" style={{ filter: `hue-rotate(${ACCENT_BG_HUE[accent]}deg)` }} />
       </div>
-      <div style={{ position: 'fixed', inset: 0, zIndex: 1, background: 'rgba(5,5,14,0.82)', backdropFilter: 'blur(36px)' }} />
+      <div style={{ position: 'fixed', inset: 0, zIndex: 1, background: 'rgba(5,5,14,0.75)', backdropFilter: 'blur(36px)' }} />
       <div className={`flex flex-col items-center text-center w-full ${squeezeValue(squeezeTier, 'gap-2', 'gap-3', 'gap-5')}`} style={{ position: 'relative', zIndex: 2 }}>
         <p className="text-white/45 text-sm">Round {roundIndex + 1}/{totalRounds}</p>
         <PartyBadge party={party} />
