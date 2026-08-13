@@ -120,8 +120,17 @@ export function FinalResultsPlayerView({ leaderboard, awards, myName, background
     };
     armTimer();
     document.addEventListener('visibilitychange', onVisible);
+    // Belt-and-suspenders for onVisible: some mobile browsers (in-app
+    // browsers like Instagram/Facebook, iOS PWA/homescreen sessions) don't
+    // reliably fire visibilitychange on resume, which was still leaving
+    // players stranded on "Look up at the board" even after the deadline had
+    // long passed. A 1s poll costs nothing while the tab is foregrounded and
+    // guarantees this settles within a second of the deadline regardless of
+    // which resume signal (if any) the browser actually delivers.
+    const poll = setInterval(settleIfDue, 1000);
     return () => {
       if (timer) clearTimeout(timer);
+      clearInterval(poll);
       document.removeEventListener('visibilitychange', onVisible);
     };
     // Keying off the content signature (not the `leaderboard` array reference) is
