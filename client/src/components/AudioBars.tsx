@@ -1,3 +1,5 @@
+import type { PartyInfo } from '../types';
+
 // Each bar gets a unique animation shape, duration, and delay so they move
 // independently. `dur`/`delay` are the fallback (fixed, tempo-agnostic)
 // timing used when a song's tempo isn't known. `beats`/`delayFrac` are used
@@ -29,6 +31,30 @@ const AUDIO_BARS = [
 ] as const;
 
 export type BarAccent = 'classic' | 'race' | 'year' | 'party';
+
+// The single place a round's identity color is decided, shared by Host and
+// Play so both ends of the same round read as the same color instead of each
+// screen inferring its own: year rounds are aqua, Party keeps its own aqua
+// identity across every sub-round format it draws, race is orange, classic
+// purple. The player side signals Party via a non-null `party` (its own
+// `mode` only ever says classic/race), the host via mode === 'party' — both
+// are accepted so one function covers both callers.
+export function resolveRoundAccent(mode: 'classic' | 'race' | 'party', yearOnly: boolean, party: PartyInfo | null): BarAccent {
+  const isYear = party ? party.format === 'year' : yearOnly;
+  if (isYear) return 'year';
+  if (party || mode === 'party') return 'party';
+  return mode === 'race' ? 'race' : 'classic';
+}
+
+// Each accent's hue as a raw "r,g,b" triple, for the places that need it at
+// their own alpha (input borders and focus glows, button washes) rather than
+// one of the pre-composed colors below.
+export const ACCENT_RGB: Record<BarAccent, string> = {
+  classic: '158,18,204',
+  race: '234,88,12',
+  year: '0,238,232',
+  party: '0,238,232',
+};
 
 export const AUDIO_BAR_COLORS: Record<BarAccent, string> = {
   classic: 'rgba(158,18,204,0.75)',

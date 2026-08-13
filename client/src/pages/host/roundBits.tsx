@@ -8,19 +8,6 @@ export function usesRaceFlow(mode: HostState['mode'], yearOnly: boolean, party: 
   return party.format !== 'classic';
 }
 
-// Which brand accent a round reads as: year rounds get teal (matching
-// Play.tsx), race/non-classic party rounds get orange, classic stays purple —
-// except Party mode itself, which keeps its own teal identity even on a
-// classic-format sub-round (which reads as 'classic' under isRace/isYear
-// alone), so it stays consistent across every screen in the round rather
-// than only wherever isRace happens to be true.
-export function fullRoundAccent(mode: HostState['mode'], roundYearOnly: boolean, party: PartyInfo | null): 'classic' | 'race' | 'year' | 'party' {
-  const isYear = party ? party.format === 'year' : roundYearOnly;
-  if (isYear) return 'year';
-  if (mode === 'party') return 'party';
-  return usesRaceFlow(mode, roundYearOnly, party) ? 'race' : 'classic';
-}
-
 // Renders an album-art image hint, blurred as a teaser (per `hint.blurred`,
 // server-driven) or clear (Underdog Boost's real, guaranteed assist) — the
 // flag is explicit so this stays correct regardless of which screen/phase

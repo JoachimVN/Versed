@@ -1,11 +1,11 @@
 import LiquidGlass from '../../components/StableLiquidGlass';
 import { PartyBadge } from '../../components/RoundIntro';
 import { HeroTimer, LinearTimer } from '../../components/CircularTimer';
-import { AudioBars, ACCENT_TINT_CLASS, ACCENT_WASH, ACCENT_GLOW_ANIMATION, ACCENT_BG_HUE } from '../../components/AudioBars';
+import { AudioBars, ACCENT_TINT_CLASS, ACCENT_WASH, ACCENT_GLOW_ANIMATION, ACCENT_BG_HUE, resolveRoundAccent } from '../../components/AudioBars';
 import { LIQUID_CARD_PROPS } from '../../components/liquidGlassPresets';
 import { useRevealLayout, squeezeValue } from '../../components/revealSqueeze';
 import type { HostState } from './useHostGame';
-import { fullRoundAccent, usesRaceFlow, RaceHintBar } from './roundBits';
+import { usesRaceFlow, RaceHintBar } from './roundBits';
 import { EndGameButton } from './dialogs';
 import { BID_OPTIONS } from '../../config';
 
@@ -192,7 +192,7 @@ export function PlayingView({ game }: Readonly<{ game: HostState }>) {
   // still win out over that, since target is a distinction orthogonal to
   // mode. This drives HeroTimer's ring gradient too (passed as `accent`),
   // so a year round rings cyan regardless of which underlying mode it rides.
-  const accent = fullRoundAccent(mode, roundYearOnly, party);
+  const accent = resolveRoundAccent(mode, roundYearOnly, party);
   const { compact, ultraCompact } = useRevealLayout();
   const tier: 'ultra' | 'compact' | 'normal' = squeezeValue({ compact, ultraCompact }, 'ultra', 'compact', 'normal');
   // The dial is the card's one dominant hero (much bigger than the old
@@ -265,7 +265,7 @@ export function GuessingView({ game }: Readonly<{ game: HostState }>) {
   const { roundIndex, totalRounds, guesserNames, lowestBid, playerBids, timeLeft, timerTotal, mode, roundYearOnly, hints, party, skipTurn, endGame } = game;
   // roundYearOnly is this round's resolved value, not the settings-panel
   // draft — see PlayingView's comment above for why that distinction matters.
-  const accent = fullRoundAccent(mode, roundYearOnly, party);
+  const accent = resolveRoundAccent(mode, roundYearOnly, party);
   // Bidders who placed a bid this round but aren't in the current tier —
   // if everyone bid the same (or there's only one player), there's no one
   // else left waiting on a later turn.

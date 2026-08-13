@@ -2,7 +2,7 @@ import { useState, useEffect } from 'react';
 import { Flame } from 'lucide-react';
 import LiquidGlass from '../../components/StableLiquidGlass';
 import { PartyBadge } from '../../components/RoundIntro';
-import { AudioBars, ACCENT_TINT_CLASS, ACCENT_WASH, ACCENT_GLOW_ANIMATION, ACCENT_BG_HUE } from '../../components/AudioBars';
+import { AudioBars, ACCENT_TINT_CLASS, ACCENT_WASH, ACCENT_GLOW_ANIMATION, ACCENT_BG_HUE, resolveRoundAccent, type BarAccent } from '../../components/AudioBars';
 import { useRevealLayout, squeezeValue } from '../../components/revealSqueeze';
 import type { PartyInfo } from '../../types';
 import type { PlayState } from './usePlayGame';
@@ -15,9 +15,10 @@ export function WatchingView({ game }: Readonly<{ game: PlayState }>) {
   const isRace = mode === 'race';
   const isDuel = !!party?.finale;
   const isUnderdog = party?.event === 'underdog';
-  const isYear = party ? party.format === 'year' : yearOnly;
-  const nonYearAccent = isRace ? 'race' : 'classic';
-  const watchAccent = isYear ? 'year' : nonYearAccent;
+  // Same resolver the host uses, so a Party round keeps its aqua identity
+  // here too instead of falling through to the underlying race/classic color
+  // on this screen only.
+  const watchAccent = resolveRoundAccent(mode, yearOnly, party);
 
   // On short viewports the card's fixed height reservation plus the
   // header/gaps/score card easily add up to more than the viewport has (e.g.
@@ -137,7 +138,7 @@ function ReadyBody({ children, bodyGap }: Readonly<{ children: React.ReactNode; 
 // roomier stacks them above it instead, matching the host's own EyebrowRow
 // (PlayingView.tsx) now that there's vertical space in the card to spend on it.
 function EyebrowRow({ label, accent, songPlaying, songTempo, ultraCompact, compact }: Readonly<{
-  label: string; accent: 'classic' | 'race' | 'year'; songPlaying: boolean; songTempo?: number | null; ultraCompact: boolean; compact: boolean;
+  label: string; accent: BarAccent; songPlaying: boolean; songTempo?: number | null; ultraCompact: boolean; compact: boolean;
 }>) {
   return (
     <div style={{ display: 'flex', flexDirection: ultraCompact ? 'row' : 'column', alignItems: 'center', gap: ultraCompact ? '8px' : '6px' }}>
@@ -151,7 +152,7 @@ function EyebrowRow({ label, accent, songPlaying, songTempo, ultraCompact, compa
 
 function GetReadyBody({ isDuel, isUnderdog, isRace, party, lowestBid, guesserNames, songPlaying, accent, songTempo, compact, ultraCompact }: Readonly<{
   isDuel: boolean; isUnderdog: boolean; isRace: boolean; party: PartyInfo | null; lowestBid: number; guesserNames: string[]; songPlaying: boolean;
-  accent: 'classic' | 'race' | 'year'; songTempo?: number | null; compact: boolean; ultraCompact: boolean;
+  accent: BarAccent; songTempo?: number | null; compact: boolean; ultraCompact: boolean;
 }>) {
   const duelWins = party?.duelProgress?.wins;
   const duelScoreLine = duelWins?.length === 2

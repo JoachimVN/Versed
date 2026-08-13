@@ -4,8 +4,8 @@ import { useEscapeKey } from '../../hooks/useEscapeKey';
 import { useFocusTrap } from '../../hooks/useFocusTrap';
 import { readKeyboardInset, useKeyboardOpen } from '../../hooks/useViewportLayout';
 import { PartyBadge } from '../../components/RoundIntro';
-import { HeroTimer, LinearTimer, type TimerAccent } from '../../components/CircularTimer';
-import { AudioBars, ACCENT_BG_HUE } from '../../components/AudioBars';
+import { HeroTimer, LinearTimer } from '../../components/CircularTimer';
+import { AudioBars, ACCENT_BG_HUE, ACCENT_RGB, ACCENT_TINT_CLASS, resolveRoundAccent, type BarAccent } from '../../components/AudioBars';
 import { LIQUID_CARD_PROPS, LIQUID_PILL_PROPS } from '../../components/liquidGlassPresets';
 import type { Hint } from '../../types';
 import type { PlayState } from './usePlayGame';
@@ -80,8 +80,7 @@ function useGuessAutofocus(phase: PlayState['phase'], isChoice: boolean, isChaos
 // guessing phase. Keeping a single component across both states means the input
 // element is never unmounted — focus and text survive the transition, which
 // prevents the mobile keyboard from dismissing mid-song.
-function ListeningHeader({ songPlaying, songTempo, isYear, compact }: Readonly<{ songPlaying: boolean; songTempo: number | null; isYear: boolean; compact: boolean }>) {
-  const accent = isYear ? 'year' : 'classic';
+function ListeningHeader({ songPlaying, songTempo, accent, compact }: Readonly<{ songPlaying: boolean; songTempo: number | null; accent: BarAccent; compact: boolean }>) {
   return (
     <div className={`flex flex-col items-center gap-2.5 ${compact ? 'pt-3 pb-2' : 'pt-10 pb-4'}`}>
       <AudioBars playing={songPlaying} accent={accent} height={compact ? 18 : 28} bpm={songTempo} />
@@ -97,12 +96,11 @@ function ListeningHeader({ songPlaying, songTempo, isYear, compact }: Readonly<{
 // a tier's turn starts, so it stays timer-only. compact swaps the HeroTimer
 // dial for LinearTimer's thin bar — confirmed by measurement to be the
 // single biggest header cost on a short landscape/keyboard-up screen (see
-// COMPACT_HEIGHT_PX above). The dial itself is always purple — matching the
-// guess field's border/glow and the Submit button's tint below it, the
-// screen's one consistent accent — rather than the race/year waveform's own
-// accent, which stays on the AudioBars underneath instead.
-function ActiveHeader({ timeLeft, timerTotal, myScore, isRace, isYear, songPlaying, songTempo, compact, ultraCompact, landscape, windowHeight }: Readonly<{ timeLeft: number; timerTotal: number; myScore: number; isRace: boolean; isYear: boolean; songPlaying: boolean; songTempo: number | null; compact: boolean; ultraCompact: boolean; landscape: boolean; windowHeight: number }>) {
-  const waveAccent = isYear ? 'year' : 'race';
+// COMPACT_HEIGHT_PX above). The dial, the waveform, the guess field and the
+// Submit button all paint in this round's accent (see resolveRoundAccent),
+// so the player's screen reads as the same color as the host's screen for
+// the same round rather than a fixed purple regardless of mode.
+function ActiveHeader({ timeLeft, timerTotal, myScore, isRace, isYear, accent, songPlaying, songTempo, compact, ultraCompact, landscape, windowHeight }: Readonly<{ timeLeft: number; timerTotal: number; myScore: number; isRace: boolean; isYear: boolean; accent: BarAccent; songPlaying: boolean; songTempo: number | null; compact: boolean; ultraCompact: boolean; landscape: boolean; windowHeight: number }>) {
   const squeezeTier = { compact, ultraCompact };
   // At the tightest squeeze (ultraCompact), a landscape phone has width to
   // spare even though it has no height to spare — folding "Your turn"/pts
@@ -118,7 +116,7 @@ function ActiveHeader({ timeLeft, timerTotal, myScore, isRace, isYear, songPlayi
       // the top, and a plain px-4 left "Your turn"/pts tucked under it.
       <div className="flex items-center justify-between w-full gap-2 pt-2 pb-0" style={{ paddingLeft: 'max(16px, env(safe-area-inset-left))', paddingRight: 'max(16px, env(safe-area-inset-right))' }}>
         <span style={{ color: 'rgba(255,255,255,0.45)', fontSize: '0.62rem', fontWeight: 600, whiteSpace: 'nowrap' }}>Your turn</span>
-        <LinearTimer timeLeft={timeLeft} total={timerTotal} accent="classic" />
+        <LinearTimer timeLeft={timeLeft} total={timerTotal} accent={accent} />
         <span style={{ color: 'rgba(255,255,255,0.45)', fontSize: '0.6rem', fontWeight: 500, whiteSpace: 'nowrap' }}>
           {myScore.toLocaleString()} pts
         </span>
@@ -141,10 +139,10 @@ function ActiveHeader({ timeLeft, timerTotal, myScore, isRace, isYear, songPlayi
         </span>
       </div>
       {compact
-        ? <LinearTimer timeLeft={timeLeft} total={timerTotal} accent="classic" />
-        : <HeroTimer timeLeft={timeLeft} total={timerTotal} size={heroSize} accent="classic" />}
+        ? <LinearTimer timeLeft={timeLeft} total={timerTotal} accent={accent} />
+        : <HeroTimer timeLeft={timeLeft} total={timerTotal} size={heroSize} accent={accent} />}
       {(isRace || isYear) && !compact && (
-        <AudioBars playing={songPlaying} accent={waveAccent} height={20} bpm={songTempo} />
+        <AudioBars playing={songPlaying} accent={accent} height={20} bpm={songTempo} />
       )}
     </div>
   );
@@ -163,26 +161,27 @@ function applySkipStyle(el: HTMLElement, s: typeof SKIP_IDLE) {
 // (landscape + keyboard): with near-zero vertical gap between the party
 // badge and the input below it, the full-size 20-28px blur bled up into the
 // badge chip and washed its text out.
-function guessInputBoxStyle(isListening: boolean, focused: boolean, tightGlow: boolean): { border: string; background: string; boxShadow: string } {
+function guessInputBoxStyle(isListening: boolean, focused: boolean, tightGlow: boolean, accent: BarAccent): { border: string; background: string; boxShadow: string } {
   if (isListening) {
     return { border: '1px solid rgba(255,255,255,0.07)', background: 'rgba(255,255,255,0.03)', boxShadow: 'none' };
   }
+  const rgb = ACCENT_RGB[accent];
   if (focused) {
     return {
-      border: '1px solid rgba(158,18,204,0.7)', background: 'rgba(158,18,204,0.1)',
-      boxShadow: tightGlow ? '0 0 10px rgba(158,18,204,0.28)' : '0 0 28px rgba(158,18,204,0.28)',
+      border: `1px solid rgba(${rgb},0.7)`, background: `rgba(${rgb},0.1)`,
+      boxShadow: tightGlow ? `0 0 10px rgba(${rgb},0.28)` : `0 0 28px rgba(${rgb},0.28)`,
     };
   }
   return {
-    border: '1px solid rgba(158,18,204,0.4)', background: 'rgba(158,18,204,0.08)',
-    boxShadow: tightGlow ? '0 0 8px rgba(158,18,204,0.1)' : '0 0 24px rgba(158,18,204,0.1)',
+    border: `1px solid rgba(${rgb},0.4)`, background: `rgba(${rgb},0.08)`,
+    boxShadow: tightGlow ? `0 0 8px rgba(${rgb},0.1)` : `0 0 24px rgba(${rgb},0.1)`,
   };
 }
 
 // Multiple Choice's 4 tappable title options — a tap submits immediately
 // (see submitChoice), so there's no separate Submit button for this format.
-function ChoiceButtons({ options, onPick, disabled }: Readonly<{ options: string[]; onPick: (option: string) => void; disabled?: boolean }>) {
-  const style = guessInputBoxStyle(false, false, false);
+function ChoiceButtons({ options, onPick, disabled, accent }: Readonly<{ options: string[]; onPick: (option: string) => void; disabled?: boolean; accent: BarAccent }>) {
+  const style = guessInputBoxStyle(false, false, false, accent);
   return (
     <div className="w-full grid grid-cols-2 gap-3" style={{ flexShrink: 0, maxWidth: 'min(92vw, 420px)' }}>
       {options.map(option => (
@@ -210,8 +209,8 @@ function ChoiceButtons({ options, onPick, disabled }: Readonly<{ options: string
 
 // Chaos Hints' tap-the-fake-hint cards — one per hint, tap = submit
 // immediately, same "no separate submit button" shape as ChoiceButtons.
-function ChaosHintButtons({ hints, onPick, disabled }: Readonly<{ hints: Hint[]; onPick: (index: number) => void; disabled?: boolean }>) {
-  const style = guessInputBoxStyle(false, false, false);
+function ChaosHintButtons({ hints, onPick, disabled, accent }: Readonly<{ hints: Hint[]; onPick: (index: number) => void; disabled?: boolean; accent: BarAccent }>) {
+  const style = guessInputBoxStyle(false, false, false, accent);
   return (
     <div className="w-full grid grid-cols-2 gap-2.5" style={{ flexShrink: 0, maxWidth: 'min(92vw, 420px)' }}>
       {hints.map((h, i) => (
@@ -252,17 +251,18 @@ type DigitBoxSize = keyof typeof YEAR_DIGIT_BOX_SIZE;
 // 4-box OTP-style display for year guesses. A single transparent input
 // underneath keeps the real focus/keyboard target (so the mobile keyboard
 // never dismisses), while these boxes render its current characters.
-function YearDigitBox({ digit, active, size }: Readonly<{ digit: string; active: boolean; size: DigitBoxSize }>) {
+function YearDigitBox({ digit, active, size, accent }: Readonly<{ digit: string; active: boolean; size: DigitBoxSize; accent: BarAccent }>) {
   const dims = YEAR_DIGIT_BOX_SIZE[size];
+  const rgb = ACCENT_RGB[accent];
   return (
     <div
       style={{
         width: `${dims.width}px`, height: `${dims.height}px`, borderRadius: '12px',
         display: 'flex', alignItems: 'center', justifyContent: 'center',
         fontSize: dims.fontSize, fontWeight: 800, color: 'white',
-        border: active ? '1px solid rgba(158,18,204,0.8)' : '1px solid rgba(255,255,255,0.12)',
-        background: active ? 'rgba(158,18,204,0.12)' : 'rgba(255,255,255,0.04)',
-        boxShadow: active ? '0 0 16px rgba(158,18,204,0.35)' : 'none',
+        border: active ? `1px solid rgba(${rgb},0.8)` : '1px solid rgba(255,255,255,0.12)',
+        background: active ? `rgba(${rgb},0.12)` : 'rgba(255,255,255,0.04)',
+        boxShadow: active ? `0 0 16px rgba(${rgb},0.35)` : 'none',
         transition: 'border-color 0.15s ease, background 0.15s ease, box-shadow 0.15s ease',
       }}
     >
@@ -274,26 +274,19 @@ function YearDigitBox({ digit, active, size }: Readonly<{ digit: string; active:
 // A year guess is always exactly 4 digits — a fixed set of positional
 // slots, not a reorderable list, so each box is written out rather than
 // mapped over an index.
-function YearDigitBoxes({ value, focused, size }: Readonly<{ value: string; focused: boolean; size: DigitBoxSize }>) {
+function YearDigitBoxes({ value, focused, size, accent }: Readonly<{ value: string; focused: boolean; size: DigitBoxSize; accent: BarAccent }>) {
   const activeIndex = Math.min(value.length, 3);
   let gap = '10px';
   if (size === 'ultra') gap = '6px';
   else if (size === 'compact') gap = '8px';
   return (
     <div style={{ display: 'flex', gap, justifyContent: 'center', pointerEvents: 'none' }}>
-      <YearDigitBox digit={value[0] ?? ''} active={focused && activeIndex === 0} size={size} />
-      <YearDigitBox digit={value[1] ?? ''} active={focused && activeIndex === 1} size={size} />
-      <YearDigitBox digit={value[2] ?? ''} active={focused && activeIndex === 2} size={size} />
-      <YearDigitBox digit={value[3] ?? ''} active={focused && activeIndex === 3} size={size} />
+      <YearDigitBox digit={value[0] ?? ''} active={focused && activeIndex === 0} size={size} accent={accent} />
+      <YearDigitBox digit={value[1] ?? ''} active={focused && activeIndex === 1} size={size} accent={accent} />
+      <YearDigitBox digit={value[2] ?? ''} active={focused && activeIndex === 2} size={size} accent={accent} />
+      <YearDigitBox digit={value[3] ?? ''} active={focused && activeIndex === 3} size={size} accent={accent} />
     </div>
   );
-}
-
-function resolveBgAccent(isYear: boolean, party: PlayState['party'], mode: PlayState['mode']): TimerAccent {
-  if (isYear) return 'year';
-  if (party) return 'party';
-  if (mode === 'race') return 'race';
-  return 'classic';
 }
 
 function guessingLabel(target: ReturnType<typeof resolveTarget>, isChoice: boolean, isChaosHints: boolean): string {
@@ -307,9 +300,9 @@ function guessingLabel(target: ReturnType<typeof resolveTarget>, isChoice: boole
 function GuessControl({
   isChaosHints, isChoice, isYear, hints, options, submitChaosTap, submitChoice,
   guessText, setGuessText, inputFocused, setInputFocused, guessInputRef,
-  canSubmit, submitGuess, squeezeTier, inputBoxStyle, placeholder,
+  canSubmit, submitGuess, squeezeTier, inputBoxStyle, placeholder, accent,
 }: Readonly<{
-  isChaosHints: boolean; isChoice: boolean; isYear: boolean;
+  isChaosHints: boolean; isChoice: boolean; isYear: boolean; accent: BarAccent;
   hints: Hint[]; options: string[];
   submitChaosTap: (index: number) => void; submitChoice: (option: string) => void;
   guessText: string; setGuessText: (value: string) => void;
@@ -320,16 +313,16 @@ function GuessControl({
   inputBoxStyle: ReturnType<typeof guessInputBoxStyle>; placeholder: string;
 }>) {
   if (isChaosHints) {
-    return <ChaosHintButtons hints={hints} onPick={submitChaosTap} />;
+    return <ChaosHintButtons hints={hints} onPick={submitChaosTap} accent={accent} />;
   }
   if (isChoice) {
-    return <ChoiceButtons options={options} onPick={submitChoice} />;
+    return <ChoiceButtons options={options} onPick={submitChoice} accent={accent} />;
   }
   if (isYear) {
     const digitBoxSize: DigitBoxSize = squeezeValue(squeezeTier, 'ultra', 'compact', 'normal');
     return (
       <div style={{ position: 'relative', flexShrink: 0 }}>
-        <YearDigitBoxes value={guessText} focused={inputFocused} size={digitBoxSize} />
+        <YearDigitBoxes value={guessText} focused={inputFocused} size={digitBoxSize} accent={accent} />
         <input
           ref={guessInputRef}
           type="text"
@@ -396,13 +389,16 @@ export function GuessingView({ game }: Readonly<{ game: PlayState }>) {
   const target = resolveTarget(party, artistOnly, yearOnly);
   const isYear = target === 'year';
   const isBoth = target === 'both';
-  const bgAccent = resolveBgAccent(isYear, party, mode);
+  // One accent for the whole screen — the same one the host resolves for this
+  // round, so the two ends match instead of the player's chrome sitting on a
+  // fixed purple while the host's card is orange/aqua.
+  const accent = resolveRoundAccent(mode, yearOnly, party);
   const keyboardOpen = useKeyboardOpen();
   const { compact, ultraCompact, landscape, windowHeight } = useGuessingLayout(isBoth, keyboardOpen);
   const squeezeTier = { compact, ultraCompact };
   const canSubmit = isYear ? guessText.trim().length === 4 : guessText.trim().length > 0;
   const [inputFocused, setInputFocused] = useState(false);
-  const inputBoxStyle = guessInputBoxStyle(isListening, inputFocused, ultraCompact);
+  const inputBoxStyle = guessInputBoxStyle(isListening, inputFocused, ultraCompact, accent);
 
   // Keep the keyboard ready as soon as a free-text turn starts, including
   // Race rounds that enter guessing directly. If the player focused either
@@ -427,6 +423,7 @@ export function GuessingView({ game }: Readonly<{ game: PlayState }>) {
       guessInputRef={guessInputRef}
       canSubmit={canSubmit} submitGuess={submitGuess}
       squeezeTier={squeezeTier} inputBoxStyle={inputBoxStyle} placeholder={placeholder}
+      accent={accent}
     />
   );
 
@@ -471,7 +468,7 @@ export function GuessingView({ game }: Readonly<{ game: PlayState }>) {
           App.tsx). absolute against this relative, min-h-screen wrapper
           covers the same area without the clipping. */}
       <div aria-hidden="true" style={{ position: 'absolute', inset: 0, zIndex: 0, overflow: 'hidden', pointerEvents: 'none' }}>
-        <img src={`${import.meta.env.BASE_URL}backgrounds/background8-2.png`} alt="" className="bg-fill-image" style={{ filter: `hue-rotate(${ACCENT_BG_HUE[bgAccent]}deg)` }} />
+        <img src={`${import.meta.env.BASE_URL}backgrounds/background8-2.png`} alt="" className="bg-fill-image" style={{ filter: `hue-rotate(${ACCENT_BG_HUE[accent]}deg)` }} />
       </div>
       <div style={{ position: 'absolute', inset: 0, zIndex: 1, background: 'rgba(5,5,14,0.82)', backdropFilter: 'blur(36px)' }} />
 
@@ -492,8 +489,8 @@ export function GuessingView({ game }: Readonly<{ game: PlayState }>) {
 
       {/* Header: waveform while listening, timer + score when active */}
       {isListening
-        ? <ListeningHeader songPlaying={songPlaying} songTempo={songTempo} isYear={isYear} compact={compact} />
-        : <ActiveHeader timeLeft={timeLeft} timerTotal={timerTotal} myScore={myScore} isRace={mode === 'race'} isYear={isYear} songPlaying={songPlaying} songTempo={songTempo} compact={compact} ultraCompact={ultraCompact} landscape={landscape} windowHeight={windowHeight} />}
+        ? <ListeningHeader songPlaying={songPlaying} songTempo={songTempo} accent={accent} compact={compact} />
+        : <ActiveHeader timeLeft={timeLeft} timerTotal={timerTotal} myScore={myScore} isRace={mode === 'race'} isYear={isYear} accent={accent} songPlaying={songPlaying} songTempo={songTempo} compact={compact} ultraCompact={ultraCompact} landscape={landscape} windowHeight={windowHeight} />}
 
       {/* Input area. min-h-0 lets it actually shrink when the keyboard takes
           the bottom of the column. Scrolling is only enabled once the
@@ -546,7 +543,7 @@ export function GuessingView({ game }: Readonly<{ game: PlayState }>) {
         {!isChoice && !isChaosHints && (
           <button
             type="button"
-            className="liquid-btn glass-tint-purple relative cursor-pointer border-0 bg-transparent p-0"
+            className={`liquid-btn ${ACCENT_TINT_CLASS[accent]} relative cursor-pointer border-0 bg-transparent p-0`}
             style={{
               width: 'min(92vw, 310px)', height: squeezeValue(squeezeTier, '36px', '44px', '64px'), borderRadius: '100px',
               background: 'rgba(0,0,0,0.001)',
@@ -566,7 +563,7 @@ export function GuessingView({ game }: Readonly<{ game: PlayState }>) {
               padding={squeezeValue(squeezeTier, '6px 20px', '9px 28px', LIQUID_PILL_PROPS.padding)}
             >
               <div style={{ position: 'relative' }}>
-                <div style={{ position: 'absolute', inset: '-18px -36px', borderRadius: '100px', pointerEvents: 'none', background: 'rgba(158,18,204,0.15)' }} />
+                <div style={{ position: 'absolute', inset: '-18px -36px', borderRadius: '100px', pointerEvents: 'none', background: `rgba(${ACCENT_RGB[accent]},0.15)` }} />
                 <span className={`text-white font-bold ${squeezeValue(squeezeTier, 'text-sm', 'text-base', 'text-xl')}`} style={{ whiteSpace: 'nowrap', position: 'relative', display: 'inline-block', minWidth: 'min(238px, calc(100vw - 112px))', textAlign: 'center' }}>
                   Submit
                 </span>

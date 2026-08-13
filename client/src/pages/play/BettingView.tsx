@@ -3,20 +3,21 @@ import { ChevronLeft, ChevronRight } from 'lucide-react';
 import LiquidGlass from '../../components/StableLiquidGlass';
 import { PartyBadge } from '../../components/RoundIntro';
 import { timerColor } from '../../components/CircularTimer';
+import { ACCENT_RGB, ACCENT_TINT_CLASS, resolveRoundAccent, type BarAccent } from '../../components/AudioBars';
 import { LIQUID_PILL_PROPS } from '../../components/liquidGlassPresets';
 import type { PlayState } from './usePlayGame';
 
-function bidArrowStyle(enabled: boolean, pressed: boolean, hovered: boolean): { bg: string; border: string } {
+function bidArrowStyle(enabled: boolean, pressed: boolean, hovered: boolean, accent: BarAccent): { bg: string; border: string } {
   if (!enabled) return { bg: 'rgba(255,255,255,0.03)', border: '1px solid rgba(255,255,255,0.04)' };
-  if (pressed) return { bg: 'rgba(158,18,204,0.28)', border: '1px solid rgba(158,18,204,0.5)' };
+  if (pressed) return { bg: `rgba(${ACCENT_RGB[accent]},0.28)`, border: `1px solid rgba(${ACCENT_RGB[accent]},0.5)` };
   if (hovered) return { bg: 'rgba(255,255,255,0.13)', border: '1px solid rgba(255,255,255,0.18)' };
   return { bg: 'rgba(255,255,255,0.07)', border: '1px solid rgba(255,255,255,0.10)' };
 }
 
-function BidArrow({ direction, enabled, onClick }: Readonly<{ direction: 'left' | 'right'; enabled: boolean; onClick: () => void }>) {
+function BidArrow({ direction, enabled, onClick, accent }: Readonly<{ direction: 'left' | 'right'; enabled: boolean; onClick: () => void; accent: BarAccent }>) {
   const [hovered, setHovered] = useState(false);
   const [pressed, setPressed] = useState(false);
-  const { bg, border } = bidArrowStyle(enabled, pressed, hovered);
+  const { bg, border } = bidArrowStyle(enabled, pressed, hovered, accent);
   return (
     <button
       type="button"
@@ -45,7 +46,7 @@ function BidArrow({ direction, enabled, onClick }: Readonly<{ direction: 'left' 
 }
 
 export function BettingView({ game }: Readonly<{ game: PlayState }>) {
-  const { roundIndex, totalRounds, timeLeft, bettingTime, bidIndex, bidOptions, bidScores, party, error, myName, submitBid, setBidIndex } = game;
+  const { roundIndex, totalRounds, timeLeft, bettingTime, bidIndex, bidOptions, bidScores, party, error, myName, submitBid, setBidIndex, mode, yearOnly } = game;
   // The finale duel's classic sub-round only takes bids from the two
   // duelists (see recordBid server-side) — everyone else would just have
   // every bid silently rejected, so they get a spectator screen instead of
@@ -61,6 +62,10 @@ export function BettingView({ game }: Readonly<{ game: PlayState }>) {
       </div>
     );
   }
+  // Only classic-flow rounds bid at all, so this resolves to purple (classic)
+  // or aqua (a Party round's classic sub-round) — but it comes from the same
+  // resolver as every other screen so it can never drift from the host's.
+  const accent = resolveRoundAccent(mode, yearOnly, party);
   const timerPct = bettingTime > 0 ? Math.max(0, (timeLeft / bettingTime)) * 100 : 0;
   const currentBid = bidOptions[bidIndex];
   const canGoLeft = bidIndex > 0;
@@ -119,7 +124,7 @@ export function BettingView({ game }: Readonly<{ game: PlayState }>) {
         </p>
 
         <div className="flex items-center gap-5">
-          <BidArrow direction="left" enabled={canGoLeft} onClick={() => setBidIndex(i => i - 1)} />
+          <BidArrow direction="left" enabled={canGoLeft} onClick={() => setBidIndex(i => i - 1)} accent={accent} />
 
           {/* Bid value — LiquidGlass */}
           <div className="liquid-btn relative" style={{ width: 160, height: 110 }}>
@@ -144,14 +149,14 @@ export function BettingView({ game }: Readonly<{ game: PlayState }>) {
             </LiquidGlass>
           </div>
 
-          <BidArrow direction="right" enabled={canGoRight} onClick={() => setBidIndex(i => i + 1)} />
+          <BidArrow direction="right" enabled={canGoRight} onClick={() => setBidIndex(i => i + 1)} accent={accent} />
         </div>
 
         {/* Score potential */}
         <div className="flex flex-col items-center gap-1">
           <span
             className="tabular-nums transition-all duration-200"
-            style={{ color: 'rgba(158,18,204,0.9)', fontWeight: 900, fontSize: '1.6rem', lineHeight: 1 }}
+            style={{ color: `rgba(${ACCENT_RGB[accent]},0.9)`, fontWeight: 900, fontSize: '1.6rem', lineHeight: 1 }}
           >
             ~{estPoints.toLocaleString()}
             {mysteryHidden && <span style={{ color: 'rgba(94,234,212,0.8)', fontSize: '1rem', marginLeft: '6px' }}>×?</span>}
@@ -166,7 +171,7 @@ export function BettingView({ game }: Readonly<{ game: PlayState }>) {
       <div className="px-5 pb-8 flex justify-center" style={{ position: 'relative', zIndex: 2 }}>
         <button
           type="button"
-          className="liquid-btn glass-tint-purple relative cursor-pointer border-0 bg-transparent p-0"
+          className={`liquid-btn ${ACCENT_TINT_CLASS[accent]} relative cursor-pointer border-0 bg-transparent p-0`}
           style={{ width: '310px', height: '64px', borderRadius: '100px', background: 'rgba(0,0,0,0.001)' }}
           onClick={submitBid}
         >
@@ -175,7 +180,7 @@ export function BettingView({ game }: Readonly<{ game: PlayState }>) {
             {...LIQUID_PILL_PROPS}
           >
             <div style={{ position: 'relative' }}>
-              <div style={{ position: 'absolute', inset: '-18px -36px', borderRadius: '100px', pointerEvents: 'none', background: 'rgba(158,18,204,0.15)' }} />
+              <div style={{ position: 'absolute', inset: '-18px -36px', borderRadius: '100px', pointerEvents: 'none', background: `rgba(${ACCENT_RGB[accent]},0.15)` }} />
               <span className="text-white font-bold text-xl" style={{ whiteSpace: 'nowrap', position: 'relative', display: 'inline-block', minWidth: '238px', textAlign: 'center' }}>
                 Lock In · {currentBid}s
               </span>
