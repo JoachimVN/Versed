@@ -1,6 +1,27 @@
 import { PlaylistTrackInput, Song } from './types';
 
 const MIN_YEAR = 1900;
+const MAX_PLAYLIST_TRACKS = 5000;
+const TRACK_ID_PATTERN = /^[A-Za-z0-9]{1,50}$/;
+const MAX_TRACK_TEXT_LENGTH = 300;
+const MAX_ART_URL_LENGTH = 2048;
+
+function sanitizeText(value: unknown, maxLength = MAX_TRACK_TEXT_LENGTH): string | null {
+  if (typeof value !== 'string') return null;
+  const trimmed = value.trim();
+  return trimmed && trimmed.length <= maxLength ? trimmed : null;
+}
+
+function sanitizeAlbumArtUrl(value: unknown): string | null {
+  if (value === null || value === undefined || value === '') return null;
+  if (typeof value !== 'string' || value.length > MAX_ART_URL_LENGTH) return null;
+  try {
+    const url = new URL(value);
+    return url.protocol === 'https:' ? url.href : null;
+  } catch {
+    return null;
+  }
+}
 
 function sanitizeYear(year: number | null): number | null {
   if (year === null || !Number.isFinite(year)) return null;
@@ -24,11 +45,11 @@ export function adaptPlaylistTracks(tracks: PlaylistTrackInput[], csvByTrackId: 
   const seen = new Set<string>();
   const songs: Song[] = [];
 
-  for (const t of tracks) {
-    const spotifyTrackId = t.spotifyTrackId?.trim();
-    const title = t.title?.trim();
-    const artist = t.artist?.trim();
-    if (!spotifyTrackId || !title || !artist) continue;
+  for (const t of tracks.slice(0, MAX_PLAYLIST_TRACKS)) {
+    const spotifyTrackId = sanitizeText(t?.spotifyTrackId, 50);
+    const title = sanitizeText(t?.title);
+    const artist = sanitizeText(t?.artist);
+    if (!spotifyTrackId || !TRACK_ID_PATTERN.test(spotifyTrackId) || !title || !artist) continue;
     if (seen.has(spotifyTrackId)) continue;
     seen.add(spotifyTrackId);
 
@@ -38,7 +59,7 @@ export function adaptPlaylistTracks(tracks: PlaylistTrackInput[], csvByTrackId: 
       rank: songs.length + 1,
       title,
       artist,
-      featuredArtists: t.featuredArtists?.trim() || undefined,
+      featuredArtists: sanitizeText(t.featuredArtists) ?? undefined,
       year,
       decade: year ? Math.floor(year / 10) * 10 : null,
       bbPeak: null,
@@ -49,7 +70,7 @@ export function adaptPlaylistTracks(tracks: PlaylistTrackInput[], csvByTrackId: 
       youtubeViews: null,
       spotifyTrackId,
       finalScore: 0,
-      albumArtUrl: t.albumArtUrl?.trim() || null,
+      albumArtUrl: sanitizeAlbumArtUrl(t.albumArtUrl),
     });
   }
 

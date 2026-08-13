@@ -334,6 +334,7 @@ function GuessControl({
           ref={guessInputRef}
           type="text"
           inputMode="numeric"
+          maxLength={4}
           value={guessText}
           onChange={e => setGuessText(e.target.value.replace(/\D/g, '').slice(0, 4))}
           onKeyDown={e => e.key === 'Enter' && canSubmit && submitGuess()}
@@ -360,6 +361,7 @@ function GuessControl({
       <input
         ref={guessInputRef}
         type="text"
+        maxLength={100}
         placeholder={placeholder}
         value={guessText}
         onChange={e => setGuessText(e.target.value)}
@@ -439,6 +441,7 @@ export function GuessingView({ game }: Readonly<{ game: PlayState }>) {
     }}>
       <input
         type="text"
+        maxLength={100}
         placeholder="Artist (bonus points)…"
         value={artistGuessText}
         onChange={e => setArtistGuessText(e.target.value)}

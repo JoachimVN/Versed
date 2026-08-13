@@ -3,35 +3,65 @@ import * as gm from '../gameManager';
 import { getIo, playerDisconnectTimers } from './context';
 import { syncState } from './sync';
 import { raceFlow, endRaceRound, closeBettingAndPlay, advanceTierOrReveal, songFields, stealPendingName, emitScoreUpdate, maybeOfferSteal } from './roundLifecycle';
+import {
+  asRecord, logSecurityViolation, MAX_NAME_LENGTH, parseFiniteNumber, parseGuessText, parseInteger, parsePin,
+  parsePlayerName, parseSessionToken, respond,
+} from './security';
 
 export function registerPlayerHandlers(socket: Socket) {
   // ── Player: check if a game PIN is still active ───────────────────────────
-  socket.on('check_game', ({ pin }: { pin: string }, callback: (r: { exists: boolean }) => void) => {
-    callback({ exists: !!gm.getGame(pin) });
+  socket.on('check_game', (payload: unknown, callback?: unknown) => {
+    if (typeof callback !== 'function') return;
+    const pin = parsePin(asRecord(payload)?.pin);
+    respond(callback, { exists: !!pin && !!gm.getGame(pin) });
   });
 
   // ── Player: join game (lobby or mid-game) ─────────────────────────────────
   socket.on(
     'join_game',
-    ({ pin, name }: { pin: string; name: string }, callback: (r: { error?: string; success?: boolean }) => void) => {
+    (payload: unknown, callback?: unknown) => {
+      if (typeof callback !== 'function') return;
+      const data = asRecord(payload);
+      const pin = parsePin(data?.pin);
+      const name = parsePlayerName(data?.name);
+      const parsedToken = data?.playerToken === undefined ? undefined : parseSessionToken(data.playerToken);
+      const sessionToken = parsedToken ?? undefined;
+      if (typeof data?.name === 'string' && data.name.trim().length > MAX_NAME_LENGTH) {
+        respond(callback, { error: `Name must be ${MAX_NAME_LENGTH} characters or fewer` });
+        return;
+      }
+      if (!pin) {
+        respond(callback, { error: 'PIN must be exactly 3 digits' });
+        return;
+      }
+      if (!name) {
+        respond(callback, { error: 'Enter a valid name' });
+        return;
+      }
+      if (data?.playerToken !== undefined && !sessionToken) {
+        respond(callback, { error: 'Invalid join details' });
+        return;
+      }
       const game = gm.getGame(pin);
-      if (!game) return callback({ error: 'Game not found' });
+      if (!game) {
+        respond(callback, { error: 'Game not found' });
+        return;
+      }
 
       // If this name is already in the game (lobby or mid-game), it's a
       // reconnect — cancel any pending removal timer, migrate the socket ID,
       // and snap to the current phase.
       const oldEntry = Array.from(game.players.entries())
         .find(([, p]) => p.name.toLowerCase() === name.trim().toLowerCase());
-      if (oldEntry) {
-        const [oldId] = oldEntry;
+      const rejoined = oldEntry ? gm.rejoinPlayer(game, socket.id, name, sessionToken) : null;
+      if (rejoined) {
+        const [oldId] = oldEntry!;
         const t = playerDisconnectTimers.get(oldId);
         if (t) { clearTimeout(t); playerDisconnectTimers.delete(oldId); }
-      }
-      const rejoined = gm.rejoinPlayer(game, socket.id, name);
-      if (rejoined) {
         socket.join(pin);
         socket.join(`player:${pin}`);
-        callback({ success: true });
+        if (oldId !== socket.id) getIo().sockets.sockets.get(oldId)?.disconnect(true);
+        respond(callback, { success: true, playerToken: rejoined.sessionToken });
         if (game.phase === 'lobby') {
           const players = Array.from(game.players.values()).map(p => ({ name: p.name, score: p.score, streak: p.streak }));
           getIo().to(`host:${pin}`).emit('player_joined', { players });
@@ -42,12 +72,21 @@ export function registerPlayerHandlers(socket: Socket) {
         return;
       }
 
-      const player = gm.addPlayer(game, socket.id, name);
-      if (!player) return callback({ error: 'Name already taken' });
+      if (oldEntry) {
+        logSecurityViolation(socket, 'join_game_identity');
+        respond(callback, { error: 'Name already taken' });
+        return;
+      }
+
+      const player = gm.addPlayer(game, socket.id, name, sessionToken);
+      if (!player) {
+        respond(callback, { error: 'Name already taken' });
+        return;
+      }
 
       socket.join(pin);
       socket.join(`player:${pin}`);
-      callback({ success: true });
+      respond(callback, { success: true, playerToken: player.sessionToken });
 
       const players = Array.from(game.players.values()).map(p => ({ name: p.name, score: p.score, streak: p.streak }));
       getIo().to(`host:${pin}`).emit('player_joined', { players });
@@ -58,45 +97,82 @@ export function registerPlayerHandlers(socket: Socket) {
   );
 
   // ── Player: rename in lobby ────────────────────────────────────────────────
-  socket.on('rename_player', ({ newName }: { newName: string }, callback: (r: { error?: string; success?: boolean }) => void) => {
+  socket.on('rename_player', (payload: unknown, callback?: unknown) => {
+    if (typeof callback !== 'function') return;
+    const newName = parsePlayerName(asRecord(payload)?.newName);
+    if (!newName) {
+      respond(callback, { error: 'Invalid name' });
+      return;
+    }
     const game = gm.getGameBySocket(socket.id);
-    if (game?.phase !== 'lobby') return callback({ error: 'Cannot rename now' });
+    if (game?.phase !== 'lobby') {
+      respond(callback, { error: 'Cannot rename now' });
+      return;
+    }
     const player = gm.renamePlayer(game, socket.id, newName);
-    if (!player) return callback({ error: 'Name already taken' });
-    callback({ success: true });
+    if (!player) {
+      respond(callback, { error: 'Name already taken' });
+      return;
+    }
+    respond(callback, { success: true });
     const players = Array.from(game.players.values()).map(p => ({ name: p.name, score: p.score, streak: p.streak }));
     getIo().to(`host:${game.pin}`).emit('player_joined', { players });
   });
 
   // ── Player: rejoin after reconnect ─────────────────────────────────────────
-  socket.on('rejoin_player', ({ pin, name }: { pin: string; name: string }, callback?: (r: { ok: boolean }) => void) => {
+  socket.on('rejoin_player', (payload: unknown, callback?: unknown) => {
+    if (typeof callback !== 'function') return;
+    const data = asRecord(payload);
+    const pin = parsePin(data?.pin);
+    const name = parsePlayerName(data?.name);
+    const sessionToken = parseSessionToken(data?.playerToken);
+    if (!pin || !name || !sessionToken) {
+      respond(callback, { ok: false });
+      return;
+    }
     const game = gm.getGame(pin);
-    if (!game) return callback?.({ ok: false });
+    if (!game) {
+      respond(callback, { ok: false });
+      return;
+    }
 
-    // Cancel any pending removal timer for this player.
     const oldEntry = Array.from(game.players.entries())
       .find(([, p]) => p.name.toLowerCase() === name.trim().toLowerCase());
-    if (oldEntry) {
-      const [oldId] = oldEntry;
+    const player = oldEntry
+      ? gm.rejoinPlayer(game, socket.id, name, sessionToken)
+      : gm.addPlayer(game, socket.id, name, sessionToken);
+    if (!player) {
+      logSecurityViolation(socket, 'rejoin_player');
+      respond(callback, { ok: false });
+      return;
+    }
+    const oldId = oldEntry?.[0];
+    if (oldId) {
       const t = playerDisconnectTimers.get(oldId);
       if (t) { clearTimeout(t); playerDisconnectTimers.delete(oldId); }
     }
-
-    const player = gm.rejoinPlayer(game, socket.id, name);
-    if (!player) return callback?.({ ok: false });
     socket.join(pin);
     socket.join(`player:${pin}`);
-    callback?.({ ok: true });
+    if (oldId && oldId !== socket.id) getIo().sockets.sockets.get(oldId)?.disconnect(true);
+    respond(callback, { ok: true });
     syncState(socket, game);
     getIo().to(`host:${pin}`).emit('player_reconnected', { name: player.name, score: player.score, streak: player.streak });
   });
 
   // ── Player: submit bid ─────────────────────────────────────────────────────
-  socket.on('submit_bid', ({ seconds }: { seconds: number }, callback?: (r: { ok: boolean }) => void) => {
+  socket.on('submit_bid', (payload: unknown, callback?: unknown) => {
+    const seconds = parseFiniteNumber(asRecord(payload)?.seconds);
+    if (seconds === null) {
+      respond(callback, { ok: false });
+      return;
+    }
     const game = gm.getGameBySocket(socket.id);
-    if (!game) return callback?.({ ok: false });
+    if (!game) {
+      respond(callback, { ok: false });
+      return;
+    }
     const ok = gm.recordBid(game, socket.id, seconds);
-    callback?.({ ok });
+    respond(callback, { ok });
     if (!ok) return;
 
     const round = game.currentRound!;
@@ -117,14 +193,27 @@ export function registerPlayerHandlers(socket: Socket) {
   });
 
   // ── Player: submit guess ───────────────────────────────────────────────────
-  socket.on('submit_guess', ({ text, artistText }: { text: string; artistText?: string }, callback?: (r: { correct: boolean; points?: number; timeMs?: number }) => void) => {
+  socket.on('submit_guess', (payload: unknown, callback?: unknown) => {
+    const data = asRecord(payload);
+    const text = parseGuessText(data?.text);
+    const artistText = parseGuessText(data?.artistText, true);
+    if (text === null || text === undefined || artistText === null) {
+      respond(callback, { correct: false });
+      return;
+    }
     const game = gm.getGameBySocket(socket.id);
-    if (!game) return callback?.({ correct: false });
+    if (!game) {
+      respond(callback, { correct: false });
+      return;
+    }
 
     if (raceFlow(game)) {
       const r = gm.recordRaceGuess(game, socket.id, text, artistText);
-      if (!r) return callback?.({ correct: false });
-      callback?.({ correct: r.correct, points: r.points, timeMs: r.elapsedMs });
+      if (!r) {
+        respond(callback, { correct: false });
+        return;
+      }
+      respond(callback, { correct: r.correct, points: r.points, timeMs: r.elapsedMs });
       getIo().to(`host:${game.pin}`).emit('answer_received', {
         answered: game.currentRound!.passed.size,
         total: game.players.size,
@@ -134,9 +223,12 @@ export function registerPlayerHandlers(socket: Socket) {
     }
 
     const result = gm.recordGuess(game, socket.id, text, artistText);
-    if (!result) return callback?.({ correct: false });
+    if (!result) {
+      respond(callback, { correct: false });
+      return;
+    }
 
-    callback?.({ correct: result.correct, points: result.correct ? result.points : undefined });
+    respond(callback, { correct: result.correct, points: result.correct ? result.points : undefined });
 
     const round = game.currentRound!;
     if (result.correct) {
@@ -162,12 +254,23 @@ export function registerPlayerHandlers(socket: Socket) {
   // Separate from submit_guess since the answer is an option index, not free
   // text — scoring keys on "did you tap the fabricated hint," not a fuzzy
   // text match, so it can't reuse the same event/validation path.
-  socket.on('submit_chaos_tap', ({ index }: { index: number }, callback?: (r: { correct: boolean; points?: number; timeMs?: number }) => void) => {
+  socket.on('submit_chaos_tap', (payload: unknown, callback?: unknown) => {
+    const index = parseInteger(asRecord(payload)?.index, 0, 10);
+    if (index === null) {
+      respond(callback, { correct: false });
+      return;
+    }
     const game = gm.getGameBySocket(socket.id);
-    if (!game) return callback?.({ correct: false });
+    if (!game) {
+      respond(callback, { correct: false });
+      return;
+    }
     const r = gm.recordChaosHintTap(game, socket.id, index);
-    if (!r) return callback?.({ correct: false });
-    callback?.({ correct: r.correct, points: r.points, timeMs: r.elapsedMs });
+    if (!r) {
+      respond(callback, { correct: false });
+      return;
+    }
+    respond(callback, { correct: r.correct, points: r.points, timeMs: r.elapsedMs });
     getIo().to(`host:${game.pin}`).emit('answer_received', {
       answered: game.currentRound!.passed.size,
       total: game.players.size,
@@ -176,7 +279,9 @@ export function registerPlayerHandlers(socket: Socket) {
   });
 
   // ── Player: steal-round winner picks their victim ──────────────────────────
-  socket.on('steal_victim', ({ name }: { name: string }) => {
+  socket.on('steal_victim', (payload: unknown) => {
+    const name = parsePlayerName(asRecord(payload)?.name);
+    if (!name) return;
     const game = gm.getGameBySocket(socket.id);
     if (!game) return;
     const result = gm.executeSteal(game, socket.id, name);
@@ -195,7 +300,11 @@ export function registerPlayerHandlers(socket: Socket) {
   });
 
   // ── Player: live guess draft (not yet submitted) ──────────────────────────
-  socket.on('update_guess_draft', ({ text, artistText }: { text: string; artistText?: string }) => {
+  socket.on('update_guess_draft', (payload: unknown) => {
+    const data = asRecord(payload);
+    const text = parseGuessText(data?.text);
+    const artistText = parseGuessText(data?.artistText, true);
+    if (text === null || text === undefined || artistText === null) return;
     const game = gm.getGameBySocket(socket.id);
     if (!game) return;
     gm.updateLiveDraft(game, socket.id, text, artistText);

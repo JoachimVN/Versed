@@ -1,7 +1,10 @@
 import { Router, Request, Response } from 'express';
 import axios from 'axios';
+import { randomBytes, timingSafeEqual } from 'node:crypto';
 
 const router = Router();
+const OAUTH_STATE_COOKIE = 'versed_oauth_state';
+const OAUTH_STATE_MAX_AGE_SECONDS = 10 * 60;
 
 const SPOTIFY_AUTH_URL = 'https://accounts.spotify.com/authorize';
 const SPOTIFY_TOKEN_URL = 'https://accounts.spotify.com/api/token';
@@ -15,21 +18,51 @@ const SCOPES = [
   'playlist-read-collaborative',
 ].join(' ');
 
+function stateMatches(expected: string | undefined, received: unknown): boolean {
+  if (!expected || typeof received !== 'string') return false;
+  const expectedBytes = Buffer.from(expected);
+  const receivedBytes = Buffer.from(received);
+  return expectedBytes.length === receivedBytes.length && timingSafeEqual(expectedBytes, receivedBytes);
+}
+
+function cookieValue(req: Request, name: string): string | undefined {
+  const cookie = req.headers.cookie?.split(';').map(part => part.trim()).find(part => part.startsWith(`${name}=`));
+  if (!cookie) return undefined;
+  try {
+    return decodeURIComponent(cookie.slice(name.length + 1));
+  } catch {
+    return undefined;
+  }
+}
+
+function stateCookie(value: string, maxAge: number): string {
+  const secure = process.env.NODE_ENV === 'production' ? '; Secure' : '';
+  return `${OAUTH_STATE_COOKIE}=${encodeURIComponent(value)}; Path=/api/auth/callback; HttpOnly; SameSite=Lax; Max-Age=${maxAge}${secure}`;
+}
+
 router.get('/spotify', (_req, res) => {
+  const state = randomBytes(32).toString('base64url');
   const params = new URLSearchParams({
     client_id: process.env.SPOTIFY_CLIENT_ID!,
     response_type: 'code',
     redirect_uri: process.env.SPOTIFY_REDIRECT_URI!,
     scope: SCOPES,
+    state,
   });
+  res.setHeader('Set-Cookie', stateCookie(state, OAUTH_STATE_MAX_AGE_SECONDS));
   res.redirect(`${SPOTIFY_AUTH_URL}?${params}`);
 });
 
 router.get('/callback', async (req, res) => {
   const frontendBase = process.env.FRONTEND_URL ?? '';
-  const error = req.query.error as string;
-  if (error) return res.redirect(`${frontendBase}/host?error=${error}`);
-  const code = req.query.code as string;
+  const expectedState = cookieValue(req, OAUTH_STATE_COOKIE);
+  res.setHeader('Set-Cookie', stateCookie('', 0));
+  if (!stateMatches(expectedState, req.query.state)) {
+    return res.redirect(`${frontendBase}/host?error=auth_failed`);
+  }
+  const error = typeof req.query.error === 'string' ? req.query.error : undefined;
+  if (error) return res.redirect(`${frontendBase}/host?error=${encodeURIComponent(error)}`);
+  const code = typeof req.query.code === 'string' && req.query.code.length <= 2048 ? req.query.code : undefined;
   if (!code) return res.redirect(`${frontendBase}/host?error=cancelled`);
 
   try {

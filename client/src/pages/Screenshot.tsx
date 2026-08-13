@@ -548,7 +548,7 @@ const MOCK_PLAY_JOIN_LINK: PlayState = {
 
 const MOCK_PLAY_JOIN_REJOIN: PlayState = {
   ...MOCK_PLAY_JOIN,
-  savedSession: { pin: '123', name: 'Anna' },
+  savedSession: { pin: '123', name: 'Anna', playerToken: 'fixture-session-token' },
 };
 
 // ─── Entry ────────────────────────────────────────────────────────────────────

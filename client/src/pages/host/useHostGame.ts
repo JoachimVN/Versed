@@ -69,6 +69,8 @@ interface SavedHostSettings {
   knownPartyRoundTypes: PartyRoundType[];
 }
 const HOST_SETTINGS_KEY = 'versed_host_settings';
+const HOST_PIN_KEY = 'versed_host_pin';
+const HOST_TOKEN_KEY = 'versed_host_token';
 const MODES: Set<Mode> = new Set(['classic', 'race', 'party']);
 const DIFFICULTIES: Set<Difficulty> = new Set(['easy', 'medium', 'hard']);
 export const ALL_PARTY_EVENTS: PartyEvent[] = ['double', 'mystery', 'steal', 'snippet', 'fullhints', 'blind', 'outro', 'underdog', 'chaoshints'];
@@ -240,9 +242,10 @@ export function useHostGame(): HostState {
   // doesn't orphan a running game. freshLoadRef marks that this pin came from
   // storage (not a live session): the rejoin then needs a full state snapshot,
   // and a failed rejoin just means the stored pin is stale — start clean.
-  const [pin, setPin] = useState(() => sessionStorage.getItem('versed_host_pin') ?? '');
-  const pinRef = useRef(sessionStorage.getItem('versed_host_pin') ?? '');
-  const freshLoadRef = useRef(!!pinRef.current);
+  const [pin, setPin] = useState(() => sessionStorage.getItem(HOST_TOKEN_KEY) ? (sessionStorage.getItem(HOST_PIN_KEY) ?? '') : '');
+  const pinRef = useRef(sessionStorage.getItem(HOST_TOKEN_KEY) ? (sessionStorage.getItem(HOST_PIN_KEY) ?? '') : '');
+  const hostTokenRef = useRef(sessionStorage.getItem(HOST_TOKEN_KEY) ?? '');
+  const freshLoadRef = useRef(!!pinRef.current && !!hostTokenRef.current);
   const [players, setPlayers] = useState<PlayerInfo[]>([]);
   const playersRef = useRef<PlayerInfo[]>([]);
   const [roundIndex, setRoundIndex] = useState(0);
@@ -370,10 +373,10 @@ export function useHostGame(): HostState {
     socket.connect();
 
     socket.on('connect', () => {
-      if (pinRef.current) {
+      if (pinRef.current && hostTokenRef.current) {
         const fresh = freshLoadRef.current;
         freshLoadRef.current = false;
-        socket.emit('rejoin_host', { pin: pinRef.current, fresh }, (res: {
+        socket.emit('rejoin_host', { pin: pinRef.current, hostToken: hostTokenRef.current, fresh }, (res: {
           players: PlayerInfo[]; phase: string; roundIndex: number; totalRounds: number;
           leaderboard: LeaderboardEntry[]; awards: Award[];
         } | { error: string }) => {
@@ -381,8 +384,10 @@ export function useHostGame(): HostState {
             if (fresh) {
               // Stale pin from an earlier session — drop it and let the lobby
               // create a brand-new game instead of showing "expired".
-              sessionStorage.removeItem('versed_host_pin');
+              sessionStorage.removeItem(HOST_PIN_KEY);
+              sessionStorage.removeItem(HOST_TOKEN_KEY);
               pinRef.current = '';
+              hostTokenRef.current = '';
               setPin('');
             } else {
               setGameExpired(true);
@@ -610,11 +615,13 @@ export function useHostGame(): HostState {
   const inviteUrl = `${globalThis.location.origin}${import.meta.env.BASE_URL}play/${pin}`;
 
   const createGame = () => {
-    socket.emit('create_game', ({ pin: p, error: e }: { pin?: string; error?: string }) => {
-      if (e || !p) return;
+    socket.emit('create_game', ({ pin: p, hostToken, error: e }: { pin?: string; hostToken?: string; error?: string }) => {
+      if (e || !p || !hostToken) return;
       pinRef.current = p;
+      hostTokenRef.current = hostToken;
       setPin(p);
-      sessionStorage.setItem('versed_host_pin', p);
+      sessionStorage.setItem(HOST_PIN_KEY, p);
+      sessionStorage.setItem(HOST_TOKEN_KEY, hostToken);
       freshLoadRef.current = false;
     });
   };
@@ -650,11 +657,13 @@ export function useHostGame(): HostState {
   };
 
   const newGame = () => {
-    socket.emit('new_game', ({ pin: p, error: e }: { pin?: string; error?: string }) => {
-      if (e || !p) return;
+    socket.emit('new_game', ({ pin: p, hostToken, error: e }: { pin?: string; hostToken?: string; error?: string }) => {
+      if (e || !p || !hostToken) return;
       pinRef.current = p;
+      hostTokenRef.current = hostToken;
       setPin(p);
-      sessionStorage.setItem('versed_host_pin', p);
+      sessionStorage.setItem(HOST_PIN_KEY, p);
+      sessionStorage.setItem(HOST_TOKEN_KEY, hostToken);
       setPlayers([]);
       playersRef.current = [];
       setLeaderboard([]);

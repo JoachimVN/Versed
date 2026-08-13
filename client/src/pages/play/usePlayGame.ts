@@ -7,6 +7,8 @@ export type Phase =
   | 'join' | 'waiting' | 'betting' | 'bid_submitted'
   | 'watching' | 'guessing' | 'passed' | 'reveal' | 'leaderboard' | 'finished';
 
+type SavedPlayerSession = { pin: string; name: string; playerToken: string };
+
 export interface PlayState {
   phase: Phase;
   pin: string;
@@ -54,7 +56,7 @@ export interface PlayState {
   songTempo: number | null;
   reconnecting: boolean;
   hostReconnecting: boolean;
-  savedSession: { pin: string; name: string } | null;
+  savedSession: SavedPlayerSession | null;
   guessInputRef: React.RefObject<HTMLInputElement | null>;
   cameFromQR: boolean;
   setPin: (v: string) => void;
@@ -96,6 +98,7 @@ export function usePlayGame(pinParam?: string): PlayState {
   const [myName, setMyName] = useState('');
   const myNameRef = useRef('');
   const pinRef = useRef(pinParam ?? '');
+  const playerTokenRef = useRef('');
   const [roundIndex, setRoundIndex] = useState(0);
   const [totalRounds, setTotalRounds] = useState(10);
   const [hints, setHints] = useState<Hint[]>([]);
@@ -164,8 +167,13 @@ export function usePlayGame(pinParam?: string): PlayState {
   // a faster server event (e.g. the host starting the round mid-transition)
   // can't be clobbered by this firing late.
   const [waitingTransitionPending, setWaitingTransitionPending] = useState(false);
-  const [savedSession, setSavedSession] = useState<{ pin: string; name: string } | null>(() => {
-    try { return JSON.parse(localStorage.getItem('versed_session') ?? 'null'); }
+  const [savedSession, setSavedSession] = useState<SavedPlayerSession | null>(() => {
+    try {
+      const saved = JSON.parse(localStorage.getItem('versed_session') ?? 'null');
+      return typeof saved?.pin === 'string' && typeof saved?.name === 'string' && typeof saved?.playerToken === 'string'
+        ? saved
+        : null;
+    }
     catch { return null; }
   });
   const timerRef = useRef<ReturnType<typeof setInterval> | null>(null);
@@ -270,11 +278,14 @@ export function usePlayGame(pinParam?: string): PlayState {
     // aren't silently dropped (the new socket id is a stranger otherwise).
     socket.on('connect', () => {
       setReconnecting(false);
-      if (myNameRef.current && pinRef.current) {
-        socket.emit('rejoin_player', { pin: pinRef.current, name: myNameRef.current }, (res?: { ok: boolean }) => {
+      if (myNameRef.current && pinRef.current && playerTokenRef.current) {
+        socket.emit('rejoin_player', {
+          pin: pinRef.current, name: myNameRef.current, playerToken: playerTokenRef.current,
+        }, (res?: { ok: boolean }) => {
           if (res && !res.ok) {
             myNameRef.current = '';
             pinRef.current = '';
+            playerTokenRef.current = '';
             setSavedSession(null);
             localStorage.removeItem('versed_session');
             setError('Game has ended.');
@@ -285,13 +296,15 @@ export function usePlayGame(pinParam?: string): PlayState {
       } else {
         try {
           const saved = JSON.parse(localStorage.getItem('versed_session') ?? 'null');
-          if (saved?.pin) {
+          if (saved?.pin && saved?.playerToken) {
             socket.emit('check_game', { pin: saved.pin }, ({ exists }: { exists: boolean }) => {
               if (!exists) {
                 setSavedSession(null);
                 localStorage.removeItem('versed_session');
               }
             });
+          } else if (saved?.pin) {
+            localStorage.removeItem('versed_session');
           }
         } catch { /* ignore */ }
       }
@@ -486,6 +499,9 @@ export function usePlayGame(pinParam?: string): PlayState {
       setHostReconnecting(false);
       stopCountdown();
       setError('Host disconnected.');
+      playerTokenRef.current = '';
+      setSavedSession(null);
+      localStorage.removeItem('versed_session');
       setWaitingTransitionPending(false);
       setPhase('join');
     });
@@ -493,6 +509,7 @@ export function usePlayGame(pinParam?: string): PlayState {
     socket.on('kicked', () => {
       stopCountdown();
       setSavedSession(null);
+      playerTokenRef.current = '';
       localStorage.removeItem('versed_session');
       setError('You were removed from the lobby.');
       setWaitingTransitionPending(false);
@@ -533,12 +550,13 @@ export function usePlayGame(pinParam?: string): PlayState {
     const p = pin.trim();
     if (!n || !p) return;
     setError('');
-    socket.emit('join_game', { pin: p, name: n }, ({ success, error: e }: { success?: boolean; error?: string }) => {
+    socket.emit('join_game', { pin: p, name: n }, ({ success, playerToken, error: e }: { success?: boolean; playerToken?: string; error?: string }) => {
       if (e) { setError(e); return; }
-      if (success) {
+      if (success && playerToken) {
+        playerTokenRef.current = playerToken;
         myNameRef.current = n; pinRef.current = p; setMyName(n);
         setWaitingTransitionPending(true);
-        const session = { pin: p, name: n };
+        const session = { pin: p, name: n, playerToken };
         setSavedSession(session);
         localStorage.setItem('versed_session', JSON.stringify(session));
       }
@@ -547,9 +565,9 @@ export function usePlayGame(pinParam?: string): PlayState {
 
   const rejoinSaved = () => {
     if (!savedSession) return;
-    const { pin: p, name: n } = savedSession;
+    const { pin: p, name: n, playerToken } = savedSession;
     setError('');
-    socket.emit('join_game', { pin: p, name: n }, ({ success, error: e }: { success?: boolean; error?: string }) => {
+    socket.emit('join_game', { pin: p, name: n, playerToken }, ({ success, error: e }: { success?: boolean; error?: string }) => {
       if (e) {
         setError(e);
         setSavedSession(null);
@@ -557,6 +575,7 @@ export function usePlayGame(pinParam?: string): PlayState {
         return;
       }
       if (success) {
+        playerTokenRef.current = playerToken;
         myNameRef.current = n;
         pinRef.current = p;
         setMyName(n);
@@ -650,9 +669,10 @@ export function usePlayGame(pinParam?: string): PlayState {
     const n = myNameRef.current;
     if (!newPin || !n) return;
     setError('');
-    socket.emit('join_game', { pin: newPin, name: n }, ({ success, error: e }: { success?: boolean; error?: string }) => {
+    socket.emit('join_game', { pin: newPin, name: n }, ({ success, playerToken, error: e }: { success?: boolean; playerToken?: string; error?: string }) => {
       if (e) { setError(e); return; }
-      if (success) {
+      if (success && playerToken) {
+        playerTokenRef.current = playerToken;
         pinRef.current = newPin;
         setPin(newPin);
         newGamePinRef.current = null;
@@ -670,7 +690,7 @@ export function usePlayGame(pinParam?: string): PlayState {
         setMyStreak(0);
         setMyRacePoints(0);
         setMyRaceTimeMs(null);
-        const session = { pin: newPin, name: n };
+        const session = { pin: newPin, name: n, playerToken };
         setSavedSession(session);
         localStorage.setItem('versed_session', JSON.stringify(session));
         setLeaderboard([]);
@@ -691,7 +711,7 @@ export function usePlayGame(pinParam?: string): PlayState {
         myNameRef.current = trimmed;
         setMyName(trimmed);
         setError('');
-        const session = { pin: pinRef.current, name: trimmed };
+        const session = { pin: pinRef.current, name: trimmed, playerToken: playerTokenRef.current };
         setSavedSession(session);
         localStorage.setItem('versed_session', JSON.stringify(session));
       }

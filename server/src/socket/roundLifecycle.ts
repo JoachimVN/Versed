@@ -319,6 +319,7 @@ export function startGuessingPhase(game: Game) {
 
   if (game.phaseTimer) clearTimeout(game.phaseTimer);
   game.phase = 'guessing';
+  gm.markGuessingDeadline(game);
   const guessingEndsAt = Date.now() + game.guessingTime * 1000;
   game.phaseEndsAt = guessingEndsAt;
   getIo().to(game.pin).emit('guessing_start', { guesserNames, timeLimit: game.guessingTime, endsAt: guessingEndsAt });

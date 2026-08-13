@@ -1,4 +1,4 @@
-import { randomInt } from 'node:crypto';
+import { randomBytes, randomInt, timingSafeEqual } from 'node:crypto';
 import {
   Award, AwardMoment, Game, GuessTarget, Player, PlaylistTrackInput, PointsBreakdown, PointsBreakdownPart, Round, Song, YearResult,
 } from './types';
@@ -38,6 +38,17 @@ export { BID_OPTIONS, MAX_ACTIVE_GAMES, PITY_BONUS, playMsFor } from './constant
 
 const games = new Map<string, Game>();
 const socketToPin = new Map<string, string>();
+
+function generateSessionToken(): string {
+  return randomBytes(32).toString('base64url');
+}
+
+export function sessionTokenMatches(actual: string, candidate: unknown): boolean {
+  if (typeof candidate !== 'string') return false;
+  const actualBytes = Buffer.from(actual);
+  const candidateBytes = Buffer.from(candidate);
+  return actualBytes.length === candidateBytes.length && timingSafeEqual(actualBytes, candidateBytes);
+}
 
 function generatePin(): string {
   let pin: string;
@@ -132,11 +143,14 @@ function buildRound(game: Game, party?: Round['party']): Round {
     pityAwardedTo: new Set(),
     pointsBreakdown: new Map(),
     playStartAt: null,
+    playStartMono: null,
     firstCorrectAt: null,
     correctGuessers: new Set(),
     guessTimes: new Map(),
     doubleDutyCredits: new Map(),
     tierStartAt: null,
+    tierStartMono: null,
+    guessingEndsMono: null,
   };
 }
 
@@ -154,6 +168,7 @@ export function createGame(hostSocketId: string, preferredPin?: string): Game {
   const game: Game = {
     pin,
     hostSocketId,
+    hostToken: generateSessionToken(),
     players: new Map(),
     formerPlayers: new Map(),
     phase: 'lobby',
@@ -214,15 +229,18 @@ export function getGameBySocket(socketId: string): Game | undefined {
   return pin ? games.get(pin) : undefined;
 }
 
-export function addPlayer(game: Game, socketId: string, name: string): Player | null {
+export function addPlayer(game: Game, socketId: string, name: string, sessionToken?: string): Player | null {
   if (game.players.size >= MAX_PLAYERS) return null;
   const taken = Array.from(game.players.values()).some(
     p => p.name.toLowerCase() === name.trim().toLowerCase()
   );
   if (taken) return null;
-  const former = game.formerPlayers.get(name.trim().toLowerCase());
+  const normalizedName = name.trim().toLowerCase();
+  const former = game.formerPlayers.get(normalizedName);
+  if (former && !sessionTokenMatches(former.sessionToken, sessionToken)) return null;
   const player: Player = {
-    socketId, name: name.trim(), score: former?.score ?? 0, streak: former?.streak ?? 0,
+    socketId, sessionToken: former?.sessionToken ?? generateSessionToken(),
+    name: name.trim(), score: former?.score ?? 0, streak: former?.streak ?? 0,
     totalCorrect: former?.totalCorrect ?? 0, totalPasses: former?.totalPasses ?? 0,
     fastestCorrectMs: former?.fastestCorrectMs ?? null, fastestClassicMs: former?.fastestClassicMs ?? null,
     fastestCorrectMoment: former?.fastestCorrectMoment ?? null,
@@ -230,6 +248,7 @@ export function addPlayer(game: Game, socketId: string, name: string): Player | 
     biggestSwing: former?.biggestSwing ?? 0,
   };
   game.players.set(socketId, player);
+  game.formerPlayers.delete(normalizedName);
   socketToPin.set(socketId, game.pin);
   return player;
 }
@@ -272,12 +291,13 @@ export function renamePlayer(game: Game, socketId: string, newName: string): Pla
   return player;
 }
 
-export function rejoinPlayer(game: Game, newSocketId: string, name: string): Player | null {
+export function rejoinPlayer(game: Game, newSocketId: string, name: string, sessionToken: unknown): Player | null {
   const entry = Array.from(game.players.entries()).find(
     ([, p]) => p.name.toLowerCase() === name.trim().toLowerCase()
   );
   if (!entry) return null;
   const [oldId, player] = entry;
+  if (!sessionTokenMatches(player.sessionToken, sessionToken)) return null;
 
   if (oldId !== newSocketId) {
     game.players.delete(oldId);
@@ -299,16 +319,16 @@ export function rejoinPlayer(game: Game, newSocketId: string, name: string): Pla
   return player;
 }
 
-export function removeSocket(socketId: string): { game: Game; wasHost: boolean } | null {
+export function removeSocket(socketId: string, preserveFormer = true): { game: Game; wasHost: boolean } | null {
   const game = getGameBySocket(socketId);
   if (!game) return null;
   socketToPin.delete(socketId);
   const wasHost = game.hostSocketId === socketId;
   if (!wasHost) {
     const player = game.players.get(socketId);
-    if (player) {
+    if (player && preserveFormer) {
       game.formerPlayers.set(player.name.toLowerCase(), {
-        name: player.name, score: player.score, streak: player.streak,
+        name: player.name, sessionToken: player.sessionToken, score: player.score, streak: player.streak,
         totalCorrect: player.totalCorrect, totalPasses: player.totalPasses,
         fastestCorrectMs: player.fastestCorrectMs, fastestClassicMs: player.fastestClassicMs,
         fastestCorrectMoment: player.fastestCorrectMoment, fastestClassicMoment: player.fastestClassicMoment,
@@ -365,6 +385,8 @@ function applyTier(game: Game, round: Round): TierTurn {
   // Cleared here (not just at round creation) so a later tier never inherits
   // an earlier tier's start time if this one's own song_started is delayed.
   round.tierStartAt = null;
+  round.tierStartMono = null;
+  round.guessingEndsMono = null;
   game.phase = 'playing';
   const guesserNames = tier.socketIds
     .map(id => game.players.get(id)?.name ?? '')
@@ -419,6 +441,7 @@ export function recordGuess(
   socketId: string,
   text: string,
   artistText?: string,
+  allowExpiredDraft = false,
 ): { correct: boolean; points: number; guesserName: string; allDone: boolean } | null {
   const round = game.currentRound;
   if (!round) return null;
@@ -428,6 +451,7 @@ export function recordGuess(
   } else if (game.phase !== 'guessing') {
     return null;
   }
+  if (!allowExpiredDraft && game.phase === 'guessing' && !guessDeadlineOpen(round)) return null;
   if (round.answered || round.passed.has(socketId)) return null;
 
   round.guesses.set(socketId, text);
@@ -436,7 +460,7 @@ export function recordGuess(
   if (target === 'both' && trimmedArtist) round.artistGuesses.set(socketId, trimmedArtist);
   const guesserName = game.players.get(socketId)?.name ?? '';
 
-  const elapsedMs = Date.now() - (round.tierStartAt ?? Date.now());
+  const elapsedMs = Math.max(0, performance.now() - (round.tierStartMono ?? performance.now()));
 
   if (target === 'year') {
     const guess = parseYearGuess(text);
@@ -544,6 +568,7 @@ export function skipGuess(game: Game, socketId: string): { allDone: boolean } | 
   if (!round) return null;
   if (!round.guesserSocketIds.includes(socketId)) return null;
   if (game.phase !== 'guessing' && game.phase !== 'playing') return null;
+  if (game.phase === 'guessing' && !guessDeadlineOpen(round)) return null;
   if (round.answered || round.passed.has(socketId)) return null;
 
   round.guesses.set(socketId, null);
@@ -559,6 +584,8 @@ export function markRaceStarted(game: Game): void {
   const round = game.currentRound;
   if (!round) return;
   round.playStartAt = Date.now();
+  round.playStartMono = performance.now();
+  round.guessingEndsMono = round.playStartMono + game.raceTime * 1000;
   game.phase = 'guessing';
 }
 
@@ -570,6 +597,17 @@ export function markTierStarted(game: Game): void {
   const round = game.currentRound;
   if (round?.tierStartAt !== null) return;
   round.tierStartAt = Date.now();
+  round.tierStartMono = performance.now();
+}
+
+export function markGuessingDeadline(game: Game): void {
+  if (game.currentRound) game.currentRound.guessingEndsMono = performance.now() + game.guessingTime * 1000;
+}
+
+const SUBMISSION_GRACE_MS = 250;
+
+function guessDeadlineOpen(round: Round): boolean {
+  return round.guessingEndsMono === null || performance.now() <= round.guessingEndsMono + SUBMISSION_GRACE_MS;
 }
 
 function applyRaceCorrectGuess(
@@ -744,17 +782,19 @@ export function recordRaceGuess(
   socketId: string,
   text: string,
   artistText?: string,
+  allowExpiredDraft = false,
 ): { correct: boolean; points: number; elapsedMs: number; allDone: boolean } | null {
   const round = game.currentRound;
   if (!round) return null;
   if (!game.players.has(socketId)) return null;
   if (game.phase !== 'guessing') return null;
+  if (!allowExpiredDraft && !guessDeadlineOpen(round)) return null;
   if (round.passed.has(socketId)) return null;
   const restricted = restrictedParticipantIds(round);
   if (restricted && !restricted.includes(socketId)) return null;
   if ((isWinnerOnlyRound(game, round) || round.party?.finale) && round.firstCorrectAt !== null) return null;
 
-  const elapsedMs = Date.now() - (round.playStartAt ?? Date.now());
+  const elapsedMs = Math.max(0, performance.now() - (round.playStartMono ?? performance.now()));
   round.guesses.set(socketId, text);
   round.passed.add(socketId);
   const participants = raceParticipants(game, round);
@@ -791,6 +831,7 @@ export function skipRaceGuess(
   if (!round) return null;
   if (!game.players.has(socketId)) return null;
   if (game.phase !== 'guessing') return null;
+  if (!guessDeadlineOpen(round)) return null;
   if (round.passed.has(socketId)) return null;
   const restricted = restrictedParticipantIds(round);
   if (restricted && !restricted.includes(socketId)) return null;
@@ -850,12 +891,13 @@ export function recordChaosHintTap(
   if (!round || round.party?.event !== 'chaoshints') return null;
   if (!game.players.has(socketId)) return null;
   if (game.phase !== 'guessing') return null;
+  if (!guessDeadlineOpen(round)) return null;
   if (round.passed.has(socketId)) return null;
   const restricted = restrictedParticipantIds(round);
   if (restricted && !restricted.includes(socketId)) return null;
   if ((isWinnerOnlyRound(game, round) || round.party?.finale) && round.firstCorrectAt !== null) return null;
 
-  const elapsedMs = Date.now() - (round.playStartAt ?? Date.now());
+  const elapsedMs = Math.max(0, performance.now() - (round.playStartMono ?? performance.now()));
   round.chaosTapped.set(socketId, tappedIndex);
   round.passed.add(socketId);
   const participants = raceParticipants(game, round);
@@ -871,10 +913,11 @@ export function recordChaosHintTap(
 // ─── Year rounds ─────────────────────────────────────────────────────────────
 
 // Parses a year guess (digits only, plausible range) or null if unusable.
-function parseYearGuess(raw: string | null | undefined): number | null {
-  if (!raw) return null;
-  const parsed = Number.parseInt(raw.replace(/\D/g, ''), 10);
-  return Number.isFinite(parsed) && parsed >= 1000 && parsed <= 3000 ? parsed : null;
+export function parseYearGuess(raw: string | null | undefined): number | null {
+  const trimmed = raw?.trim();
+  if (!trimmed || !/^\d{4}$/.test(trimmed)) return null;
+  const parsed = Number.parseInt(trimmed, 10);
+  return parsed >= 1000 && parsed <= 3000 ? parsed : null;
 }
 
 function yearGuessEntries(game: Game, round: Round, actual: number) {
@@ -1040,7 +1083,7 @@ export function finalizeRaceDrafts(game: Game): void {
   for (const id of game.players.keys()) {
     if (round.passed.has(id)) continue;
     const draft = round.liveDrafts.get(id)?.trim();
-    if (draft) recordRaceGuess(game, id, draft, round.liveArtistDrafts.get(id)?.trim());
+    if (draft) recordRaceGuess(game, id, draft, round.liveArtistDrafts.get(id)?.trim(), true);
   }
 }
 
@@ -1059,7 +1102,7 @@ export function finalizeGuessDrafts(
     if (round.passed.has(id)) continue;
     const draft = round.liveDrafts.get(id)?.trim();
     if (!draft) continue;
-    const result = recordGuess(game, id, draft, round.liveArtistDrafts.get(id)?.trim());
+    const result = recordGuess(game, id, draft, round.liveArtistDrafts.get(id)?.trim(), true);
     if (result?.correct) return result as { correct: true; points: number; guesserName: string; allDone: boolean };
   }
   return null;
@@ -1072,6 +1115,7 @@ export function updateLiveDraft(game: Game, socketId: string, text: string, arti
   if (!round) return;
   if (!isRaceFlowRound(game, round) && !round.guesserSocketIds.includes(socketId)) return;
   if (game.phase !== 'guessing' && game.phase !== 'playing') return;
+  if (game.phase === 'guessing' && !guessDeadlineOpen(round)) return;
   if (round.passed.has(socketId)) return;
   round.liveDrafts.set(socketId, text);
   if (artistText !== undefined) round.liveArtistDrafts.set(socketId, artistText);

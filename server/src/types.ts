@@ -179,6 +179,7 @@ export interface Round {
   pointsBreakdown: Map<string, PointsBreakdown>; // socketId → itemization of the points they earned this round
   // Race-mode fields
   playStartAt: number | null;      // epoch ms when audio started
+  playStartMono: number | null;    // monotonic counterpart used for scoring durations
   firstCorrectAt: number | null;   // epoch ms of first correct guess (decay origin)
   correctGuessers: Set<string>;    // socketIds who guessed correctly in Race
   guessTimes: Map<string, number>; // socketId → ms from playStartAt to correct guess
@@ -193,10 +194,13 @@ export interface Round {
   // of every tier (applyTier) so a later tier never inherits an earlier
   // tier's timestamp.
   tierStartAt: number | null;
+  tierStartMono: number | null;
+  guessingEndsMono: number | null; // authoritative monotonic submission deadline
 }
 
 export interface Player {
   socketId: string;
+  sessionToken: string;
   name: string;
   score: number;
   streak: number;
@@ -249,11 +253,12 @@ export type GamePhase =
 export interface Game {
   pin: string;
   hostSocketId: string;
+  hostToken: string;
   players: Map<string, Player>;
   // name.toLowerCase() → saved state, restored on rejoin (and shown, via
   // getLeaderboard/computeAwards, for players who never came back)
   formerPlayers: Map<string, {
-    name: string; score: number; streak: number;
+    name: string; sessionToken: string; score: number; streak: number;
     totalCorrect: number; totalPasses: number; fastestCorrectMs: number | null; fastestClassicMs: number | null;
     fastestCorrectMoment: AwardMoment | null; fastestClassicMoment: AwardMoment | null; biggestSwing: number;
   }>;
