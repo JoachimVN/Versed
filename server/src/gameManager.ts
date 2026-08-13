@@ -648,18 +648,23 @@ function creditDraftedDoubleDutyMatches(
     const draftArtist = round.liveArtistDrafts.get(id)?.trim();
     const { correct, artistBonus } = checkGuess('both', draftTitle, draftArtist, round.song);
     if (!correct) continue;
-    creditDraftedMatch(game, round, id, draftTitle, draftArtist, artistBonus, elapsedMs, base, diffBonus, mult, winnerOnly);
+    creditDraftedMatch(game, round, { id, draftTitle, draftArtist, artistBonus, elapsedMs, base, diffBonus, mult, winnerOnly });
   }
 }
 
 // Scores and records a single drafted-match credit — split out of
 // creditDraftedDoubleDutyMatches purely to keep that loop's cognitive
 // complexity under the lint threshold; same breakdown/pity/apply shape as
-// applyRaceCorrectGuess above.
+// applyRaceCorrectGuess above. Bundled into one options object (rather than
+// its own 9 positional params) to stay under the lint's max-params limit.
 function creditDraftedMatch(
-  game: Game, round: Round, id: string, draftTitle: string, draftArtist: string | undefined,
-  artistBonus: boolean, elapsedMs: number, base: number, diffBonus: number, mult: number, winnerOnly: boolean,
+  game: Game, round: Round,
+  match: {
+    id: string; draftTitle: string; draftArtist: string | undefined; artistBonus: boolean;
+    elapsedMs: number; base: number; diffBonus: number; mult: number; winnerOnly: boolean;
+  },
 ): void {
+  const { id, draftTitle, draftArtist, artistBonus, elapsedMs, base, diffBonus, mult, winnerOnly } = match;
   round.guesses.set(id, draftTitle);
   if (draftArtist) round.artistGuesses.set(id, draftArtist);
   round.correctGuessers.add(id);
