@@ -182,6 +182,12 @@ export interface Round {
   firstCorrectAt: number | null;   // epoch ms of first correct guess (decay origin)
   correctGuessers: Set<string>;    // socketIds who guessed correctly in Race
   guessTimes: Map<string, number>; // socketId → ms from playStartAt to correct guess
+  // Double Duty (target 'both'), non-winner-only races only: players who were
+  // already awarded the flat "first" rate because their drafted title matched
+  // when someone else submitted, but hadn't (yet) also drafted the correct
+  // artist. Their own later submission tops up the artist bonus instead of
+  // re-paying the base amount — see settleDoubleDutyTopUp in gameManager.ts.
+  doubleDutyCredits: Map<string, { base: number; artistAwarded: boolean }>;
   // Classic-mode field. Race's counterpart to playStartAt: epoch ms when the
   // *current tier's* clip actually started playing, reset to null at the top
   // of every tier (applyTier) so a later tier never inherits an earlier

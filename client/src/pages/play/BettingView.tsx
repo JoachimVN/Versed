@@ -82,8 +82,12 @@ export function BettingView({ game }: Readonly<{ game: PlayState }>) {
       />
       <div style={{ position: 'absolute', inset: 0, zIndex: 1, background: 'rgba(5,5,14,0.82)', backdropFilter: 'blur(28px)' }} />
 
-      {/* Top bar */}
-      <div className="flex items-center justify-between px-5 pt-5 pb-3" style={{ position: 'relative', zIndex: 2 }}>
+      {/* Top bar. Horizontal padding floors at max(20px, safe-area inset) —
+          in landscape the notch/Dynamic Island sits on the left or right
+          edge (whichever side depending on rotation) rather than the top,
+          so a plain px-5 here left the round counter tucked right under the
+          sensor housing on that side. */}
+      <div className="flex items-center justify-between pt-5 pb-3" style={{ position: 'relative', zIndex: 2, paddingLeft: 'max(20px, env(safe-area-inset-left))', paddingRight: 'max(20px, env(safe-area-inset-right))' }}>
         <span style={{ color: 'rgba(255,255,255,0.45)', fontSize: '0.85rem', fontWeight: 600 }}>
           Round {roundIndex + 1}<span style={{ color: 'rgba(255,255,255,0.45)' }}>/{totalRounds}</span>
         </span>

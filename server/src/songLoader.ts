@@ -55,6 +55,52 @@ function headerIndex(header: string[]): Record<string, number> {
   return index;
 }
 
+// One CSV row -> Song, or null for a short/unusable row (missing fields, no
+// track id). Split out of loadSongs purely to keep that loop under the
+// cognitive-complexity lint threshold.
+function buildSongFromRow(
+  f: string[], header: string[], col: Record<string, number>, i: number,
+  tempoIdx: number | undefined, artIdx: number | undefined, releaseYearIdx: number | undefined,
+): Song | null {
+  if (f.length < header.length) return null;
+
+  const trackId = extractTrackId(f[col.spotify_url] ?? '');
+  if (!trackId) return null;
+
+  const rawArtist = f[col.artist].replace(/^"|"$/g, '');
+  const year = (releaseYearIdx === undefined ? null : num(f[releaseYearIdx])) ?? num(f[col.year]);
+  return {
+    rank: num(f[col.rank]) ?? i,
+    title: f[col.title].replace(/^"|"$/g, '').trim(),
+    artist: (rawArtist.split(';')[0] ?? '').trim(),
+    // ';'-joined (not ', '): individual artist names can themselves contain
+    // commas (e.g. "Tyler, The Creator", "Crosby, Stills & Nash"), so a
+    // comma join would be ambiguous to split back apart downstream. See
+    // fuzzyMatch.ts/songPool.ts, which split this on ';'; display sites
+    // render it as ', ' for humans.
+    featuredArtists: rawArtist.includes(';')
+      ? rawArtist.split(';').slice(1).join(';').trim()
+      : undefined,
+    // Prefer the true Spotify release year over the pipeline's "year"
+    // column, which is actually the song's first Billboard Hot 100 chart
+    // year — those diverge for singles that chart late (e.g. a TikTok
+    // resurgence), and this field is what the year-guessing game quizzes.
+    year,
+    // Derived from the same `year` above (not read from the CSV's "decade"
+    // column) so the "Era" hint in hints.ts never contradicts it.
+    decade: year === null ? null : Math.floor(year / 10) * 10,
+    bbPeak: num(f[col.bb_peak]),
+    bbChartWeeks: num(f[col.bb_chart_weeks]),
+    durationMs: num(f[col.duration_ms]),
+    tempo: tempoIdx === undefined ? null : num(f[tempoIdx]),
+    spotifyStreams: num(f[col.spotify_streams]),
+    youtubeViews: num(f[col.youtube_views]),
+    spotifyTrackId: trackId,
+    finalScore: num(f[col.final_score]) ?? 0,
+    albumArtUrl: (artIdx === undefined ? '' : f[artIdx]?.trim()) || null,
+  };
+}
+
 export function loadSongs(): Song[] {
   const csvPath = path.join(__dirname, 'data', 'music_index_full.csv');
   const lines = fs.readFileSync(csvPath, 'utf-8').split('\n').filter(l => l.trim());
@@ -62,44 +108,16 @@ export function loadSongs(): Song[] {
 
   const header = parseCSVLine(lines[0]);
   const col = headerIndex(header);
-  // tempo and album_art_url are newer, optional columns — absent on an older
-  // CSV, in which case both fields just come through as null.
+  // tempo, album_art_url and release_year are newer, optional columns —
+  // absent on an older CSV, in which case they come through as null/fall back.
   const tempoIdx = col.tempo;
   const artIdx = col.album_art_url;
+  const releaseYearIdx = col.release_year;
 
   const songs: Song[] = [];
   for (let i = 1; i < lines.length; i++) {
-    const f = parseCSVLine(lines[i]);
-    if (f.length < header.length) continue;
-
-    const trackId = extractTrackId(f[col.spotify_url] ?? '');
-    if (!trackId) continue;
-
-    const rawArtist = f[col.artist].replace(/^"|"$/g, '');
-    songs.push({
-      rank: num(f[col.rank]) ?? i,
-      title: f[col.title].replace(/^"|"$/g, '').trim(),
-      artist: (rawArtist.split(';')[0] ?? '').trim(),
-      // ';'-joined (not ', '): individual artist names can themselves contain
-      // commas (e.g. "Tyler, The Creator", "Crosby, Stills & Nash"), so a
-      // comma join would be ambiguous to split back apart downstream. See
-      // fuzzyMatch.ts/songPool.ts, which split this on ';'; display sites
-      // render it as ', ' for humans.
-      featuredArtists: rawArtist.includes(';')
-        ? rawArtist.split(';').slice(1).join(';').trim()
-        : undefined,
-      year: num(f[col.year]),
-      decade: num(f[col.decade]),
-      bbPeak: num(f[col.bb_peak]),
-      bbChartWeeks: num(f[col.bb_chart_weeks]),
-      durationMs: num(f[col.duration_ms]),
-      tempo: tempoIdx === undefined ? null : num(f[tempoIdx]),
-      spotifyStreams: num(f[col.spotify_streams]),
-      youtubeViews: num(f[col.youtube_views]),
-      spotifyTrackId: trackId,
-      finalScore: num(f[col.final_score]) ?? 0,
-      albumArtUrl: (artIdx === undefined ? '' : f[artIdx]?.trim()) || null,
-    });
+    const song = buildSongFromRow(parseCSVLine(lines[i]), header, col, i, tempoIdx, artIdx, releaseYearIdx);
+    if (song) songs.push(song);
   }
 
   return songs.sort((a, b) => a.rank - b.rank);
