@@ -648,27 +648,37 @@ function creditDraftedDoubleDutyMatches(
     const draftArtist = round.liveArtistDrafts.get(id)?.trim();
     const { correct, artistBonus } = checkGuess('both', draftTitle, draftArtist, round.song);
     if (!correct) continue;
-
-    round.guesses.set(id, draftTitle);
-    if (draftArtist) round.artistGuesses.set(id, draftArtist);
-    round.correctGuessers.add(id);
-    round.guessTimes.set(id, elapsedMs);
-    if (winnerOnly) round.passed.add(id);
-
-    const parts: PointsBreakdownPart[] = [
-      { label: 'Speed', amount: base - diffBonus },
-      { label: 'Difficulty', amount: diffBonus },
-    ];
-    if (artistBonus) parts.push({ label: 'Title + artist bonus', amount: base });
-    const preMultiplier = parts.reduce((sum, p) => sum + p.amount, 0);
-    let points = Math.round(preMultiplier * mult);
-    let pity = 0;
-    if (points > 0) { pity = pityBonus(currentScores(game), id, round); points += pity; }
-    round.pointsBreakdown.set(id, buildBreakdown(parts, mult, pity));
-    applyRaceScoreToPlayer(game, round, id, elapsedMs, points, draftTitle);
-
-    if (!winnerOnly) round.doubleDutyCredits.set(id, { base, artistAwarded: artistBonus });
+    creditDraftedMatch(game, round, id, draftTitle, draftArtist, artistBonus, elapsedMs, base, diffBonus, mult, winnerOnly);
   }
+}
+
+// Scores and records a single drafted-match credit — split out of
+// creditDraftedDoubleDutyMatches purely to keep that loop's cognitive
+// complexity under the lint threshold; same breakdown/pity/apply shape as
+// applyRaceCorrectGuess above.
+function creditDraftedMatch(
+  game: Game, round: Round, id: string, draftTitle: string, draftArtist: string | undefined,
+  artistBonus: boolean, elapsedMs: number, base: number, diffBonus: number, mult: number, winnerOnly: boolean,
+): void {
+  round.guesses.set(id, draftTitle);
+  if (draftArtist) round.artistGuesses.set(id, draftArtist);
+  round.correctGuessers.add(id);
+  round.guessTimes.set(id, elapsedMs);
+  if (winnerOnly) round.passed.add(id);
+
+  const parts: PointsBreakdownPart[] = [
+    { label: 'Speed', amount: base - diffBonus },
+    { label: 'Difficulty', amount: diffBonus },
+  ];
+  if (artistBonus) parts.push({ label: 'Title + artist bonus', amount: base });
+  const preMultiplier = parts.reduce((sum, p) => sum + p.amount, 0);
+  let points = Math.round(preMultiplier * mult);
+  let pity = 0;
+  if (points > 0) { pity = pityBonus(currentScores(game), id, round); points += pity; }
+  round.pointsBreakdown.set(id, buildBreakdown(parts, mult, pity));
+  applyRaceScoreToPlayer(game, round, id, elapsedMs, points, draftTitle);
+
+  if (!winnerOnly) round.doubleDutyCredits.set(id, { base, artistAwarded: artistBonus });
 }
 
 // Pays the artist-bonus top-up for a player who was already credited by
@@ -756,9 +766,12 @@ export function recordRaceGuess(
   const trimmedArtist = artistText?.trim();
   if (target === 'both' && trimmedArtist) round.artistGuesses.set(socketId, trimmedArtist);
   const priorCredit = round.doubleDutyCredits.get(socketId);
-  const points = priorCredit
-    ? settleDoubleDutyTopUp(game, round, socketId, priorCredit, correct, artistText, elapsedMs)
-    : (correct ? applyRaceCorrectGuess(game, round, socketId, elapsedMs, artistBonus, text) : 0);
+  let points = 0;
+  if (priorCredit) {
+    points = settleDoubleDutyTopUp(game, round, socketId, priorCredit, correct, artistText, elapsedMs);
+  } else if (correct) {
+    points = applyRaceCorrectGuess(game, round, socketId, elapsedMs, artistBonus, text);
+  }
 
   const allDone = ((isWinnerOnlyRound(game, round) || round.party?.finale === true) && correct)
     || participants.every(id => round.passed.has(id));
