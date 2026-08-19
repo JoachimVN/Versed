@@ -68,7 +68,7 @@ The host's screen is the "board" — everyone else joins from their phone.
 
 ### Song Source
 
-Before starting, the host picks a song pool: the **[Versed Library](https://joavn.dev/mpi** or **custom Spotify playlist(s)**.
+Before starting, the host picks a song pool: the **[Versed Library](https://joavn.dev/mpi)** or **custom Spotify playlist(s)**.
 
 ### Classic
 
